@@ -302,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21o</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21p</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21o</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21p</div>
         </div>
       </div>
     </div>
@@ -1241,7 +1241,56 @@ function td_zuord(ds,field,val,wh){
     setDay(uid,year,mon,ds,'b1bis',addMin('08:00',sick));
     setDay(uid,year,mon,ds,'b2von',''); setDay(uid,year,mon,ds,'b2bis','');
   }
+  // ── Bidirektionale Sync Zeiterfassung ↔ Abwesenheiten ──
+  if(field==='b1zuord'){
+    const u=getUser(uid)||cu;
+    if(val==='AU/Krank'){
+      mutate(d=>{
+        if(!d.vacRequests) d.vacRequests={};
+        const rk=`${uid}_${ds}_${ds}`;
+        if(!d.vacRequests[rk]) // nicht überschreiben wenn schon vorhanden
+          d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
+            type:'AU/Krank',startDate:ds,endDate:ds,workDays:1,note:'',
+            status:'approved',submittedAt:new Date().toISOString(),
+            reviewedBy:cu.id,reviewedAt:new Date().toISOString(),
+            reviewNote:'Automatisch aus Zeiterfassung'};
+      });
+    } else {
+      // AU/Krank entfernt → Einzeltag-Eintrag in Abwesenheiten löschen
+      mutate(d=>{
+        const rk=`${uid}_${ds}_${ds}`;
+        if(d.vacRequests&&d.vacRequests[rk]&&d.vacRequests[rk].type==='AU/Krank')
+          delete d.vacRequests[rk];
+      });
+    }
+  }
   renderZeiterfassung();
+}
+
+// Sync: Abwesenheiten (AU/Krank) → Zeiterfassung (alle Tage im Zeitraum befüllen)
+function syncSickToTimesheets(uid,user,from,to){
+  if((user.wh||0)<=0) return;
+  const sick=Math.round((user.wh/5)*60);
+  mutate(d=>{
+    let cur=new Date(from+'T12:00:00');
+    const endD=new Date(to+'T12:00:00');
+    while(cur<=endD){
+      const wd=cur.getDay();
+      if(wd!==0&&wd!==6){
+        const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
+        const ds=dateStr(y,m,day);
+        const hols=getHolidays(y,user.bundesland||'');
+        if(!hols.has(ds)){
+          const k=entryKey(uid,y,m);
+          if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+          if(!d.entries[k].days) d.entries[k].days={};
+          if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+          Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',sick),b1zuord:'AU/Krank',b2von:'',b2bis:'',b2zuord:''});
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
 }
 function saveCarryover(){
   const uid=viewEmpId||cu.id;
@@ -1902,6 +1951,8 @@ async function saveVacRequest(){
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
+  // Richtung 1: AU/Krank in Abwesenheiten → Zeiterfassung automatisch befüllen
+  if(isSick) syncSickToTimesheets(targetUser.id,targetUser,from,to);
   closeModal(); renderAbwesenheiten();
   if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
   else toast('Antrag eingereicht – wartet auf Genehmigung. ✓','ok');
