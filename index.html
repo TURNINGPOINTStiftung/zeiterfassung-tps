@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Zeiterfassung – TURNING POINT Stiftung</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -538,9 +541,12 @@ async function initFirebase(){
   const snap=await _fbRef.once('value');
   const data=snap.val();
   if(data&&Array.isArray(data.users)&&data.users.length>0){
-    // Prüfen ob strukturelle Migration nötig (z.B. moritz→admin ID-Umbenennung)
-    let needsSave=data.users.some(u=>u.id==='moritz')||!data.teamReports;
+    // Prüfen ob strukturelle Migration nötig
+    const hasMoritz=data.users.some(u=>u.id==='moritz');
+    let needsSave=hasMoritz||!data.teamReports||data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
     _dataCache=_migrate(data);
+    // Direkte ID-Umbenennung sicherstellen
+    if(hasMoritz){ const adm=_dataCache.users.find(u=>u.role==='admin'); if(adm) adm.id='admin'; needsSave=true; }
     // Klartext-Passwörter automatisch hashen (einmalige Migration)
     for(const u of _dataCache.users){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
