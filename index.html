@@ -529,16 +529,19 @@ function _migrate(d){
     if(u.bundesland===undefined) u.bundesland='';
     // Leitungspersonal: teams-Array migrieren (war früher einzelner String)
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
-    // Moritz: Rolle auf admin migrieren + Login-ID auf 'admin' umbenennen
-    if(u.id==='moritz'){ u.role='admin'; u.id='admin'; }
   });
-  if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
-  // Sicherheitsnetz: Kein Admin vorhanden → Admin-Account wiederherstellen
-  if(!d.users.find(u=>u.role==='admin')){
-    const existing=d.users.find(u=>u.id==='admin');
-    if(existing){ existing.role='admin'; }
-    else{ d.users.unshift({id:'admin',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',teams:[]}); }
+  // Admin-Account bereinigen: alten 'moritz'-Eintrag entfernen falls 'admin' bereits existiert
+  const hasAdminId=d.users.some(u=>u.id==='admin');
+  const moritzIdx=d.users.findIndex(u=>u.id==='moritz');
+  if(moritzIdx>=0){
+    if(hasAdminId){ d.users.splice(moritzIdx,1); } // Duplikat entfernen
+    else { d.users[moritzIdx].id='admin'; d.users[moritzIdx].role='admin'; } // umbenennen
   }
+  // Sicherheitsnetz: id='admin' muss IMMER role='admin' haben
+  const adminUser=d.users.find(u=>u.id==='admin');
+  if(adminUser){ adminUser.role='admin'; }
+  else{ d.users.unshift({id:'admin',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',teams:[]}); }
+  if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
   return d;
 }
 async function initFirebase(){
@@ -549,11 +552,10 @@ async function initFirebase(){
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     // Prüfen ob strukturelle Migration nötig
     const hasMoritz=data.users.some(u=>u.id==='moritz');
+    const adminWrongRole=data.users.some(u=>u.id==='admin'&&u.role!=='admin');
     const noAdmin=!data.users.some(u=>u.role==='admin');
-    let needsSave=hasMoritz||noAdmin||!data.teamReports||data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
+    let needsSave=hasMoritz||adminWrongRole||noAdmin||!data.teamReports||data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
     _dataCache=_migrate(data);
-    // Direkte ID-Umbenennung sicherstellen
-    if(hasMoritz){ const adm=_dataCache.users.find(u=>u.role==='admin'); if(adm) adm.id='admin'; needsSave=true; }
     // Klartext-Passwörter automatisch hashen (einmalige Migration)
     for(const u of _dataCache.users){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
