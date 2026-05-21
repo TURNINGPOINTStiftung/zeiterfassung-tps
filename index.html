@@ -57,7 +57,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .app-header .brand{font-size:15px;font-weight:700}
 .app-header .brand span{font-weight:400;font-size:12px;opacity:.7;margin-left:8px}
 .header-right{display:flex;align-items:center;gap:10px}
-.user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:13px;line-height:1.3;cursor:default}
+.user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:13px;line-height:1.3;cursor:pointer;transition:background .2s}
+.user-badge:hover{background:rgba(255,255,255,.28)}
 .user-badge .role{font-size:10px;opacity:.75;display:block;text-align:center}
 .app-nav{background:var(--white);border-bottom:1px solid var(--border);display:flex;padding:0 20px;gap:4px;overflow-x:auto}
 .nav-tab{padding:11px 14px;font-size:13px;font-weight:500;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0}
@@ -305,9 +306,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21t</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21u</span></div>
     <div class="header-right">
-      <div class="user-badge" id="hdr-user">
+      <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
       </div>
@@ -491,7 +492,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21t</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21u</div>
         </div>
       </div>
     </div>
@@ -2267,6 +2268,63 @@ function printBuchhaltung(){
   document.title=prev;
   bemCells.forEach(el=>el.style.display='');
   blockHeads.forEach(el=>el.setAttribute('colspan','5'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROFIL
+// ═══════════════════════════════════════════════════════════════
+function openProfileModal(){
+  const BL=[['','– Bundesland –'],['BW','Baden-Württemberg'],['BY','Bayern'],['BE','Berlin'],
+    ['BB','Brandenburg'],['HB','Bremen'],['HH','Hamburg'],['HE','Hessen'],
+    ['MV','Mecklenburg-Vorpommern'],['NI','Niedersachsen'],['NW','Nordrhein-Westfalen'],
+    ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
+    ['SH','Schleswig-Holstein'],['TH','Thüringen']];
+  const blOpts=BL.map(([v,l])=>`<option value="${v}"${(cu.bundesland||'')===v?' selected':''}>${l}</option>`).join('');
+  openModal(`<h3>👤 Mein Profil</h3>
+    <div class="form-group"><label>Name</label>
+      <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
+    <div class="form-group"><label>Wohnort</label>
+      <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
+    <div class="form-group"><label>Bundesland</label>
+      <select id="prof-bl">${blOpts}</select></div>
+    <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+    <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px">🔒 Passwort ändern</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nur ausfüllen, wenn Sie Ihr Passwort ändern möchten.</div>
+    <div class="form-group"><label>Aktuelles Passwort</label>
+      <input type="password" id="prof-pw-cur" placeholder="Aktuelles Passwort" autocomplete="current-password"></div>
+    <div class="form-group"><label>Neues Passwort</label>
+      <input type="password" id="prof-pw-new" placeholder="Neues Passwort" autocomplete="new-password"></div>
+    <div class="form-group"><label>Neues Passwort bestätigen</label>
+      <input type="password" id="prof-pw-confirm" placeholder="Bestätigung" autocomplete="new-password"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="saveProfile()">Speichern</button>
+    </div>`);
+}
+async function saveProfile(){
+  const city=document.getElementById('prof-city').value.trim();
+  const bl=document.getElementById('prof-bl').value;
+  const pwCur=document.getElementById('prof-pw-cur').value;
+  const pwNew=document.getElementById('prof-pw-new').value;
+  const pwConfirm=document.getElementById('prof-pw-confirm').value;
+  let newPwHash=null;
+  if(pwCur||pwNew||pwConfirm){
+    if(!pwCur){ toast('Bitte aktuelles Passwort eingeben.','err'); return; }
+    const user=getUser(cu.id);
+    const match=isHashed(user.pw)?(await hashPw(pwCur))===user.pw:pwCur===user.pw;
+    if(!match){ toast('Aktuelles Passwort falsch.','err'); return; }
+    if(!pwNew){ toast('Bitte neues Passwort eingeben.','err'); return; }
+    if(pwNew!==pwConfirm){ toast('Neue Passwörter stimmen nicht überein.','err'); return; }
+    if(pwNew.length<4){ toast('Neues Passwort zu kurz (min. 4 Zeichen).','err'); return; }
+    newPwHash=await hashPw(pwNew);
+  }
+  await mutate(d=>{
+    const u=d.users.find(x=>x.id===cu.id);
+    if(u){ u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; }
+  });
+  cu=getUser(cu.id);
+  closeModal();
+  toast('Profil gespeichert. ✓','ok');
 }
 
 // ═══════════════════════════════════════════════════════════════
