@@ -224,6 +224,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 
@@ -441,6 +442,16 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 // ═══════════════════════════════════════════════════════════════
 // FIREBASE – gemeinsamer Cloud-Speicher
 // ═══════════════════════════════════════════════════════════════
+// ── Passwort-Hashing (SHA-256, Web Crypto API) ──
+const _PW_SALT='tp_zt_turning_point_2026_x9k';
+async function hashPw(pw){
+  if(!pw) return '';
+  const data=new TextEncoder().encode(pw+_PW_SALT);
+  const buf=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function isHashed(pw){ return pw&&pw.length===64&&/^[0-9a-f]+$/.test(pw); }
+
 firebase.initializeApp({
   apiKey:'AIzaSyA1SxyoH1NwIk6nWK66PNvV2EmvSwPJNOk',
   authDomain:'zeiterfassung-tps.firebaseapp.com',
@@ -497,12 +508,22 @@ function _migrate(d){
   return d;
 }
 async function initFirebase(){
+  // Anonym einloggen – schützt DB vor Fremdzugriff
+  await firebase.auth().signInAnonymously();
   const snap=await _fbRef.once('value');
   const data=snap.val();
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     _dataCache=_migrate(data);
+    // Klartext-Passwörter automatisch hashen (einmalige Migration)
+    let needsSave=false;
+    for(const u of _dataCache.users){
+      if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
+    }
+    if(needsSave) await _fbRef.set(_dataCache);
   } else {
-    _dataCache=freshData();
+    const d=freshData();
+    for(const u of d.users){ u.pw=await hashPw(u.pw); }
+    _dataCache=d;
     await _fbRef.set(_dataCache);
   }
 }
@@ -676,7 +697,7 @@ function populateLoginDropdown(){
     list.appendChild(tile);
   });
 }
-function doLogin(){
+async function doLogin(){
   var errEl=document.getElementById('login-err');
   var selectedTile=document.querySelector('#login-user-list .user-tile.selected');
   if(!selectedTile){
@@ -690,11 +711,19 @@ function doLogin(){
     errEl.textContent='Benutzer nicht gefunden – bitte "Login-Probleme?" verwenden.';
     errEl.style.display='block'; return;
   }
-  if(u.pw!==pw){
+  // Hash-Vergleich (mit automatischer Migration von Klartext)
+  var match=false;
+  if(isHashed(u.pw)){
+    match=(await hashPw(pw))===u.pw;
+  } else {
+    match=pw===u.pw;
+    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
+  }
+  if(!match){
     errEl.textContent='Falsches Passwort.';
     errEl.style.display='block'; return;
   }
-  cu=u;
+  cu=getUser(uid);
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
@@ -1178,7 +1207,7 @@ function userForm(u={}){
   return `
     <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
     <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
-    <div class="form-group"><label>Passwort *</label><input id="uf-pw" type="password" value="${esc(u.pw||'')}" autocomplete="new-password"></div>
+    <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
     <div class="form-group"><label>Rolle</label>
       <select id="uf-role" onchange="toggleFreelancerFields()">
         <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
@@ -1219,15 +1248,18 @@ function collectUserForm(){
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0
   };
 }
-function saveNewUser(){
+async function saveNewUser(){
   const u=collectUserForm();
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
+  u.pw=await hashPw(u.pw);
   mutate(d=>d.users.push(u));
   closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter hinzugefügt.','ok');
 }
-function saveEditUser(id){
+async function saveEditUser(id){
   const u=collectUserForm(); u.id=id;
+  if(u.pw){ u.pw=await hashPw(u.pw); }
+  else { const ex=getUser(id); if(ex) u.pw=ex.pw; } // bestehendes Hash behalten
   mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],u); });
   closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert.','ok');
   if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
@@ -1551,13 +1583,12 @@ function doEmergencyReset(){
   closeModal();
   location.reload();
 }
-function resetPasswordsOnly(){
+async function resetPasswordsOnly(){
   if(!confirm('Passwörter aller Benutzer auf Standard zurücksetzen?\nZeitdaten bleiben erhalten.')) return;
+  const hashMap={};
+  for(const def of DEFAULT_USERS){ hashMap[def.id]=await hashPw(def.pw); }
   mutate(d=>{
-    d.users.forEach(u=>{
-      const def=DEFAULT_USERS.find(x=>x.id===u.id);
-      if(def) u.pw=def.pw;
-    });
+    d.users.forEach(u=>{ if(hashMap[u.id]) u.pw=hashMap[u.id]; });
   });
   closeModal();
   toast('Passwörter zurückgesetzt.','ok');
