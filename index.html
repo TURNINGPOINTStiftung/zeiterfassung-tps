@@ -88,7 +88,10 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .chip-freiberuflich{background:#fff3cd;color:#856404}
 .chip-admin{background:#fee2e2;color:#991b1b}
 /* ── GF Berichte ── */
-.gf-report-card{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;transition:box-shadow .2s}
+.gf-team-group{margin-bottom:32px}
+.gf-team-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:2.5px solid var(--primary)}
+.gf-team-name{font-size:17px;font-weight:700;color:var(--primary)}
+.gf-report-card{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;transition:box-shadow .2s}
 .gf-report-card:hover{box-shadow:0 3px 12px rgba(0,0,0,.08)}
 .gf-report-card.gf-report-new{border-color:var(--warn);background:#fffbf5}
 .gf-report-title{font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px}
@@ -302,7 +305,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21r</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21s</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +491,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21r</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21s</div>
         </div>
       </div>
     </div>
@@ -2129,24 +2132,49 @@ function renderGFBerichte(){
     content.innerHTML='<p style="color:var(--muted);padding:20px 0">Noch keine Berichte eingegangen.</p>';
     return;
   }
-  reports.sort(function(a,b){ return new Date(b.submittedAt)-new Date(a.submittedAt); });
-  content.innerHTML=reports.map(function(r){
-    const dt=new Date(r.submittedAt);
-    const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-    const teams=(r.managedTeams&&r.managedTeams.length)?r.managedTeams.join(', '):'–';
-    const isNew=!r.seenAt;
-    return '<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
-      +'<div>'
-      +'<div class="gf-report-title">'+MONTHS[r.month-1]+' '+r.year+' &ndash; '+esc(teams)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
-      +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
-      +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'+(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')+'</div>'
-      +'</div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">👁 Anzeigen / Drucken</button>'
-      +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
-      +'</div>'
+  // Group by team name
+  const teamMap={};
+  reports.forEach(function(r){
+    const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
+    if(!teamMap[team]) teamMap[team]=[];
+    teamMap[team].push(r);
+  });
+  // Sort teams alphabetically
+  const teams=Object.keys(teamMap).sort(function(a,b){ return a.localeCompare(b,'de'); });
+  let html='';
+  teams.forEach(function(team){
+    const teamReports=teamMap[team].slice().sort(function(a,b){
+      if(b.year!==a.year) return b.year-a.year;
+      return b.month-a.month;
+    });
+    const newCount=teamReports.filter(function(r){ return !r.seenAt; }).length;
+    html+='<div class="gf-team-group">';
+    html+='<div class="gf-team-header"><span class="gf-team-name">🏢 '+esc(team)+'</span>'
+      +(newCount?'<span class="gf-new-badge">'+newCount+' NEU</span>':'')
+      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+teamReports.length+' Bericht'+(teamReports.length!==1?'e':'')+'</span>'
       +'</div>';
-  }).join('');
+    html+='<div>';
+    teamReports.forEach(function(r){
+      const dt=new Date(r.submittedAt);
+      const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      const isNew=!r.seenAt;
+      html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
+        +'<div>'
+        +'<div class="gf-report-title">'+MONTHS[r.month-1]+' '+r.year+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+        +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
+        +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
+          +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
+        +'</div>'
+        +'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
+        +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+        +'</div>'
+        +'</div>';
+    });
+    html+='</div></div>';
+  });
+  content.innerHTML=html;
 }
 
 function renderBuchhaltungHTML(u,entry,y,m){
