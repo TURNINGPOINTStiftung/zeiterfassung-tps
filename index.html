@@ -95,6 +95,18 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .gf-report-meta{font-size:12px;color:var(--muted);margin-top:3px}
 .gf-new-badge{display:inline-block;background:var(--warn);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle}
 
+/* ── Abwesenheiten ── */
+.ab-card{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;transition:box-shadow .2s}
+.ab-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.07)}
+.ab-card.ab-pending{border-color:var(--warn);background:#fffbf5}
+.ab-card.ab-approved{border-color:var(--ok);background:#f0fff4}
+.ab-card.ab-rejected{border-color:var(--danger);background:#fff5f5}
+.ab-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;display:inline-block}
+.ab-status.pending{background:#fff3cd;color:#856404}
+.ab-status.approved{background:#d4edda;color:#155724}
+.ab-status.rejected{background:#f8d7da;color:#721c24}
+.tab-badge{display:inline-block;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:middle}
+
 /* ── Time Table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}
 table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
@@ -289,6 +301,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
     <div class="nav-tab active" data-view="zeiterfassung" onclick="if(cu)viewEmpId=cu.id;switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
     <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
+    <div class="nav-tab" data-view="abwesenheiten" id="tab-abwesenheiten" style="display:none" onclick="switchView('abwesenheiten')">Abwesenheiten<span class="tab-badge" id="tab-ab-badge" style="display:none">0</span></div>
     <div class="nav-tab" data-view="einstellungen" id="tab-einstellungen" style="display:none" onclick="switchView('einstellungen')">Einstellungen</div>
   </nav>
 
@@ -412,6 +425,15 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
       <div id="gf-berichte-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
 
+    <!-- ─── Abwesenheiten ─── -->
+    <div class="view" id="view-abwesenheiten">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Abwesenheiten &amp; Urlaub</h2>
+        <button class="btn btn-ok btn-sm" onclick="showVacRequestForm()">+ Abwesenheit beantragen</button>
+      </div>
+      <div id="ab-content"><p style="color:var(--muted)">Wird geladen…</p></div>
+    </div>
+
     <!-- ─── Einstellungen ─── -->
     <div class="view" id="view-einstellungen">
       <h2 style="font-size:19px;font-weight:700;color:var(--primary);margin-bottom:16px">Einstellungen</h2>
@@ -523,13 +545,14 @@ const DEFAULT_USERS = [
   {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
 ];
 function freshData(){
-  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{}};
+  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{}};
 }
 function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
   if(!d.teamReports) d.teamReports={};
+  if(!d.vacRequests) d.vacRequests={};
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
   let adminSeen=false;
   d.users=d.users.filter(u=>{
@@ -563,7 +586,8 @@ async function initFirebase(){
       !data.users.some(u=>u.id==='admin') ||
       !data.teamReports ||
       data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams)) ||
-      data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined);
+      data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined) ||
+      !data.vacRequests;
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
     // Klartext-Passwörter automatisch hashen (einmalige Migration)
@@ -784,6 +808,7 @@ async function doLogin(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
   initApp();
+  updateAbBadge();
 }
 document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 function doLogout(){
@@ -821,6 +846,8 @@ function initApp(){
   document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF
   document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
+  // Abwesenheiten: alle Rollen
+  document.getElementById('tab-abwesenheiten').style.display='';
   // Einstellungen: nur Admin
   document.getElementById('tab-einstellungen').style.display=isAdmin?'':'none';
   // Teamberichte-Button: nur Leitung
@@ -854,6 +881,7 @@ function switchView(v){
   if(v==='uebersicht') renderOverview();
   if(v==='einstellungen') renderSettings();
   if(v==='gfberichte') renderGFBerichte();
+  if(v==='abwesenheiten') renderAbwesenheiten();
 }
 function changeMonth(delta){
   mon+=delta;
@@ -1577,6 +1605,172 @@ function viewTeamReport(key){
 function markReportSeen(key){
   mutate(function(d){ if(d.teamReports&&d.teamReports[key]) d.teamReports[key].seenAt=new Date().toISOString(); });
   renderGFBerichte();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ABWESENHEITSANTRÄGE
+// ═══════════════════════════════════════════════════════════════
+function countWorkDays(start,end){
+  let count=0, cur=new Date(start+'T12:00:00');
+  const endD=new Date(end+'T12:00:00');
+  while(cur<=endD){ const wd=cur.getDay(); if(wd!==0&&wd!==6) count++; cur.setDate(cur.getDate()+1); }
+  return count;
+}
+function showVacRequestForm(){
+  const today=new Date().toISOString().slice(0,10);
+  openModal(`
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Abwesenheit beantragen</h3>
+    <div class="form-group"><label>Art der Abwesenheit</label>
+      <select id="vr-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+        <option value="Urlaub">Urlaub</option>
+        <option value="Freistellung">Freistellung</option>
+        <option value="Sonstiges">Sonstiges</option>
+      </select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${today}" oninput="calcVrDays()"></div>
+      <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${today}" oninput="calcVrDays()"></div>
+    </div>
+    <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
+    <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:#fffbf5;border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:#856404">
+      ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
+    </div>
+    <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:11px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
+      <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="saveVacRequest()">📨 Antrag einreichen</button>
+    </div>
+    <script>calcVrDays()<\/script>`);
+}
+function calcVrDays(){
+  const f=document.getElementById('vr-from')?.value;
+  const t=document.getElementById('vr-to')?.value;
+  const info=document.getElementById('vr-days-info');
+  const hint=document.getElementById('vr-week-hint');
+  if(!f||!t||f>t){ if(info) info.textContent=''; return; }
+  const wd=countWorkDays(f,t);
+  if(info) info.textContent=`→ ${wd} Arbeitstag${wd!==1?'e':''}`;
+  if(hint) hint.style.display=wd>5?'block':'none';
+}
+async function saveVacRequest(){
+  const type=document.getElementById('vr-type').value;
+  const from=document.getElementById('vr-from').value;
+  const to=document.getElementById('vr-to').value;
+  const note=document.getElementById('vr-note').value.trim();
+  if(!from||!to){ toast('Bitte Zeitraum auswählen.','err'); return; }
+  if(from>to){ toast('Startdatum muss vor dem Enddatum liegen.','err'); return; }
+  const wd=countWorkDays(from,to);
+  const key=`${cu.id}_${from}_${to}`;
+  const req={id:key,userId:cu.id,userName:cu.name,team:cu.team||(getLeitungTeams(cu)[0]||''),
+    type,startDate:from,endDate:to,workDays:wd,note,
+    status:'pending',submittedAt:new Date().toISOString(),
+    reviewedBy:null,reviewedAt:null,reviewNote:''};
+  await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
+  closeModal(); renderAbwesenheiten(); toast('Antrag eingereicht. ✓','ok');
+}
+function showRejectModal(id){
+  const r=getData().vacRequests?.[id];
+  if(!r) return;
+  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  openModal(`
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">Antrag ablehnen</h3>
+    <p style="font-size:13px;margin-bottom:14px;color:var(--muted)">${esc(r.userName)}: ${r.type}, ${fmtD(r.startDate)} – ${fmtD(r.endDate)} (${r.workDays} AT)</p>
+    <div class="form-group"><label>Ablehnungsgrund <span style="color:var(--danger)">*</span></label>
+      <textarea id="reject-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Veranstaltung kollidiert mit dem Termin am…"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-danger" onclick="confirmRejectVac('${id}')">✗ Ablehnen</button>
+    </div>`);
+}
+function approveVacRequest(id){
+  const r=getData().vacRequests?.[id];
+  if(!r) return;
+  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?`)) return;
+  mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
+  renderAbwesenheiten(); toast('Antrag genehmigt. ✓','ok');
+}
+function confirmRejectVac(id){
+  const note=document.getElementById('reject-note').value.trim();
+  if(!note){ toast('Bitte einen Ablehnungsgrund angeben.','err'); return; }
+  mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='rejected'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); d.vacRequests[id].reviewNote=note; } });
+  closeModal(); renderAbwesenheiten(); toast('Antrag abgelehnt.','err');
+}
+function updateAbBadge(){
+  if(!cu) return;
+  const reqs=Object.values(getData().vacRequests||{});
+  let n=0;
+  if(cu.role==='admin') n=reqs.filter(r=>r.status==='pending').length;
+  else if(cu.role==='leitung') n=reqs.filter(r=>r.status==='pending'&&r.userId!==cu.id&&canSeeEmployee(cu,getUser(r.userId))).length;
+  const badge=document.getElementById('tab-ab-badge');
+  if(badge){ badge.textContent=n; badge.style.display=n>0?'inline-block':'none'; }
+}
+function renderAbwesenheiten(){
+  const d=getData();
+  const isAdmin=cu.role==='admin';
+  const isLeitung=cu.role==='leitung';
+  const isMgr=isAdmin||isLeitung;
+  const reqs=Object.values(d.vacRequests||{});
+  const fmtD=ds=>{ if(!ds) return '–'; const[y,m,dd]=ds.split('-'); return `${dd}.${m}.${y}`; };
+  const statusBadge=s=>({
+    pending:'<span class="ab-status pending">⏳ Ausstehend</span>',
+    approved:'<span class="ab-status approved">✓ Genehmigt</span>',
+    rejected:'<span class="ab-status rejected">✗ Abgelehnt</span>'
+  }[s]||'');
+  const canReview=r=>{
+    if(r.status!=='pending') return false;
+    if(isAdmin) return true;
+    if(isLeitung&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
+    return false;
+  };
+  const card=r=>{
+    const showName=isMgr&&r.userId!==cu.id;
+    const rnBtns=canReview(r)?`<div style="display:flex;gap:6px;margin-top:10px">
+      <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
+      <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
+    </div>`:'';
+    const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
+                r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
+    return `<div class="ab-card ab-${r.status}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            ${showName?`<strong style="font-size:14px">${esc(r.userName)}</strong>`:''}
+            <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(r.type)}</span>
+            ${statusBadge(r.status)}
+          </div>
+          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.team?` · ${esc(r.team)}`:''}</div>
+          ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
+          ${extra}${rnBtns}
+        </div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${new Date(r.submittedAt).toLocaleDateString('de-DE')}</div>
+      </div>
+    </div>`;
+  };
+  let html='';
+  // Manager: offene Anträge zuerst
+  if(isMgr){
+    const pending=reqs.filter(canReview).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+    if(pending.length) html+=`<section style="margin-bottom:28px">
+      <h3 style="font-size:15px;font-weight:700;color:var(--warn);margin-bottom:10px">⏳ Offene Anträge (${pending.length})</h3>
+      ${pending.map(card).join('')}</section>`;
+    const teamDone=reqs.filter(r=>{
+      if(r.status==='pending'||r.userId===cu.id) return false;
+      if(isAdmin) return true;
+      const u=getUser(r.userId); return u&&canSeeEmployee(cu,u);
+    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,30);
+    if(teamDone.length) html+=`<section style="margin-bottom:28px">
+      <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
+      ${teamDone.map(card).join('')}</section>`;
+  }
+  // Eigene Anträge
+  const myReqs=reqs.filter(r=>r.userId===cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  html+=`<section>
+    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Meine Anträge</h3>
+    ${myReqs.length?myReqs.map(card).join(''):'<p style="color:var(--muted);font-size:13px">Noch keine Anträge gestellt.</p>'}
+  </section>`;
+  document.getElementById('ab-content').innerHTML=html;
+  updateAbBadge();
 }
 
 function renderGFBerichte(){
