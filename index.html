@@ -287,7 +287,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21g</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21h</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -471,7 +471,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21g</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21h</div>
         </div>
       </div>
     </div>
@@ -733,7 +733,33 @@ function monthIST(entry){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd),0);
 }
-function monthSOLL(user){ return isFreelancer(user)?0:(user.wh||0)*4*60; }
+function monthSOLL(user,y,m){
+  if(isFreelancer(user)) return 0;
+  const dailyMin=Math.round((user.wh||0)/5*60);
+  if(!y||!m) return (user.wh||0)*4*60; // Fallback ohne Datum
+  const dim=daysInMonth(y,m);
+  const hols=getHolidays(y,user.bundesland||'');
+  let workdays=0;
+  for(let d=1;d<=dim;d++){
+    const ds=dateStr(y,m,d);
+    const dw=new Date(y,m-1,d).getDay();
+    if(dw!==0&&dw!==6&&!hols.has(ds)) workdays++;
+  }
+  return workdays*dailyMin;
+}
+function monthSOLLdays(user,y,m){
+  // Hilfsfunktion: Anzahl der Arbeitstage ohne Feiertage
+  if(isFreelancer(user)||!y||!m) return 0;
+  const dim=daysInMonth(y,m);
+  const hols=getHolidays(y,user.bundesland||'');
+  let workdays=0;
+  for(let d=1;d<=dim;d++){
+    const ds=dateStr(y,m,d);
+    const dw=new Date(y,m-1,d).getDay();
+    if(dw!==0&&dw!==6&&!hols.has(ds)) workdays++;
+  }
+  return workdays;
+}
 function countZuord(entry,val){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).filter(dd=>(dd.b1zuord||'')=== val).length;
@@ -1040,14 +1066,16 @@ function renderSummary(uid,user,entry,istMin){
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
     }
   } else {
-    const soll=monthSOLL(user);
+    const soll=monthSOLL(user,year,mon);
     const diff=istMin-(soll-(carryH)*60);
     const vd=vacDays(entry);
     const sk=sickDays(entry);
     const vacUsed=totalVacUsed(uid,year);
     const vacLeft=user.al-vacUsed;
+    const sollDays=monthSOLLdays(user,year,mon);
+    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(Math.round((user.wh||0)/5*60))}`:'4 × Wochenarbeitszeit';
     cards=[
-      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:'4 × Wochenarbeitszeit'},
+      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUsed} von ${user.al} im Jahr`},
@@ -1851,7 +1879,7 @@ function renderBuchhaltungHTML(u,entry,y,m){
       +'</tr>';
   }
   const isFree=isFreelancer(u);
-  const soll=monthSOLL(u);
+  const soll=monthSOLL(u,y,m);
   const carryH=entry.carryover||0;
   const diff=monthTotal-(soll-carryH*60);
   return '<div class="emp-section">'
