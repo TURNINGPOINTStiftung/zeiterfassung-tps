@@ -305,7 +305,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21s</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21t</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -491,7 +491,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21s</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21t</div>
         </div>
       </div>
     </div>
@@ -1731,7 +1731,14 @@ function renderSignature(user,entry){
 // ═══════════════════════════════════════════════════════════════
 // PRINT FUNCTIONS
 // ═══════════════════════════════════════════════════════════════
-function printFull(){ window.print(); }
+function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
+function printFull(){
+  const u=getUser(viewEmpId||cu.id);
+  const prev=document.title;
+  document.title=pdfTitle(year,mon,u?u.name:'Zeiterfassung');
+  window.print();
+  document.title=prev;
+}
 function printTeamBuchhaltung(){
   const d=getData();
   const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
@@ -1743,7 +1750,7 @@ function printTeamBuchhaltung(){
   const win=window.open('','_blank');
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>Teamberichte '+MONTHS[mon-1]+' '+year+'</title>'
+    +'<title>'+pdfTitle(year,mon,getLeitungTeams(cu)[0]||'Team')+'</title>'
     +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
@@ -1792,7 +1799,7 @@ function sendTeamReport(){
   const win=window.open('','_blank');
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>Teambericht '+MONTHS[mon-1]+' '+year+'</title>'
+    +'<title>'+pdfTitle(year,mon,getLeitungTeams(cu)[0]||'Team')+'</title>'
     +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
@@ -1824,7 +1831,7 @@ function sendTeamReportForTeam(teamName,empIds,y,m){
   const win=window.open('','_blank');
   if(!win){ toast('Popup blockiert – Bericht wurde trotzdem gespeichert.','warn'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>Teambericht '+teamName+' – '+MONTHS[m-1]+' '+y+'</title>'
+    +'<title>'+pdfTitle(y,m,teamName)+'</title>'
     +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
@@ -1843,7 +1850,7 @@ function viewTeamReport(key){
   const win=window.open('','_blank');
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>Teambericht '+MONTHS[r.month-1]+' '+r.year+' – '+esc(r.leitungName)+'</title>'
+    +'<title>'+pdfTitle(r.year,r.month,r.teamName||(r.managedTeams&&r.managedTeams[0])||'Team')+'</title>'
     +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
@@ -2249,12 +2256,15 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +'</div>';
 }
 function printBuchhaltung(){
-  // Temporarily hide Bemerkung columns and adjust colspans
   const bemCells=document.querySelectorAll('.bem-col');
   const blockHeads=document.querySelectorAll('.block-head');
   bemCells.forEach(el=>el.style.display='none');
   blockHeads.forEach(el=>el.setAttribute('colspan','4'));
+  const u=getUser(viewEmpId||cu.id);
+  const prev=document.title;
+  document.title=pdfTitle(year,mon,u?u.name:'Zeiterfassung');
   window.print();
+  document.title=prev;
   bemCells.forEach(el=>el.style.display='');
   blockHeads.forEach(el=>el.setAttribute('colspan','5'));
 }
