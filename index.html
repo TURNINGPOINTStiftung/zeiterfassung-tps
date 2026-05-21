@@ -132,6 +132,8 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt thead th.l{text-align:left;padding-left:8px}
 .zt thead th.block-head{background:#2d4f70}
 .zt thead th.sep-head{background:#0e2235;width:8px;padding:0}
+/* Freiberufler: Block 2 + Kleinteilig ausblenden */
+.no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col{display:none!important}
 .zt tbody tr{border-bottom:1px solid var(--border)}
 .zt tbody tr:nth-child(even){background:var(--row-alt)}
 .zt tbody tr.weekend{background:var(--weekend)}
@@ -306,7 +308,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21v</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21w</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -365,15 +367,15 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <th rowspan="2">KW</th>
               <th rowspan="2">Tag</th>
               <th colspan="5" class="block-head">Block 1</th>
-              <th class="sep-head" rowspan="2"></th>
-              <th colspan="5" class="block-head">Block 2</th>
-              <th colspan="3">Kleinteilig</th>
+              <th class="sep-head sep-col" rowspan="2"></th>
+              <th colspan="5" class="block-head b2-col">Block 2</th>
+              <th colspan="3" class="kt-col">Kleinteilig</th>
               <th rowspan="2">Gesamt</th>
             </tr>
             <tr>
               <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
-              <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
-              <th>Min</th><th>Zuordnung</th><th>∑</th>
+              <th class="b2-col">von</th><th class="b2-col">bis</th><th class="b2-col">Zuordnung</th><th class="bem-col b2-col">Bemerkung</th><th class="b2-col">∑</th>
+              <th class="kt-col">Min</th><th class="kt-col">Zuordnung</th><th class="kt-col">∑</th>
             </tr>
           </thead>
           <tbody id="zt-body"></tbody>
@@ -381,9 +383,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <tr>
               <td class="l" colspan="3">Monatssumme IST</td>
               <td colspan="5"></td>
-              <td class="sep-c"></td>
-              <td colspan="5"></td>
-              <td colspan="3"></td>
+              <td class="sep-c sep-col"></td>
+              <td class="b2-col" colspan="5"></td>
+              <td class="kt-col" colspan="3"></td>
               <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
             </tr>
           </tfoot>
@@ -492,7 +494,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21v</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21w</div>
         </div>
       </div>
     </div>
@@ -703,8 +705,22 @@ function roundToQuarter(val){
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
 function td_tchange(ds,field,val){
-  const r=roundToQuarter(val);
-  setDay(viewEmpId||cu.id,year,mon,ds,field,r);
+  const uid=viewEmpId||cu.id;
+  setDay(uid,year,mon,ds,field,val);
+  // Gesamtdauer auf volle Viertelstunden abrunden, Startzeit vorne anpassen
+  const block=field.startsWith('b2')?'2':'1';
+  const vonF=`b${block}von`, bisF=`b${block}bis`;
+  const entry=getEntry(uid,year,mon);
+  const day=(entry.days||{})[ds]||{};
+  const von=field===vonF?val:(day[vonF]||'');
+  const bis=field===bisF?val:(day[bisF]||'');
+  if(von&&bis){
+    const rawMin=diffMin(von,bis);
+    if(rawMin>=15){
+      const rounded=Math.floor(rawMin/15)*15;
+      if(rounded!==rawMin) setDay(uid,year,mon,ds,vonF,addMin(bis,-rounded));
+    }
+  }
   renderZeiterfassung();
 }
 function isoWeek(date){
@@ -1081,21 +1097,22 @@ function renderZeiterfassung(){
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0})">${catOptions(dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c">${b1min>0?minFmt(b1min):''}</td>
-      <td class="sep-c"></td>
-      <td><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptions(dd.b2zuord||'')}</select></td>
-      <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
-      <td class="sum-c">${b2min>0?minFmt(b2min):''}</td>
-      <td><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
-      <td><select class="zuord" style="width:100px" ${dis?'disabled':''} onchange="td_change('${ds}','ktzuord',this.value)">${catOptions(dd.ktzuord||'')}</select></td>
-      <td class="sum-c">${ktm>0?minFmt(ktm):''}</td>
+      <td class="sep-c sep-col"></td>
+      <td class="b2-col"><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptions(dd.b2zuord||'')}</select></td>
+      <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
+      <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td class="kt-col"><select class="zuord" style="width:100px" ${dis?'disabled':''} onchange="td_change('${ds}','ktzuord',this.value)">${catOptions(dd.ktzuord||'')}</select></td>
+      <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="total-c${over?' over':''}">${dayMin>0?hFmt(dayMin):''}</td>
     `;
     tbody.appendChild(tr);
   }
 
   document.getElementById('tfoot-total').textContent=hFmt(monthTotal);
+  document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
   renderSummary(uid,user,entry,monthTotal);
   renderZuordBreakdown(entry);
   renderActionBar(uid,user,entry,isLeiter);
