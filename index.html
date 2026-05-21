@@ -222,8 +222,16 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt tbody tr.holiday td.date-c,.zt tbody tr.holiday td.day-c{color:var(--danger)!important}
 .chip-geschaeftsfuehrer{background:#f3e8ff;color:#5b21b6}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
+
+<div id="fb-loading" style="position:fixed;inset:0;background:linear-gradient(135deg,#1a3a5c 0%,#2d6099 100%);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif">
+  <div style="font-size:42px;margin-bottom:18px">⏳</div>
+  <div style="font-size:18px;font-weight:700;margin-bottom:6px">TURNING POINT Stiftung</div>
+  <div style="font-size:13px;opacity:.7">Zeiterfassung wird geladen …</div>
+</div>
 
 <!-- ═══════════════ LOGIN ═══════════════ -->
 <div id="login-screen">
@@ -431,6 +439,21 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 
 <script>
 // ═══════════════════════════════════════════════════════════════
+// FIREBASE – gemeinsamer Cloud-Speicher
+// ═══════════════════════════════════════════════════════════════
+firebase.initializeApp({
+  apiKey:'AIzaSyA1SxyoH1NwIk6nWK66PNvV2EmvSwPJNOk',
+  authDomain:'zeiterfassung-tps.firebaseapp.com',
+  databaseURL:'https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app',
+  projectId:'zeiterfassung-tps',
+  storageBucket:'zeiterfassung-tps.firebasestorage.app',
+  messagingSenderId:'527053392310',
+  appId:'1:527053392310:web:37d12a851b0e5c0acb9917'
+});
+const _fbRef=firebase.database().ref('zeiterfassung');
+let _dataCache=null;
+
+// ═══════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 const MONTHS = ['Januar','Februar','März','April','Mai','Juni',
@@ -465,28 +488,30 @@ const DEFAULT_USERS = [
 function freshData(){
   return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS]};
 }
-function loadData(){
-  try{
-    const raw=localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      const d=JSON.parse(raw);
-      if(d&&Array.isArray(d.users)&&d.users.length>0){
-        if(!d.cats) d.cats=[...DEFAULT_CATS];
-        if(!d.teams) d.teams=[...DEFAULT_TEAMS];
-        d.users.forEach(u=>{ if(u.bundesland===undefined) u.bundesland=''; });
-        // add Jens if missing
-        if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
-        return d;
-      }
-    }
-  }catch(e){ console.warn('Zeiterfassung: Daten konnten nicht geladen werden, setze zurück.',e); }
-  const d=freshData(); saveRaw(d); return d;
+function _migrate(d){
+  if(!d.cats) d.cats=[...DEFAULT_CATS];
+  if(!d.teams) d.teams=[...DEFAULT_TEAMS];
+  if(!d.entries) d.entries={};
+  d.users.forEach(u=>{ if(u.bundesland===undefined) u.bundesland=''; });
+  if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
+  return d;
 }
+async function initFirebase(){
+  const snap=await _fbRef.once('value');
+  const data=snap.val();
+  if(data&&Array.isArray(data.users)&&data.users.length>0){
+    _dataCache=_migrate(data);
+  } else {
+    _dataCache=freshData();
+    await _fbRef.set(_dataCache);
+  }
+}
+function getData(){ return _dataCache||freshData(); }
 function saveRaw(d){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
-  catch(e){ console.warn('Zeiterfassung: Speichern fehlgeschlagen',e); }
+  _dataCache=d;
+  try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
+  _fbRef.set(d).catch(e=>console.warn('Firebase sync error:',e));
 }
-function getData(){ return loadData(); }
 function mutate(fn){ const d=getData(); fn(d); saveRaw(d); }
 
 function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
@@ -1543,13 +1568,20 @@ function resetPasswordsOnly(){
 // BOOT
 // ═══════════════════════════════════════════════════════════════
 (function(){
-  try {
-    populateLoginDropdown();
-  } catch(e) {
-    var el = document.getElementById('login-user-list');
-    if(el) el.innerHTML = '<div style="background:#fdd;border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: ' + e.message + '</div>';
-    console.error('Boot-Fehler:', e);
-  }
+  initFirebase().then(function(){
+    document.getElementById('fb-loading').style.display='none';
+    try{ populateLoginDropdown(); }
+    catch(e){
+      var el=document.getElementById('login-user-list');
+      if(el) el.innerHTML='<div style="background:#fdd;border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: '+e.message+'</div>';
+      console.error('Boot-Fehler:',e);
+    }
+  }).catch(function(e){
+    console.error('Firebase Verbindungsfehler:',e);
+    document.getElementById('fb-loading').innerHTML=
+      '<div style="font-size:17px;color:#ff6b6b;font-weight:700">&#9888; Verbindungsfehler</div>'
+      +'<div style="font-size:13px;margin-top:10px;opacity:.8">Bitte Seite neu laden.<br><small>'+e.message+'</small></div>';
+  });
 })();
 </script>
 </body>
