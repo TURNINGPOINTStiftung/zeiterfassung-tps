@@ -796,11 +796,11 @@ function initApp(){
 
   // Tab-Sichtbarkeit je Rolle
   const isLeitung=cu.role==='leitung';
-  // Zeiterfassung: nur Mitarbeiter/Freiberuflich und Leitung
+  // Zeiterfassung: GF hat keinen Zugriff
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=(isGF||isAdmin)?'none':'';
-  // Mitarbeiterübersicht: nur Leitung
-  document.getElementById('tab-uebersicht').style.display=isLeitung?'':'none';
+  if(tabZE) tabZE.style.display=isGF?'none':'';
+  // Mitarbeiterübersicht: Leitung + Admin
+  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF
   document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
   // Einstellungen: nur Admin
@@ -809,21 +809,23 @@ function initApp(){
   const btnTeam=document.getElementById('btn-teamberichte');
   if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
 
-  if(isLeitung){
+  if(isLeitung||isAdmin){
     rebuildEmpSelect();
     populateUeberYear();
     populateUeberTeam();
   }
   // Startansicht je Rolle
   if(isGF) switchView('gfberichte');
-  else if(isAdmin) switchView('einstellungen');
+  else if(isAdmin) switchView('uebersicht');
   else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
   const sel=document.getElementById('emp-select');
   sel.innerHTML='';
   getData().users
-    .filter(u=>!isManagerRole(u))
+    .filter(u=>cu.role==='admin'
+      ? (u.role!=='admin'&&u.role!=='geschaeftsfuehrer')
+      : !isManagerRole(u))
     .filter(u=>canSeeEmployee(cu,u))
     .forEach(u=>{
       const o=document.createElement('option');
@@ -1154,6 +1156,9 @@ function renderOverview(){
   let employees;
   if(cu.role==='geschaeftsfuehrer'){
     employees=d.users.filter(u=>u.role==='leitung');
+  } else if(cu.role==='admin'){
+    employees=d.users.filter(u=>u.role!=='admin'&&u.role!=='geschaeftsfuehrer');
+    if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
   } else {
     employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
     if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
