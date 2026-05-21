@@ -286,7 +286,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   </header>
 
   <nav class="app-nav" id="app-nav">
-    <div class="nav-tab active" data-view="zeiterfassung" onclick="switchView('zeiterfassung')">Zeiterfassung</div>
+    <div class="nav-tab active" data-view="zeiterfassung" onclick="if(cu)viewEmpId=cu.id;switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
     <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
     <div class="nav-tab" data-view="einstellungen" id="tab-einstellungen" style="display:none" onclick="switchView('einstellungen')">Einstellungen</div>
@@ -303,6 +303,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
         <span id="month-status-badge" class="status-badge s-draft">Entwurf</span>
         <span id="emp-select-wrap" style="display:none">
           <select id="emp-select" onchange="onEmpSelect()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        </span>
+        <span id="viewing-other-banner" style="display:none;background:#e8f0fe;color:var(--primary);font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1.5px solid var(--primary-l)">
+          👁 Ansicht: <span id="viewing-other-name"></span>
+          &nbsp;<button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px" onclick="if(cu)viewEmpId=cu.id;renderZeiterfassung()">Eigene anzeigen</button>
         </span>
         <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap" class="no-print">
           <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken (vollständig)</button>
@@ -806,13 +810,13 @@ function initApp(){
   const isAdmin=cu.role==='admin';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
-  viewEmpId=isMgr?null:cu.id;
+  viewEmpId=cu.id; // Zeiterfassung zeigt immer die eigene AZ
 
   // Tab-Sichtbarkeit je Rolle
   const isLeitung=cu.role==='leitung';
-  // Zeiterfassung: GF hat keinen Zugriff
+  // Zeiterfassung: GF + Admin haben keine eigene AZ
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=isGF?'none':'';
+  if(tabZE) tabZE.style.display=(isGF||isAdmin)?'none':'';
   // Mitarbeiterübersicht: Leitung + Admin
   document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF
@@ -824,36 +828,20 @@ function initApp(){
   if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
 
   if(isLeitung||isAdmin){
-    rebuildEmpSelect();
     populateUeberYear();
     populateUeberTeam();
   }
   // Startansicht je Rolle
   if(isGF) switchView('gfberichte');
   else if(isAdmin) switchView('uebersicht');
+  else if(isLeitung){ switchView('zeiterfassung'); }
   else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
-  const sel=document.getElementById('emp-select');
-  sel.innerHTML='';
-  getData().users
-    .filter(u=>cu.role==='admin'
-      ? (u.role!=='admin'&&u.role!=='geschaeftsfuehrer')
-      : !isManagerRole(u))
-    .filter(u=>canSeeEmployee(cu,u))
-    .forEach(u=>{
-      const o=document.createElement('option');
-      o.value=u.id;
-      o.textContent=u.name+(u.team?` [${u.team}]`:'');
-      sel.appendChild(o);
-    });
-  if(sel.options.length>0){
-    viewEmpId=viewEmpId||sel.options[0].value;
-    for(let o of sel.options){ if(o.value===viewEmpId){ o.selected=true; break; } }
-    document.getElementById('emp-select-wrap').style.display='inline';
-  } else {
-    document.getElementById('emp-select-wrap').style.display='none';
-  }
+  // Dropdown im Zeiterfassungs-Tab wird nicht mehr benötigt
+  // (Navigation zu Mitarbeiter-AZ erfolgt über die Mitarbeiterübersicht)
+  document.getElementById('emp-select-wrap').style.display='none';
+  if(!viewEmpId||!getUser(viewEmpId)) viewEmpId=cu?cu.id:null;
 }
 function onEmpSelect(){
   viewEmpId=document.getElementById('emp-select').value;
@@ -898,6 +886,14 @@ function renderZeiterfassung(){
   const canEdit=(cu.id===uid&&entry.status==='draft')||
                 (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
   const readonly=!canEdit;
+
+  // Banner: "fremde AZ" nur anzeigen wenn Leitung/Admin eine andere AZ betrachtet
+  const viewingOther=cu&&uid!==cu.id&&isManagerRole(cu);
+  const banner=document.getElementById('viewing-other-banner');
+  if(banner){
+    banner.style.display=viewingOther?'inline-flex':'none';
+    if(viewingOther){ const n=document.getElementById('viewing-other-name'); if(n) n.textContent=user.name; }
+  }
 
   document.getElementById('month-title').textContent=`${MONTHS[mon-1]} ${year}`;
   document.getElementById('info-name').textContent=user.name;
@@ -1231,7 +1227,6 @@ function renderOverview(){
 }
 function openEmpMonth(uid){
   viewEmpId=uid;
-  rebuildEmpSelect();
   switchView('zeiterfassung');
 }
 
