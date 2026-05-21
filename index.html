@@ -445,6 +445,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version 2026-05-21c</div>
         </div>
       </div>
     </div>
@@ -577,9 +578,9 @@ function getData(){ return _dataCache||freshData(); }
 function saveRaw(d){
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
-  _fbRef.set(d).catch(e=>{ console.warn('Firebase sync error:',e); toast('⚠ Speichern fehlgeschlagen – bitte Seite neu laden.','err'); });
+  return _fbRef.set(d).catch(e=>{ console.warn('Firebase sync error:',e); toast('⚠ Speichern fehlgeschlagen – bitte Seite neu laden.','err'); });
 }
-function mutate(fn){ const d=getData(); fn(d); saveRaw(d); }
+function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
 
 function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
 function getEntry(uid,y,m){
@@ -1370,16 +1371,16 @@ async function saveNewUser(){
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   u.pw=await hashPw(u.pw);
-  mutate(d=>d.users.push(u));
-  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter hinzugefügt.','ok');
+  await mutate(d=>d.users.push(u));
+  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 async function saveEditUser(id){
   const u=collectUserForm(); u.id=id;
   if(id==='admin') u.role='admin'; // Admin-Rolle kann nie geändert werden
   if(u.pw){ u.pw=await hashPw(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; } // bestehendes Hash behalten
-  mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
-  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert.','ok');
+  await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
+  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
 }
 function deleteUser(id){
