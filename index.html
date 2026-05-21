@@ -106,6 +106,20 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .ab-status.approved{background:#d4edda;color:#155724}
 .ab-status.rejected{background:#f8d7da;color:#721c24}
 .tab-badge{display:inline-block;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;vertical-align:middle}
+/* ── Anstehende Abwesenheiten ── */
+.upcoming-section{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:24px}
+.upcoming-section h3{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.upcoming-list{display:flex;flex-direction:column;gap:6px}
+.upcoming-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;background:var(--bg);border-left:3px solid var(--ok);font-size:13px;flex-wrap:wrap}
+.upcoming-row.today{border-left-color:var(--accent);background:#fff8f4}
+.upcoming-row.soon{border-left-color:var(--warn);background:#fffbf5}
+.upcoming-row .upc-name{font-weight:700;min-width:120px}
+.upcoming-row .upc-type{color:var(--primary);font-weight:600}
+.upcoming-row .upc-dates{color:var(--muted);font-size:12px}
+.upcoming-row .upc-badge{margin-left:auto;font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;white-space:nowrap}
+.upc-badge.active{background:#d4edda;color:#155724}
+.upc-badge.soon{background:#fff3cd;color:#856404}
+.upc-badge.later{background:#e8f0fe;color:#1a3a5c}
 
 /* ── Time Table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}
@@ -288,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21k</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21l</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -474,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21k</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21l</div>
         </div>
       </div>
     </div>
@@ -1917,7 +1931,54 @@ function renderAbwesenheiten(){
       </div>
     </div>`;
   };
-  let html='';
+  // ── Anstehende Abwesenheiten (Vorschau) ──
+  const today=new Date(); today.setHours(0,0,0,0);
+  const todayStr=today.toISOString().slice(0,10);
+  // Genehmigte Anträge die noch nicht beendet sind
+  const upcoming=reqs.filter(r=>{
+    if(r.status!=='approved') return false;
+    if(r.endDate<todayStr) return false; // bereits vergangen
+    if(!isMgr && r.userId!==cu.id) return false; // Mitarbeiter nur eigene
+    if(isMgr && r.userId!==cu.id){
+      const u=getUser(r.userId);
+      if(!u||!canSeeEmployee(cu,u)) return false;
+    }
+    return true;
+  }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+
+  let upcomingHtml='';
+  if(upcoming.length){
+    const rows=upcoming.map(r=>{
+      const start=new Date(r.startDate+'T12:00:00');
+      const end=new Date(r.endDate+'T12:00:00');
+      const daysUntil=Math.round((start-today)/86400000);
+      const isActive=start<=today&&end>=today;
+      const isSoon=!isActive&&daysUntil<=14;
+      let badgeCls,badgeTxt;
+      if(isActive){
+        const remaining=Math.round((end-today)/86400000)+1;
+        badgeCls='active'; badgeTxt=`Läuft · noch ${remaining} Tag${remaining!==1?'e':''}`;
+      } else if(isSoon){
+        badgeCls='soon'; badgeTxt=`in ${daysUntil} Tag${daysUntil!==1?'en':''}`;
+      } else {
+        badgeCls='later'; badgeTxt=`in ${daysUntil} Tagen`;
+      }
+      const showName=isMgr&&r.userId!==cu.id;
+      const fmtShort=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.`; };
+      return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
+        ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
+        <span class="upc-type">${esc(r.type)}</span>
+        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.team?` · ${esc(r.team)}`:''}</span>
+        <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
+      </div>`;
+    }).join('');
+    upcomingHtml=`<div class="upcoming-section">
+      <h3>📅 Anstehende &amp; laufende Abwesenheiten <span style="font-size:12px;font-weight:400;color:var(--muted)">(${upcoming.length})</span></h3>
+      <div class="upcoming-list">${rows}</div>
+    </div>`;
+  }
+
+  let html=upcomingHtml;
   // Manager: offene Anträge zuerst
   if(isMgr){
     const pending=reqs.filter(canReview).sort((a,b)=>a.startDate.localeCompare(b.startDate));
