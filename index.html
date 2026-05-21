@@ -287,7 +287,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21h</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21i</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -471,7 +471,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21h</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21i</div>
         </div>
       </div>
     </div>
@@ -733,10 +733,13 @@ function monthIST(entry){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd),0);
 }
+function isVollzeit(user){ return !isFreelancer(user)&&(user.wh||0)>=39; }
 function monthSOLL(user,y,m){
   if(isFreelancer(user)) return 0;
-  const dailyMin=Math.round((user.wh||0)/5*60);
-  if(!y||!m) return (user.wh||0)*4*60; // Fallback ohne Datum
+  const wh=user.wh||0;
+  // Feiertags-Abzug nur für Vollzeit (≥39h/Woche)
+  if(!isVollzeit(user)||!y||!m) return wh*4*60;
+  const dailyMin=Math.round(wh/5*60);
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,user.bundesland||'');
   let workdays=0;
@@ -748,8 +751,8 @@ function monthSOLL(user,y,m){
   return workdays*dailyMin;
 }
 function monthSOLLdays(user,y,m){
-  // Hilfsfunktion: Anzahl der Arbeitstage ohne Feiertage
-  if(isFreelancer(user)||!y||!m) return 0;
+  // Hilfsfunktion: Anzahl Arbeitstage ohne Feiertage (nur Vollzeit)
+  if(!isVollzeit(user)||!y||!m) return 0;
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,user.bundesland||'');
   let workdays=0;
