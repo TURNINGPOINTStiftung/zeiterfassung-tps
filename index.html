@@ -110,14 +110,14 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .upcoming-section{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:24px}
 .upcoming-section h3{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .upcoming-list{display:flex;flex-direction:column;gap:6px}
-.upcoming-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;background:var(--bg);border-left:3px solid var(--ok);font-size:13px;flex-wrap:wrap}
-.upcoming-row.today{border-left-color:var(--accent);background:#fff8f4}
+.upcoming-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;background:var(--bg);border-left:3px solid var(--primary-l);font-size:13px;flex-wrap:wrap}
+.upcoming-row.today{border-left-color:var(--danger);background:#fff5f5}
 .upcoming-row.soon{border-left-color:var(--warn);background:#fffbf5}
 .upcoming-row .upc-name{font-weight:700;min-width:120px}
 .upcoming-row .upc-type{color:var(--primary);font-weight:600}
 .upcoming-row .upc-dates{color:var(--muted);font-size:12px}
 .upcoming-row .upc-badge{margin-left:auto;font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;white-space:nowrap}
-.upc-badge.active{background:#d4edda;color:#155724}
+.upc-badge.active{background:#f8d7da;color:#721c24}
 .upc-badge.soon{background:#fff3cd;color:#856404}
 .upc-badge.later{background:#e8f0fe;color:#1a3a5c}
 
@@ -302,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21l</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21m</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21l</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21m</div>
         </div>
       </div>
     </div>
@@ -1798,14 +1798,32 @@ function countWorkDays(start,end){
 }
 function showVacRequestForm(){
   const today=new Date().toISOString().slice(0,10);
+  const isMgr=cu.role==='leitung'||cu.role==='admin'||cu.role==='geschaeftsfuehrer';
+  const d=getData();
+  // Mitarbeiter die dieser Manager sehen kann
+  const teamEmps=isMgr
+    ? d.users.filter(u=>!isManagerRole(u)&&canSeeEmployee(cu,u))
+    : [];
+  const empSelector=isMgr&&teamEmps.length
+    ? `<div class="form-group"><label>Für wen?</label>
+        <select id="vr-emp" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="calcVrDays()">
+          <option value="">– Mich selbst –</option>
+          ${teamEmps.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+        </select></div>`
+    : '';
   openModal(`
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Abwesenheit beantragen</h3>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Abwesenheit eintragen</h3>
+    ${empSelector}
     <div class="form-group"><label>Art der Abwesenheit</label>
-      <select id="vr-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <select id="vr-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="onVrTypeChange()">
         <option value="Urlaub">Urlaub</option>
+        <option value="AU/Krank">AU / Krank</option>
         <option value="Freistellung">Freistellung</option>
         <option value="Sonstiges">Sonstiges</option>
       </select></div>
+    <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
+      🤒 Krankmeldung – wird sofort als aktiv eingetragen (kein Genehmigungsschritt).
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${today}" oninput="calcVrDays()"></div>
       <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${today}" oninput="calcVrDays()"></div>
@@ -1822,6 +1840,11 @@ function showVacRequestForm(){
     </div>
     <script>calcVrDays()<\/script>`);
 }
+function onVrTypeChange(){
+  const t=document.getElementById('vr-type')?.value;
+  const hint=document.getElementById('vr-krank-hint');
+  if(hint) hint.style.display=t==='AU/Krank'?'block':'none';
+}
 function calcVrDays(){
   const f=document.getElementById('vr-from')?.value;
   const t=document.getElementById('vr-to')?.value;
@@ -1836,17 +1859,34 @@ async function saveVacRequest(){
   const type=document.getElementById('vr-type').value;
   const from=document.getElementById('vr-from').value;
   const to=document.getElementById('vr-to').value;
-  const note=document.getElementById('vr-note').value.trim();
+  const note=document.getElementById('vr-note')?.value.trim()||'';
   if(!from||!to){ toast('Bitte Zeitraum auswählen.','err'); return; }
   if(from>to){ toast('Startdatum muss vor dem Enddatum liegen.','err'); return; }
+  // Ziel-Mitarbeiter bestimmen (Manager kann für Teammitglied eintragen)
+  const empSelVal=document.getElementById('vr-emp')?.value||'';
+  const d=getData();
+  const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:cu;
+  const forOther=targetUser.id!==cu.id;
+  const isSick=type==='AU/Krank';
+  // AU/Krank und Eintragungen für andere: sofort genehmigt
+  const autoApprove=isSick||forOther;
   const wd=countWorkDays(from,to);
-  const key=`${cu.id}_${from}_${to}`;
-  const req={id:key,userId:cu.id,userName:cu.name,team:cu.team||(getLeitungTeams(cu)[0]||''),
-    type,startDate:from,endDate:to,workDays:wd,note,
-    status:'pending',submittedAt:new Date().toISOString(),
-    reviewedBy:null,reviewedAt:null,reviewNote:''};
+  const key=`${targetUser.id}_${from}_${to}`;
+  const now=new Date().toISOString();
+  const req={
+    id:key, userId:targetUser.id, userName:targetUser.name,
+    team:targetUser.team||(getLeitungTeams(targetUser)[0]||''),
+    type, startDate:from, endDate:to, workDays:wd, note,
+    status:autoApprove?'approved':'pending',
+    submittedAt:now,
+    reviewedBy:autoApprove?cu.id:null,
+    reviewedAt:autoApprove?now:null,
+    reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
+  };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-  closeModal(); renderAbwesenheiten(); toast('Antrag eingereicht. ✓','ok');
+  closeModal(); renderAbwesenheiten();
+  if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
+  else toast('Antrag eingereicht – wartet auf Genehmigung. ✓','ok');
 }
 function showRejectModal(id){
   const r=getData().vacRequests?.[id];
@@ -1965,9 +2005,10 @@ function renderAbwesenheiten(){
       }
       const showName=isMgr&&r.userId!==cu.id;
       const fmtShort=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.`; };
+      const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Freistellung'?'📋 ':'📌 ';
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
         ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
-        <span class="upc-type">${esc(r.type)}</span>
+        <span class="upc-type">${typeIcon}${esc(r.type)}</span>
         <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.team?` · ${esc(r.team)}`:''}</span>
         <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
       </div>`;
