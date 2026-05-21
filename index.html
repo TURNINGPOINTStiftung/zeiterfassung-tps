@@ -302,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21m</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21n</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21m</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21n</div>
         </div>
       </div>
     </div>
@@ -1801,8 +1801,10 @@ function showVacRequestForm(){
   const isMgr=cu.role==='leitung'||cu.role==='admin'||cu.role==='geschaeftsfuehrer';
   const d=getData();
   // Mitarbeiter die dieser Manager sehen kann
+  // canSeeEmployee regelt bereits die Sichtbarkeit korrekt:
+  // Leitung → eigene Teammitarbeiter, GF → alle Leitungspersonen, Admin → alle
   const teamEmps=isMgr
-    ? d.users.filter(u=>!isManagerRole(u)&&canSeeEmployee(cu,u))
+    ? d.users.filter(u=>u.id!==cu.id&&canSeeEmployee(cu,u))
     : [];
   const empSelector=isMgr&&teamEmps.length
     ? `<div class="form-group"><label>Für wen?</label>
