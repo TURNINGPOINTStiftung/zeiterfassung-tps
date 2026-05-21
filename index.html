@@ -533,6 +533,12 @@ function _migrate(d){
     if(u.id==='moritz'){ u.role='admin'; u.id='admin'; }
   });
   if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
+  // Sicherheitsnetz: Kein Admin vorhanden → Admin-Account wiederherstellen
+  if(!d.users.find(u=>u.role==='admin')){
+    const existing=d.users.find(u=>u.id==='admin');
+    if(existing){ existing.role='admin'; }
+    else{ d.users.unshift({id:'admin',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',teams:[]}); }
+  }
   return d;
 }
 async function initFirebase(){
@@ -543,7 +549,8 @@ async function initFirebase(){
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     // Prüfen ob strukturelle Migration nötig
     const hasMoritz=data.users.some(u=>u.id==='moritz');
-    let needsSave=hasMoritz||!data.teamReports||data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
+    const noAdmin=!data.users.some(u=>u.role==='admin');
+    let needsSave=hasMoritz||noAdmin||!data.teamReports||data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
     _dataCache=_migrate(data);
     // Direkte ID-Umbenennung sicherstellen
     if(hasMoritz){ const adm=_dataCache.users.find(u=>u.role==='admin'); if(adm) adm.id='admin'; needsSave=true; }
@@ -1281,13 +1288,15 @@ function userForm(u={}){
     <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
     <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
     <div class="form-group"><label>Rolle</label>
-      <select id="uf-role" onchange="toggleFreelancerFields()">
+      ${u.id==='admin'
+        ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
+        : `<select id="uf-role" onchange="toggleFreelancerFields()">
         <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
         <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
         <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
         <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
         <option value="admin"${u.role==='admin'?' selected':''}>Administrator</option>
-      </select>
+      </select>`}
     </div>
     <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
     <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
@@ -1340,6 +1349,7 @@ async function saveNewUser(){
 }
 async function saveEditUser(id){
   const u=collectUserForm(); u.id=id;
+  if(id==='admin') u.role='admin'; // Admin-Rolle kann nie geändert werden
   if(u.pw){ u.pw=await hashPw(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; } // bestehendes Hash behalten
   mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
@@ -1348,6 +1358,7 @@ async function saveEditUser(id){
 }
 function deleteUser(id){
   if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
   if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
   mutate(d=>{
     d.users=d.users.filter(u=>u.id!==id);
