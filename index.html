@@ -539,6 +539,8 @@ function _migrate(d){
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
     // Nur id=admin darf role=admin haben
     if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
+    // Stundenlimit für Freiberufliche sicherstellen
+    if(u.role==='freiberuflich'&&u.maxHours===undefined) u.maxHours=0;
   });
   // Genau einen Admin sicherstellen
   const adminUser=d.users.find(u=>u.id==='admin');
@@ -990,12 +992,26 @@ function renderSummary(uid,user,entry,istMin){
   let cards=[];
 
   if(isFree){
-    cards=[
-      {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-      {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+carryH+' h',sub:'manuell eingetragen'},
-    ];
-    const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
-    cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
+    const maxH=user.maxHours||0;
+    if(maxH>0){
+      const totalMin=istMin+carryH*60;
+      const billedMin=Math.min(totalMin,maxH*60);
+      const overflowMin=Math.max(0,totalMin-maxH*60);
+      cards=[
+        {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+        {lbl:'Übertrag Vormonat',big:(carryH>0?'+':'')+carryH+' h',sub:'aus Vormonat'},
+        {lbl:'Abrechenbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag'},
+        {lbl:'Abgerechnet (max. '+maxH+' h)',big:hFmt(billedMin),sub:'Monatliches Limit',cls:billedMin>=maxH*60?'neg':'pos'},
+        {lbl:'Übertrag → nächster Monat',big:overflowMin>0?hFmt(overflowMin):'–',sub:overflowMin>0?'wird vorgetragen':'kein Übertrag'},
+      ];
+    } else {
+      cards=[
+        {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+        {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+carryH+' h',sub:'manuell eingetragen'},
+      ];
+      const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
+      cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
+    }
   } else {
     const soll=monthSOLL(user);
     const diff=istMin-(soll-(carryH)*60);
@@ -1312,6 +1328,9 @@ function userForm(u={}){
       <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
       <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
     </div>
+    <div id="uf-freelancer-fields" style="display:none">
+      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
+    </div>
     <script>toggleFreelancerFields()<\/script>`;
 }
 function toggleFreelancerFields(){
@@ -1320,6 +1339,8 @@ function toggleFreelancerFields(){
   if(!sel||!fields) return;
   const role=sel.value;
   fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
+  const ff=document.getElementById('uf-freelancer-fields');
+  if(ff) ff.style.display=role==='freiberuflich'?'':'none';
   const s=document.getElementById('uf-team-single');
   const m=document.getElementById('uf-team-multi');
   if(s&&m){ const isL=role==='leitung'; s.style.display=isL?'none':''; m.style.display=isL?'':'none'; }
@@ -1342,7 +1363,8 @@ function collectUserForm(){
     bundesland:document.getElementById('uf-bl').value,
     wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
     al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
-    prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0
+    prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
+    maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
   };
 }
 async function saveNewUser(){
