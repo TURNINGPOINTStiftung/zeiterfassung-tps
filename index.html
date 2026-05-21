@@ -531,7 +531,10 @@ function _migrate(d){
     if(u.bundesland===undefined) u.bundesland='';
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
   });
-  // id=admin muss immer role=admin haben
+  // Alle doppelten oder falsch gesetzten Admin-Accounts bereinigen
+  // Nur id='admin' darf role='admin' haben – alle anderen auf mitarbeiter zurücksetzen
+  d.users.forEach(u=>{ if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter'; });
+  // Genau einen Admin sicherstellen
   const adminUser=d.users.find(u=>u.id==='admin');
   if(adminUser){ adminUser.role='admin'; }
   else{ d.users.unshift({id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',teams:[]}); }
@@ -1293,7 +1296,6 @@ function userForm(u={}){
         <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
         <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
         <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
-        <option value="admin"${u.role==='admin'?' selected':''}>Administrator</option>
       </select>`}
     </div>
     <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
@@ -1340,6 +1342,7 @@ function collectUserForm(){
 async function saveNewUser(){
   const u=collectUserForm();
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
+  if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   u.pw=await hashPw(u.pw);
   mutate(d=>d.users.push(u));
