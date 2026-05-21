@@ -287,7 +287,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21e</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21f</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -471,7 +471,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version 2026-05-21c</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21f</div>
         </div>
       </div>
     </div>
@@ -637,6 +637,7 @@ function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfu
 function getLeitungTeams(u){ return (u&&u.role==='leitung'&&Array.isArray(u.teams))?u.teams:[]; }
 function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
 function canSeeEmployee(mgr,emp){
+  if(!emp) return false; // Null-Safety: gelöschter User
   if(mgr.role==='admin') return true;
   if(mgr.role==='geschaeftsfuehrer') return emp.role==='leitung';
   if(mgr.role==='leitung'){ const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team); }
@@ -807,8 +808,8 @@ async function doLogin(){
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
-  initApp();
-  updateAbBadge();
+  try{ initApp(); } catch(e){ console.error('initApp Fehler:',e); }
+  try{ updateAbBadge(); } catch(e){ console.error('updateAbBadge Fehler:',e); }
 }
 document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 function doLogout(){
@@ -875,8 +876,8 @@ function onEmpSelect(){
 function switchView(v){
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
-  document.getElementById('view-'+v).classList.add('active');
-  document.querySelector(`[data-view="${v}"]`).classList.add('active');
+  const vEl=document.getElementById('view-'+v); if(vEl) vEl.classList.add('active');
+  const tEl=document.querySelector(`[data-view="${v}"]`); if(tEl) tEl.classList.add('active');
   if(v==='zeiterfassung') renderZeiterfassung();
   if(v==='uebersicht') renderOverview();
   if(v==='einstellungen') renderSettings();
@@ -1700,8 +1701,11 @@ function updateAbBadge(){
   if(!cu) return;
   const reqs=Object.values(getData().vacRequests||{});
   let n=0;
-  if(cu.role==='admin') n=reqs.filter(r=>r.status==='pending').length;
-  else if(cu.role==='leitung') n=reqs.filter(r=>r.status==='pending'&&r.userId!==cu.id&&canSeeEmployee(cu,getUser(r.userId))).length;
+  if(cu.role==='admin'){
+    n=reqs.filter(r=>r.status==='pending').length;
+  } else if(cu.role==='leitung'||cu.role==='geschaeftsfuehrer'){
+    n=reqs.filter(r=>r.status==='pending'&&r.userId!==cu.id&&canSeeEmployee(cu,getUser(r.userId))).length;
+  }
   const badge=document.getElementById('tab-ab-badge');
   if(badge){ badge.textContent=n; badge.style.display=n>0?'inline-block':'none'; }
 }
@@ -1709,7 +1713,8 @@ function renderAbwesenheiten(){
   const d=getData();
   const isAdmin=cu.role==='admin';
   const isLeitung=cu.role==='leitung';
-  const isMgr=isAdmin||isLeitung;
+  const isGF=cu.role==='geschaeftsfuehrer';
+  const isMgr=isAdmin||isLeitung||isGF; // GF kann Leitung-Anträge sehen
   const reqs=Object.values(d.vacRequests||{});
   const fmtD=ds=>{ if(!ds) return '–'; const[y,m,dd]=ds.split('-'); return `${dd}.${m}.${y}`; };
   const statusBadge=s=>({
@@ -1720,7 +1725,7 @@ function renderAbwesenheiten(){
   const canReview=r=>{
     if(r.status!=='pending') return false;
     if(isAdmin) return true;
-    if(isLeitung&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
+    if((isLeitung||isGF)&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
     return false;
   };
   const card=r=>{
@@ -1758,7 +1763,7 @@ function renderAbwesenheiten(){
       if(r.status==='pending'||r.userId===cu.id) return false;
       if(isAdmin) return true;
       const u=getUser(r.userId); return u&&canSeeEmployee(cu,u);
-    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,30);
+    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,50);
     if(teamDone.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
       ${teamDone.map(card).join('')}</section>`;
