@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeiterfassung – TURNING POINT Stiftung</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1a3a5c;--primary-l:#2d6099;--accent:#e8703a;
+  --ok:#27ae60;--warn:#e67e22;--danger:#c0392b;
+  --bg:#f0f2f5;--white:#fff;--border:#dde1e7;
+  --text:#2c3e50;--muted:#7f8c8d;--row-alt:#f8f9fb;
+  --weekend:#fef3e2;--hdr:60px;
+}
+body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── Login ── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-l) 100%)}
+.login-card{background:var(--white);border-radius:12px;padding:40px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo h1{font-size:18px;font-weight:700;color:var(--primary);line-height:1.4}
+.login-logo p{font-size:12px;color:var(--muted);margin-top:4px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.form-group input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}
+.form-group input:focus{border-color:var(--primary-l)}
+.error-msg{color:var(--danger);font-size:13px;margin-top:8px;display:none}
+#login-user-list{max-height:220px;overflow-y:auto;padding-right:2px}
+.user-tile{width:100%;padding:10px 14px;margin-bottom:6px;border:2px solid var(--border);border-radius:7px;background:#fff;font-size:14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all .15s}
+.user-tile:hover{border-color:var(--primary-l);background:#f4f8ff}
+.user-tile.selected{border-color:var(--primary);background:#e8f0fe;font-weight:700}
+.user-tile .role-tag{font-size:11px;color:var(--muted);font-weight:400}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--primary);color:#fff;width:100%}
+.btn-primary:hover:not(:disabled){background:var(--primary-l)}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-ok:hover:not(:disabled){opacity:.9}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover:not(:disabled){opacity:.9}
+.btn-warn{background:var(--warn);color:#fff}
+.btn-warn:hover:not(:disabled){opacity:.9}
+.btn-outline{background:#fff;border:1.5px solid var(--border);color:var(--text)}
+.btn-outline:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.btn-sm{padding:5px 12px;font-size:12px}
+
+/* ── App Shell ── */
+#app{display:none;min-height:100vh;flex-direction:column}
+#app.visible{display:flex}
+.app-header{background:var(--primary);color:#fff;height:var(--hdr);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.app-header .brand{font-size:15px;font-weight:700}
+.app-header .brand span{font-weight:400;font-size:12px;opacity:.7;margin-left:8px}
+.header-right{display:flex;align-items:center;gap:10px}
+.user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:13px;line-height:1.3;cursor:default}
+.user-badge .role{font-size:10px;opacity:.75;display:block;text-align:center}
+.app-nav{background:var(--white);border-bottom:1px solid var(--border);display:flex;padding:0 20px;gap:4px;overflow-x:auto}
+.nav-tab{padding:11px 14px;font-size:13px;font-weight:500;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0}
+.nav-tab:hover{color:var(--primary)}
+.nav-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.app-content{flex:1;padding:20px;max-width:1500px;margin:0 auto;width:100%}
+.view{display:none}
+.view.active{display:block}
+
+/* ── Month Navigator ── */
+.month-nav{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.month-nav h2{font-size:19px;font-weight:700;color:var(--primary);min-width:180px}
+.status-badge{padding:3px 12px;border-radius:12px;font-size:12px;font-weight:600}
+.s-draft{background:#e8f0fe;color:#1a3a5c}
+.s-submitted{background:#fff3cd;color:#856404}
+.s-approved{background:#d4edda;color:#155724}
+.s-rejected{background:#f8d7da;color:#721c24}
+
+/* ── Info Panel ── */
+.info-panel{background:var(--white);border-radius:8px;border:1px solid var(--border);padding:14px 18px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+.info-item label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block}
+.info-item .val{font-size:15px;font-weight:700;color:var(--primary);margin-top:2px}
+
+/* ── Role / type chips ── */
+.chip{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+.chip-leitung{background:#e8f0fe;color:#1a3a5c}
+.chip-mitarbeiter{background:#d4edda;color:#155724}
+.chip-freiberuflich{background:#fff3cd;color:#856404}
+
+/* ── Time Table ── */
+.tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}
+table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
+.zt thead th{background:var(--primary);color:#fff;padding:7px 5px;text-align:center;font-size:11px;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:5}
+.zt thead th.l{text-align:left;padding-left:8px}
+.zt thead th.block-head{background:#2d4f70}
+.zt thead th.sep-head{background:#0e2235;width:8px;padding:0}
+.zt tbody tr{border-bottom:1px solid var(--border)}
+.zt tbody tr:nth-child(even){background:var(--row-alt)}
+.zt tbody tr.weekend{background:var(--weekend)}
+.zt tbody tr.today-row{outline:2px solid var(--accent);outline-offset:-2px}
+.zt td{padding:4px 3px;vertical-align:middle}
+.zt td.date-c{font-weight:700;font-size:11px;white-space:nowrap;padding-left:8px;min-width:82px}
+.zt td.kw-c{font-size:10px;color:var(--muted);text-align:center;min-width:28px}
+.zt td.day-c{font-size:10px;text-align:center;min-width:24px;font-weight:700}
+.zt td.day-c.we{color:var(--warn)}
+.zt td.sep-c{width:8px;background:#e8edf2;padding:0}
+.zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
+.zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
+.zt td.total-c.over{color:var(--danger)}
+/* weekend rows: visually distinct but still editable */
+.zt tr.weekend td.total-c,.zt tr.weekend td.sum-c{color:var(--warn)}
+.zt tr.weekend td input[type=time],.zt tr.weekend td select,.zt tr.weekend td input.bem,.zt tr.weekend td input.kt-min{background:var(--weekend)}
+.zt td input[type=time]{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:76px;background:#fff}
+.zt td input[type=time]:focus{border-color:var(--primary-l);outline:none}
+.zt td select.zuord{padding:3px 3px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:120px;background:#fff;max-width:140px}
+.zt td input.bem{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:100%;min-width:70px;background:#fff}
+.zt td input.kt-min{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:54px;text-align:center;background:#fff}
+.zt tr.readonly td input,.zt tr.readonly td select{background:#f0f2f5;pointer-events:none;border-color:transparent}
+.zt tfoot td{background:#1a3a5c;color:#fff;font-weight:700;font-size:12px;padding:8px 5px;text-align:center}
+.zt tfoot td.l{text-align:left;padding-left:8px}
+
+/* ── Summary Cards ── */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:18px}
+.s-card{background:var(--white);border-radius:8px;border:1px solid var(--border);padding:14px 16px}
+.s-card .lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.s-card .big{font-size:22px;font-weight:700;color:var(--primary);margin-top:4px}
+.s-card .sub{font-size:11px;color:var(--muted);margin-top:3px}
+.s-card .big.pos{color:var(--ok)}
+.s-card .big.neg{color:var(--danger)}
+
+/* ── Submit Bar ── */
+.action-bar{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.action-bar .info{flex:1;font-size:13px;color:var(--muted)}
+.carryover-field{display:flex;align-items:center;gap:6px;font-size:13px}
+.carryover-field input{width:70px;padding:5px 8px;border:1.5px solid var(--border);border-radius:5px;font-size:13px;text-align:center}
+
+/* ── Manager Overview ── */
+.team-section{margin-bottom:28px}
+.team-section h3{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+.emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.emp-card{background:var(--white);border-radius:8px;border:1px solid var(--border);padding:18px;cursor:pointer;transition:all .2s}
+.emp-card:hover{border-color:var(--primary);box-shadow:0 4px 12px rgba(26,58,92,.12)}
+.emp-card h3{font-size:14px;font-weight:700;margin-bottom:4px}
+.emp-card .meta{font-size:11px;color:var(--muted);margin-bottom:4px}
+.emp-card .months{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.m-pill{padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.team-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;background:#e8f4fd;color:#1a3a5c;margin-right:4px}
+
+/* ── Settings ── */
+.settings-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:4px}
+@media(max-width:700px){.settings-row{grid-template-columns:1fr}}
+.s-box{background:var(--white);border-radius:8px;border:1px solid var(--border);padding:20px}
+.s-box h3{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:14px}
+.user-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.user-row:last-child{border-bottom:none}
+.user-row .name{font-size:13px;font-weight:600}
+.user-row .details{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── Signature ── */
+.sig-area{display:flex;gap:40px;margin-top:22px;flex-wrap:wrap}
+.sig-block{flex:1;min-width:200px}
+.sig-block .lbl{font-size:11px;color:var(--muted);margin-bottom:6px}
+.sig-line{border-bottom:1.5px solid var(--text);height:36px;position:relative}
+.sig-line .loc{position:absolute;bottom:-18px;font-size:10px;color:var(--muted)}
+
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:10px;padding:26px;max-width:500px;width:93%;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:17px;font-weight:700;margin-bottom:16px;color:var(--primary)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+
+/* ── Toast ── */
+#toasts{position:fixed;bottom:20px;right:20px;z-index:400;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--primary);color:#fff;padding:10px 18px;border-radius:7px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:tIn .25s ease}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--danger)}
+@keyframes tIn{from{transform:translateX(80px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Review panel ── */
+.review-panel{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.review-panel .title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--primary)}
+.review-panel textarea{width:100%;padding:8px;border:1.5px solid var(--border);border-radius:5px;font-size:13px;resize:vertical;min-height:60px}
+
+/* ── Zuordnung breakdown ── */
+.zuord-breakdown{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:14px}
+.zuord-breakdown h4{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.zuord-table{width:100%;font-size:12px;border-collapse:collapse}
+.zuord-table td,.zuord-table th{padding:5px 8px;border-bottom:1px solid var(--border)}
+.zuord-table th{color:var(--muted);font-weight:600;font-size:11px;background:var(--bg)}
+.zuord-bar{height:8px;background:var(--primary-l);border-radius:4px;min-width:4px}
+
+/* ── Digital signature display ── */
+.sig-area{display:flex;gap:40px;margin-top:22px;flex-wrap:wrap}
+.sig-block{flex:1;min-width:200px}
+.sig-block .lbl{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.sig-line{border-bottom:1.5px solid var(--text);height:44px;position:relative;display:flex;align-items:flex-end;padding-bottom:4px}
+.dig-sig{font-size:12px;color:var(--primary);font-weight:700;line-height:1.3}
+.dig-sig .ts{font-size:10px;color:var(--muted);font-weight:400;display:block;margin-top:2px}
+.dig-sig .pending{font-size:11px;color:var(--muted);font-style:italic}
+
+/* ── Print ── */
+@media print{
+  .no-print,.app-header,.app-nav,.btn,.action-bar,.review-panel,.modal-bg,.zuord-breakdown{display:none!important}
+  .app-content{padding:0;max-width:100%}
+  .tbl-wrap{border:none;overflow:visible}
+  .zt td input,.zt td select{border:none!important;-webkit-appearance:none;background:transparent!important;pointer-events:none}
+  .zt thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .zt tr.weekend{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .summary-grid{page-break-inside:avoid}
+  .sig-area{margin-top:32px}
+  @page{margin:1cm}
+}
+
+.flex{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mt-14{margin-top:14px}
+.tag-input{padding:5px 10px;border:1.5px solid var(--border);border-radius:5px;font-size:13px;flex:1;min-width:120px}
+.cat-chip{display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;color:var(--primary);padding:3px 10px;border-radius:12px;font-size:12px;margin:3px}
+.cat-chip button{background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 0 0 3px}
+.team-chip{display:inline-flex;align-items:center;gap:4px;background:#e8f4fd;color:#0d6efd;padding:3px 10px;border-radius:12px;font-size:12px;margin:3px}
+.team-chip button{background:none;border:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 0 0 3px}
+
+/* ── Feiertage ── */
+.zt tbody tr.holiday{background:#fff0f0!important}
+.zt tbody tr.holiday td.date-c,.zt tbody tr.holiday td.day-c{color:var(--danger)!important}
+.chip-geschaeftsfuehrer{background:#f3e8ff;color:#5b21b6}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <h1>TURNING POINT<br>Stiftung</h1>
+      <p>Arbeitszeiterfassung 2026</p>
+    </div>
+    <div class="form-group">
+      <label>Wer bist du?</label>
+      <div id="login-user-list"></div>
+      <input type="hidden" id="login-user" value="">
+    </div>
+    <div class="form-group">
+      <label for="login-pw">Passwort</label>
+      <input type="password" id="login-pw" placeholder="Passwort eingeben" autocomplete="current-password">
+    </div>
+    <div class="error-msg" id="login-err">Falsches Passwort.</div>
+    <div style="margin-top:20px">
+      <button type="button" class="btn btn-primary" onclick="doLogin()">Anmelden</button>
+    </div>
+    <div style="margin-top:14px;text-align:center;display:flex;justify-content:space-between;align-items:center">
+      <a href="#" style="font-size:12px;color:var(--muted)" onclick="shareApp();return false">⬇ App herunterladen / teilen</a>
+      <a href="#" style="font-size:12px;color:var(--muted)" onclick="emergencyReset();return false">Login-Probleme?</a>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<div id="app">
+  <header class="app-header">
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung</span></div>
+    <div class="header-right">
+      <div class="user-badge" id="hdr-user">
+        <span id="hdr-name">–</span>
+        <span class="role" id="hdr-role">–</span>
+      </div>
+      <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
+    </div>
+  </header>
+
+  <nav class="app-nav" id="app-nav">
+    <div class="nav-tab active" data-view="zeiterfassung" onclick="switchView('zeiterfassung')">Zeiterfassung</div>
+    <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
+    <div class="nav-tab" data-view="einstellungen" id="tab-einstellungen" style="display:none" onclick="switchView('einstellungen')">Einstellungen</div>
+  </nav>
+
+  <main class="app-content">
+
+    <!-- ─── Zeiterfassung ─── -->
+    <div class="view active" id="view-zeiterfassung">
+      <div class="month-nav no-print">
+        <button class="btn btn-outline btn-sm" onclick="changeMonth(-1)">◀</button>
+        <h2 id="month-title">–</h2>
+        <button class="btn btn-outline btn-sm" onclick="changeMonth(1)">▶</button>
+        <span id="month-status-badge" class="status-badge s-draft">Entwurf</span>
+        <span id="emp-select-wrap" style="display:none">
+          <select id="emp-select" onchange="onEmpSelect()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        </span>
+        <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap" class="no-print">
+          <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken (vollständig)</button>
+          <button class="btn btn-outline btn-sm" onclick="printBuchhaltung()" title="Ohne Bemerkungsspalten – für die Buchhaltung">📋 Buchhaltung</button>
+          <button class="btn btn-warn btn-sm" id="btn-teamberichte" style="display:none" onclick="printTeamBuchhaltung()" title="Alle Buchhaltungsblätter des Teams (an GF)">📑 Teamberichte</button>
+        </div>
+      </div>
+
+      <div class="info-panel" id="emp-info">
+        <div class="info-item"><label>Mitarbeiter</label><div class="val" id="info-name">–</div></div>
+        <div class="info-item"><label>Team</label><div class="val" id="info-team">–</div></div>
+        <div class="info-item"><label>Wohnort</label><div class="val" id="info-city">–</div></div>
+        <div class="info-item" id="info-wh-wrap"><label>Wochenarbeitszeit</label><div class="val" id="info-wh">–</div></div>
+        <div class="info-item" id="info-al-wrap"><label>Jahresurlaub</label><div class="val" id="info-al">–</div></div>
+        <div class="info-item" id="info-apd-wrap"><label>Arbeitstag (h)</label><div class="val" id="info-apd">–</div></div>
+        <div class="info-item" id="info-type-wrap"><label>Beschäftigung</label><div class="val" id="info-type">–</div></div>
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="zt" id="zt">
+          <thead>
+            <tr>
+              <th class="l" rowspan="2">Datum</th>
+              <th rowspan="2">KW</th>
+              <th rowspan="2">Tag</th>
+              <th colspan="5" class="block-head">Block 1</th>
+              <th class="sep-head" rowspan="2"></th>
+              <th colspan="5" class="block-head">Block 2</th>
+              <th colspan="3">Kleinteilig</th>
+              <th rowspan="2">Gesamt</th>
+            </tr>
+            <tr>
+              <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
+              <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
+              <th>Min</th><th>Zuordnung</th><th>∑</th>
+            </tr>
+          </thead>
+          <tbody id="zt-body"></tbody>
+          <tfoot>
+            <tr>
+              <td class="l" colspan="3">Monatssumme IST</td>
+              <td colspan="5"></td>
+              <td class="sep-c"></td>
+              <td colspan="5"></td>
+              <td colspan="3"></td>
+              <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="summary-grid" id="summary-cards"></div>
+
+      <!-- Zuordnung breakdown -->
+      <div class="zuord-breakdown no-print" id="zuord-breakdown">
+        <h4>Stunden nach Zuordnung</h4>
+        <table class="zuord-table" id="zuord-table">
+          <thead><tr><th>Kategorie</th><th style="text-align:right">Stunden</th><th style="width:120px"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="action-bar no-print" id="action-bar">
+        <div class="info" id="action-info"></div>
+        <div class="carryover-field" id="carryover-wrap">
+          <label for="carryover-input" style="font-weight:600">Übertrag Vormonat (h):</label>
+          <input type="number" id="carryover-input" step="0.25" min="-99" max="99" value="0" onchange="saveCarryover()">
+        </div>
+        <div id="action-btns"></div>
+      </div>
+
+      <div class="review-panel no-print" id="review-panel" style="display:none">
+        <div class="title">Prüfvermerk (Leitungspersonal)</div>
+        <textarea id="review-note" placeholder="Anmerkungen zur Zeiterfassung…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-ok" onclick="doApprove()">✓ Genehmigen</button>
+          <button class="btn btn-danger" onclick="doReject()">✗ Ablehnen</button>
+          <button class="btn btn-outline" onclick="doResetToDraft()">↩ Zurück zu Entwurf</button>
+        </div>
+      </div>
+
+      <div class="sig-area" id="sig-area" style="margin-top:28px"></div>
+    </div>
+
+    <!-- ─── Manager Übersicht ─── -->
+    <div class="view" id="view-uebersicht">
+      <div class="flex" style="margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Mitarbeiterübersicht</h2>
+        <select id="ueber-year" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        <select id="ueber-team" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+          <option value="">Alle Teams</option>
+        </select>
+      </div>
+      <div id="overview-content"></div>
+    </div>
+
+    <!-- ─── Einstellungen ─── -->
+    <div class="view" id="view-einstellungen">
+      <h2 style="font-size:19px;font-weight:700;color:var(--primary);margin-bottom:16px">Einstellungen</h2>
+      <div class="settings-row">
+        <div class="s-box">
+          <h3>Mitarbeiter verwalten</h3>
+          <div id="user-list"></div>
+          <div class="mt-14">
+            <button class="btn btn-ok btn-sm" onclick="showAddUser()">+ Mitarbeiter hinzufügen</button>
+          </div>
+        </div>
+        <div class="s-box">
+          <h3>Teams</h3>
+          <div id="team-list"></div>
+          <div class="flex mt-14">
+            <input class="tag-input" id="new-team-input" placeholder="Neues Team…" onkeydown="if(event.key==='Enter')addTeam()">
+            <button class="btn btn-ok btn-sm" onclick="addTeam()">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-row" style="margin-top:14px">
+        <div class="s-box">
+          <h3>Zuordnungskategorien</h3>
+          <div id="cat-list"></div>
+          <div class="flex mt-14">
+            <input class="tag-input" id="new-cat-input" placeholder="Neue Kategorie…" onkeydown="if(event.key==='Enter')addCategory()">
+            <button class="btn btn-ok btn-sm" onclick="addCategory()">+</button>
+          </div>
+        </div>
+        <div class="s-box">
+          <h3>Daten</h3>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn-ok btn-sm" onclick="shareApp()">⬇ App herunterladen / teilen</button>
+            <button class="btn btn-outline btn-sm" onclick="exportData()">📥 Alle Daten exportieren (JSON)</button>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+            <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ─── Modals ─── -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- ─── Toasts ─── -->
+<div id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni',
+                'Juli','August','September','Oktober','November','Dezember'];
+const DAYS   = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+const STORAGE_KEY = 'tp_zt_v3';
+
+const DEFAULT_CATS = [
+  'Akademie','Wendeakademie','Wendekurs','Wendestart',
+  'Öffentlichkeitsarbeit','Social Media','Besprechung',
+  'Mails/Nachrichten','Kooperationspartner','Telefonate',
+  'Veranstaltung','Urlaub','AU/Krank','Sonstiges'
+];
+const DEFAULT_TEAMS = ['Akademie','Öffentlichkeitsarbeit','Verwaltung'];
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let cu   = null;
+let year = 2026;
+let mon  = 1;
+let viewEmpId = null;
+
+// ═══════════════════════════════════════════════════════════════
+// STORAGE
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_USERS = [
+  {id:'moritz',name:'Moritz Kriese',role:'leitung',pw:'admin123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
+  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
+  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
+];
+function freshData(){
+  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS]};
+}
+function loadData(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const d=JSON.parse(raw);
+      if(d&&Array.isArray(d.users)&&d.users.length>0){
+        if(!d.cats) d.cats=[...DEFAULT_CATS];
+        if(!d.teams) d.teams=[...DEFAULT_TEAMS];
+        d.users.forEach(u=>{ if(u.bundesland===undefined) u.bundesland=''; });
+        // add Jens if missing
+        if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
+        return d;
+      }
+    }
+  }catch(e){ console.warn('Zeiterfassung: Daten konnten nicht geladen werden, setze zurück.',e); }
+  const d=freshData(); saveRaw(d); return d;
+}
+function saveRaw(d){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+  catch(e){ console.warn('Zeiterfassung: Speichern fehlgeschlagen',e); }
+}
+function getData(){ return loadData(); }
+function mutate(fn){ const d=getData(); fn(d); saveRaw(d); }
+
+function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
+function getEntry(uid,y,m){
+  const d=getData(); const k=entryKey(uid,y,m);
+  if(!d.entries[k]){ d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}}; saveRaw(d); }
+  return d.entries[entryKey(uid,y,m)];
+}
+function setDay(uid,y,m,ds,field,val){
+  mutate(d=>{
+    const k=entryKey(uid,y,m);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+    d.entries[k].days[ds][field]=val;
+  });
+}
+function setEntryField(uid,y,m,field,val){
+  mutate(d=>{
+    const k=entryKey(uid,y,m);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    d.entries[k][field]=val;
+  });
+}
+function getUser(id){ return getData().users.find(u=>u.id===id); }
+function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
+function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'); }
+function isAdminUser(u){ return u&&(u.role==='geschaeftsfuehrer'||(u.role==='leitung'&&!u.team)); }
+function canSeeEmployee(mgr,emp){ return isAdminUser(mgr)||mgr.team===emp.team; }
+
+// ═══════════════════════════════════════════════════════════════
+// TIME UTILS
+// ═══════════════════════════════════════════════════════════════
+function tMin(s){ if(!s||!s.includes(':')) return 0; const[h,m]=s.split(':').map(Number); return h*60+m; }
+function minFmt(n){ if(n<=0) return ''; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+function hFmt(n){ if(n<=0) return '0:00'; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+function diffMin(v,b){ const d=tMin(b)-tMin(v); return d>0?d:0; }
+function addMin(t,m){ const tot=tMin(t)+m; return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`; }
+function roundToQuarter(val){
+  if(!val||!val.includes(':')) return val;
+  let [h,m]=val.split(':').map(Number);
+  m=Math.round(m/15)*15;
+  if(m===60){h+=1;m=0;}
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function td_tchange(ds,field,val){
+  const r=roundToQuarter(val);
+  setDay(viewEmpId||cu.id,year,mon,ds,field,r);
+  renderZeiterfassung();
+}
+function isoWeek(date){
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+  d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
+  const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+function dateStr(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function isWeekend(y,m,d){ const wd=new Date(y,m-1,d).getDay(); return wd===0||wd===6; }
+function dayName(y,m,d){ return DAYS[new Date(y,m-1,d).getDay()]; }
+function isToday(y,m,d){ const t=new Date(); return t.getFullYear()===y&&t.getMonth()+1===m&&t.getDate()===d; }
+
+// ═══════════════════════════════════════════════════════════════
+// PUBLIC HOLIDAYS (Deutschland)
+// ═══════════════════════════════════════════════════════════════
+function getEaster(y){
+  const a=y%19,b=Math.floor(y/100),c=y%100,d2=Math.floor(b/4),e=b%4,
+        f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d2-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31),dy=((h+l-7*m+114)%31)+1;
+  return new Date(y,mo-1,dy);
+}
+function addDays(date,n){ const d=new Date(date); d.setDate(d.getDate()+n); return d; }
+function ds2(date){ return dateStr(date.getFullYear(),date.getMonth()+1,date.getDate()); }
+function getHolidays(y,bl){
+  const e=getEaster(y); const s=new Set();
+  // Bundesweite Feiertage
+  [dateStr(y,1,1),dateStr(y,5,1),dateStr(y,10,3),dateStr(y,12,25),dateStr(y,12,26),
+   ds2(addDays(e,-2)),ds2(addDays(e,1)),ds2(addDays(e,39)),ds2(addDays(e,50))
+  ].forEach(x=>s.add(x));
+  if(!bl) return s;
+  // Heilige Drei Könige: BW, BY, ST
+  if(['BW','BY','ST'].includes(bl)) s.add(dateStr(y,1,6));
+  // Internationaler Frauentag: BE
+  if(bl==='BE') s.add(dateStr(y,3,8));
+  // Fronleichnam: BW, BY, HE, NW, RP, SL
+  if(['BW','BY','HE','NW','RP','SL'].includes(bl)) s.add(ds2(addDays(e,60)));
+  // Maria Himmelfahrt: BY, SL
+  if(['BY','SL'].includes(bl)) s.add(dateStr(y,8,15));
+  // Reformationstag: BB, MV, SN, ST, TH, HB, HH, NI, SH
+  if(['BB','MV','SN','ST','TH','HB','HH','NI','SH'].includes(bl)) s.add(dateStr(y,10,31));
+  // Allerheiligen: BW, BY, NW, RP, SL
+  if(['BW','BY','NW','RP','SL'].includes(bl)) s.add(dateStr(y,11,1));
+  // Bußtag: SN only
+  if(bl==='SN'){
+    let bdt=new Date(y,10,22); while(bdt.getDay()!==0) bdt.setDate(bdt.getDate()-1);
+    bdt.setDate(bdt.getDate()-4); s.add(ds2(bdt));
+  }
+  return s;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALCULATIONS
+// ═══════════════════════════════════════════════════════════════
+function dayMinutes(dd){
+  if(!dd) return 0;
+  return diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+}
+function monthIST(entry){
+  if(!entry||!entry.days) return 0;
+  return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd),0);
+}
+function monthSOLL(user){ return isFreelancer(user)?0:(user.wh||0)*4*60; }
+function countZuord(entry,val){
+  if(!entry||!entry.days) return 0;
+  return Object.values(entry.days).filter(dd=>(dd.b1zuord||'')=== val).length;
+}
+function vacDays(entry){ return countZuord(entry,'Urlaub'); }
+function sickDays(entry){ return countZuord(entry,'AU/Krank'); }
+function totalVacUsed(uid,y){
+  let used=0;
+  for(let m=1;m<=12;m++){ const e=getEntry(uid,y,m); used+=vacDays(e); }
+  return used;
+}
+function zuordBreakdown(entry){
+  const map={};
+  if(!entry||!entry.days) return map;
+  Object.values(entry.days).forEach(dd=>{
+    const m1=diffMin(dd.b1von||'',dd.b1bis||'');
+    const m2=diffMin(dd.b2von||'',dd.b2bis||'');
+    const mk=Number(dd.ktmin||0);
+    const add=(key,min)=>{ if(key&&min>0) map[key]=(map[key]||0)+min; };
+    add(dd.b1zuord,m1); add(dd.b2zuord,m2); add(dd.ktzuord,mk);
+  });
+  return map;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN / LOGOUT
+// ═══════════════════════════════════════════════════════════════
+function populateLoginDropdown(){
+  var list=document.getElementById('login-user-list');
+  var hidden=document.getElementById('login-user');
+  list.innerHTML='';
+  hidden.value='';
+
+  var users=[];
+  try{ users=getData().users||[]; }catch(e){}
+  if(!users.length) users=DEFAULT_USERS.slice();
+
+  users.forEach(function(u,i){
+    var roleLabel=u.role==='leitung'?' [Leitung]':u.role==='geschaeftsfuehrer'?' [GF]':u.role==='freiberuflich'?' [Freiberuflich]':'';
+    var tile=document.createElement('button');
+    tile.type='button';
+    tile.className='user-tile'+(i===0?' selected':'');
+    tile.setAttribute('data-uid', u.id);
+    tile.innerHTML=esc(u.name)+'<span class="role-tag">'+roleLabel+'</span>';
+    tile.onclick=function(){
+      list.querySelectorAll('.user-tile').forEach(function(t){ t.classList.remove('selected'); });
+      tile.classList.add('selected');
+    };
+    list.appendChild(tile);
+  });
+}
+function doLogin(){
+  var errEl=document.getElementById('login-err');
+  var selectedTile=document.querySelector('#login-user-list .user-tile.selected');
+  if(!selectedTile){
+    errEl.textContent='Bitte eine Person auswählen.';
+    errEl.style.display='block'; return;
+  }
+  var uid=selectedTile.getAttribute('data-uid');
+  var pw=document.getElementById('login-pw').value;
+  var u=getUser(uid);
+  if(!u){
+    errEl.textContent='Benutzer nicht gefunden – bitte "Login-Probleme?" verwenden.';
+    errEl.style.display='block'; return;
+  }
+  if(u.pw!==pw){
+    errEl.textContent='Falsches Passwort.';
+    errEl.style.display='block'; return;
+  }
+  cu=u;
+  errEl.style.display='none';
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  initApp();
+}
+document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+function doLogout(){
+  cu=null; viewEmpId=null;
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pw').value='';
+  populateLoginDropdown();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// APP INIT & VIEW SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function roleLabel(r){
+  return r==='leitung'?'Leitungspersonal':
+         r==='geschaeftsfuehrer'?'Geschäftsführung':
+         r==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
+}
+function initApp(){
+  document.getElementById('hdr-name').textContent=cu.name;
+  document.getElementById('hdr-role').textContent=roleLabel(cu.role);
+  const isMgr=isManagerRole(cu);
+  const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
+  viewEmpId=isMgr?null:cu.id;
+  document.getElementById('tab-uebersicht').style.display=isMgr?'':'none';
+  document.getElementById('tab-einstellungen').style.display=isMgr?'':'none';
+  const btnTeam=document.getElementById('btn-teamberichte');
+  if(btnTeam) btnTeam.style.display=isMgr?'':'none';
+  if(isMgr){
+    rebuildEmpSelect();
+    populateUeberYear();
+    populateUeberTeam();
+  }
+  switchView('zeiterfassung');
+}
+function rebuildEmpSelect(){
+  const sel=document.getElementById('emp-select');
+  sel.innerHTML='';
+  getData().users
+    .filter(u=>!isManagerRole(u))
+    .filter(u=>canSeeEmployee(cu,u))
+    .forEach(u=>{
+      const o=document.createElement('option');
+      o.value=u.id;
+      o.textContent=u.name+(u.team?` [${u.team}]`:'')+(u.role==='freiberuflich'?' ★':'');
+      sel.appendChild(o);
+    });
+  if(sel.options.length>0){
+    viewEmpId=viewEmpId||sel.options[0].value;
+    for(let o of sel.options){ if(o.value===viewEmpId){ o.selected=true; break; } }
+    document.getElementById('emp-select-wrap').style.display='inline';
+  } else {
+    document.getElementById('emp-select-wrap').style.display='none';
+  }
+}
+function onEmpSelect(){
+  viewEmpId=document.getElementById('emp-select').value;
+  renderZeiterfassung();
+}
+function switchView(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelector(`[data-view="${v}"]`).classList.add('active');
+  if(v==='zeiterfassung') renderZeiterfassung();
+  if(v==='uebersicht') renderOverview();
+  if(v==='einstellungen') renderSettings();
+}
+function changeMonth(delta){
+  mon+=delta;
+  if(mon<1){mon=12;year--;} if(mon>12){mon=1;year++;}
+  renderZeiterfassung();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CATEGORIES & TEAMS
+// ═══════════════════════════════════════════════════════════════
+function getCats(){ return getData().cats||[...DEFAULT_CATS]; }
+function getTeams(){ return getData().teams||[...DEFAULT_TEAMS]; }
+function catOptions(selected=''){
+  return `<option value=""></option>`+getCats().map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER ZEITERFASSUNG
+// ═══════════════════════════════════════════════════════════════
+function renderZeiterfassung(){
+  const uid=viewEmpId||cu.id;
+  const user=getUser(uid);
+  if(!user){ document.getElementById('zt-body').innerHTML='<tr><td colspan="18" style="padding:20px;text-align:center;color:var(--muted)">Kein Mitarbeiter ausgewählt.</td></tr>'; return; }
+
+  const entry=getEntry(uid,year,mon);
+  const isLeiter=isManagerRole(cu);
+  const isFree=isFreelancer(user);
+  const canEdit=(cu.id===uid&&entry.status==='draft')||
+                (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
+  const readonly=!canEdit;
+
+  document.getElementById('month-title').textContent=`${MONTHS[mon-1]} ${year}`;
+  document.getElementById('info-name').textContent=user.name;
+  document.getElementById('info-team').textContent=user.team||'–';
+  document.getElementById('info-city').textContent=user.city||'–';
+  document.getElementById('info-type').textContent=isFree?'Freiberuflich':'Festangestellt';
+  document.getElementById('info-wh').textContent=isFree?'flexibel':`${user.wh} h`;
+  document.getElementById('info-al').textContent=isFree?'–':`${user.al} Tage`;
+  document.getElementById('info-apd').textContent=isFree?'–':hFmt((user.wh/5)*60);
+
+
+  // Hide vacation/sick info for freelancers in info panel
+  document.getElementById('info-al-wrap').style.display=isFree?'none':'';
+  document.getElementById('info-apd-wrap').style.display=isFree?'none':'';
+
+  const badges={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'};
+  const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
+  const badgeEl=document.getElementById('month-status-badge');
+  badgeEl.textContent=badges[entry.status]||'Entwurf';
+  badgeEl.className='status-badge '+(bCls[entry.status]||'s-draft');
+
+  const tbody=document.getElementById('zt-body');
+  tbody.innerHTML='';
+  const dim=daysInMonth(year,mon);
+  const hols=getHolidays(year,user.bundesland||'');
+  let monthTotal=0;
+
+  for(let d=1;d<=dim;d++){
+    const ds=dateStr(year,mon,d);
+    const dd=entry.days[ds]||{};
+    const we=isWeekend(year,mon,d);
+    const hol=hols.has(ds);
+    const tod=isToday(year,mon,d);
+    const kw=isoWeek(new Date(year,mon-1,d));
+    const dn=dayName(year,mon,d);
+
+    const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
+    const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
+    const ktm=Number(dd.ktmin||0);
+    const dayMin=b1min+b2min+ktm;
+    monthTotal+=dayMin; // count ALL days incl. weekends
+
+    const over=dayMin>600; // >10h → red
+
+    const tr=document.createElement('tr');
+    if(we) tr.classList.add('weekend');
+    if(hol) tr.classList.add('holiday');
+    if(tod) tr.classList.add('today-row');
+    if(readonly) tr.classList.add('readonly');
+
+    const dis=readonly; // weekends NO LONGER disabled
+
+    const dateFmt=`${String(d).padStart(2,'0')}.${String(mon).padStart(2,'0')}.${String(year).slice(2)}`;
+
+    tr.innerHTML=`
+      <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
+      <td class="kw-c">${kw}</td>
+      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
+      <td><input type="time" value="${dd.b1von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="time" value="${dd.b1bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1bis',this.value)"></td>
+      <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0})">${catOptions(dd.b1zuord||'')}</select></td>
+      <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
+      <td class="sum-c">${b1min>0?minFmt(b1min):''}</td>
+      <td class="sep-c"></td>
+      <td><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptions(dd.b2zuord||'')}</select></td>
+      <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="sum-c">${b2min>0?minFmt(b2min):''}</td>
+      <td><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td><select class="zuord" style="width:100px" ${dis?'disabled':''} onchange="td_change('${ds}','ktzuord',this.value)">${catOptions(dd.ktzuord||'')}</select></td>
+      <td class="sum-c">${ktm>0?minFmt(ktm):''}</td>
+      <td class="total-c${over?' over':''}">${dayMin>0?hFmt(dayMin):''}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('tfoot-total').textContent=hFmt(monthTotal);
+  renderSummary(uid,user,entry,monthTotal);
+  renderZuordBreakdown(entry);
+  renderActionBar(uid,user,entry,isLeiter);
+  renderReviewPanel(uid,entry,isLeiter);
+  renderSignature(user,entry);
+}
+
+// ── Summary cards ──
+function renderSummary(uid,user,entry,istMin){
+  const isFree=isFreelancer(user);
+  const carryH=entry.carryover||0;
+  let cards=[];
+
+  if(isFree){
+    cards=[
+      {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+      {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+carryH+' h',sub:'manuell eingetragen'},
+    ];
+    const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
+    cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
+  } else {
+    const soll=monthSOLL(user);
+    const diff=istMin-(soll-(carryH)*60);
+    const vd=vacDays(entry);
+    const sk=sickDays(entry);
+    const vacUsed=totalVacUsed(uid,year);
+    const vacLeft=user.al-vacUsed;
+    cards=[
+      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:'4 × Wochenarbeitszeit'},
+      {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+      {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
+      {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUsed} von ${user.al} im Jahr`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:`Jahresurlaub ${user.al} Tage`},
+      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*(user.wh/5)*60)+' h anteilig'},
+    ];
+  }
+
+  document.getElementById('summary-cards').innerHTML=cards.map(c=>`
+    <div class="s-card">
+      <div class="lbl">${c.lbl}</div>
+      <div class="big${c.cls?' '+c.cls:''}">${c.big}</div>
+      <div class="sub">${c.sub||''}</div>
+    </div>`).join('');
+
+  document.getElementById('carryover-input').value=carryH;
+}
+
+// ── Zuordnung breakdown ──
+function renderZuordBreakdown(entry){
+  const map=zuordBreakdown(entry);
+  const total=Object.values(map).reduce((a,b)=>a+b,0)||1;
+  const sorted=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  const tbody=document.querySelector('#zuord-table tbody');
+  if(sorted.length===0){ tbody.innerHTML='<tr><td colspan="3" style="color:var(--muted);text-align:center">Noch keine Einträge</td></tr>'; return; }
+  tbody.innerHTML=sorted.map(([cat,min])=>{
+    const pct=Math.round(min/total*100);
+    return `<tr>
+      <td>${cat}</td>
+      <td style="text-align:right;font-weight:600">${hFmt(min)}</td>
+      <td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Action bar ──
+function renderActionBar(uid,user,entry,isLeiter){
+  const bar=document.getElementById('action-bar');
+  const info=document.getElementById('action-info');
+  const btns=document.getElementById('action-btns');
+  const cw=document.getElementById('carryover-wrap');
+  bar.style.display='flex';
+  cw.style.display=isFreelancer(user)?'none':'flex';
+
+  if(isLeiter&&cu.id!==uid){ bar.style.display='none'; return; }
+
+  info.textContent=''; btns.innerHTML='';
+  if(cu.id===uid){
+    if(entry.status==='draft'){
+      info.textContent='Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.';
+      btns.innerHTML=`<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`;
+    } else if(entry.status==='submitted'){
+      info.textContent='Monat eingereicht – wartet auf Prüfung durch die Leitung.';
+      btns.innerHTML=`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
+    } else if(entry.status==='approved'){
+      info.textContent='✓ Dieser Monat wurde genehmigt.';
+    } else if(entry.status==='rejected'){
+      info.textContent='✗ Abgelehnt – bitte korrigieren und erneut einreichen.'+(entry.managerNote?` Anmerkung: „${entry.managerNote}"`:'');
+      btns.innerHTML=`<button class="btn btn-warn" onclick="doRecall()">Bearbeiten &amp; erneut einreichen</button>`;
+    }
+  }
+}
+
+// ── Review panel ──
+function renderReviewPanel(uid,entry,isLeiter){
+  const panel=document.getElementById('review-panel');
+  if(!isLeiter||cu.id===uid){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  document.getElementById('review-note').value=entry.managerNote||'';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TABLE CHANGE HANDLERS
+// ═══════════════════════════════════════════════════════════════
+function td_change(ds,field,val){
+  const uid=viewEmpId||cu.id;
+  setDay(uid,year,mon,ds,field,val);
+  renderZeiterfassung();
+}
+function td_zuord(ds,field,val,wh){
+  const uid=viewEmpId||cu.id;
+  setDay(uid,year,mon,ds,field,val);
+  if(val==='Urlaub'){
+    setDay(uid,year,mon,ds,'b1von','08:00');
+    setDay(uid,year,mon,ds,'b1bis',addMin('08:00',480));
+    setDay(uid,year,mon,ds,'b2von',''); setDay(uid,year,mon,ds,'b2bis','');
+  } else if(val==='AU/Krank'&&wh>0){
+    const sick=Math.round((wh/5)*60);
+    setDay(uid,year,mon,ds,'b1von','08:00');
+    setDay(uid,year,mon,ds,'b1bis',addMin('08:00',sick));
+    setDay(uid,year,mon,ds,'b2von',''); setDay(uid,year,mon,ds,'b2bis','');
+  }
+  renderZeiterfassung();
+}
+function saveCarryover(){
+  const uid=viewEmpId||cu.id;
+  setEntryField(uid,year,mon,'carryover',parseFloat(document.getElementById('carryover-input').value)||0);
+  renderZeiterfassung();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUBMIT / APPROVE / REJECT
+// ═══════════════════════════════════════════════════════════════
+function doSubmit(){
+  if(!confirm('Monat einreichen? Danach keine Änderungen bis zur Freigabe.')) return;
+  setEntryField(cu.id,year,mon,'status','submitted');
+  setEntryField(cu.id,year,mon,'submittedAt',new Date().toISOString());
+  toast('Monat erfolgreich eingereicht.');
+  renderZeiterfassung();
+}
+function doRecall(){
+  setEntryField(cu.id,year,mon,'status','draft');
+  toast('Monatserfassung zurückgezogen.');
+  renderZeiterfassung();
+}
+function doApprove(){
+  const uid=viewEmpId; const note=document.getElementById('review-note').value;
+  setEntryField(uid,year,mon,'status','approved');
+  setEntryField(uid,year,mon,'managerNote',note);
+  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
+  setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  toast('Zeiterfassung genehmigt.','ok'); renderZeiterfassung(); renderOverview();
+}
+function doReject(){
+  const uid=viewEmpId; const note=document.getElementById('review-note').value;
+  if(!note.trim()){ toast('Bitte einen Ablehnungsgrund eingeben.','err'); return; }
+  setEntryField(uid,year,mon,'status','rejected');
+  setEntryField(uid,year,mon,'managerNote',note);
+  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
+  setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  toast('Zeiterfassung abgelehnt.','err'); renderZeiterfassung(); renderOverview();
+}
+function doResetToDraft(){
+  setEntryField(viewEmpId,year,mon,'status','draft');
+  setEntryField(viewEmpId,year,mon,'managerNote','');
+  toast('Zurück auf Entwurf gesetzt.');
+  renderZeiterfassung();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MANAGER OVERVIEW
+// ═══════════════════════════════════════════════════════════════
+function populateUeberYear(){
+  const sel=document.getElementById('ueber-year');
+  sel.innerHTML='';
+  for(let y=2024;y<=2028;y++){
+    const o=document.createElement('option'); o.value=y; o.textContent=y;
+    if(y===year) o.selected=true; sel.appendChild(o);
+  }
+}
+function populateUeberTeam(){
+  const sel=document.getElementById('ueber-team');
+  sel.innerHTML='<option value="">Alle Teams</option>';
+  getTeams().forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+}
+function renderOverview(){
+  const oy=parseInt(document.getElementById('ueber-year').value)||year;
+  const filterTeam=document.getElementById('ueber-team').value;
+  const d=getData();
+  const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
+  const bTxt={draft:'E',submitted:'I',approved:'✓',rejected:'✗'};
+
+  let employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+  if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
+
+  // Group by team
+  const teamMap={};
+  employees.forEach(u=>{
+    const t=u.team||'(kein Team)';
+    if(!teamMap[t]) teamMap[t]=[];
+    teamMap[t].push(u);
+  });
+
+  const renderCard=(u)=>{
+    const pills=MONTHS.map((mn,i)=>{
+      const e=d.entries[entryKey(u.id,oy,i+1)];
+      const st=e?e.status:'draft';
+      const hasPending=st==='submitted';
+      return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
+    }).join('');
+    const ist=MONTHS.reduce((s,_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return s+(e?monthIST(e):0); },0);
+    const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'; }).length;
+    const roleChip=`<span class="chip chip-${u.role}">${u.role==='freiberuflich'?'★ Freiberuflich':'Festangestellt'}</span>`;
+    return `<div class="emp-card" onclick="openEmpMonth('${u.id}')">
+      <h3>${u.name} ${roleChip}</h3>
+      <div class="meta">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche`}${u.role!=='freiberuflich'?` · Urlaub: ${u.al}T`:''}</div>
+      <div class="meta">IST-Gesamt ${oy}: <strong>${hFmt(ist)} h</strong>${pending>0?` · <span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span>`:''}</div>
+      <div class="months">${pills}</div>
+    </div>`;
+  };
+
+  const content=document.getElementById('overview-content');
+  if(Object.keys(teamMap).length===0){
+    content.innerHTML='<p style="color:var(--muted)">Keine Mitarbeiter gefunden.</p>'; return;
+  }
+
+  content.innerHTML=Object.entries(teamMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([team,users])=>`
+    <div class="team-section">
+      <h3>${team}</h3>
+      <div class="emp-grid">${users.map(renderCard).join('')}</div>
+    </div>`).join('');
+}
+function openEmpMonth(uid){
+  viewEmpId=uid;
+  rebuildEmpSelect();
+  switchView('zeiterfassung');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function renderSettings(){
+  const d=getData();
+  // Users
+  document.getElementById('user-list').innerHTML=d.users.map(u=>`
+    <div class="user-row">
+      <div>
+        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.team?` <span class="team-badge">${u.team}</span>`:''}</div>
+        <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
+        ${u.id!==cu.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">×</button>`:''}
+      </div>
+    </div>`).join('');
+
+  // Teams
+  const teams=getTeams();
+  document.getElementById('team-list').innerHTML=teams.length
+    ? teams.map((t,i)=>`<span class="team-chip">${t} <button onclick="removeTeam(${i})" title="Entfernen">×</button></span>`).join('')
+    : '<span style="color:var(--muted);font-size:13px">Noch keine Teams angelegt.</span>';
+
+  // Categories
+  const cats=getCats();
+  document.getElementById('cat-list').innerHTML=cats.map((c,i)=>`
+    <span class="cat-chip">${c} <button onclick="removeCat(${i})" title="Entfernen">×</button></span>`).join('');
+}
+
+function addTeam(){
+  const inp=document.getElementById('new-team-input'); const val=inp.value.trim();
+  if(!val) return;
+  mutate(d=>{ if(!d.teams) d.teams=[]; if(!d.teams.includes(val)) d.teams.push(val); });
+  inp.value=''; renderSettings(); populateUeberTeam(); toast('Team hinzugefügt.');
+}
+function removeTeam(i){
+  mutate(d=>{ d.teams.splice(i,1); });
+  renderSettings(); populateUeberTeam();
+}
+function addCategory(){
+  const inp=document.getElementById('new-cat-input'); const val=inp.value.trim();
+  if(!val) return;
+  mutate(d=>{ if(!d.cats.includes(val)) d.cats.push(val); });
+  inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
+}
+function removeCat(i){ mutate(d=>{ d.cats.splice(i,1); }); renderSettings(); }
+
+// ── Add / Edit User ──
+function showAddUser(){
+  openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveNewUser()">Speichern</button></div>`);
+}
+function showEditUser(id){
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`);
+}
+function userForm(u={}){
+  const teamOpts=`<option value=""></option>`+getTeams().map(t=>`<option value="${t}"${u.team===t?' selected':''}>${t}</option>`).join('');
+  const isFree=u.role==='freiberuflich';
+  const BL=[['','– Bundesland –'],['BW','Baden-Württemberg'],['BY','Bayern'],['BE','Berlin'],
+    ['BB','Brandenburg'],['HB','Bremen'],['HH','Hamburg'],['HE','Hessen'],
+    ['MV','Mecklenburg-Vorpommern'],['NI','Niedersachsen'],['NW','Nordrhein-Westfalen'],
+    ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
+    ['SH','Schleswig-Holstein'],['TH','Thüringen']];
+  const blOpts=BL.map(([v,l])=>`<option value="${v}"${(u.bundesland||'')=== v?' selected':''}>${l}</option>`).join('');
+  return `
+    <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
+    <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
+    <div class="form-group"><label>Passwort *</label><input id="uf-pw" type="password" value="${esc(u.pw||'')}" autocomplete="new-password"></div>
+    <div class="form-group"><label>Rolle</label>
+      <select id="uf-role" onchange="toggleFreelancerFields()">
+        <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
+        <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
+        <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
+        <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Team</label><select id="uf-team">${teamOpts}</select></div>
+    <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
+    <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
+    <div id="uf-employed-fields">
+      <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
+      <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
+      <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
+    </div>
+    <script>toggleFreelancerFields()<\/script>`;
+}
+function toggleFreelancerFields(){
+  const sel=document.getElementById('uf-role');
+  const fields=document.getElementById('uf-employed-fields');
+  if(!sel||!fields) return;
+  fields.style.display=sel.value==='freiberuflich'?'none':'';
+}
+function collectUserForm(){
+  const role=document.getElementById('uf-role').value;
+  const isFree=role==='freiberuflich';
+  return {
+    name:document.getElementById('uf-name').value.trim(),
+    id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
+    pw:document.getElementById('uf-pw').value,
+    role,
+    team:document.getElementById('uf-team').value,
+    city:document.getElementById('uf-city').value.trim(),
+    bundesland:document.getElementById('uf-bl').value,
+    wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
+    al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
+    prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0
+  };
+}
+function saveNewUser(){
+  const u=collectUserForm();
+  if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
+  if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
+  mutate(d=>d.users.push(u));
+  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter hinzugefügt.','ok');
+}
+function saveEditUser(id){
+  const u=collectUserForm(); u.id=id;
+  mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],u); });
+  closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert.','ok');
+  if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
+}
+function deleteUser(id){
+  if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
+  mutate(d=>{
+    d.users=d.users.filter(u=>u.id!==id);
+    Object.keys(d.entries).forEach(k=>{ if(k.startsWith(id+'_')) delete d.entries[k]; });
+  });
+  renderSettings(); toast('Mitarbeiter gelöscht.','err');
+  if(viewEmpId===id){
+    const rem=getData().users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+    viewEmpId=rem.length?rem[0].id:null;
+    rebuildEmpSelect(); renderZeiterfassung();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORT / IMPORT / RESET
+// ═══════════════════════════════════════════════════════════════
+function exportData(){
+  const blob=new Blob([JSON.stringify(getData(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`zeiterfassung_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importData(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!d.users||!d.entries) throw new Error();
+      if(!confirm('Alle aktuellen Daten ersetzen?')) return;
+      saveRaw(d); toast('Import erfolgreich – Seite wird neu geladen…','ok');
+      setTimeout(()=>location.reload(),1200);
+    }catch(e){ toast('Ungültige Datei.','err'); }
+  };
+  reader.readAsText(file); e.target.value='';
+}
+function resetData(){
+  if(!confirm('ACHTUNG: Alle Zeitdaten unwiderruflich löschen?')) return;
+  if(!confirm('Wirklich?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  toast('Daten gelöscht – Seite wird neu geladen…','err');
+  setTimeout(()=>location.reload(),1200);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIGNATURE RENDERING
+// ═══════════════════════════════════════════════════════════════
+function fmtTs(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})+
+         ' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr';
+}
+function renderSignature(user,entry){
+  const area=document.getElementById('sig-area');
+  const city=user.city||'';
+  const today=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Block 1 – Ort / Datum
+  const ortDat=entry.submittedAt
+    ? `${city}${city?', ':''}${fmtTs(entry.submittedAt).split(' ')[0]}`
+    : `${city}${city?', ':''}${today}`;
+
+  // Block 2 – Mitarbeiter-Unterschrift
+  let empSig='';
+  if(entry.status==='submitted'||entry.status==='approved'||entry.status==='rejected'){
+    empSig=`<div class="dig-sig">
+      ✍ Digital eingereicht<br>${user.name}
+      <span class="ts">${fmtTs(entry.submittedAt)}</span>
+    </div>`;
+  } else {
+    empSig=`<span class="dig-sig"><span class="pending">Noch nicht eingereicht</span></span>`;
+  }
+
+  // Block 3 – Leitung-Unterschrift
+  let mgSig='';
+  if(entry.status==='approved'||entry.status==='rejected'){
+    const reviewer=entry.reviewedBy?getUser(entry.reviewedBy):null;
+    const rName=reviewer?reviewer.name:'Leitung';
+    const action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
+    mgSig=`<div class="dig-sig">
+      ${action}<br>${rName}
+      <span class="ts">${fmtTs(entry.reviewedAt)}</span>
+      ${entry.managerNote?`<span class="ts" style="color:var(--danger)">${entry.managerNote}</span>`:''}
+    </div>`;
+  } else {
+    mgSig=`<span class="dig-sig"><span class="pending">Ausstehend</span></span>`;
+  }
+
+  area.innerHTML=`
+    <div class="sig-block">
+      <div class="lbl">Ort / Datum</div>
+      <div class="sig-line"><span style="font-size:12px;font-weight:600">${ortDat}</span></div>
+    </div>
+    <div class="sig-block">
+      <div class="lbl">Unterschrift Mitarbeiter/in</div>
+      <div class="sig-line">${empSig}</div>
+    </div>
+    <div class="sig-block">
+      <div class="lbl">Geprüft – Unterschrift Leitung</div>
+      <div class="sig-line">${mgSig}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRINT FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+function printFull(){ window.print(); }
+function printTeamBuchhaltung(){
+  const d=getData();
+  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+  if(!emps.length){ toast('Keine Mitarbeiter im Team vorhanden.','err'); return; }
+  const pages=emps.map((u,i)=>{
+    const entry=getEntry(u.id,year,mon);
+    return renderBuchhaltungHTML(u,entry,year,mon)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
+  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
+    +'<title>Teamberichte '+MONTHS[mon-1]+' '+year+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:Arial,sans-serif;font-size:11px;color:#2c3e50;padding:10px}'
+    +'.emp-section{margin-bottom:16px}'
+    +'.emp-section h2{font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:3px;padding-bottom:4px;border-bottom:2px solid #1a3a5c}'
+    +'.emp-section .sub{font-size:10px;color:#7f8c8d;margin-bottom:8px}'
+    +'.emp-section .diff{font-size:10px;color:#7f8c8d;margin-top:6px}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px}'
+    +'th{background:#1a3a5c;color:#fff;padding:5px 3px;text-align:center;font-size:9px;font-weight:700;white-space:nowrap}'
+    +'th.bh{background:#2d4f70}'
+    +'th.sp{background:#0e2235;width:5px;padding:0}'
+    +'th.l{text-align:left;padding-left:5px}'
+    +'td{padding:3px 3px;vertical-align:middle;border-bottom:1px solid #dde1e7;text-align:center}'
+    +'td.l{text-align:left;padding-left:5px;font-weight:700;font-size:9px;white-space:nowrap}'
+    +'td.sp{background:#e8edf2;width:5px;padding:0}'
+    +'td.sm{font-weight:700;color:#1a3a5c;font-size:10px}'
+    +'td.tt{font-weight:700;font-size:11px;color:#1a3a5c;background:rgba(26,58,92,.07)}'
+    +'.we{background:#fef3e2}'
+    +'.hol{background:#fff0f0!important}'
+    +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:5px 3px;text-align:center}'
+    +'tfoot td.l{text-align:left;padding-left:5px}'
+    +'@media print{'
+    +'  body{padding:0}'
+    +'  @page{margin:1cm}'
+    +'}'
+    +'</style></head><body>'
+    +pages
+    +'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); },500);
+}
+function renderBuchhaltungHTML(u,entry,y,m){
+  const dim=daysInMonth(y,m);
+  const hols=getHolidays(y,u.bundesland||'');
+  let rows=''; let monthTotal=0;
+  for(let d=1;d<=dim;d++){
+    const ds=dateStr(y,m,d);
+    const dd=entry.days[ds]||{};
+    const we=isWeekend(y,m,d);
+    const hol=hols.has(ds);
+    const kw=isoWeek(new Date(y,m-1,d));
+    const dn=DAYS[new Date(y,m-1,d).getDay()];
+    const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
+    const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
+    const ktm=Number(dd.ktmin||0);
+    const dayMin=b1min+b2min+ktm;
+    monthTotal+=dayMin;
+    const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+String(y).slice(2);
+    const cls=hol?'hol':(we?'we':'');
+    rows+='<tr'+(cls?' class="'+cls+'"':'')+'>'
+      +'<td class="l">'+dateFmt+(hol?'<br><span style="font-size:8px;color:#c0392b">Feiertag</span>':'')+'</td>'
+      +'<td>'+kw+'</td>'
+      +'<td>'+(we?'<b>':'')+dn+(we?'</b>':'')+'</td>'
+      +'<td>'+(dd.b1von||'')+'</td>'
+      +'<td>'+(dd.b1bis||'')+'</td>'
+      +'<td style="text-align:left;max-width:80px;overflow:hidden">'+(dd.b1zuord||'')+'</td>'
+      +'<td class="sm">'+(b1min>0?minFmt(b1min):'')+'</td>'
+      +'<td class="sp"></td>'
+      +'<td>'+(dd.b2von||'')+'</td>'
+      +'<td>'+(dd.b2bis||'')+'</td>'
+      +'<td style="text-align:left;max-width:80px;overflow:hidden">'+(dd.b2zuord||'')+'</td>'
+      +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
+      +'<td>'+(ktm>0?ktm:'')+'</td>'
+      +'<td style="text-align:left;max-width:70px;overflow:hidden">'+(dd.ktzuord||'')+'</td>'
+      +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>'
+      +'<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'
+      +'</tr>';
+  }
+  const isFree=isFreelancer(u);
+  const soll=monthSOLL(u);
+  const carryH=entry.carryover||0;
+  const diff=monthTotal-(soll-carryH*60);
+  return '<div class="emp-section">'
+    +'<h2>'+esc(u.name)+' &ndash; '+MONTHS[m-1]+' '+y+'</h2>'
+    +'<div class="sub">'+(u.city||'&ndash;')+' &middot; '+(isFree?'Freiberuflich':'Festangestellt, '+u.wh+'h/Woche')+'</div>'
+    +'<table>'
+    +'<thead><tr>'
+    +'<th class="l" rowspan="2">Datum</th><th rowspan="2">KW</th><th rowspan="2">Tag</th>'
+    +'<th colspan="4" class="bh">Block 1</th>'
+    +'<th class="sp" rowspan="2"></th>'
+    +'<th colspan="4" class="bh">Block 2</th>'
+    +'<th colspan="3">Kleinteilig</th>'
+    +'<th rowspan="2">Gesamt</th>'
+    +'</tr><tr>'
+    +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
+    +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
+    +'<th>Min</th><th>Zuordnung</th><th>&sum;</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr>'
+    +'<td class="l" colspan="3">Monatssumme IST</td>'
+    +'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="3"></td>'
+    +'<td>'+hFmt(monthTotal)+'</td>'
+    +'</tr></tfoot>'
+    +'</table>'
+    +'<div class="diff">IST: <strong>'+hFmt(monthTotal)+'</strong>'
+    +(isFree?'':' &nbsp;|&nbsp; SOLL: <strong>'+hFmt(soll)+'</strong>'
+      +' &nbsp;|&nbsp; Differenz: <strong style="color:'+(diff>=0?'#27ae60':'#c0392b')+'">'
+      +(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</strong>')
+    +'</div>'
+    +'</div>';
+}
+function printBuchhaltung(){
+  // Temporarily hide Bemerkung columns and adjust colspans
+  const bemCells=document.querySelectorAll('.bem-col');
+  const blockHeads=document.querySelectorAll('.block-head');
+  bemCells.forEach(el=>el.style.display='none');
+  blockHeads.forEach(el=>el.setAttribute('colspan','4'));
+  window.print();
+  bemCells.forEach(el=>el.style.display='');
+  blockHeads.forEach(el=>el.setAttribute('colspan','5'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL / TOAST
+// ═══════════════════════════════════════════════════════════════
+function openModal(html){ document.getElementById('modal-body').innerHTML=html; document.getElementById('modal-bg').classList.add('show'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
+document.getElementById('modal-bg').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-bg')) closeModal(); });
+function toast(msg,type=''){
+  const el=document.createElement('div');
+  el.className='toast'+(type?' '+type:''); el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ═══════════════════════════════════════════════════════════════
+// SHARE / EMERGENCY RESET
+// ═══════════════════════════════════════════════════════════════
+function shareApp(){
+  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='Zeiterfassung_TURNING_POINT.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('Download gestartet ✓','ok');
+}
+function emergencyReset(){
+  var users=[];
+  try{ users=getData().users||[]; }catch(e){}
+
+  var rows='';
+  for(var i=0;i<users.length;i++){
+    var u=users[i];
+    rows+='<tr><td style="padding:5px 8px">'+esc(u.name)+'</td>'
+      +'<td style="padding:5px 8px;font-family:monospace;color:#1a3a5c">'+esc(u.id)+'</td>'
+      +'<td style="padding:5px 8px"><span class="chip chip-'+u.role+'">'+u.role+'</span></td></tr>';
+  }
+  if(!rows) rows='<tr><td colspan="3" style="padding:8px;color:#7f8c8d;text-align:center">Keine Benutzer lesbar</td></tr>';
+
+  var pwRows='';
+  for(var j=0;j<users.length;j++){
+    var uu=users[j];
+    var def=null;
+    for(var k=0;k<DEFAULT_USERS.length;k++){ if(DEFAULT_USERS[k].id===uu.id){ def=DEFAULT_USERS[k]; break; } }
+    if(def) pwRows+='<tr><td style="padding:2px 8px 2px 0">'+esc(uu.name)+'</td>'
+      +'<td style="padding:2px 8px 2px 0;font-family:monospace;color:#1a3a5c">'+def.pw+'</td></tr>';
+  }
+
+  openModal(
+    '<h3>Login-Hilfe</h3>'
+    +'<p style="font-size:13px;color:#7f8c8d;margin-bottom:14px">Gespeicherte Benutzer im System:</p>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">'
+    +'<thead><tr style="background:#f0f2f5"><th style="padding:5px 8px;text-align:left;font-size:11px">Name</th>'
+    +'<th style="padding:5px 8px;text-align:left;font-size:11px">Login-ID</th>'
+    +'<th style="padding:5px 8px;text-align:left;font-size:11px">Rolle</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'<p style="font-size:12px;color:#7f8c8d;margin-bottom:16px">Passw&ouml;rter &auml;ndern: nach Login unter <strong>Einstellungen &rarr; Mitarbeiter bearbeiten</strong>.</p>'
+    +'<details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#e67e22;cursor:pointer">Passw&ouml;rter auf Standard zur&uuml;cksetzen</summary>'
+    +'<p style="font-size:12px;color:#7f8c8d;margin:8px 0">Zeitdaten bleiben erhalten!</p>'
+    +(pwRows ? '<table style="font-size:12px;margin:6px 0 10px 0;border-collapse:collapse">'
+      +'<tr><th style="padding:2px 8px 2px 0;text-align:left;font-size:11px">Name</th>'
+      +'<th style="padding:2px 8px 2px 0;text-align:left;font-size:11px">Neues Passwort</th></tr>'
+      +pwRows+'</table>' : '')
+    +'<button class="btn btn-warn btn-sm" onclick="resetPasswordsOnly()">Passw&ouml;rter zur&uuml;cksetzen</button></details>'
+    +'<details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#c0392b;cursor:pointer">Notfall: Alle Daten l&ouml;schen</summary>'
+    +'<p style="font-size:12px;color:#7f8c8d;margin:8px 0">L&ouml;scht alle Zeitdaten. Nicht r&uuml;ckg&auml;ngig zu machen!</p>'
+    +'<button class="btn btn-danger btn-sm" onclick="doEmergencyReset()">Alles l&ouml;schen &amp; neu starten</button></details>'
+    +'<div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schlie&szlig;en</button></div>'
+  );
+}
+function doEmergencyReset(){
+  if(!confirm('Wirklich ALLE Daten löschen?\nDieser Schritt kann nicht rückgängig gemacht werden.')) return;
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  closeModal();
+  location.reload();
+}
+function resetPasswordsOnly(){
+  if(!confirm('Passwörter aller Benutzer auf Standard zurücksetzen?\nZeitdaten bleiben erhalten.')) return;
+  mutate(d=>{
+    d.users.forEach(u=>{
+      const def=DEFAULT_USERS.find(x=>x.id===u.id);
+      if(def) u.pw=def.pw;
+    });
+  });
+  closeModal();
+  toast('Passwörter zurückgesetzt.','ok');
+  populateLoginDropdown();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════
+(function(){
+  try {
+    populateLoginDropdown();
+  } catch(e) {
+    var el = document.getElementById('login-user-list');
+    if(el) el.innerHTML = '<div style="background:#fdd;border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: ' + e.message + '</div>';
+    console.error('Boot-Fehler:', e);
+  }
+})();
+</script>
+</body>
+</html>
