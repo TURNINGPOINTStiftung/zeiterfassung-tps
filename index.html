@@ -275,7 +275,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21e</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -832,10 +832,8 @@ function initApp(){
     populateUeberTeam();
   }
   // Startansicht je Rolle
-  if(isGF) switchView('gfberichte');
-  else if(isAdmin) switchView('uebersicht');
-  else if(isLeitung){ switchView('zeiterfassung'); }
-  else switchView('zeiterfassung');
+  if(isAdmin) switchView('uebersicht');
+  else switchView('zeiterfassung'); // alle anderen (inkl. GF) starten auf eigener AZ
 }
 function rebuildEmpSelect(){
   // Dropdown im Zeiterfassungs-Tab wird nicht mehr benötigt
