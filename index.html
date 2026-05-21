@@ -788,33 +788,35 @@ function initApp(){
   viewEmpId=isMgr?null:cu.id;
 
   // Tab-Sichtbarkeit je Rolle
-  document.getElementById('tab-uebersicht').style.display=(isMgr&&!isGF)?'':'none';
-  document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
-  document.getElementById('tab-einstellungen').style.display=(isAdmin||cu.role==='leitung')?'':'none';
-  // Zeiterfassung-Tab: GF braucht ihn nicht
+  const isLeitung=cu.role==='leitung';
+  // Zeiterfassung: nur Mitarbeiter/Freiberuflich und Leitung
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=isGF?'none':'';
-  // Teamberichte-Button nur für Leitungspersonal
+  if(tabZE) tabZE.style.display=(isGF||isAdmin)?'none':'';
+  // Mitarbeiterübersicht: nur Leitung
+  document.getElementById('tab-uebersicht').style.display=isLeitung?'':'none';
+  // GF-Berichte: nur GF
+  document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
+  // Einstellungen: nur Admin
+  document.getElementById('tab-einstellungen').style.display=isAdmin?'':'none';
+  // Teamberichte-Button: nur Leitung
   const btnTeam=document.getElementById('btn-teamberichte');
-  if(btnTeam) btnTeam.style.display=(cu.role==='leitung')?'':'none';
+  if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
 
-  if(isMgr&&!isGF){
+  if(isLeitung){
     rebuildEmpSelect();
     populateUeberYear();
     populateUeberTeam();
   }
-  // GF startet direkt in Berichte-Ansicht
-  switchView(isGF?'gfberichte':'zeiterfassung');
+  // Startansicht je Rolle
+  if(isGF) switchView('gfberichte');
+  else if(isAdmin) switchView('einstellungen');
+  else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
   const sel=document.getElementById('emp-select');
   sel.innerHTML='';
   getData().users
-    .filter(u=>{
-      if(cu.role==='geschaeftsfuehrer') return u.role==='leitung';
-      if(cu.role==='admin') return !isManagerRole(u);
-      return !isManagerRole(u);
-    })
+    .filter(u=>!isManagerRole(u))
     .filter(u=>canSeeEmployee(cu,u))
     .forEach(u=>{
       const o=document.createElement('option');
