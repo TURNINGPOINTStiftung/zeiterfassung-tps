@@ -525,10 +525,7 @@ function _migrate(d){
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
   if(!d.teamReports) d.teamReports={};
-  // Alle moritz-Einträge und doppelte admin-Einträge entfernen
-  // Schritt 1: moritz raus
-  d.users=d.users.filter(u=>u.id!=='moritz');
-  // Schritt 2: von mehreren admin-Einträgen nur den ersten behalten
+  // Doppelte admin-Einträge entfernen (nur ersten behalten)
   let adminSeen=false;
   d.users=d.users.filter(u=>{
     if(u.id==='admin'){ if(adminSeen) return false; adminSeen=true; }
@@ -557,11 +554,11 @@ async function initFirebase(){
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     // Prüfen ob strukturelle Migration nötig
     const needsCleanup=
-      data.users.some(u=>u.id==='moritz') ||
       data.users.some(u=>u.id==='admin'&&u.role!=='admin') ||
       !data.users.some(u=>u.id==='admin') ||
       !data.teamReports ||
-      data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams));
+      data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams)) ||
+      data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined);
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
     // Klartext-Passwörter automatisch hashen (einmalige Migration)
