@@ -302,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21n</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21o</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21n</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21o</div>
         </div>
       </div>
     </div>
@@ -667,6 +667,22 @@ function canSeeEmployee(mgr,emp){
   return false;
 }
 
+// Sichtbarkeit von Abwesenheiten (weiter als canSeeEmployee)
+function canSeeAbsence(viewer,target){
+  if(!target||!target.id) return false;
+  if(target.id===viewer.id) return true; // eigene immer sichtbar
+  if(viewer.role==='admin') return true;
+  if(viewer.role==='geschaeftsfuehrer') return target.role==='leitung';
+  if(viewer.role==='leitung'){
+    // Eigene Teammitarbeiter
+    const t=getLeitungTeams(viewer);
+    if(!isManagerRole(target)&&(t.length===0||t.includes(target.team))) return true;
+    // Andere Leitung + GF
+    return target.role==='leitung'||target.role==='geschaeftsfuehrer';
+  }
+  // Mitarbeiter / Freiberuflich: gleicher Team-Name
+  return !!(viewer.team&&target.team&&viewer.team===target.team);
+}
 // ═══════════════════════════════════════════════════════════════
 // TIME UTILS
 // ═══════════════════════════════════════════════════════════════
@@ -1979,13 +1995,9 @@ function renderAbwesenheiten(){
   // Genehmigte Anträge die noch nicht beendet sind
   const upcoming=reqs.filter(r=>{
     if(r.status!=='approved') return false;
-    if(r.endDate<todayStr) return false; // bereits vergangen
-    if(!isMgr && r.userId!==cu.id) return false; // Mitarbeiter nur eigene
-    if(isMgr && r.userId!==cu.id){
-      const u=getUser(r.userId);
-      if(!u||!canSeeEmployee(cu,u)) return false;
-    }
-    return true;
+    if(r.endDate<todayStr) return false;
+    const u=r.userId===cu.id?cu:getUser(r.userId);
+    return u&&canSeeAbsence(cu,u);
   }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
 
   let upcomingHtml='';
@@ -2005,7 +2017,7 @@ function renderAbwesenheiten(){
       } else {
         badgeCls='later'; badgeTxt=`in ${daysUntil} Tagen`;
       }
-      const showName=isMgr&&r.userId!==cu.id;
+      const showName=r.userId!==cu.id;
       const fmtShort=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.`; };
       const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Freistellung'?'📋 ':'📌 ';
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
@@ -2031,11 +2043,21 @@ function renderAbwesenheiten(){
     const teamDone=reqs.filter(r=>{
       if(r.status==='pending'||r.userId===cu.id) return false;
       if(isAdmin) return true;
-      const u=getUser(r.userId); return u&&canSeeEmployee(cu,u);
-    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,50);
+      const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
+    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,60);
     if(teamDone.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
       ${teamDone.map(card).join('')}</section>`;
+  } else {
+    // Mitarbeiter / Freiberuflich: genehmigte Abwesenheiten der Teamkollegen
+    const teamAbs=reqs.filter(r=>{
+      if(r.userId===cu.id) return false;
+      if(r.status!=='approved') return false;
+      const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
+    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,30);
+    if(teamAbs.length) html+=`<section style="margin-bottom:28px">
+      <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Abwesenheiten</h3>
+      ${teamAbs.map(card).join('')}</section>`;
   }
   // Eigene Anträge
   const myReqs=reqs.filter(r=>r.userId===cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
