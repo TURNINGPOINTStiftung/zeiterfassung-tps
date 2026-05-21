@@ -503,7 +503,11 @@ function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
-  d.users.forEach(u=>{ if(u.bundesland===undefined) u.bundesland=''; });
+  d.users.forEach(u=>{
+    if(u.bundesland===undefined) u.bundesland='';
+    // Leitungspersonal: teams-Array migrieren (war früher einzelner String)
+    if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
+  });
   if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
   return d;
 }
@@ -531,7 +535,7 @@ function getData(){ return _dataCache||freshData(); }
 function saveRaw(d){
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
-  _fbRef.set(d).catch(e=>console.warn('Firebase sync error:',e));
+  _fbRef.set(d).catch(e=>{ console.warn('Firebase sync error:',e); toast('⚠ Speichern fehlgeschlagen – bitte Seite neu laden.','err'); });
 }
 function mutate(fn){ const d=getData(); fn(d); saveRaw(d); }
 
@@ -559,8 +563,9 @@ function setEntryField(uid,y,m,field,val){
 function getUser(id){ return getData().users.find(u=>u.id===id); }
 function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
 function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'); }
-function isAdminUser(u){ return u&&(u.role==='geschaeftsfuehrer'||(u.role==='leitung'&&!u.team)); }
-function canSeeEmployee(mgr,emp){ return isAdminUser(mgr)||mgr.team===emp.team; }
+function getLeitungTeams(u){ return (u&&u.role==='leitung'&&Array.isArray(u.teams))?u.teams:[]; }
+function isAdminUser(u){ return u&&(u.role==='geschaeftsfuehrer'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
+function canSeeEmployee(mgr,emp){ if(isAdminUser(mgr)) return true; if(mgr.role==='leitung'){ const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team); } return false; }
 
 // ═══════════════════════════════════════════════════════════════
 // TIME UTILS
@@ -828,7 +833,7 @@ function renderZeiterfassung(){
 
   document.getElementById('month-title').textContent=`${MONTHS[mon-1]} ${year}`;
   document.getElementById('info-name').textContent=user.name;
-  document.getElementById('info-team').textContent=user.team||'–';
+  document.getElementById('info-team').textContent=user.role==='leitung'?(getLeitungTeams(user).join(', ')||'–'):(user.team||'–');
   document.getElementById('info-city').textContent=user.city||'–';
   document.getElementById('info-type').textContent=isFree?'Freiberuflich':'Festangestellt';
   document.getElementById('info-wh').textContent=isFree?'flexibel':`${user.wh} h`;
@@ -1149,7 +1154,7 @@ function renderSettings(){
   document.getElementById('user-list').innerHTML=d.users.map(u=>`
     <div class="user-row">
       <div>
-        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.team?` <span class="team-badge">${u.team}</span>`:''}</div>
+        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -1196,7 +1201,10 @@ function showEditUser(id){
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`);
 }
 function userForm(u={}){
-  const teamOpts=`<option value=""></option>`+getTeams().map(t=>`<option value="${t}"${u.team===t?' selected':''}>${t}</option>`).join('');
+  const allTeams=getTeams();
+  const userLeitungTeams=Array.isArray(u.teams)?u.teams:[];
+  const teamOpts=`<option value=""></option>`+allTeams.map(t=>`<option value="${t}"${u.team===t?' selected':''}>${t}</option>`).join('');
+  const teamChecks=allTeams.length?allTeams.map((t,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-team-cb-${i}" value="${esc(t)}"${userLeitungTeams.includes(t)?' checked':''}> ${esc(t)}</label>`).join(''):'<span style="color:var(--muted);font-size:12px">Noch keine Teams angelegt.</span>';
   const isFree=u.role==='freiberuflich';
   const BL=[['','– Bundesland –'],['BW','Baden-Württemberg'],['BY','Bayern'],['BE','Berlin'],
     ['BB','Brandenburg'],['HB','Bremen'],['HH','Hamburg'],['HE','Hessen'],
@@ -1216,7 +1224,7 @@ function userForm(u={}){
         <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
       </select>
     </div>
-    <div class="form-group"><label>Team</label><select id="uf-team">${teamOpts}</select></div>
+    <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
     <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
     <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     <div id="uf-employed-fields">
@@ -1230,17 +1238,26 @@ function toggleFreelancerFields(){
   const sel=document.getElementById('uf-role');
   const fields=document.getElementById('uf-employed-fields');
   if(!sel||!fields) return;
-  fields.style.display=sel.value==='freiberuflich'?'none':'';
+  const role=sel.value;
+  fields.style.display=role==='freiberuflich'?'none':'';
+  const s=document.getElementById('uf-team-single');
+  const m=document.getElementById('uf-team-multi');
+  if(s&&m){ const isL=role==='leitung'; s.style.display=isL?'none':''; m.style.display=isL?'':'none'; }
 }
 function collectUserForm(){
   const role=document.getElementById('uf-role').value;
   const isFree=role==='freiberuflich';
+  const isLeitung=role==='leitung';
+  const at=getTeams();
+  const teams=isLeitung?at.filter((_,i)=>{ const cb=document.getElementById(`uf-team-cb-${i}`); return cb&&cb.checked; }):[];
+  const teamEl=document.getElementById('uf-team');
   return {
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     pw:document.getElementById('uf-pw').value,
     role,
-    team:document.getElementById('uf-team').value,
+    team:isLeitung?'':(teamEl?teamEl.value:''),
+    teams:isLeitung?teams:[],
     city:document.getElementById('uf-city').value.trim(),
     bundesland:document.getElementById('uf-bl').value,
     wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
@@ -1260,7 +1277,7 @@ async function saveEditUser(id){
   const u=collectUserForm(); u.id=id;
   if(u.pw){ u.pw=await hashPw(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; } // bestehendes Hash behalten
-  mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],u); });
+  mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
   closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert.','ok');
   if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
 }
