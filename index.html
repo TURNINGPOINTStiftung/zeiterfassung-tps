@@ -525,15 +525,21 @@ function _migrate(d){
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
   if(!d.teamReports) d.teamReports={};
-  // Alte moritz-Einträge komplett entfernen
+  // Alle moritz-Einträge und doppelte admin-Einträge entfernen
+  // Schritt 1: moritz raus
   d.users=d.users.filter(u=>u.id!=='moritz');
+  // Schritt 2: von mehreren admin-Einträgen nur den ersten behalten
+  let adminSeen=false;
+  d.users=d.users.filter(u=>{
+    if(u.id==='admin'){ if(adminSeen) return false; adminSeen=true; }
+    return true;
+  });
   d.users.forEach(u=>{
     if(u.bundesland===undefined) u.bundesland='';
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
+    // Nur id=admin darf role=admin haben
+    if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
   });
-  // Alle doppelten oder falsch gesetzten Admin-Accounts bereinigen
-  // Nur id='admin' darf role='admin' haben – alle anderen auf mitarbeiter zurücksetzen
-  d.users.forEach(u=>{ if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter'; });
   // Genau einen Admin sicherstellen
   const adminUser=d.users.find(u=>u.id==='admin');
   if(adminUser){ adminUser.role='admin'; }
