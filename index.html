@@ -302,7 +302,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21p</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21q</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -488,7 +488,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21p</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21q</div>
         </div>
       </div>
     </div>
@@ -1387,7 +1387,7 @@ function renderOverview(){
   if(cu.role==='geschaeftsfuehrer'){
     employees=d.users.filter(u=>u.role==='leitung');
   } else if(cu.role==='admin'){
-    employees=d.users.filter(u=>u.role!=='admin'&&u.role!=='geschaeftsfuehrer');
+    employees=d.users.filter(u=>u.role!=='admin'); // GF wird jetzt eingeschlossen
     if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
   } else {
     employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
@@ -1397,7 +1397,7 @@ function renderOverview(){
   // Group by team
   const teamMap={};
   employees.forEach(u=>{
-    const t=u.team||'(kein Team)';
+    const t=u.team||(isManagerRole(u)?'Leitungsteam':'(kein Team)');
     if(!teamMap[t]) teamMap[t]=[];
     teamMap[t].push(u);
   });
