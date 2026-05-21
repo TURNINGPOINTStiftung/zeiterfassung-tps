@@ -84,6 +84,13 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .chip-mitarbeiter{background:#d4edda;color:#155724}
 .chip-freiberuflich{background:#fff3cd;color:#856404}
 .chip-admin{background:#fee2e2;color:#991b1b}
+/* ── GF Berichte ── */
+.gf-report-card{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;transition:box-shadow .2s}
+.gf-report-card:hover{box-shadow:0 3px 12px rgba(0,0,0,.08)}
+.gf-report-card.gf-report-new{border-color:var(--warn);background:#fffbf5}
+.gf-report-title{font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px}
+.gf-report-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.gf-new-badge{display:inline-block;background:var(--warn);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle}
 
 /* ── Time Table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}
@@ -278,6 +285,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   <nav class="app-nav" id="app-nav">
     <div class="nav-tab active" data-view="zeiterfassung" onclick="switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
+    <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
     <div class="nav-tab" data-view="einstellungen" id="tab-einstellungen" style="display:none" onclick="switchView('einstellungen')">Einstellungen</div>
   </nav>
 
@@ -296,7 +304,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
         <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap" class="no-print">
           <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken (vollständig)</button>
           <button class="btn btn-outline btn-sm" onclick="printBuchhaltung()" title="Ohne Bemerkungsspalten – für die Buchhaltung">📋 Buchhaltung</button>
-          <button class="btn btn-warn btn-sm" id="btn-teamberichte" style="display:none" onclick="printTeamBuchhaltung()" title="Alle Buchhaltungsblätter des Teams (an GF)">📑 Teamberichte</button>
+          <button class="btn btn-warn btn-sm" id="btn-teamberichte" style="display:none" onclick="sendTeamReport()" title="Teamberichte an Geschäftsführung senden und drucken">📤 An GF senden</button>
         </div>
       </div>
 
@@ -386,6 +394,15 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
         </select>
       </div>
       <div id="overview-content"></div>
+    </div>
+
+    <!-- ─── GF Berichte ─── -->
+    <div class="view" id="view-gfberichte">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Eingegangene Teamberichte</h2>
+        <button class="btn btn-outline btn-sm" onclick="renderGFBerichte()">↻ Aktualisieren</button>
+      </div>
+      <div id="gf-berichte-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
 
     <!-- ─── Einstellungen ─── -->
@@ -498,12 +515,13 @@ const DEFAULT_USERS = [
   {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
 ];
 function freshData(){
-  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS]};
+  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{}};
 }
 function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
+  if(!d.teamReports) d.teamReports={};
   d.users.forEach(u=>{
     if(u.bundesland===undefined) u.bundesland='';
     // Leitungspersonal: teams-Array migrieren (war früher einzelner String)
@@ -767,20 +785,26 @@ function initApp(){
   const isAdmin=cu.role==='admin';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
-  // Admin und GF haben keine eigene Zeiterfassung
-  viewEmpId=(isMgr)?null:cu.id;
-  document.getElementById('tab-uebersicht').style.display=isMgr?'':'none';
-  // Einstellungen nur für Admin und Leitung, nicht GF
+  viewEmpId=isMgr?null:cu.id;
+
+  // Tab-Sichtbarkeit je Rolle
+  document.getElementById('tab-uebersicht').style.display=(isMgr&&!isGF)?'':'none';
+  document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
   document.getElementById('tab-einstellungen').style.display=(isAdmin||cu.role==='leitung')?'':'none';
+  // Zeiterfassung-Tab: GF braucht ihn nicht
+  const tabZE=document.querySelector('[data-view="zeiterfassung"]');
+  if(tabZE) tabZE.style.display=isGF?'none':'';
   // Teamberichte-Button nur für Leitungspersonal
   const btnTeam=document.getElementById('btn-teamberichte');
   if(btnTeam) btnTeam.style.display=(cu.role==='leitung')?'':'none';
-  if(isMgr){
+
+  if(isMgr&&!isGF){
     rebuildEmpSelect();
     populateUeberYear();
     populateUeberTeam();
   }
-  switchView('zeiterfassung');
+  // GF startet direkt in Berichte-Ansicht
+  switchView(isGF?'gfberichte':'zeiterfassung');
 }
 function rebuildEmpSelect(){
   const sel=document.getElementById('emp-select');
@@ -818,6 +842,7 @@ function switchView(v){
   if(v==='zeiterfassung') renderZeiterfassung();
   if(v==='uebersicht') renderOverview();
   if(v==='einstellungen') renderSettings();
+  if(v==='gfberichte') renderGFBerichte();
 }
 function changeMonth(delta){
   mon+=delta;
@@ -1427,8 +1452,13 @@ function printTeamBuchhaltung(){
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
     +'<title>Teamberichte '+MONTHS[mon-1]+' '+year+'</title>'
-    +'<style>'
-    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); },500);
+}
+
+function _teamReportStyle(){
+  return '*{box-sizing:border-box;margin:0;padding:0}'
     +'body{font-family:Arial,sans-serif;font-size:11px;color:#2c3e50;padding:10px}'
     +'.emp-section{margin-bottom:16px}'
     +'.emp-section h2{font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:3px;padding-bottom:4px;border-bottom:2px solid #1a3a5c}'
@@ -1436,28 +1466,100 @@ function printTeamBuchhaltung(){
     +'.emp-section .diff{font-size:10px;color:#7f8c8d;margin-top:6px}'
     +'table{width:100%;border-collapse:collapse;font-size:10px}'
     +'th{background:#1a3a5c;color:#fff;padding:5px 3px;text-align:center;font-size:9px;font-weight:700;white-space:nowrap}'
-    +'th.bh{background:#2d4f70}'
-    +'th.sp{background:#0e2235;width:5px;padding:0}'
-    +'th.l{text-align:left;padding-left:5px}'
+    +'th.bh{background:#2d4f70}th.sp{background:#0e2235;width:5px;padding:0}th.l{text-align:left;padding-left:5px}'
     +'td{padding:3px 3px;vertical-align:middle;border-bottom:1px solid #dde1e7;text-align:center}'
     +'td.l{text-align:left;padding-left:5px;font-weight:700;font-size:9px;white-space:nowrap}'
-    +'td.sp{background:#e8edf2;width:5px;padding:0}'
-    +'td.sm{font-weight:700;color:#1a3a5c;font-size:10px}'
+    +'td.sp{background:#e8edf2;width:5px;padding:0}td.sm{font-weight:700;color:#1a3a5c;font-size:10px}'
     +'td.tt{font-weight:700;font-size:11px;color:#1a3a5c;background:rgba(26,58,92,.07)}'
-    +'.we{background:#fef3e2}'
-    +'.hol{background:#fff0f0!important}'
+    +'.we{background:#fef3e2}.hol{background:#fff0f0!important}'
     +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:5px 3px;text-align:center}'
     +'tfoot td.l{text-align:left;padding-left:5px}'
-    +'@media print{'
-    +'  body{padding:0}'
-    +'  @page{margin:1cm}'
-    +'}'
-    +'</style></head><body>'
-    +pages
-    +'</body></html>');
+    +'@media print{body{padding:0}@page{margin:1cm}}';
+}
+
+function sendTeamReport(){
+  const d=getData();
+  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+  if(!emps.length){ toast('Keine Mitarbeiter im Team vorhanden.','err'); return; }
+  const key=cu.id+'_'+year+'_'+String(mon).padStart(2,'0');
+  const report={
+    id:key, leitungId:cu.id, leitungName:cu.name,
+    managedTeams:getLeitungTeams(cu),
+    year:year, month:mon,
+    submittedAt:new Date().toISOString(),
+    seenAt:null,
+    employeeIds:emps.map(u=>u.id)
+  };
+  mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[key]=report; });
+  toast('Teambericht an Geschäftsführung gesendet. ✓','ok');
+  // Auch direkt drucken
+  const pages=emps.map(function(u,i){
+    const entry=getEntry(u.id,year,mon);
+    return renderBuchhaltungHTML(u,entry,year,mon)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
+  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
+    +'<title>Teambericht '+MONTHS[mon-1]+' '+year+'</title>'
+    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
 }
+
+function viewTeamReport(key){
+  const d=getData();
+  const r=d.teamReports&&d.teamReports[key];
+  if(!r){ toast('Bericht nicht gefunden.','err'); return; }
+  const emps=r.employeeIds.map(function(id){ return d.users.find(function(u){ return u.id===id; }); }).filter(Boolean);
+  if(!emps.length){ toast('Keine Mitarbeiterdaten vorhanden.','err'); return; }
+  const pages=emps.map(function(u,i){
+    const entry=getEntry(u.id,r.year,r.month);
+    return renderBuchhaltungHTML(u,entry,r.year,r.month)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
+  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
+    +'<title>Teambericht '+MONTHS[r.month-1]+' '+r.year+' – '+esc(r.leitungName)+'</title>'
+    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); },500);
+  if(!r.seenAt) markReportSeen(key);
+}
+
+function markReportSeen(key){
+  mutate(function(d){ if(d.teamReports&&d.teamReports[key]) d.teamReports[key].seenAt=new Date().toISOString(); });
+  renderGFBerichte();
+}
+
+function renderGFBerichte(){
+  const content=document.getElementById('gf-berichte-content');
+  if(!content) return;
+  const d=getData();
+  const reports=Object.values(d.teamReports||{});
+  if(!reports.length){
+    content.innerHTML='<p style="color:var(--muted);padding:20px 0">Noch keine Berichte eingegangen.</p>';
+    return;
+  }
+  reports.sort(function(a,b){ return new Date(b.submittedAt)-new Date(a.submittedAt); });
+  content.innerHTML=reports.map(function(r){
+    const dt=new Date(r.submittedAt);
+    const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+    const teams=(r.managedTeams&&r.managedTeams.length)?r.managedTeams.join(', '):'–';
+    const isNew=!r.seenAt;
+    return '<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
+      +'<div>'
+      +'<div class="gf-report-title">'+MONTHS[r.month-1]+' '+r.year+' &ndash; '+esc(teams)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+      +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
+      +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'+(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">👁 Anzeigen / Drucken</button>'
+      +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
 function renderBuchhaltungHTML(u,entry,y,m){
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,u.bundesland||'');
