@@ -165,6 +165,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .emp-card .months{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
 .m-pill{padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600}
 .team-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;background:#e8f4fd;color:#1a3a5c;margin-right:4px}
+.team-send-bar{margin-top:14px;padding:12px 16px;background:var(--white);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 
 /* ── Settings ── */
 .settings-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:4px}
@@ -287,7 +288,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21j</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21k</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -407,9 +408,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 
     <!-- ─── Manager Übersicht ─── -->
     <div class="view" id="view-uebersicht">
-      <div class="flex" style="margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div class="flex" style="margin-bottom:18px;flex-wrap:wrap;gap:10px;align-items:center">
         <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Mitarbeiterübersicht</h2>
         <select id="ueber-year" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        <select id="ueber-mon" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
         <select id="ueber-team" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
           <option value="">Alle Teams</option>
         </select>
@@ -472,7 +474,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21j</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21k</div>
         </div>
       </div>
     </div>
@@ -917,6 +919,7 @@ function initApp(){
 
   if(isLeitung||isAdmin){
     populateUeberYear();
+    populateUeberMon();
     populateUeberTeam();
   }
   // Startansicht je Rolle
@@ -1280,6 +1283,14 @@ function populateUeberYear(){
     if(y===year) o.selected=true; sel.appendChild(o);
   }
 }
+function populateUeberMon(){
+  const sel=document.getElementById('ueber-mon');
+  sel.innerHTML='';
+  MONTHS.forEach((mn,i)=>{
+    const o=document.createElement('option'); o.value=i+1; o.textContent=mn;
+    if(i+1===mon) o.selected=true; sel.appendChild(o);
+  });
+}
 function populateUeberTeam(){
   const sel=document.getElementById('ueber-team');
   sel.innerHTML='<option value="">Alle Teams</option>';
@@ -1287,10 +1298,11 @@ function populateUeberTeam(){
 }
 function renderOverview(){
   const oy=parseInt(document.getElementById('ueber-year').value)||year;
+  const om=parseInt(document.getElementById('ueber-mon').value)||mon;
   const filterTeam=document.getElementById('ueber-team').value;
   const d=getData();
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
-  const bTxt={draft:'E',submitted:'I',approved:'✓',rejected:'✗'};
+  const canSend=cu.role==='leitung'||cu.role==='admin';
 
   let employees;
   if(cu.role==='geschaeftsfuehrer'){
@@ -1315,7 +1327,6 @@ function renderOverview(){
     const pills=MONTHS.map((mn,i)=>{
       const e=d.entries[entryKey(u.id,oy,i+1)];
       const st=e?e.status:'draft';
-      const hasPending=st==='submitted';
       return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
     }).join('');
     const ist=MONTHS.reduce((s,_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return s+(e?monthIST(e):0); },0);
@@ -1329,6 +1340,39 @@ function renderOverview(){
     </div>`;
   };
 
+  const renderTeamSendBar=(team,users)=>{
+    if(!canSend) return '';
+    const monEmps=users; // alle Mitarbeiter des Teams
+    const total=monEmps.length;
+    if(total===0) return '';
+    const approved=monEmps.filter(u=>{
+      const e=d.entries[entryKey(u.id,oy,om)];
+      return e&&e.status==='approved';
+    }).length;
+    const allApproved=approved===total;
+    const monthLabel=MONTHS[om-1]+' '+oy;
+    // Bereits gesendeter Bericht?
+    const rKey='team_'+team.replace(/\W/g,'_')+'_'+oy+'_'+String(om).padStart(2,'0');
+    const sent=d.teamReports&&d.teamReports[rKey];
+    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')}</span>`:'';
+    const empIds=JSON.stringify(monEmps.map(u=>u.id));
+    if(allApproved){
+      return `<div class="team-send-bar">
+        <span style="color:var(--ok);font-weight:600;font-size:13px">✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt</span>
+        ${sentInfo}
+        <button class="btn btn-ok btn-sm" onclick='sendTeamReportForTeam(${JSON.stringify(team)},${empIds},${oy},${om})'>
+          📨 An GF weiterleiten
+        </button>
+      </div>`;
+    } else {
+      return `<div class="team-send-bar">
+        <span style="color:var(--muted);font-size:13px">${monthLabel}: <strong>${approved}/${total}</strong> genehmigt – bitte zuerst alle freigeben</span>
+        ${sentInfo}
+        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">📨 An GF weiterleiten</button>
+      </div>`;
+    }
+  };
+
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
     content.innerHTML='<p style="color:var(--muted)">Keine Mitarbeiter gefunden.</p>'; return;
@@ -1338,6 +1382,7 @@ function renderOverview(){
     <div class="team-section">
       <h3>${team}</h3>
       <div class="emp-grid">${users.map(renderCard).join('')}</div>
+      ${renderTeamSendBar(team,users)}
     </div>`).join('');
 }
 function openEmpMonth(uid){
@@ -1666,6 +1711,38 @@ function sendTeamReport(){
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
     +'<title>Teambericht '+MONTHS[mon-1]+' '+year+'</title>'
+    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); },500);
+}
+
+function sendTeamReportForTeam(teamName,empIds,y,m){
+  const d=getData();
+  const emps=empIds.map(id=>d.users.find(u=>u.id===id)).filter(Boolean);
+  if(!emps.length){ toast('Keine Mitarbeiterdaten vorhanden.','err'); return; }
+  if(!confirm(`Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?`)) return;
+  const rKey='team_'+teamName.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0');
+  const report={
+    id:rKey, leitungId:cu.id, leitungName:cu.name,
+    teamName:teamName,
+    managedTeams:[teamName],
+    year:y, month:m,
+    submittedAt:new Date().toISOString(),
+    seenAt:null,
+    employeeIds:empIds
+  };
+  mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]=report; });
+  toast('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
+  renderOverview();
+  // Druckvorschau öffnen
+  const pages=emps.map(function(u,i){
+    const entry=getEntry(u.id,y,m);
+    return renderBuchhaltungHTML(u,entry,y,m)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
+  }).join('');
+  const win=window.open('','_blank');
+  if(!win){ toast('Popup blockiert – Bericht wurde trotzdem gespeichert.','warn'); return; }
+  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
+    +'<title>Teambericht '+teamName+' – '+MONTHS[m-1]+' '+y+'</title>'
     +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
   win.document.close();
   setTimeout(function(){ win.print(); },500);
