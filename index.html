@@ -279,7 +279,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
-        <span class="role" id="hdr-role">–</span>
+        <span class="role" id="hdr-role" style="display:none"></span>
       </div>
       <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
     </div>
@@ -731,12 +731,11 @@ function populateLoginDropdown(){
   if(!users.length) users=DEFAULT_USERS.slice();
 
   users.forEach(function(u,i){
-    var roleLabel=u.role==='leitung'?' [Leitung]':u.role==='geschaeftsfuehrer'?' [GF]':u.role==='admin'?' [Admin]':u.role==='freiberuflich'?' [Freiberuflich]':'';
     var tile=document.createElement('button');
     tile.type='button';
     tile.className='user-tile'+(i===0?' selected':'');
     tile.setAttribute('data-uid', u.id);
-    tile.innerHTML=esc(u.name)+'<span class="role-tag">'+roleLabel+'</span>';
+    tile.innerHTML=esc(u.name);
     tile.onclick=function(){
       list.querySelectorAll('.user-tile').forEach(function(t){ t.classList.remove('selected'); });
       tile.classList.add('selected');
@@ -839,7 +838,7 @@ function rebuildEmpSelect(){
     .forEach(u=>{
       const o=document.createElement('option');
       o.value=u.id;
-      o.textContent=u.name+(u.team?` [${u.team}]`:'')+(u.role==='freiberuflich'?' ★':'');
+      o.textContent=u.name+(u.team?` [${u.team}]`:'');
       sel.appendChild(o);
     });
   if(sel.options.length>0){
