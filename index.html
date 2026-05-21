@@ -287,7 +287,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21i</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21j</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -385,8 +385,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
       <div class="action-bar no-print" id="action-bar">
         <div class="info" id="action-info"></div>
         <div class="carryover-field" id="carryover-wrap">
-          <label for="carryover-input" style="font-weight:600">Übertrag Vormonat (h):</label>
+          <label id="carryover-label" for="carryover-input" style="font-weight:600">Übertrag Vormonat (h):</label>
           <input type="number" id="carryover-input" step="0.25" min="-99" max="99" value="0" onchange="saveCarryover()">
+          <button id="carryover-reset" class="btn btn-outline btn-sm" onclick="resetCarryover()" title="Auf automatischen Wert zurücksetzen" style="display:none">↺ Auto</button>
         </div>
         <div id="action-btns"></div>
       </div>
@@ -471,7 +472,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21i</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21j</div>
         </div>
       </div>
     </div>
@@ -763,6 +764,30 @@ function monthSOLLdays(user,y,m){
   }
   return workdays;
 }
+// ── Automatischer Übertrag ──
+function computeAutoCarry(uid,user,y,m,_d){
+  _d=_d||0; if(_d>24) return 0;
+  let py=y,pm=m-1; if(pm<1){pm=12;py--;}
+  const pe=getEntry(uid,py,pm);
+  const pIST=monthIST(pe);
+  // Leerer Vormonat ohne manuellen Übertrag → Kette endet hier
+  if(pIST===0&&!pe.carryoverManual) return 0;
+  const pCarryH=pe.carryoverManual?(pe.carryover||0):computeAutoCarry(uid,user,py,pm,_d+1);
+  if(isFreelancer(user)){
+    const maxH=user.maxHours||0;
+    if(maxH<=0) return 0;
+    const total=pIST+pCarryH*60;
+    return Math.round(Math.max(0,total-maxH*60)/60*4)/4;
+  } else {
+    const pSOLL=monthSOLL(user,py,pm);
+    const pDiff=pIST-pSOLL+pCarryH*60;
+    return Math.round(pDiff/60*4)/4;
+  }
+}
+function getEffectiveCarryH(uid,user,y,m){
+  const e=getEntry(uid,y,m);
+  return e.carryoverManual?(e.carryover||0):computeAutoCarry(uid,user,y,m);
+}
 function countZuord(entry,val){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).filter(dd=>(dd.b1zuord||'')=== val).length;
@@ -1044,7 +1069,7 @@ function renderZeiterfassung(){
 // ── Summary cards ──
 function renderSummary(uid,user,entry,istMin){
   const isFree=isFreelancer(user);
-  const carryH=entry.carryover||0;
+  const carryH=getEffectiveCarryH(uid,user,year,mon);
   let cards=[];
 
   if(isFree){
@@ -1055,7 +1080,7 @@ function renderSummary(uid,user,entry,istMin){
       const overflowMin=Math.max(0,totalMin-maxH*60);
       cards=[
         {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-        {lbl:'Übertrag Vormonat',big:(carryH>0?'+':'')+carryH+' h',sub:'aus Vormonat'},
+        {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
         {lbl:'Abrechenbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag'},
         {lbl:'Abgerechnet (max. '+maxH+' h)',big:hFmt(billedMin),sub:'Monatliches Limit',cls:billedMin>=maxH*60?'neg':'pos'},
         {lbl:'Übertrag → nächster Monat',big:overflowMin>0?hFmt(overflowMin):'–',sub:overflowMin>0?'wird vorgetragen':'kein Übertrag'},
@@ -1063,7 +1088,7 @@ function renderSummary(uid,user,entry,istMin){
     } else {
       cards=[
         {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-        {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+carryH+' h',sub:'manuell eingetragen'},
+        {lbl:'Übertrag Vormonat',big:(carryH>=0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
       ];
       const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
@@ -1121,7 +1146,19 @@ function renderActionBar(uid,user,entry,isLeiter){
   const btns=document.getElementById('action-btns');
   const cw=document.getElementById('carryover-wrap');
   bar.style.display='flex';
-  cw.style.display=isFreelancer(user)?'none':'flex';
+  // Freiberufler ohne Limit: kein Übertrag-Feld; Freiberufler MIT Limit: Feld anzeigen
+  const showCarry=!isFreelancer(user)||(user.maxHours||0)>0;
+  cw.style.display=showCarry?'flex':'none';
+  if(showCarry){
+    const effCarry=getEffectiveCarryH(uid,user,year,mon);
+    const isManual=!!entry.carryoverManual;
+    const lbl=document.getElementById('carryover-label');
+    if(lbl) lbl.innerHTML=`Übertrag Vormonat (h): <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
+    const inp=document.getElementById('carryover-input');
+    if(inp) inp.value=effCarry;
+    const rst=document.getElementById('carryover-reset');
+    if(rst) rst.style.display=isManual?'inline-flex':'none';
+  }
 
   if(isLeiter&&cu.id!==uid){ bar.style.display='none'; return; }
 
@@ -1175,7 +1212,21 @@ function td_zuord(ds,field,val,wh){
 }
 function saveCarryover(){
   const uid=viewEmpId||cu.id;
-  setEntryField(uid,year,mon,'carryover',parseFloat(document.getElementById('carryover-input').value)||0);
+  const v=parseFloat(document.getElementById('carryover-input').value)||0;
+  mutate(d=>{
+    const k=entryKey(uid,year,mon);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    d.entries[k].carryover=v;
+    d.entries[k].carryoverManual=true;
+  });
+  renderZeiterfassung();
+}
+function resetCarryover(){
+  const uid=viewEmpId||cu.id;
+  mutate(d=>{
+    const k=entryKey(uid,year,mon);
+    if(d.entries[k]){ d.entries[k].carryover=0; d.entries[k].carryoverManual=false; }
+  });
   renderZeiterfassung();
 }
 
