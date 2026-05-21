@@ -510,7 +510,7 @@ let viewEmpId = null;
 // STORAGE
 // ═══════════════════════════════════════════════════════════════
 const DEFAULT_USERS = [
-  {id:'moritz',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:''},
+  {id:'admin',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:''},
   {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
   {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
 ];
@@ -526,8 +526,8 @@ function _migrate(d){
     if(u.bundesland===undefined) u.bundesland='';
     // Leitungspersonal: teams-Array migrieren (war früher einzelner String)
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
-    // Moritz: Rolle auf admin migrieren
-    if(u.id==='moritz') u.role='admin';
+    // Moritz: Rolle auf admin migrieren + Login-ID auf 'admin' umbenennen
+    if(u.id==='moritz'){ u.role='admin'; u.id='admin'; }
   });
   if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
   return d;
