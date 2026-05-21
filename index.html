@@ -83,6 +83,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .chip-leitung{background:#e8f0fe;color:#1a3a5c}
 .chip-mitarbeiter{background:#d4edda;color:#155724}
 .chip-freiberuflich{background:#fff3cd;color:#856404}
+.chip-admin{background:#fee2e2;color:#991b1b}
 
 /* ── Time Table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}
@@ -492,7 +493,7 @@ let viewEmpId = null;
 // STORAGE
 // ═══════════════════════════════════════════════════════════════
 const DEFAULT_USERS = [
-  {id:'moritz',name:'Moritz Kriese',role:'leitung',pw:'admin123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
+  {id:'moritz',name:'Moritz Kriese',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:''},
   {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
   {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
 ];
@@ -507,6 +508,8 @@ function _migrate(d){
     if(u.bundesland===undefined) u.bundesland='';
     // Leitungspersonal: teams-Array migrieren (war früher einzelner String)
     if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
+    // Moritz: Rolle auf admin migrieren
+    if(u.id==='moritz') u.role='admin';
   });
   if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''});
   return d;
@@ -562,10 +565,15 @@ function setEntryField(uid,y,m,field,val){
 }
 function getUser(id){ return getData().users.find(u=>u.id===id); }
 function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
-function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'); }
+function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'||u.role==='admin'); }
 function getLeitungTeams(u){ return (u&&u.role==='leitung'&&Array.isArray(u.teams))?u.teams:[]; }
-function isAdminUser(u){ return u&&(u.role==='geschaeftsfuehrer'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
-function canSeeEmployee(mgr,emp){ if(isAdminUser(mgr)) return true; if(mgr.role==='leitung'){ const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team); } return false; }
+function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
+function canSeeEmployee(mgr,emp){
+  if(mgr.role==='admin') return true;
+  if(mgr.role==='geschaeftsfuehrer') return emp.role==='leitung';
+  if(mgr.role==='leitung'){ const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team); }
+  return false;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TIME UTILS
@@ -689,7 +697,7 @@ function populateLoginDropdown(){
   if(!users.length) users=DEFAULT_USERS.slice();
 
   users.forEach(function(u,i){
-    var roleLabel=u.role==='leitung'?' [Leitung]':u.role==='geschaeftsfuehrer'?' [GF]':u.role==='freiberuflich'?' [Freiberuflich]':'';
+    var roleLabel=u.role==='leitung'?' [Leitung]':u.role==='geschaeftsfuehrer'?' [GF]':u.role==='admin'?' [Admin]':u.role==='freiberuflich'?' [Freiberuflich]':'';
     var tile=document.createElement('button');
     tile.type='button';
     tile.className='user-tile'+(i===0?' selected':'');
@@ -749,18 +757,24 @@ function doLogout(){
 function roleLabel(r){
   return r==='leitung'?'Leitungspersonal':
          r==='geschaeftsfuehrer'?'Geschäftsführung':
+         r==='admin'?'Administrator':
          r==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
 }
 function initApp(){
   document.getElementById('hdr-name').textContent=cu.name;
   document.getElementById('hdr-role').textContent=roleLabel(cu.role);
   const isMgr=isManagerRole(cu);
+  const isAdmin=cu.role==='admin';
+  const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
-  viewEmpId=isMgr?null:cu.id;
+  // Admin und GF haben keine eigene Zeiterfassung
+  viewEmpId=(isMgr)?null:cu.id;
   document.getElementById('tab-uebersicht').style.display=isMgr?'':'none';
-  document.getElementById('tab-einstellungen').style.display=isMgr?'':'none';
+  // Einstellungen nur für Admin und Leitung, nicht GF
+  document.getElementById('tab-einstellungen').style.display=(isAdmin||cu.role==='leitung')?'':'none';
+  // Teamberichte-Button nur für Leitungspersonal
   const btnTeam=document.getElementById('btn-teamberichte');
-  if(btnTeam) btnTeam.style.display=isMgr?'':'none';
+  if(btnTeam) btnTeam.style.display=(cu.role==='leitung')?'':'none';
   if(isMgr){
     rebuildEmpSelect();
     populateUeberYear();
@@ -772,7 +786,11 @@ function rebuildEmpSelect(){
   const sel=document.getElementById('emp-select');
   sel.innerHTML='';
   getData().users
-    .filter(u=>!isManagerRole(u))
+    .filter(u=>{
+      if(cu.role==='geschaeftsfuehrer') return u.role==='leitung';
+      if(cu.role==='admin') return !isManagerRole(u);
+      return !isManagerRole(u);
+    })
     .filter(u=>canSeeEmployee(cu,u))
     .forEach(u=>{
       const o=document.createElement('option');
@@ -1099,8 +1117,13 @@ function renderOverview(){
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
   const bTxt={draft:'E',submitted:'I',approved:'✓',rejected:'✗'};
 
-  let employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
-  if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
+  let employees;
+  if(cu.role==='geschaeftsfuehrer'){
+    employees=d.users.filter(u=>u.role==='leitung');
+  } else {
+    employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+    if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
+  }
 
   // Group by team
   const teamMap={};
@@ -1154,7 +1177,7 @@ function renderSettings(){
   document.getElementById('user-list').innerHTML=d.users.map(u=>`
     <div class="user-row">
       <div>
-        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
+        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='admin'?'Admin':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -1222,6 +1245,7 @@ function userForm(u={}){
         <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
         <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
         <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+        <option value="admin"${u.role==='admin'?' selected':''}>Administrator</option>
       </select>
     </div>
     <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
@@ -1239,7 +1263,7 @@ function toggleFreelancerFields(){
   const fields=document.getElementById('uf-employed-fields');
   if(!sel||!fields) return;
   const role=sel.value;
-  fields.style.display=role==='freiberuflich'?'none':'';
+  fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
   const s=document.getElementById('uf-team-single');
   const m=document.getElementById('uf-team-multi');
   if(s&&m){ const isL=role==='leitung'; s.style.display=isL?'none':''; m.style.display=isL?'':'none'; }
