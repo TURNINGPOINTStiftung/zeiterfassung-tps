@@ -287,7 +287,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21f</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.21g</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user">
         <span id="hdr-name">–</span>
@@ -471,7 +471,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21f</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.21g</div>
         </div>
       </div>
     </div>
@@ -553,6 +553,8 @@ function _migrate(d){
   if(!d.entries) d.entries={};
   if(!d.teamReports) d.teamReports={};
   if(!d.vacRequests) d.vacRequests={};
+  // Firebase entfernt leere Objekte – days:{} in Einträgen fehlt nach dem Speichern
+  Object.values(d.entries).forEach(e=>{ if(e&&!e.days) e.days={}; });
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
   let adminSeen=false;
   d.users=d.users.filter(u=>{
@@ -587,7 +589,8 @@ async function initFirebase(){
       !data.teamReports ||
       data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams)) ||
       data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined) ||
-      !data.vacRequests;
+      !data.vacRequests ||
+      Object.values(data.entries||{}).some(e=>e&&!e.days); // Firebase entfernt leere days-Objekte
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
     // Klartext-Passwörter automatisch hashen (einmalige Migration)
@@ -614,12 +617,15 @@ function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
 function getEntry(uid,y,m){
   const d=getData(); const k=entryKey(uid,y,m);
   if(!d.entries[k]){ d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}}; saveRaw(d); }
+  // Firebase entfernt leere Objekte – days:{} wird nicht gespeichert und fehlt beim nächsten Laden
+  if(!d.entries[k].days) d.entries[k].days={};
   return d.entries[entryKey(uid,y,m)];
 }
 function setDay(uid,y,m,ds,field,val){
   mutate(d=>{
     const k=entryKey(uid,y,m);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     d.entries[k].days[ds][field]=val;
   });
@@ -950,7 +956,7 @@ function renderZeiterfassung(){
 
   for(let d=1;d<=dim;d++){
     const ds=dateStr(year,mon,d);
-    const dd=entry.days[ds]||{};
+    const dd=(entry.days||{})[ds]||{};
     const we=isWeekend(year,mon,d);
     const hol=hols.has(ds);
     const tod=isToday(year,mon,d);
@@ -1813,7 +1819,7 @@ function renderBuchhaltungHTML(u,entry,y,m){
   let rows=''; let monthTotal=0;
   for(let d=1;d<=dim;d++){
     const ds=dateStr(y,m,d);
-    const dd=entry.days[ds]||{};
+    const dd=(entry.days||{})[ds]||{};
     const we=isWeekend(y,m,d);
     const hol=hols.has(ds);
     const kw=isoWeek(new Date(y,m-1,d));
