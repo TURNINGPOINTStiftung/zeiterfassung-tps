@@ -814,9 +814,9 @@ function initApp(){
 
   // Tab-Sichtbarkeit je Rolle
   const isLeitung=cu.role==='leitung';
-  // Zeiterfassung: GF + Admin haben keine eigene AZ
+  // Zeiterfassung: nur Admin hat keine eigene AZ
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=(isGF||isAdmin)?'none':'';
+  if(tabZE) tabZE.style.display=isAdmin?'none':'';
   // Mitarbeiterübersicht: Leitung + Admin
   document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF
