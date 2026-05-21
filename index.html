@@ -1257,9 +1257,11 @@ function removeCat(i){ mutate(d=>{ d.cats.splice(i,1); }); renderSettings(); }
 
 // ── Add / Edit User ──
 function showAddUser(){
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
   openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveNewUser()">Speichern</button></div>`);
 }
 function showEditUser(id){
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`);
 }
 function userForm(u={}){
@@ -1345,6 +1347,7 @@ async function saveEditUser(id){
   if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
 }
 function deleteUser(id){
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
   if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
   mutate(d=>{
     d.users=d.users.filter(u=>u.id!==id);
