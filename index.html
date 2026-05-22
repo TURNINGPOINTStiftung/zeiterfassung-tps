@@ -1404,6 +1404,8 @@ function renderReviewPanel(uid,entry,isLeiter){
   const viewedUser=getUser(uid);
   // Berater: nur GF + Admin dürfen reviewen (nicht Leitung)
   if(isBerater(viewedUser)&&cu.role==='leitung'){ panel.style.display='none'; return; }
+  // Nur anzeigen wenn Mitarbeiter die ZE bereits eingereicht hat
+  if(entry.status==='draft'){ panel.style.display='none'; return; }
   panel.style.display='block';
   document.getElementById('review-note').value=entry.managerNote||'';
 }
@@ -1513,6 +1515,7 @@ function doRecall(){
 }
 function doApprove(){
   const uid=viewEmpId; const note=document.getElementById('review-note').value;
+  if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können genehmigt werden.','err'); return; }
   setEntryField(uid,year,mon,'status','approved');
   setEntryField(uid,year,mon,'managerNote',note);
   setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
@@ -1521,6 +1524,7 @@ function doApprove(){
 }
 function doReject(){
   const uid=viewEmpId; const note=document.getElementById('review-note').value;
+  if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können abgelehnt werden.','err'); return; }
   if(!note.trim()){ toast('Bitte einen Ablehnungsgrund eingeben.','err'); return; }
   setEntryField(uid,year,mon,'status','rejected');
   setEntryField(uid,year,mon,'managerNote',note);
