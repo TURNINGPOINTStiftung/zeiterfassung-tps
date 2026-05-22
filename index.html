@@ -2624,21 +2624,53 @@ function printFull(){
   window.print();
   document.title=prev;
 }
+// Öffnet ein einzelnes Fenster mit ◀/▶-Navigation: jede Person einzeln drucken
+function _openPerEmpPrint(emps,y,m){
+  const win=window.open('','_blank');
+  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
+  win._pPages=emps.map(function(u){
+    const entry=getEntry(u.id,y,m);
+    return {name:u.name,html:renderBuchhaltungHTML(u,entry,y,m)};
+  });
+  win._pMonths=MONTHS; win._pY=y; win._pM=m;
+  const style=_teamReportStyle()
+    +'.pnav{position:fixed;top:0;left:0;right:0;background:#1a3a5c;color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;z-index:9999;font-family:Arial,sans-serif;font-size:12px}'
+    +'.pnav button{background:#fff;color:#1a3a5c;border:none;border-radius:5px;padding:5px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'
+    +'.pnav button:hover{background:#e8f0fe}'
+    +'.pnav .pbtn{background:#27ae60;color:#fff}'
+    +'.pnav .pbtn:hover{background:#1e9147}'
+    +'.pnav .pctr{flex:1;text-align:center;font-weight:700;font-size:13px;line-height:1.4}'
+    +'.pnav .phint{font-size:10px;font-weight:400;opacity:.75;display:block}'
+    +'body{padding-top:60px}'
+    +'@media print{.pnav{display:none}body{padding-top:0}}';
+  win.document.write(
+    '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Zeiterfassung</title>'
+    +'<style>'+style+'</style></head><body>'
+    +'<div class="pnav">'
+    +'<button onclick="pPrev()">&#9664; Zur\xfcck</button>'
+    +'<div class="pctr"><span id="pLabel"></span>'
+    +'<span class="phint">Drucken = 1 PDF pro Mitarbeiter &nbsp;|&nbsp; Weiter f\xfcr n\xe4chste Person</span></div>'
+    +'<button class="pbtn" onclick="window.print()">&#128438;&nbsp;Drucken / PDF</button>'
+    +'<button onclick="pNext()">Weiter &#9654;</button>'
+    +'</div>'
+    +'<div id="pContent"></div>'
+    +'<script>'
+    +'var PP=window._pPages,PM=window._pMonths,PY=window._pY,PMN=window._pM,pc=0;'
+    +'function pShow(i){pc=i;var p=PP[i];document.getElementById("pContent").innerHTML=p.html;'
+    +'document.getElementById("pLabel").textContent=(i+1)+" / "+PP.length+":  "+p.name;'
+    +'document.title=PY+" "+PM[PMN-1]+" - "+p.name+" Zeiterfassung";}'
+    +'function pNext(){if(pc<PP.length-1)pShow(pc+1);}'
+    +'function pPrev(){if(pc>0)pShow(pc-1);}'
+    +'pShow(0);'
+    +'<\/script></body></html>'
+  );
+  win.document.close();
+}
 function printTeamBuchhaltung(){
   const d=getData();
   const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
   if(!emps.length){ toast('Keine Mitarbeiter im Team vorhanden.','err'); return; }
-  const pages=emps.map((u,i)=>{
-    const entry=getEntry(u.id,year,mon);
-    return renderBuchhaltungHTML(u,entry,year,mon)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
-  }).join('');
-  const win=window.open('','_blank');
-  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
-  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>'+pdfTitle(year,mon,getLeitungTeams(cu)[0]||'Team')+'</title>'
-    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); },500);
+  _openPerEmpPrint(emps,year,mon);
 }
 
 function _teamReportStyle(){
@@ -2676,18 +2708,7 @@ function sendTeamReport(){
   };
   mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[key]=report; });
   toast('Teambericht an Geschäftsführung gesendet. ✓','ok');
-  // Auch direkt drucken
-  const pages=emps.map(function(u,i){
-    const entry=getEntry(u.id,year,mon);
-    return renderBuchhaltungHTML(u,entry,year,mon)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
-  }).join('');
-  const win=window.open('','_blank');
-  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
-  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>'+pdfTitle(year,mon,getLeitungTeams(cu)[0]||'Team')+'</title>'
-    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); },500);
+  _openPerEmpPrint(emps,year,mon);
 }
 
 function sendTeamReportForTeam(teamName,empIds,y,m){
@@ -2708,18 +2729,7 @@ function sendTeamReportForTeam(teamName,empIds,y,m){
   mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]=report; });
   toast('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
   renderOverview();
-  // Druckvorschau öffnen
-  const pages=emps.map(function(u,i){
-    const entry=getEntry(u.id,y,m);
-    return renderBuchhaltungHTML(u,entry,y,m)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
-  }).join('');
-  const win=window.open('','_blank');
-  if(!win){ toast('Popup blockiert – Bericht wurde trotzdem gespeichert.','warn'); return; }
-  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>'+pdfTitle(y,m,teamName)+'</title>'
-    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); },500);
+  _openPerEmpPrint(emps,y,m);
 }
 
 function viewTeamReport(key){
@@ -2728,17 +2738,7 @@ function viewTeamReport(key){
   if(!r){ toast('Bericht nicht gefunden.','err'); return; }
   const emps=r.employeeIds.map(function(id){ return d.users.find(function(u){ return u.id===id; }); }).filter(Boolean);
   if(!emps.length){ toast('Keine Mitarbeiterdaten vorhanden.','err'); return; }
-  const pages=emps.map(function(u,i){
-    const entry=getEntry(u.id,r.year,r.month);
-    return renderBuchhaltungHTML(u,entry,r.year,r.month)+(i<emps.length-1?'<div style="page-break-after:always"></div>':'');
-  }).join('');
-  const win=window.open('','_blank');
-  if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
-  win.document.write('<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">'
-    +'<title>'+pdfTitle(r.year,r.month,r.teamName||(r.managedTeams&&r.managedTeams[0])||'Team')+'</title>'
-    +'<style>'+_teamReportStyle()+'</style></head><body>'+pages+'</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); },500);
+  _openPerEmpPrint(emps,r.year,r.month);
   if(!r.seenAt) markReportSeen(key);
 }
 
