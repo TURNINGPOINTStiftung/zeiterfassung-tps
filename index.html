@@ -2657,38 +2657,21 @@ function _openPerEmpPrint(emps,y,m){
     +'.pnav .phint{font-size:10px;font-weight:400;opacity:.75;display:block}'
     +'body{padding-top:58px}'
     +'@media print{.pnav{display:none!important}body{padding-top:0}}';
-  // Signatur-Pad JS (inline, in eigenes Fenster geschrieben)
-  const sigJS=''
-    // Zeichnen auf Canvas (Maus + Touch)
-    +'function bhSigInit(id){'
-    +'  var c=document.getElementById(id);if(!c)return;'
-    +'  var ctx=c.getContext("2d");'
-    +'  c.width=c.offsetWidth||400;c.height=c.offsetHeight||72;'
-    +'  ctx.strokeStyle="#1a3a5c";ctx.lineWidth=1.8;ctx.lineCap="round";ctx.lineJoin="round";'
-    +'  var drawing=false,lx=0,ly=0;'
-    +'  function getPos(e,c){'
-    +'    var r=c.getBoundingClientRect();'
-    +'    if(e.touches){return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};}'
-    +'    return{x:e.clientX-r.left,y:e.clientY-r.top};'
-    +'  }'
-    +'  function start(e){e.preventDefault();drawing=true;var p=getPos(e,c);lx=p.x;ly=p.y;ctx.beginPath();ctx.moveTo(lx,ly);}'
-    +'  function move(e){if(!drawing)return;e.preventDefault();var p=getPos(e,c);ctx.lineTo(p.x,p.y);ctx.stroke();lx=p.x;ly=p.y;}'
-    +'  function stop(){drawing=false;}'
-    +'  c.addEventListener("mousedown",start);c.addEventListener("mousemove",move);'
-    +'  c.addEventListener("mouseup",stop);c.addEventListener("mouseleave",stop);'
-    +'  c.addEventListener("touchstart",start,{passive:false});c.addEventListener("touchmove",move,{passive:false});'
-    +'  c.addEventListener("touchend",stop);'
+  // Zoom-JS für das Popup-Fenster
+  const zoomJS=''
+    +'var _pz=1;'
+    +'function _apz(z){'
+    +'  _pz=Math.round(Math.max(0.5,Math.min(2,z))*10)/10;'
+    +'  document.body.style.zoom=_pz;'
+    +'  var l=document.getElementById("pzLbl");if(l)l.textContent=Math.round(_pz*100)+"%";'
     +'}'
-    +'function bhSigClear(id){var c=document.getElementById(id);if(!c)return;c.getContext("2d").clearRect(0,0,c.width,c.height);}'
-    // Alle Canvase initialisieren nach DOM-Aufbau
-    +'function bhInitAll(){'
-    +'  document.querySelectorAll(".bh-sig-canvas").forEach(function(c){bhSigInit(c.id);});'
-    +'}'
-    // Vor dem Druck: Canvas-Größe fixieren damit sie korrekt erscheint
-    +'window.addEventListener("beforeprint",function(){'
-    +'  document.querySelectorAll(".bh-sig-canvas").forEach(function(c){'
-    +'    c.width=c.offsetWidth||400;c.height=c.offsetHeight||72;'
-    +'  });'
+    +'function _pzS(d){_apz(_pz+d*0.1);}'
+    +'window.addEventListener("wheel",function(e){if(!e.ctrlKey)return;e.preventDefault();_pzS(e.deltaY<0?1:-1);},{passive:false});'
+    +'window.addEventListener("keydown",function(e){'
+    +'  if(!e.ctrlKey)return;'
+    +'  if(e.key==="+"||e.key==="="){e.preventDefault();_pzS(1);}'
+    +'  else if(e.key==="-"){e.preventDefault();_pzS(-1);}'
+    +'  else if(e.key==="0"){e.preventDefault();_apz(1);}'
     +'});';
   win.document.write(
     '<!DOCTYPE html><html lang="de"><head>'
@@ -2698,20 +2681,24 @@ function _openPerEmpPrint(emps,y,m){
     +'<div class="pnav">'
     +'<button onclick="pPrev()">&#9664; Zur\xfcck</button>'
     +'<div class="pctr"><span id="pLabel"></span>'
-    +'<span class="phint">&#128438; Drucken = 1 PDF pro Mitarbeiter &nbsp;&bull;&nbsp; Unterschrift vor dem Drucken leisten</span></div>'
+    +'<span class="phint">&#128438; Drucken = 1 PDF pro Mitarbeiter</span></div>'
+    +'<div class="pz-ctrl">'
+    +'<button onclick="_pzS(-1)" title="Verkleinern">&#8722;</button>'
+    +'<span id="pzLbl" onclick="_apz(1)" title="Zur\xfccksetzen">100%</span>'
+    +'<button onclick="_pzS(1)" title="Vergr\xf6\xdfern">&#43;</button>'
+    +'</div>'
     +'<button class="pbtn" onclick="window.print()">&#128438;&nbsp;Drucken / PDF speichern</button>'
     +'<button onclick="pNext()">Weiter &#9654;</button>'
     +'</div>'
     +'<div id="pContent"></div>'
     +'<script>'
     +'var PP=window._pPages,PM=window._pMonths,PY=window._pY,PMN=window._pM,pc=0;'
-    +sigJS
+    +zoomJS
     +'function pShow(i){'
     +'  pc=i;var p=PP[i];'
     +'  document.getElementById("pContent").innerHTML=p.html;'
     +'  document.getElementById("pLabel").textContent=(i+1)+" / "+PP.length+":  "+p.name;'
     +'  document.title=PY+" "+PM[PMN-1]+" - "+p.name+" Zeiterfassung";'
-    +'  setTimeout(bhInitAll,50);'  // Canvas nach DOM-Paint initialisieren
     +'}'
     +'function pNext(){if(pc<PP.length-1)pShow(pc+1);}'
     +'function pPrev(){if(pc>0)pShow(pc-1);}'
@@ -2762,23 +2749,19 @@ function _teamReportStyle(){
     +'.bh-sc .lbl{font-size:7.5px;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px}'
     +'.bh-sc .val{font-size:15px;font-weight:700;color:#1a3a5c;margin:2px 0 1px}'
     +'.bh-sc .sub{font-size:8px;color:#7f8c8d}'
-    // Unterschrift
-    +'.bh-sig{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid #dde1e7;padding-top:14px}'
-    +'.bh-sig-col h4{font-size:9px;font-weight:700;color:#1a3a5c;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}'
-    +'.bh-sig-canvas{width:100%;height:72px;border:1.5px solid #c0c8d8;border-radius:3px;background:#fafbfc;cursor:crosshair;display:block;touch-action:none}'
-    +'.bh-sig-actions{margin-top:4px;display:flex;gap:6px;align-items:center}'
-    +'.bh-sig-btn{font-size:8.5px;color:#7f8c8d;cursor:pointer;background:none;border:1px solid #ccc;border-radius:3px;padding:2px 8px}'
-    +'.bh-sig-hint{font-size:8px;color:#aab;flex:1}'
-    +'.bh-sig-meta{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}'
-    +'.bh-sig-meta label{font-size:8px;color:#7f8c8d;display:block;margin-bottom:1px}'
-    +'.bh-sig-meta input{width:100%;border:none;border-bottom:1px solid #c0c8d8;padding:2px 0 1px;font-size:9px;background:transparent;outline:none;color:#2c3e50}'
-    +'.bh-sig-meta .span2{grid-column:1/-1}'
-    +'@media print{'
-    +'body{padding:4px}'
-    +'.bh-sig-btn,.bh-sig-actions{display:none}'
-    +'.bh-sig-canvas{border-color:#888;cursor:default;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-    +'@page{margin:1.2cm;size:A4}'
-    +'}';
+    // Unterschrift (digital)
+    +'.bh-sig{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;border-top:1px solid #dde1e7;padding-top:14px}'
+    +'.bh-sig-col h4{font-size:8.5px;font-weight:700;color:#1a3a5c;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}'
+    +'.bh-sig-line{border-bottom:1.5px solid #c0c8d8;min-height:44px;display:flex;align-items:flex-end;padding-bottom:4px}'
+    +'.bh-dig-sig{font-size:11px;color:#1a3a5c;font-weight:700;line-height:1.3}'
+    +'.bh-sig-ts{font-size:9px;color:#7f8c8d;font-weight:400;display:block;margin-top:2px}'
+    +'.bh-sig-pending{font-size:10px;color:#7f8c8d;font-style:italic;font-weight:400}'
+    // Zoom-Control im Nav-Bereich
+    +'.pz-ctrl{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.18);border-radius:14px;padding:2px 8px}'
+    +'.pz-ctrl button{background:none;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:1}'
+    +'.pz-ctrl button:hover{background:rgba(255,255,255,.2)}'
+    +'.pz-ctrl span{font-size:11px;font-weight:600;color:#fff;min-width:36px;text-align:center;cursor:pointer}'
+    +'@media print{body{padding:4px}@page{margin:1.2cm;size:A4}}';
 }
 
 function sendTeamReport(){
@@ -3338,8 +3321,27 @@ function renderBuchhaltungHTML(u,entry,y,m){
 
   const empType=isFree?'Freiberuflich':'Festangestellt, '+u.wh+' h/Woche';
   const statusLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[entry.status]||entry.status||'Entwurf';
-  // Canvas-ID eindeutig pro Mitarbeiter
-  const cid='s'+Math.random().toString(36).slice(2,8);
+  // Digitale Unterschrift-Daten
+  const _city=u.city||'';
+  const _today=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const ortDat=entry.submittedAt
+    ? _city+(_city?', ':'')+fmtTs(entry.submittedAt).split(' ')[0]
+    : _city+(_city?', ':'')+_today;
+  let empSigHtml='';
+  if(entry.status==='submitted'||entry.status==='approved'||entry.status==='rejected'){
+    empSigHtml='<div class="bh-dig-sig">✍ Digital eingereicht<br>'+esc(u.name)+'<span class="bh-sig-ts">'+fmtTs(entry.submittedAt)+'</span></div>';
+  } else {
+    empSigHtml='<span class="bh-dig-sig bh-sig-pending">Noch nicht eingereicht</span>';
+  }
+  let mgSigHtml='';
+  if(entry.status==='approved'||entry.status==='rejected'){
+    const _rev=entry.reviewedBy?getUser(entry.reviewedBy):null;
+    const _rName=_rev?_rev.name:'Leitung';
+    const _action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
+    mgSigHtml='<div class="bh-dig-sig">'+_action+'<br>'+esc(_rName)+'<span class="bh-sig-ts">'+fmtTs(entry.reviewedAt)+'</span>'+(entry.managerNote?'<span class="bh-sig-ts" style="color:#c0392b">'+esc(entry.managerNote)+'</span>':'')+'</div>';
+  } else {
+    mgSigHtml='<span class="bh-dig-sig bh-sig-pending">Ausstehend</span>';
+  }
 
   return '<div class="bh-page">'
     // ── Kopfzeile ──
@@ -3385,34 +3387,11 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +'</table>'
     // ── Zusammenfassung ──
     +sumCards
-    // ── Unterschriften ──
+    // ── Unterschriften (digital) ──
     +'<div class="bh-sig">'
-    +'<div class="bh-sig-col">'
-    +'<h4>Unterschrift Mitarbeiter / in</h4>'
-    +'<canvas class="bh-sig-canvas" id="'+cid+'_ma"></canvas>'
-    +'<div class="bh-sig-actions">'
-    +'<button class="bh-sig-btn" onclick="bhSigClear(\''+cid+'_ma\')">&#10005; Löschen</button>'
-    +'<span class="bh-sig-hint">Mit Maus oder Finger unterschreiben</span>'
-    +'</div>'
-    +'<div class="bh-sig-meta">'
-    +'<div><label>Name</label><input type="text" value="'+esc(u.name)+'" readonly></div>'
-    +'<div><label>Datum</label><input type="text" id="'+cid+'_ma_dt" placeholder="TT.MM.JJJJ"></div>'
-    +'<div class="span2"><label>Ort</label><input type="text" value="'+esc(u.city||'')+'" placeholder="Ort"></div>'
-    +'</div>'
-    +'</div>'
-    +'<div class="bh-sig-col">'
-    +'<h4>Unterschrift Vorgesetzte / r</h4>'
-    +'<canvas class="bh-sig-canvas" id="'+cid+'_vg"></canvas>'
-    +'<div class="bh-sig-actions">'
-    +'<button class="bh-sig-btn" onclick="bhSigClear(\''+cid+'_vg\')">&#10005; Löschen</button>'
-    +'<span class="bh-sig-hint">Mit Maus oder Finger unterschreiben</span>'
-    +'</div>'
-    +'<div class="bh-sig-meta">'
-    +'<div><label>Name</label><input type="text" placeholder="Name der Leitung"></div>'
-    +'<div><label>Datum</label><input type="text" placeholder="TT.MM.JJJJ"></div>'
-    +'<div class="span2"><label>Funktion</label><input type="text" value="Leitung Akademie-Programm"></div>'
-    +'</div>'
-    +'</div>'
+    +'<div class="bh-sig-col"><h4>Ort / Datum</h4><div class="bh-sig-line"><span style="font-size:11px;font-weight:600">'+esc(ortDat)+'</span></div></div>'
+    +'<div class="bh-sig-col"><h4>Unterschrift Mitarbeiter / in</h4><div class="bh-sig-line">'+empSigHtml+'</div></div>'
+    +'<div class="bh-sig-col"><h4>Gepr\xfcft – Unterschrift Leitung</h4><div class="bh-sig-line">'+mgSigHtml+'</div></div>'
     +'</div>'
     +'</div>'; // .bh-page
 }
