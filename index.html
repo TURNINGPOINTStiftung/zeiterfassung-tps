@@ -3277,6 +3277,8 @@ function renderGFBerichte(){
 }
 
 function renderBuchhaltungHTML(u,entry,y,m){
+  // Für Akademie-Team: Ö-Arbeit wird in der Buchhaltungsversion als "Akademie" angezeigt
+  const _bzuord=z=>(z==='Ö-Arbeit'&&u.team==='Akademie')?'Akademie':z;
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,u.bundesland||'');
   let rows=''; let monthTotal=0;
@@ -3300,15 +3302,15 @@ function renderBuchhaltungHTML(u,entry,y,m){
       +'<td>'+(we?'<b>':'')+dn+(we?'</b>':'')+'</td>'
       +'<td>'+(dd.b1von||'')+'</td>'
       +'<td>'+(dd.b1bis||'')+'</td>'
-      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+(dd.b1zuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b1zuord||'')+'</td>'
       +'<td class="sm">'+(b1min>0?minFmt(b1min):'')+'</td>'
       +'<td class="sp"></td>'
       +'<td>'+(dd.b2von||'')+'</td>'
       +'<td>'+(dd.b2bis||'')+'</td>'
-      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+(dd.b2zuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b2zuord||'')+'</td>'
       +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
       +'<td>'+(ktm>0?ktm:'')+'</td>'
-      +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+(dd.ktzuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
       +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>'
       +'<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'
       +'</tr>';
