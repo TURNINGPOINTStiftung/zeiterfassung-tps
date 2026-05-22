@@ -89,6 +89,26 @@ const fbRef = firebase.database().ref('zeiterfassung');
 const log = document.getElementById('log');
 const statusEl = document.getElementById('status');
 
+// Standard-Profile für fehlende Mitarbeiter (werden automatisch angelegt)
+const USERS_TO_CREATE = [
+  {name:"Max Meindl",         id:"max_meindl",          role:"mitarbeiter", pw:"max123",       wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"RP", prevNeg:0, teams:[]},
+  {name:"Anja Düvel",         id:"anja_duevel",          role:"mitarbeiter", pw:"anja123",      wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", prevNeg:0, teams:[]},
+  {name:"Jörg Aleith",        id:"joerg_aleith",         role:"mitarbeiter", pw:"joerg123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"HH", prevNeg:0, teams:[]},
+  {name:"Betty Pabst",        id:"betty_pabst",          role:"mitarbeiter", pw:"betty123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", prevNeg:0, teams:[]},
+  {name:"Mateo Alava Hilgert",id:"mateo_alava_hilgert",  role:"mitarbeiter", pw:"mateo123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BY", prevNeg:0, teams:[]},
+  {name:"Simon Scheidt",      id:"simon_scheidt",        role:"mitarbeiter", pw:"simon123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BW", prevNeg:0, teams:[]},
+  {name:"Christian Bittner",  id:"christian_bittner",    role:"mitarbeiter", pw:"christian123", wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BY", prevNeg:0, teams:[]},
+  {name:"Janne Handermann",   id:"janne",                role:"mitarbeiter", pw:"janne123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"Speyer", bundesland:"RP", prevNeg:0, teams:[]}
+];
+
+function matchUser(users, name) {
+  const nm = name.toLowerCase();
+  return users.find(u => {
+    const un = (u.name || '').toLowerCase();
+    return un === nm || nm.split(' ').every(p => un.includes(p)) || un.split(' ').every(p => nm.includes(p));
+  });
+}
+
 function addLog(msg, cls='') {
   log.innerHTML += `<span class="${cls}">${msg}</span>\n`;
   log.scrollTop = log.scrollHeight;
@@ -105,27 +125,44 @@ async function runImport() {
     addLog('✓ Authentifiziert', 'ok');
 
     const snap = await fbRef.once('value');
-    const data = snap.val();
-    if (!data || !Array.isArray(data.users) || !data.users.length) {
-      addLog('✗ Keine Nutzerdaten in Firebase gefunden. App muss zuerst geöffnet werden.', 'err');
-      statusEl.textContent = '✗ Fehler';
-      document.getElementById('btn').disabled = false;
-      return;
-    }
-    addLog(`✓ ${data.users.length} Nutzer geladen`, 'ok');
+    let data = snap.val();
 
+    // Wenn noch keine App-Daten vorhanden: Minimaldaten anlegen
+    if (!data || !Array.isArray(data.users)) {
+      addLog('ℹ Keine Nutzerdaten gefunden – lege Basis-Datenstruktur an.', 'info');
+      data = { users: [], entries: {}, cats: [], teams: [], teamReports: {}, vacRequests: {}, teamCats: {} };
+    }
+    if (!Array.isArray(data.users)) data.users = [];
     if (!data.entries) data.entries = {};
-    let imp = 0, skip = 0, noUser = [];
+
+    addLog(`✓ ${data.users.length} vorhandene Nutzer geladen`, 'ok');
+
+    // ── Schritt 1: Fehlende Mitarbeiter automatisch anlegen ──────────
+    let usersCreated = 0;
+    for (const tmpl of USERS_TO_CREATE) {
+      if (!matchUser(data.users, tmpl.name)) {
+        data.users.push({...tmpl});
+        addLog(`  ✚ Mitarbeiter angelegt: ${tmpl.name} (Login-ID: ${tmpl.id}, Passwort: ${tmpl.pw})`, 'info');
+        usersCreated++;
+      }
+    }
+    if (usersCreated > 0) {
+      addLog(`✓ ${usersCreated} neue Mitarbeiter angelegt`, 'ok');
+      addLog('  ⚠ Bitte Stammdaten (Wochenstunden, Bundesland) in der App unter Einstellungen prüfen!', 'warn');
+    } else {
+      addLog('✓ Alle Mitarbeiter bereits vorhanden', 'ok');
+    }
+
+    // ── Schritt 2: Zeiterfassungsdaten importieren ───────────────────
+    addLog('\nImportiere Zeitdaten…', 'info');
+    let imp = 0, skip = 0, notFound = [];
+    const newEntries = {};
 
     for (const rec of HIST_IMPORT) {
-      const nm = rec.n.toLowerCase();
-      const user = data.users.find(u => {
-        const un = (u.name || '').toLowerCase();
-        return un === nm || nm.split(' ').every(p => un.includes(p)) || un.split(' ').every(p => nm.includes(p));
-      });
+      const user = matchUser(data.users, rec.n);
       if (!user) {
-        if (!noUser.includes(rec.n)) noUser.push(rec.n);
-        addLog(`  ⚠ Nicht gefunden: ${rec.n} (${rec.y}-${String(rec.m).padStart(2,'0')})`, 'warn');
+        if (!notFound.includes(rec.n)) notFound.push(rec.n);
+        addLog(`  ⚠ Nicht gefunden: ${rec.n}`, 'warn');
         continue;
       }
       const k = `${user.id}_${rec.y}_${String(rec.m).padStart(2,'0')}`;
@@ -137,24 +174,34 @@ async function runImport() {
           skip++; continue;
         }
       }
-      data.entries[k] = { status: 'approved', days: rec.d };
+      newEntries[k] = { status: 'approved', days: rec.d };
+      data.entries[k] = newEntries[k];
       addLog(`  ✓ Importiert: ${rec.n} – ${['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][rec.m-1]} ${rec.y}`, 'ok');
       imp++;
     }
 
+    // ── Schritt 3: In Firebase speichern ────────────────────────────
     addLog('\nSpeichere in Firebase…', 'info');
     statusEl.textContent = '⏳ Speichere…';
+
+    // Gesamtdaten speichern (inkl. neu angelegter Nutzer + importierter Einträge)
     await fbRef.set(data);
     addLog('✓ Gespeichert!', 'ok');
 
-    const summary = `\n✅ Import abgeschlossen!\n   Importiert: ${imp} Monate\n   Übersprungen: ${skip} (bereits vorhanden)\n   Nicht gefunden: ${noUser.length ? noUser.join(', ') : 'Keine'}`;
+    const summary = [
+      '',
+      '✅ Import abgeschlossen!',
+      `   Neue Mitarbeiter: ${usersCreated}`,
+      `   Importiert: ${imp} Monate`,
+      `   Übersprungen: ${skip} (bereits vorhanden)`,
+      `   Nicht gefunden: ${notFound.length ? notFound.join(', ') : 'Keine'}`
+    ].join('\n');
     addLog(summary, imp > 0 ? 'ok' : 'warn');
     statusEl.textContent = imp > 0 ? `✅ ${imp} Monate importiert` : `⚠ 0 Monate importiert`;
 
-    if (noUser.length) {
-      addLog('\n⚠ Nicht gefundene Personen sind möglicherweise noch nicht im System angelegt.', 'warn');
-      addLog('  Bitte zuerst die Mitarbeiter in der App anlegen, dann erneut importieren.', 'warn');
-    }
+    addLog('\n⚡ WICHTIG: Bitte die Zeiterfassungs-App jetzt im Browser neu laden (F5 / Strg+Shift+R)!', 'warn');
+    addLog('  Damit werden die importierten Daten korrekt angezeigt.', 'warn');
+
   } catch(e) {
     addLog('✗ Fehler: ' + e.message, 'err');
     statusEl.textContent = '✗ Fehler';
