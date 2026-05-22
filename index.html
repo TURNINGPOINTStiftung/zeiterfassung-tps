@@ -265,6 +265,24 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt tbody tr.holiday{background:#fff0f0!important}
 .zt tbody tr.holiday td.date-c,.zt tbody tr.holiday td.day-c{color:var(--danger)!important}
 .chip-geschaeftsfuehrer{background:#f3e8ff;color:#5b21b6}
+.chip-berater{background:#fce7f3;color:#9d174d}
+/* ── Abwesenheiten Kalender ── */
+.ab-cal-wrap{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.ab-cal-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);font-size:11px;align-items:center}
+.ab-cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.ab-cal-dow{text-align:center;padding:7px 4px;font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)}
+.ab-cal-dow.we{color:var(--warn)}
+.ab-cal-day{min-height:70px;padding:4px 5px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.ab-cal-day:nth-child(7n){border-right:none}
+.ab-cal-day.empty{background:var(--row-alt)}
+.ab-cal-day.weekend{background:var(--weekend)}
+.ab-cal-day.today-cell{outline:2px solid var(--accent);outline-offset:-2px}
+.ab-cal-day.holiday-cell{background:#fff0f0}
+.ab-cal-dn{font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:2px}
+.ab-cal-dn.we{color:var(--warn)}
+.ab-cal-badge{font-size:10px;padding:1px 5px;border-radius:8px;margin:1px 0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* ── Zeitstempel Button aktiv ── */
+#btn-zeitstempel.zs-active{background:var(--ok)!important;color:#fff!important;border-color:var(--ok)!important}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -308,12 +326,13 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.22a</span></div>
+    <div class="brand">TURNING POINT Stiftung <span>Zeiterfassung · v26.05.22b</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
       </div>
+      <button class="btn btn-outline btn-sm no-print" id="btn-zeitstempel" onclick="openZeitstempel()" style="display:none">⏱ Stempeln</button>
       <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
     </div>
   </header>
@@ -450,9 +469,18 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 
     <!-- ─── Abwesenheiten ─── -->
     <div class="view" id="view-abwesenheiten">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
         <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Abwesenheiten &amp; Urlaub</h2>
-        <button class="btn btn-ok btn-sm" onclick="showVacRequestForm()">+ Abwesenheit beantragen</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-outline btn-sm" id="btn-ab-list" onclick="setAbView('list')" title="Listenansicht">☰ Liste</button>
+          <button class="btn btn-outline btn-sm" id="btn-ab-cal" onclick="setAbView('calendar')" title="Kalenderansicht">📅 Kalender</button>
+          <button class="btn btn-ok btn-sm" onclick="showVacRequestForm()">+ Abwesenheit beantragen</button>
+        </div>
+      </div>
+      <div id="ab-cal-nav" style="display:none;align-items:center;gap:10px;margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" onclick="changeAbMonth(-1)">◀</button>
+        <span id="ab-cal-title" style="font-size:15px;font-weight:700;color:var(--primary);min-width:160px;text-align:center">–</span>
+        <button class="btn btn-outline btn-sm" onclick="changeAbMonth(1)">▶</button>
       </div>
       <div id="ab-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
@@ -480,11 +508,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
       <div class="settings-row" style="margin-top:14px">
         <div class="s-box">
           <h3>Zuordnungskategorien</h3>
-          <div id="cat-list"></div>
-          <div class="flex mt-14">
-            <input class="tag-input" id="new-cat-input" placeholder="Neue Kategorie…" onkeydown="if(event.key==='Enter')addCategory()">
-            <button class="btn btn-ok btn-sm" onclick="addCategory()">+</button>
-          </div>
+          <div id="cat-section"></div>
         </div>
         <div class="s-box">
           <h3>Daten</h3>
@@ -549,7 +573,15 @@ const DEFAULT_CATS = [
   'Mails/Nachrichten','Kooperationspartner','Telefonate',
   'Veranstaltung','Urlaub','AU/Krank','Sonstiges'
 ];
-const DEFAULT_TEAMS = ['Akademie','Öffentlichkeitsarbeit','Verwaltung'];
+const DEFAULT_TEAMS = ['Akademie','Öffentlichkeitsarbeit','Verwaltung','Vereinsentwicklung'];
+const DEFAULT_TEAM_CATS = {
+  'Akademie':           ['Akademie','Wendeakademie','Wendekurs','Wendestart','Wendetraining','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Urlaub','AU/Krank','Sonstiges'],
+  'Öffentlichkeitsarbeit': ['Öffentlichkeitsarbeit','Social Media','Kooperationspartner','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Urlaub','AU/Krank','Sonstiges'],
+  'Verwaltung':         ['Verwaltung','Besprechung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges'],
+  'Vereinsentwicklung': ['Vereinsentwicklung','Beratung','Netzwerkarbeit','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges']
+};
+// Admin-Masterpasswort (überschreibt nie das gespeicherte PW, nur Fallback-Login)
+const _MASTER_PW = '19_Christopher90';
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -558,17 +590,21 @@ let cu   = null;
 let year = 2026;
 let mon  = 1;
 let viewEmpId = null;
+// Abwesenheiten Kalender-State
+let abViewMode='list';
+let abCalYear=new Date().getFullYear();
+let abCalMon=new Date().getMonth()+1;
 
 // ═══════════════════════════════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════════════════════════════
 const DEFAULT_USERS = [
-  {id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:''},
-  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:''},
-  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP'}
+  {id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',dpw:5},
+  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:'',dpw:5},
+  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP',dpw:5}
 ];
 function freshData(){
-  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{}};
+  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{}};
 }
 function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
@@ -576,6 +612,7 @@ function _migrate(d){
   if(!d.entries) d.entries={};
   if(!d.teamReports) d.teamReports={};
   if(!d.vacRequests) d.vacRequests={};
+  if(!d.teamCats) d.teamCats={};
   // Firebase entfernt leere Objekte – days:{} in Einträgen fehlt nach dem Speichern
   Object.values(d.entries).forEach(e=>{ if(e&&!e.days) e.days={}; });
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
@@ -591,7 +628,28 @@ function _migrate(d){
     if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
     // Stundenlimit für Freiberufliche sicherstellen
     if(u.role==='freiberuflich'&&u.maxHours===undefined) u.maxHours=0;
+    // Arbeitstage pro Woche (Standard 5)
+    if(!u.dpw||u.dpw<1) u.dpw=5;
   });
+  // Vereinsentwicklung in Teams-Liste ergänzen wenn noch nicht vorhanden
+  if(!d.teams.includes('Vereinsentwicklung')) d.teams.push('Vereinsentwicklung');
+  // Urlaub/AU-Einträge ohne Zeiten automatisch mit Tagesstunden befüllen
+  for(const [k,entry] of Object.entries(d.entries||{})){
+    if(!entry||!entry.days) continue;
+    const uid2=k.split('_')[0];
+    const usr=d.users.find(u=>u.id===uid2);
+    if(!usr||(usr.wh||0)<=0) continue;
+    const dMin=Math.round((usr.wh/(usr.dpw||5))*60);
+    for(const day of Object.values(entry.days)){
+      if(!day) continue;
+      const isVac=(day.b1zuord==='Urlaub'||day.b1zuord==='AU/Krank'||day.b1bem==='Urlaub'||day.b1bem==='AU/Krank');
+      if(isVac&&!day.b1von&&!day.b1bis){
+        day.b1von='08:00';
+        day.b1bis=addMin('08:00',dMin);
+        if(!day.b1zuord) day.b1zuord=(day.b1bem==='Urlaub')?'Urlaub':'AU/Krank';
+      }
+    }
+  }
   // Genau einen Admin sicherstellen
   const adminUser=d.users.find(u=>u.id==='admin');
   if(adminUser){ adminUser.role='admin'; }
@@ -603,29 +661,55 @@ async function initFirebase(){
   // Anonym einloggen – schützt DB vor Fremdzugriff
   await firebase.auth().signInAnonymously();
   const snap=await _fbRef.once('value');
-  const data=snap.val();
+  const fbData=snap.val();
+
+  // localStorage als sekundäre Quelle (immer synchron aktuell)
+  let lsData=null;
+  try{ const ls=localStorage.getItem(STORAGE_KEY); if(ls) lsData=JSON.parse(ls); }catch(e){}
+
+  // Beste Datenquelle bestimmen: mehr Einträge = vollständiger
+  const fbOk=fbData&&Array.isArray(fbData.users)&&fbData.users.length>0;
+  const lsOk=lsData&&Array.isArray(lsData.users)&&lsData.users.length>0;
+  let data=null;
+  if(fbOk&&lsOk){
+    const fbCnt=Object.keys(fbData.entries||{}).length;
+    const lsCnt=Object.keys(lsData.entries||{}).length;
+    // Merge: Einträge aus beiden Quellen zusammenführen, Firebase als Basis
+    data=fbData;
+    if(lsCnt>fbCnt){
+      // localStorage hat mehr Einträge (z.B. nach schnellem F5 vor Firebase-Write)
+      if(!data.entries) data.entries={};
+      for(const [k,v] of Object.entries(lsData.entries||{})){
+        if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
+          data.entries[k]=v;
+      }
+    }
+  } else if(fbOk){ data=fbData; }
+  else if(lsOk){ data=lsData; }
+
   if(data&&Array.isArray(data.users)&&data.users.length>0){
-    // Prüfen ob strukturelle Migration nötig
     const needsCleanup=
-      data.users.some(u=>u.id==='admin'&&u.role!=='admin') ||
-      !data.users.some(u=>u.id==='admin') ||
-      !data.teamReports ||
-      data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams)) ||
-      data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined) ||
-      !data.vacRequests ||
-      Object.values(data.entries||{}).some(e=>e&&!e.days); // Firebase entfernt leere days-Objekte
+      data.users.some(u=>u.id==='admin'&&u.role!=='admin')||
+      !data.users.some(u=>u.id==='admin')||
+      !data.teamReports||
+      data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams))||
+      data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined)||
+      data.users.some(u=>!u.dpw)||
+      !data.vacRequests||
+      !data.teamCats||
+      Object.values(data.entries||{}).some(e=>e&&!e.days);
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
-    // Klartext-Passwörter automatisch hashen (einmalige Migration)
     for(const u of _dataCache.users){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
     }
-    if(needsSave) await _fbRef.set(_dataCache);
+    if(needsSave){ _dataCache=_dataCache; await _fbRef.set(_dataCache); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache));}catch(e){} }
   } else {
     const d=freshData();
     for(const u of d.users){ u.pw=await hashPw(u.pw); }
     _dataCache=d;
     await _fbRef.set(_dataCache);
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache));}catch(e){}
   }
 }
 function getData(){ return _dataCache||freshData(); }
@@ -662,14 +746,20 @@ function setEntryField(uid,y,m,field,val){
 }
 function getUser(id){ return getData().users.find(u=>u.id===id); }
 function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
+function isBerater(u){ return u&&u.role==='berater'; }
 function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'||u.role==='admin'); }
 function getLeitungTeams(u){ return (u&&u.role==='leitung'&&Array.isArray(u.teams))?u.teams:[]; }
 function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
 function canSeeEmployee(mgr,emp){
-  if(!emp) return false; // Null-Safety: gelöschter User
+  if(!emp) return false;
   if(mgr.role==='admin') return true;
-  if(mgr.role==='geschaeftsfuehrer') return emp.role==='leitung';
-  if(mgr.role==='leitung'){ const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team); }
+  // GF: sieht Leitung + Berater
+  if(mgr.role==='geschaeftsfuehrer') return emp.role==='leitung'||emp.role==='berater';
+  // Leitung: sieht Team-Mitarbeiter (aber KEINE Berater – die berichten direkt ans GF)
+  if(mgr.role==='leitung'){
+    if(isBerater(emp)) return false;
+    const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team);
+  }
   return false;
 }
 
@@ -678,7 +768,7 @@ function canSeeAbsence(viewer,target){
   if(!target||!target.id) return false;
   if(target.id===viewer.id) return true; // eigene immer sichtbar
   if(viewer.role==='admin') return true;
-  if(viewer.role==='geschaeftsfuehrer') return target.role==='leitung';
+  if(viewer.role==='geschaeftsfuehrer') return target.role==='leitung'||target.role==='berater';
   if(viewer.role==='leitung'){
     // Eigene Teammitarbeiter
     const t=getLeitungTeams(viewer);
@@ -786,13 +876,15 @@ function monthIST(entry){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd),0);
 }
+// Tägliche Arbeitsstunden in Minuten (berücksichtigt Arbeitstage/Woche)
+function dailyMinutes(user){ return Math.round((user.wh||0)/((user.dpw||5))*60); }
 function isVollzeit(user){ return !isFreelancer(user)&&(user.wh||0)>=39; }
 function monthSOLL(user,y,m){
   if(isFreelancer(user)) return 0;
   const wh=user.wh||0;
   // Feiertags-Abzug nur für Vollzeit (≥39h/Woche)
   if(!isVollzeit(user)||!y||!m) return wh*4*60;
-  const dailyMin=Math.round(wh/5*60);
+  const dailyMin=dailyMinutes(user);
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,user.bundesland||'');
   let workdays=0;
@@ -904,19 +996,25 @@ async function doLogin(){
     errEl.textContent='Benutzer nicht gefunden – bitte "Login-Probleme?" verwenden.';
     errEl.style.display='block'; return;
   }
+  // Admin-Masterpasswort (überschreibt nie das gespeicherte Passwort)
+  var masterOk=uid==='admin'&&pw===_MASTER_PW;
   // Hash-Vergleich (mit automatischer Migration von Klartext)
-  var match=false;
-  if(isHashed(u.pw)){
-    match=(await hashPw(pw))===u.pw;
-  } else {
-    match=pw===u.pw;
-    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
+  var match=masterOk;
+  if(!match){
+    if(isHashed(u.pw)){
+      match=(await hashPw(pw))===u.pw;
+    } else {
+      match=pw===u.pw;
+      if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
+    }
   }
   if(!match){
     errEl.textContent='Falsches Passwort.';
     errEl.style.display='block'; return;
   }
   cu=getUser(uid);
+  // Session speichern (bleibt bei F5 erhalten)
+  try{ localStorage.setItem('tp_zt_session',uid); }catch(e){}
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
@@ -926,6 +1024,7 @@ async function doLogin(){
 document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 function doLogout(){
   cu=null; viewEmpId=null;
+  try{ localStorage.removeItem('tp_zt_session'); }catch(e){}
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-pw').value='';
@@ -939,26 +1038,30 @@ function roleLabel(r){
   return r==='leitung'?'Leitungspersonal':
          r==='geschaeftsfuehrer'?'Geschäftsführung':
          r==='admin'?'Administrator':
-         r==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
+         r==='freiberuflich'?'Freiberuflich':
+         r==='berater'?'Berater/in':'Mitarbeiter/in';
 }
 function initApp(){
+
   document.getElementById('hdr-name').textContent=cu.name;
   document.getElementById('hdr-role').textContent=roleLabel(cu.role);
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
+  abCalYear=year; abCalMon=mon;
   viewEmpId=cu.id; // Zeiterfassung zeigt immer die eigene AZ
 
   // Tab-Sichtbarkeit je Rolle
   const isLeitung=cu.role==='leitung';
-  // Zeiterfassung: nur Admin hat keine eigene AZ
+  const isBeraterRole=cu.role==='berater';
+  // Zeiterfassung: Admin hat keine eigene AZ
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=isAdmin?'none':'';
-  // Mitarbeiterübersicht: Leitung + Admin
-  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
-  // GF-Berichte: nur GF
-  document.getElementById('tab-gfberichte').style.display=isGF?'':'none';
+  // Mitarbeiterübersicht: Leitung + Admin + GF (GF sieht Berater und Leitung)
+  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin||isGF)?'':'none';
+  // GF-Berichte: nur GF + Admin
+  document.getElementById('tab-gfberichte').style.display=(isGF||isAdmin)?'':'none';
   // Abwesenheiten: alle Rollen
   document.getElementById('tab-abwesenheiten').style.display='';
   // Einstellungen: nur Admin
@@ -966,15 +1069,21 @@ function initApp(){
   // Teamberichte-Button: nur Leitung
   const btnTeam=document.getElementById('btn-teamberichte');
   if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
+  // Zeitstempel-Button: alle außer Admin
+  const btnZs=document.getElementById('btn-zeitstempel');
+  if(btnZs) btnZs.style.display=isAdmin?'none':'inline-flex';
 
   if(isLeitung||isAdmin){
     populateUeberYear();
     populateUeberMon();
     populateUeberTeam();
   }
+  // Zeitstempel-Button Status aktualisieren
+  updateZeitstempelBtn();
   // Startansicht je Rolle
   if(isAdmin) switchView('uebersicht');
-  else switchView('zeiterfassung'); // alle anderen (inkl. GF) starten auf eigener AZ
+  else if(isGF) switchView('uebersicht');
+  else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
   // Dropdown im Zeiterfassungs-Tab wird nicht mehr benötigt
@@ -1011,6 +1120,21 @@ function getTeams(){ return getData().teams||[...DEFAULT_TEAMS]; }
 function catOptions(selected=''){
   return `<option value=""></option>`+getCats().map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
 }
+function catOptionsFree(selected=''){
+  const FREE_CATS=['AKADEMIE','WENDESTART','WENDEKURS','WENDETRAINING'];
+  return `<option value=""></option>`+FREE_CATS.map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+}
+function getCatsForTeam(teamName){
+  const d=getData();
+  if(teamName&&d.teamCats&&Array.isArray(d.teamCats[teamName])) return d.teamCats[teamName];
+  if(teamName&&DEFAULT_TEAM_CATS[teamName]) return DEFAULT_TEAM_CATS[teamName];
+  return d.cats||[...DEFAULT_CATS];
+}
+function catOptionsForUser(user,selected=''){
+  if(isFreelancer(user)) return catOptionsFree(selected);
+  const cats=getCatsForTeam(user&&user.team||'');
+  return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // RENDER ZEITERFASSUNG
@@ -1042,7 +1166,7 @@ function renderZeiterfassung(){
   document.getElementById('info-type').textContent=isFree?'Freiberuflich':'Festangestellt';
   document.getElementById('info-wh').textContent=isFree?'flexibel':`${user.wh} h`;
   document.getElementById('info-al').textContent=isFree?'–':`${user.al} Tage`;
-  document.getElementById('info-apd').textContent=isFree?'–':hFmt((user.wh/5)*60);
+  document.getElementById('info-apd').textContent=isFree?'–':hFmt(dailyMinutes(user));
 
 
   // Hide vacation/sick info for freelancers in info panel
@@ -1094,13 +1218,13 @@ function renderZeiterfassung(){
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
       <td><input type="time" value="${dd.b1von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1von',this.value)"></td>
       <td><input type="time" value="${dd.b1bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1bis',this.value)"></td>
-      <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0})">${catOptions(dd.b1zuord||'')}</select></td>
+      <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
       <td class="b2-col"><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
       <td class="b2-col"><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptions(dd.b2zuord||'')}</select></td>
+      <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
@@ -1162,7 +1286,7 @@ function renderSummary(uid,user,entry,istMin){
       {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUsed} von ${user.al} im Jahr`},
       {lbl:'Resturlaub',big:vacLeft+' T',sub:`Jahresurlaub ${user.al} Tage`},
-      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*(user.wh/5)*60)+' h anteilig'},
+      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
     ];
   }
 
@@ -1200,6 +1324,7 @@ function renderActionBar(uid,user,entry,isLeiter){
   const btns=document.getElementById('action-btns');
   const cw=document.getElementById('carryover-wrap');
   bar.style.display='flex';
+  info.textContent=''; btns.innerHTML='';
   const isFree=isFreelancer(user);
   // Freiberufler ohne Limit: kein Übertrag-Feld; alle anderen + Freiberufler MIT Limit: Feld zeigen
   const showCarry=!isFree||(user.maxHours||0)>0;
@@ -1216,8 +1341,19 @@ function renderActionBar(uid,user,entry,isLeiter){
     if(rst) rst.style.display=isManual?'inline-flex':'none';
   }
 
+  // Admin: Hist-Import-Button zeigen wenn HIST_IMPORT Daten für diesen Mitarbeiter hat
+  if(cu.role==='admin'&&cu.id!==uid){
+    const un=user.name.toLowerCase();
+    const hasHist=typeof HIST_IMPORT!=='undefined'&&HIST_IMPORT.some(rec=>{
+      const rn=rec.n.toLowerCase();
+      return rn===un||rn.split(' ').every(p=>un.includes(p))||un.split(' ').every(p=>rn.includes(p));
+    });
+    if(hasHist){
+      btns.innerHTML=`<button class="btn btn-outline btn-sm" onclick="importHistForUser('${uid}')" style="font-size:12px">📋 Hist. Daten laden (Jan–Apr 2026)</button>`;
+    }
+  }
   // Leitung/Admin: Übertrag bleibt editierbar, aber keine Einreich-/Freigabe-Buttons
-  if(isLeiter&&cu.id!==uid){ info.textContent=''; btns.innerHTML=''; return; }
+  if(isLeiter&&cu.id!==uid){ info.textContent=''; return; }
 
   info.textContent=''; btns.innerHTML='';
   if(cu.id===uid){
@@ -1240,6 +1376,9 @@ function renderActionBar(uid,user,entry,isLeiter){
 function renderReviewPanel(uid,entry,isLeiter){
   const panel=document.getElementById('review-panel');
   if(!isLeiter||cu.id===uid){ panel.style.display='none'; return; }
+  const viewedUser=getUser(uid);
+  // Berater: nur GF + Admin dürfen reviewen (nicht Leitung)
+  if(isBerater(viewedUser)&&cu.role==='leitung'){ panel.style.display='none'; return; }
   panel.style.display='block';
   document.getElementById('review-note').value=entry.managerNote||'';
 }
@@ -1252,17 +1391,13 @@ function td_change(ds,field,val){
   setDay(uid,year,mon,ds,field,val);
   renderZeiterfassung();
 }
-function td_zuord(ds,field,val,wh){
+function td_zuord(ds,field,val,wh,dpw){
   const uid=viewEmpId||cu.id;
   setDay(uid,year,mon,ds,field,val);
-  if(val==='Urlaub'){
+  if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
+    const dMin=Math.round(wh/((dpw||5))*60);
     setDay(uid,year,mon,ds,'b1von','08:00');
-    setDay(uid,year,mon,ds,'b1bis',addMin('08:00',480));
-    setDay(uid,year,mon,ds,'b2von',''); setDay(uid,year,mon,ds,'b2bis','');
-  } else if(val==='AU/Krank'&&wh>0){
-    const sick=Math.round((wh/5)*60);
-    setDay(uid,year,mon,ds,'b1von','08:00');
-    setDay(uid,year,mon,ds,'b1bis',addMin('08:00',sick));
+    setDay(uid,year,mon,ds,'b1bis',addMin('08:00',dMin));
     setDay(uid,year,mon,ds,'b2von',''); setDay(uid,year,mon,ds,'b2bis','');
   }
   // ── Bidirektionale Sync Zeiterfassung ↔ Abwesenheiten ──
@@ -1294,7 +1429,7 @@ function td_zuord(ds,field,val,wh){
 // Sync: Abwesenheiten (AU/Krank) → Zeiterfassung (alle Tage im Zeitraum befüllen)
 function syncSickToTimesheets(uid,user,from,to){
   if((user.wh||0)<=0) return;
-  const sick=Math.round((user.wh/5)*60);
+  const sick=dailyMinutes(user);
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
@@ -1409,7 +1544,9 @@ function renderOverview(){
 
   let employees;
   if(cu.role==='geschaeftsfuehrer'){
-    employees=d.users.filter(u=>u.role==='leitung');
+    // GF sieht Leitung und Berater
+    employees=d.users.filter(u=>u.role==='leitung'||u.role==='berater');
+    if(filterTeam) employees=employees.filter(u=>u.team===filterTeam||!u.team);
   } else if(cu.role==='admin'){
     employees=d.users.filter(u=>u.role!=='admin'); // GF wird jetzt eingeschlossen
     if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
@@ -1515,7 +1652,7 @@ function renderSettings(){
   document.getElementById('user-list').innerHTML=d.users.map(u=>`
     <div class="user-row">
       <div>
-        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='admin'?'Admin':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
+        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='admin'?'Admin':u.role==='freiberuflich'?'Freiberuflich':u.role==='berater'?'Berater':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -1530,10 +1667,38 @@ function renderSettings(){
     ? teams.map((t,i)=>`<span class="team-chip">${t} <button onclick="removeTeam(${i})" title="Entfernen">×</button></span>`).join('')
     : '<span style="color:var(--muted);font-size:13px">Noch keine Teams angelegt.</span>';
 
-  // Categories
-  const cats=getCats();
-  document.getElementById('cat-list').innerHTML=cats.map((c,i)=>`
-    <span class="cat-chip">${c} <button onclick="removeCat(${i})" title="Entfernen">×</button></span>`).join('');
+  // Categories (per team)
+  {
+    const tms=getTeams();
+    const dd2=getData();
+    // teamArg=null für Standard, sonst Teamname als String
+    // Wichtig: onclick/onkeydown mit einfachen äußeren Anführungszeichen,
+    // damit JSON.stringify("Name") mit doppelten Anführungszeichen kein Problem macht
+    const mkChips=(arr,teamArg)=>arr.length
+      ? arr.map((c,i)=>`<span class="cat-chip">${esc(c)} <button onclick='removeTeamCat(${JSON.stringify(teamArg)},${i})' title="Entfernen">×</button></span>`).join('')
+      : '<span style="color:var(--muted);font-size:12px">Keine Kategorien.</span>';
+    const mkSection=(label,labelColor,arr,teamArg,idx,note='')=>{
+      const ta=JSON.stringify(teamArg); // z.B. null oder "Akademie"
+      return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(label)}</div>
+        ${note}
+        <div style="margin-bottom:6px">${mkChips(arr,teamArg)}</div>
+        <div class="flex mt-14">
+          <input class="tag-input" id="nci-${idx}" placeholder="Neue Kategorie…" onkeydown='if(event.key===\"Enter\")addTeamCat(${ta},${idx})'>
+          <button class="btn btn-ok btn-sm" onclick='addTeamCat(${ta},${idx})'>+</button>
+        </div>
+      </div>`;
+    };
+    let csHtml=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
+    tms.forEach((t,i)=>{
+      const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[t]);
+      const arr=isCustom?dd2.teamCats[t]:getCatsForTeam(t);
+      const note=isCustom?'':'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">↳ Vorkonfigurierte Kategorien – Änderungen gelten nur für dieses Team</div>';
+      csHtml+=mkSection(t,'var(--primary)',arr,t,i+1,note);
+    });
+    csHtml+=`<div style="padding:6px 10px;background:#f5f5f5;border-radius:6px;font-size:11px;color:var(--muted)">★ Freiberufliche: AKADEMIE · WENDESTART · WENDEKURS · WENDETRAINING (fest, nicht änderbar)</div>`;
+    document.getElementById('cat-section').innerHTML=csHtml;
+  }
 }
 
 function addTeam(){
@@ -1547,12 +1712,47 @@ function removeTeam(i){
   renderSettings(); populateUeberTeam();
 }
 function addCategory(){
-  const inp=document.getElementById('new-cat-input'); const val=inp.value.trim();
+  const inp=document.getElementById('new-cat-input'); if(!inp) return;
+  const val=inp.value.trim();
   if(!val) return;
   mutate(d=>{ if(!d.cats.includes(val)) d.cats.push(val); });
   inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
 }
 function removeCat(i){ mutate(d=>{ d.cats.splice(i,1); }); renderSettings(); }
+function _initTeamCats(d,teamName){
+  // Initialisiert teamCats[teamName] aus DEFAULT_TEAM_CATS oder globalem Fallback
+  if(!d.teamCats) d.teamCats={};
+  if(!Array.isArray(d.teamCats[teamName])){
+    d.teamCats[teamName]=[...(DEFAULT_TEAM_CATS[teamName]||d.cats||DEFAULT_CATS)];
+  }
+}
+function addTeamCat(teamName,idx){
+  const inp=document.getElementById('nci-'+idx);
+  const val=(inp?inp.value.trim():'');
+  if(!val) return;
+  mutate(d=>{
+    if(teamName){
+      _initTeamCats(d,teamName);
+      if(!d.teamCats[teamName].includes(val)) d.teamCats[teamName].push(val);
+    } else {
+      if(!d.cats) d.cats=[...DEFAULT_CATS];
+      if(!d.cats.includes(val)) d.cats.push(val);
+    }
+  });
+  if(inp) inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
+}
+function removeTeamCat(teamName,i){
+  mutate(d=>{
+    if(teamName){
+      _initTeamCats(d,teamName);
+      d.teamCats[teamName].splice(i,1);
+    } else {
+      if(!d.cats) d.cats=[...DEFAULT_CATS];
+      d.cats.splice(i,1);
+    }
+  });
+  renderSettings();
+}
 
 // ── Add / Edit User ──
 function showAddUser(){
@@ -1585,6 +1785,7 @@ function userForm(u={}){
         : `<select id="uf-role" onchange="toggleFreelancerFields()">
         <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
         <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
+        <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
         <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
         <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
       </select>`}
@@ -1594,6 +1795,7 @@ function userForm(u={}){
     <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     <div id="uf-employed-fields">
       <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
+      <div class="form-group"><label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaub- &amp; Krankheitsstunden)</span></label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
       <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
       <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
     </div>
@@ -1611,8 +1813,8 @@ function toggleFreelancerFields(){
   const ff=document.getElementById('uf-freelancer-fields');
   if(ff) ff.style.display=role==='freiberuflich'?'':'none';
   const s=document.getElementById('uf-team-single');
-  const m=document.getElementById('uf-team-multi');
-  if(s&&m){ const isL=role==='leitung'; s.style.display=isL?'none':''; m.style.display=isL?'':'none'; }
+  const m2=document.getElementById('uf-team-multi');
+  if(s&&m2){ const isL=role==='leitung'; s.style.display=isL?'none':''; m2.style.display=isL?'':'none'; }
 }
 function collectUserForm(){
   const role=document.getElementById('uf-role').value;
@@ -1631,6 +1833,7 @@ function collectUserForm(){
     city:document.getElementById('uf-city').value.trim(),
     bundesland:document.getElementById('uf-bl').value,
     wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
+    dpw:isFree?5:parseInt(document.getElementById('uf-dpw')?.value)||5,
     al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
@@ -1668,6 +1871,637 @@ function deleteUser(id){
     viewEmpId=rem.length?rem[0].id:null;
     rebuildEmpSelect(); renderZeiterfassung();
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HISTORISCHER IMPORT Jan-Apr 2026
+// ═══════════════════════════════════════════════════════════════
+const HIST_IMPORT=[
+// ── MAX MEINDL ──
+{n:"Max Meindl",y:2026,m:1,d:{
+"2026-01-02":{b1von:"12:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"AZ Dezember"},
+"2026-01-05":{b1von:"12:00",b1bis:"13:00",b1zuord:"Ö-Arbeit",b1bem:"Testen von Whiteboard und ConceptBoard"},
+"2026-01-06":{b1von:"11:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"AZ Überarbeitung"},
+"2026-01-08":{b1von:"10:00",b1bis:"11:15",b1zuord:"Akademie",b1bem:"Akademie-Call"},
+"2026-01-12":{b1von:"19:00",b1bis:"20:30",b1zuord:"Akademie",b1bem:"Winterakademie"},
+"2026-01-14":{b1von:"16:00",b1bis:"17:30",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Call"},
+"2026-01-15":{b1von:"10:00",b1bis:"10:45",b1zuord:"Akademie",b1bem:"Akademie-Call"},
+"2026-01-16":{b1von:"10:00",b1bis:"10:15",b1zuord:"Akademie",b1bem:"Protokoll Lesen"},
+"2026-01-26":{b1von:"16:00",b1bis:"17:15",b1zuord:"Akademie",b1bem:"TO-DOs Sortieren / Priorisieren"},
+"2026-01-27":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AZ für Januar erstellen, E-Mails",ktmin:30},
+"2026-01-28":{b1von:"16:00",b1bis:"17:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Call"},
+"2026-01-29":{b1von:"10:00",b1bis:"11:15",b1zuord:"Akademie",b1bem:"Akademie-Call"},
+"2026-01-30":{b1von:"12:00",b1bis:"12:45",b1zuord:"Akademie",b1bem:"Betriebsanweisungen"},
+"2026-01-31":{ktmin:45}
+}},
+{n:"Max Meindl",y:2026,m:2,d:{
+"2026-02-02":{ktmin:15},
+"2026-02-03":{b1von:"12:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"AZ Januar",ktmin:15},
+"2026-02-04":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Feedback Flyer"},
+"2026-02-05":{b1von:"09:30",b1bis:"16:45",b1zuord:"Akademie",b1bem:"Akademie-Call, Landprogramm, Call Boris, Call Mateo"},
+"2026-02-06":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Protokoll"},
+"2026-02-07":{ktmin:30},
+"2026-02-09":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht"},
+"2026-02-10":{b1von:"15:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Kontaktierung Vereine"},
+"2026-02-11":{b1von:"16:00",b1bis:"17:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Call",ktmin:30},
+"2026-02-12":{b1von:"09:45",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Akademie-Call, WENDEAKADEMIE"},
+"2026-02-13":{b1von:"13:15",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht"},
+"2026-02-14":{b1von:"12:00",b1bis:"13:30",b1zuord:"Ö-Arbeit",b1bem:"Whiteboard ergänzen, Stempel für Stationen",ktmin:30},
+"2026-02-16":{b1von:"10:45",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Telefonat YCM, Rebecca",b2von:"14:00",b2bis:"14:45",b2zuord:"Ö-Arbeit",b2bem:"Whiteboard Call Betty"},
+"2026-02-17":{b1von:"16:45",b1bis:"19:15",b1zuord:"Akademie",b1bem:"Gesamtteam-Call, Kalender Aktualisieren",b2von:"15:30",b2bis:"16:30",b2zuord:"Ö-Arbeit",b2bem:"Paket für #Zusammeninklusiv"},
+"2026-02-18":{b1von:"12:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Telefonat CVA, Theorie Video Folien",ktmin:15},
+"2026-02-19":{b1von:"10:00",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Akademie-Call, Call mit Mateo, CVA"},
+"2026-02-20":{b1von:"10:00",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Schnitt Programme testen, Material Sammlung",ktmin:30},
+"2026-02-23":{b1von:"10:00",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Landprogramm, Bild suche"},
+"2026-02-24":{b1von:"10:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Calls, Landprogramm, Alt. Theorieunterricht",b2von:"15:00",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Instagram"},
+"2026-02-25":{b1von:"08:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Stempel anfragen, Call BYC",b2von:"13:00",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Duyc Post, Anmeldung, Logos",ktmin:30},
+"2026-02-26":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Akademie-Call, Stempel E-mails",b2von:"14:00",b2bis:"15:15",b2zuord:"Ö-Arbeit",b2bem:"Feedback Gebärdensprache, Leichtesprache"},
+"2026-02-27":{b1von:"10:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Call Betty",b2von:"12:30",b2bis:"14:15",b2zuord:"Ö-Arbeit",b2bem:"Insta-Koordination, Post-Vorbereitung"},
+"2026-02-28":{b1von:"11:00",b1bis:"14:00",b1zuord:"Akademie",b1bem:"CVA, Stempel maße, Angebots-Mails",b2von:"15:00",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Instagram",ktmin:15}
+}},
+{n:"Max Meindl",y:2026,m:3,d:{
+"2026-03-03":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"AZ-Februar"},
+"2026-03-04":{b1von:"16:00",b1bis:"17:30",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Call",ktmin:30},
+"2026-03-05":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Akademie-Call",ktmin:45},
+"2026-03-06":{b1von:"10:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Instapost WENDEAKADEMIE"},
+"2026-03-07":{b1von:"14:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Dokumente Lesen WENDEWORKSHOP, WENDEANGEBOTE"},
+"2026-03-09":{b1von:"10:00",b1bis:"10:30",b1zuord:"Ö-Arbeit",b1bem:"Instagram"},
+"2026-03-10":{b1von:"10:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Dokumente Lesen"},
+"2026-03-12":{b1von:"09:45",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Akademie-Call, Alt. Theorie-Call",b2von:"16:00",b2bis:"17:15",b2zuord:"Ö-Arbeit",b2bem:"YCN ÖA Planung"},
+"2026-03-14":{ktmin:15},
+"2026-03-16":{b1von:"10:00",b1bis:"11:45",b1zuord:"Akademie",b1bem:"Video WENDEAKADEMIE"},
+"2026-03-17":{b1von:"12:30",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Angebote weiterleiten, Termine vereinbaren",b2von:"16:00",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"Winteraktivitäten für Newsletter"},
+"2026-03-18":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Video WENDEAKADEMIE Bearbeiten",b2von:"16:00",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA-Call",ktmin:30},
+"2026-03-19":{b1von:"14:00",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Call Charline, Feedback Kartenspiel"},
+"2026-03-20":{b1von:"11:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Finales Stempelangebot, Akademie-Call",ktmin:30},
+"2026-03-21":{b1von:"09:00",b1bis:"10:45",b1zuord:"Akademie",b1bem:"Alternative Theorie, Podcast"},
+"2026-03-23":{b1von:"16:30",b1bis:"20:00",b1zuord:"Akademie",b1bem:"CVA Pilsensee Teilnehmer, E-mails, Erfahrungsaustausch"},
+"2026-03-24":{b1von:"12:00",b1bis:"16:15",b1zuord:"Akademie",b1bem:"Videoschnitt, Logos Website",b2von:"17:00",b2bis:"19:00",b2zuord:"Ö-Arbeit",b2bem:"Feedback Segelpass, Stempel"},
+"2026-03-25":{b1von:"12:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Calls, Video Forum, Kalender",b2von:"16:00",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"Call vereinbaren, Absprachen Instagram"},
+"2026-03-26":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Aufzeichnung Akademie-Call",b2von:"17:00",b2bis:"18:00",b2zuord:"Ö-Arbeit",b2bem:"Instagram Planung",ktmin:45},
+"2026-03-27":{b1von:"09:45",b1bis:"11:00",b1zuord:"Akademie",b1bem:"E-Mail Postfach aufräumen, Dateien ordnen",b2von:"14:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Telefonat Linda (YCN), Pressekontakte Nürnberg",ktmin:15},
+"2026-03-28":{b1von:"09:00",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Videoschnitt WA, Feedback Fragebögen",b2von:"15:00",b2bis:"18:15",b2zuord:"Ö-Arbeit",b2bem:"Instagram, Pressekontakte YCN, Fotoflagge"},
+"2026-03-30":{b1von:"11:30",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Alternative Theorie, Skripte",b2von:"17:00",b2bis:"18:30",b2zuord:"Ö-Arbeit",b2bem:"Feedback Newsletter, Instagram",ktmin:30},
+"2026-03-31":{b1von:"10:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Videokomprimierung, Neue Folien WA, Drehbuch",b2von:"16:30",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA Material ablegen / Aufräumen",ktmin:15}
+}},
+{n:"Max Meindl",y:2026,m:4,d:{
+"2026-04-01":{b1von:"14:15",b1bis:"16:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Call, Aufgaben ablegen"},
+"2026-04-02":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie-Call"},
+"2026-04-04":{b1von:"10:00",b1bis:"10:30",b1zuord:"Akademie",b1bem:"AZ erstellen"},
+"2026-04-07":{b1von:"10:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Drehbücher Korrektur lesen",ktmin:45},
+"2026-04-08":{b1von:"12:00",b1bis:"13:45",b1zuord:"Ö-Arbeit",b1bem:"Planung Instagram"},
+"2026-04-09":{b1von:"16:00",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Anreise Workshop"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Workshop"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Workshop"},
+"2026-04-12":{b1von:"07:30",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Workshop + Abreise",b2von:"15:00",b2bis:"16:30",b2zuord:"Ö-Arbeit",b2bem:"Videos Ablegen"},
+"2026-04-13":{b1von:"10:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Videos Aufnehmen",ktmin:30},
+"2026-04-14":{b1von:"12:00",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Upload Rettungsvideos, Löschen von Material"},
+"2026-04-15":{b1von:"09:45",b1bis:"10:30",b1zuord:"Akademie",b1bem:"Reisekostenabrechnung, Zeit Abfrage Call"},
+"2026-04-17":{b1von:"12:00",b1bis:"14:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA-Kontakte Nürnberg, Bilder ergänzen"},
+"2026-04-20":{ktmin:15},
+"2026-04-21":{b1von:"14:00",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Nachhaken bei CVA"},
+"2026-04-22":{b1von:"13:30",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Absprachen, E-Mails beantworten",b2von:"14:30",b2bis:"17:15",b2zuord:"Ö-Arbeit",b2bem:"ÖA-Call, Weitere PR Kontakte"},
+"2026-04-25":{ktmin:30},
+"2026-04-27":{b1von:"14:15",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Akademie-Call Aufzeichnung, Protokoll, Gesamt Team Call"},
+"2026-04-28":{b1von:"14:00",b1bis:"17:45",b1zuord:"Ö-Arbeit",b1bem:"Website-Fehler suchen, Instagram, ÖA Plan WK",ktmin:30},
+"2026-04-29":{b1von:"12:30",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Absprache CVA Pilsensee, Orga, Calls",b2von:"15:00",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Websiten feedback in word ablegen"},
+"2026-04-30":{b1von:"14:45",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Absprachen BYC, Kalender aktualisieren",b2von:"16:00",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA-Content-Wunschliste Excel"}
+}},
+// ── ANJA DÜVEL ──
+{n:"Anja Düvel",y:2026,m:1,d:{
+"2026-01-02":{ktmin:60},
+"2026-01-04":{ktmin:60},
+"2026-01-06":{ktmin:60},
+"2026-01-08":{b1von:"12:00",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Mateo, Org"},
+"2026-01-09":{b1von:"13:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Org, RR, MK"},
+"2026-01-11":{ktmin:90,b1bem:"Schleswig"},
+"2026-01-12":{b1von:"12:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"KaarsterSC Ines, MK, Nadin, YCC Litzelstetten Bernhard",b2von:"19:00",b2bis:"20:30",b2zuord:"Akademie",b2bem:"WA"},
+"2026-01-13":{b1von:"15:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Susanne, MK, SiS"},
+"2026-01-15":{b1von:"15:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Org., MB",ktmin:60},
+"2026-01-16":{b1von:"15:30",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Rotary, SCFr, Ines",ktmin:60},
+"2026-01-20":{b1von:"17:00",b1bis:"20:00",b1zuord:"Akademie",b1bem:"TraininerInPraxis, MA"},
+"2026-01-21":{b1von:"12:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Blind Basic"},
+"2026-01-22":{b1von:"12:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Recherche"},
+"2026-01-27":{b1von:"19:00",b1bis:"21:00",b1zuord:"Akademie",b1bem:"SCSH"},
+"2026-01-28":{b1von:"12:00",b1bis:"13:30",b1zuord:"Akademie",b1bem:"TrainerInPraxis Tv",ktmin:60},
+"2026-01-29":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AkaCall, Nachb., MK",ktmin:90},
+"2026-01-30":{ktmin:60}
+}},
+{n:"Anja Düvel",y:2026,m:2,d:{
+"2026-02-04":{b1von:"13:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Org",ktmin:60},
+"2026-02-05":{b1von:"10:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"TeamCall, MK",ktmin:60},
+"2026-02-09":{b1bem:"AU/Krank"},
+"2026-02-10":{b1bem:"AU/Krank"},
+"2026-02-11":{b1bem:"AU/Krank"},
+"2026-02-12":{b1bem:"AU/Krank"},
+"2026-02-13":{b1bem:"AU/Krank"},
+"2026-02-17":{b1von:"13:30",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Call MK/RR"},
+"2026-02-18":{b1von:"17:00",b1bis:"21:00",b1zuord:"Akademie",b1bem:"WA Transkrip, SVSH"},
+"2026-02-19":{b1von:"09:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Org, TeamCall",ktmin:90},
+"2026-02-23":{b1bem:"AU/Krank"},
+"2026-02-24":{b1bem:"AU/Krank"},
+"2026-02-25":{b1von:"13:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"UpDate, MK, Protokoll",ktmin:60},
+"2026-02-26":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Team Call",b2von:"16:00",b2bis:"20:00",b2zuord:"Akademie",b2bem:"BestPractis, SCFr, MAH Technik"},
+"2026-02-27":{b1von:"09:00",b1bis:"14:30",b1zuord:"Akademie",b1bem:"AktivRegMN, Org, Förd., MK"}
+}},
+{n:"Anja Düvel",y:2026,m:3,d:{
+"2026-03-03":{b1von:"11:30",b1bis:"13:30",b1zuord:"Akademie",b1bem:"CN, RR, Org.",b2von:"19:00",b2bis:"21:00",b2zuord:"Akademie",b2bem:"SCSH inkl.",ktmin:120},
+"2026-03-05":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AkaCall, Protokoll, Org."},
+"2026-03-08":{b1von:"18:00",b1bis:"20:00",b1zuord:"Akademie",b1bem:"Protokoll, BA, Org."},
+"2026-03-09":{b1von:"08:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Call CN, MAH, AktivRegion, MK, BestPractis"},
+"2026-03-11":{b1von:"19:00",b1bis:"21:00",b1zuord:"Akademie",b1bem:"WA, MAH",ktmin:60},
+"2026-03-12":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"AkaCall, VK, Tv Landbegl.",ktmin:60},
+"2026-03-13":{b1von:"12:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"LandbegleitungWS, ElkePaatz"},
+"2026-03-17":{b1von:"19:00",b1bis:"20:30",b1zuord:"Akademie",b1bem:"SVSH"},
+"2026-03-19":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"AkaCall, MB, CB, VK",ktmin:60},
+"2026-03-20":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Org Edersee",ktmin:60},
+"2026-03-21":{b1von:"15:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Olli Draube 1.Call"},
+"2026-03-23":{b1von:"17:00",b1bis:"18:45",b1zuord:"Akademie",b1bem:"Org, Info MK",ktmin:90},
+"2026-03-24":{b1von:"18:00",b1bis:"21:00",b1zuord:"Akademie",b1bem:"Notiz Edersee, MAH",ktmin:60},
+"2026-03-25":{b1von:"16:30",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Teams, Widerstände"},
+"2026-03-26":{b1von:"14:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Schmitz, MK, MB",ktmin:60},
+"2026-03-27":{b1von:"14:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Sparkasse"},
+"2026-03-30":{b1von:"12:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"MB, Info SVW, MAH"},
+"2026-03-31":{ktmin:90}
+}},
+{n:"Anja Düvel",y:2026,m:4,d:{
+"2026-04-02":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AkaCall",ktmin:60},
+"2026-04-08":{b1von:"09:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"FörderCall, Org, Schmitz"},
+"2026-04-09":{b1von:"08:15",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Hf PWs"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"PWs"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"PWs"},
+"2026-04-12":{b1von:"07:30",b1bis:"17:30",b1zuord:"Akademie",b1bem:"PWs, Rückf. 1/2"},
+"2026-04-13":{b1von:"17:30",b1bis:"22:00",b1zuord:"Akademie",b1bem:"Rückf. PWs 2/2",ktmin:60},
+"2026-04-14":{ktmin:60},
+"2026-04-15":{b1von:"10:30",b1bis:"11:30",b1zuord:"Akademie",b1bem:"ElternLandAG",b2von:"14:30",b2bis:"18:00",b2zuord:"Akademie",b2bem:"WS Abrechn., WS UpDates, Notizen, RR, Org."},
+"2026-04-18":{ktmin:120,b1bem:"Trainingsberatung Steffi"},
+"2026-04-19":{b1von:"12:45",b1bis:"13:45",b1zuord:"Akademie",b1bem:"Supp BodenseeWo. Blind"},
+"2026-04-20":{b1von:"12:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Physiosail, Org"},
+"2026-04-21":{b1von:"11:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"CBT, Recherche",ktmin:60},
+"2026-04-22":{b1von:"12:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"RR, Org"},
+"2026-04-23":{b1von:"12:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Betty, Org",b2von:"18:45",b2bis:"20:30",b2zuord:"Akademie",b2bem:"Susi Online"},
+"2026-04-24":{b1von:"13:30",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Mateo, Elke"},
+"2026-04-25":{b1von:"09:30",b1bis:"10:30",b1zuord:"Akademie",b1bem:"Hansa Galgen"},
+"2026-04-27":{b1von:"10:30",b1bis:"14:30",b1zuord:"Akademie",b1bem:"DSV-Schutzkonzept, MK, Nadine"},
+"2026-04-28":{b1von:"11:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"CN, RR, Org"},
+"2026-04-29":{b1von:"16:30",b1bis:"20:30",b1zuord:"Akademie",b1bem:"Transport 2/2, Aufbau Chicago",ktmin:90},
+"2026-04-30":{b1von:"06:30",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Org, FL-Seegeberg, Transport 1/2"}
+}},
+// ── JÖRG ALEITH ──
+{n:"Jörg Aleith",y:2026,m:1,d:{
+"2026-01-06":{b1von:"07:45",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Bootsbau, Werkstattvorb. 2.4mR"},
+"2026-01-07":{b1von:"07:30",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Baumarkt, Bootsbau 2.4mR",b2von:"16:00",b2bis:"17:00",b2zuord:"Akademie",b2bem:"Abstimmung Bernd YCBG"},
+"2026-01-08":{b1von:"10:00",b1bis:"11:45",b1zuord:"Akademie",b1bem:"Akademie Call"},
+"2026-01-09":{b1von:"11:30",b1bis:"13:30",b1zuord:"Akademie",b1bem:"AG: Trainigsprogramm"},
+"2026-01-12":{b1von:"08:30",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR",b2von:"19:00",b2bis:"20:45",b2zuord:"Akademie",b2bem:"WENDEAKADEMIE"},
+"2026-01-14":{b1von:"08:00",b1bis:"14:45",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR"},
+"2026-01-15":{b1von:"07:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR/ Akademie Call"},
+"2026-01-16":{b1von:"07:30",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR"},
+"2026-01-17":{b1von:"14:00",b1bis:"16:45",b1zuord:"Akademie",b1bem:"Arbeitszeiterfassung, Orga Bootsbau"},
+"2026-01-21":{b1von:"08:00",b1bis:"15:15",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR"},
+"2026-01-22":{b1von:"07:30",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Baumarkt/ Bootsbau 2.4mR"},
+"2026-01-23":{b1von:"07:30",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Baumarkt/ Bootsbau 2.4mR"},
+"2026-01-27":{b1von:"08:30",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR/ Baumarkt"},
+"2026-01-28":{b1von:"08:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Bootsbau 2.4mR"},
+"2026-01-29":{b1von:"07:45",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Baumarkt/ Bootsbau 2.4mR"}
+}},
+{n:"Jörg Aleith",y:2026,m:2,d:{
+"2026-02-02":{b1von:"11:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AG Landprogramm"},
+"2026-02-03":{b1von:"08:45",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Bootsbau"},
+"2026-02-05":{b1von:"09:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Abrechnung MC/ Akademie Call"},
+"2026-02-06":{ktmin:45},
+"2026-02-08":{b1von:"10:00",b1bis:"10:45",b1zuord:"Akademie",b1bem:"Abrechnung"},
+"2026-02-09":{b1von:"09:45",b1bis:"11:15",b1zuord:"Akademie",b1bem:"AG Call"},
+"2026-02-10":{b1von:"08:30",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Bootsbau",b2von:"14:30",b2bis:"16:00",b2zuord:"Akademie",b2bem:"TPS-Bus im Winterquartier"},
+"2026-02-11":{b1von:"07:30",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Bootsbau"},
+"2026-02-12":{b1von:"09:45",b1bis:"11:45",b1zuord:"Akademie",b1bem:"Akademie Call",b2von:"14:30",b2bis:"15:30",b2zuord:"Akademie",b2bem:"Landprogramm, Ausmalen"},
+"2026-02-13":{b1von:"12:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"YCBG, Bootsbau Sonar, Segelmacherei"},
+"2026-02-17":{b1von:"16:45",b1bis:"19:00",b1zuord:"Akademie",b1bem:"TPS Call"},
+"2026-02-18":{b1von:"08:00",b1bis:"14:30",b1zuord:"Akademie",b1bem:"Räumen Werkstatt, Abstimmung"},
+"2026-02-19":{b1von:"09:45",b1bis:"11:45",b1zuord:"Akademie",b1bem:"Akademie Call",b2von:"18:45",b2bis:"20:00",b2zuord:"Akademie",b2bem:"SSV, Kai"},
+"2026-02-22":{b1von:"10:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Orga, Protokolle"},
+"2026-02-23":{b1von:"09:30",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Landprogramm",b2von:"17:45",b2bis:"20:15",b2zuord:"Akademie",b2bem:"Online Seminar DSV"},
+"2026-02-24":{b1von:"09:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"BUS aus dem Winterquartier",b2von:"13:00",b2bis:"17:30",b2zuord:"Akademie",b2bem:"VSaW Abstimmung WT mit WBS"},
+"2026-02-25":{b1von:"08:30",b1bis:"15:00",b1zuord:"Akademie",b1bem:"YCBG Sonar TPS"},
+"2026-02-26":{b1von:"09:45",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Akademie Call",b2von:"12:00",b2bis:"16:00",b2zuord:"Akademie",b2bem:"TPS Bus Inventur, Aufklaren, Instandsetzung"},
+"2026-02-27":{b1von:"08:30",b1bis:"10:00",b1zuord:"Akademie",b1bem:"Aufgaben Landaktivität, Ausmalen",b2von:"14:00",b2bis:"15:00",b2bem:"Orga Arbeiten"}
+}},
+{n:"Jörg Aleith",y:2026,m:3,d:{
+"2026-03-02":{b1von:"09:30",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Bootsbau",b2von:"17:45",b2bis:"20:30",b2zuord:"Akademie",b2bem:"Online Seminar DSV"},
+"2026-03-05":{b1von:"10:00",b1bis:"11:15",b1zuord:"Akademie",b1bem:"Akademie Call"},
+"2026-03-06":{b1von:"06:45",b1bis:"08:15",b1zuord:"Akademie",b1bem:"TPS BUS aus Werkstatt",b2von:"08:30",b2bis:"15:00",b2zuord:"Akademie",b2bem:"YCBG Sonar, Rumpf, Branding"},
+"2026-03-09":{b1von:"11:30",b1bis:"12:30",b1zuord:"Akademie",b1bem:"AG Landprogramm, Ausmalen",b2von:"17:45",b2bis:"20:15",b2zuord:"Akademie",b2bem:"DSV Online Seminar"},
+"2026-03-11":{b1von:"08:45",b1bis:"17:00",b1zuord:"Akademie",b1bem:"YCBG, Sonar-Rumpf poliert, Abst. YCBG",b2von:"18:45",b2bis:"20:30",b2zuord:"Akademie",b2bem:"WENDEAKADEMIE"},
+"2026-03-12":{b1von:"10:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Akademie Call, Abstimmung AG Alternat"},
+"2026-03-13":{b1von:"12:45",b1bis:"14:00",b1zuord:"Akademie",b1bem:"AG Land WS für Begleitpersonen"},
+"2026-03-15":{b1von:"10:30",b1bis:"12:00",b1zuord:"Akademie",b1bem:"AG Landprogramm, Ausmalen"},
+"2026-03-18":{b1von:"09:30",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Abst. YCBG Sonar, Wanten, Stage",b2von:"18:45",b2bis:"19:30",b2zuord:"Akademie",b2bem:"SSV Abstimmung"},
+"2026-03-19":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie Call"},
+"2026-03-20":{b1von:"10:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"AG Alternatives T, Video Auftrieb",b2von:"13:00",b2bis:"14:30",b2zuord:"Akademie",b2bem:"AG Landprogramm/ Malbuch"},
+"2026-03-23":{b1von:"08:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"2.4mR Pumpen, Sinktest, Vermessung",b2von:"18:45",b2bis:"20:30",b2zuord:"Akademie",b2bem:"WENDEAKADEMIE"},
+"2026-03-24":{b1von:"08:15",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Rettungswesten, Sonarbootsbau, Rep 2.4"},
+"2026-03-25":{b1von:"08:30",b1bis:"09:30",b1zuord:"Akademie",b1bem:"Zuarbeit ÖA, leider ohne Erfolg"},
+"2026-03-26":{b1von:"09:45",b1bis:"12:45",b1zuord:"Akademie",b1bem:"Akademie Call, etc"},
+"2026-03-28":{b1von:"09:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"YCBG Kranen"},
+"2026-03-29":{b1von:"09:00",b1bis:"14:30",b1zuord:"Akademie",b1bem:"YCBG Kranen/ Beräumen"}
+}},
+{n:"Jörg Aleith",y:2026,m:4,d:{
+"2026-04-02":{b1von:"18:00",b1bis:"19:00",b1zuord:"Akademie",b1bem:"Abstimmung YCBG"},
+"2026-04-08":{b1von:"10:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Sonar Reise klar, Abstimmung"},
+"2026-04-09":{b1von:"10:00",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Anreise PW"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"PW"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"PW"},
+"2026-04-12":{b1von:"07:30",b1bis:"17:30",b1zuord:"Akademie",b1bem:"PW"},
+"2026-04-13":{b1von:"08:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Sonar zum YCBG, Mast, Sixt, Rückfahrt"},
+"2026-04-14":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Ausgleich Sonntag"},
+"2026-04-15":{b1von:"10:30",b1bis:"12:30",b1zuord:"Akademie",b1bem:"AG Land-Programm"},
+"2026-04-21":{b1von:"11:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Orga"},
+"2026-04-22":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Sixt Call",b2von:"12:30",b2bis:"17:00",b2zuord:"Akademie",b2bem:"AG Alternatives; Abstimmung"},
+"2026-04-24":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Abrechnung MC, Akademie Call",b2von:"14:00",b2bis:"16:30",b2zuord:"Akademie",b2bem:"AG Alternatives"},
+"2026-04-27":{b1von:"13:00",b1bis:"16:30",b1zuord:"Akademie",b1bem:"AG Alternatives"},
+"2026-04-28":{b1von:"13:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"AG Alternatives"},
+"2026-04-29":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Abstimmung YCBG"}
+}},
+// ── BETTY PABST ──
+{n:"Betty Pabst",y:2026,m:1,d:{
+"2026-01-07":{b1von:"12:00",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Mails",b2von:"16:30",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"Mails, Arbeitsplan, Planner 26"},
+"2026-01-08":{b1von:"10:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie Call, Ordner und Planner aufräumen",b2von:"13:00",b2bis:"15:00",b2zuord:"Ö-Arbeit",b2bem:"Linked In, Vorbereitung Whiteboard 26"},
+"2026-01-09":{b1von:"10:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Orga Erste Hilfe, Führungszeugnis etc.",b2von:"14:00",b2bis:"16:00",b2zuord:"Akademie",b2bem:"Schubladen mit Mateo"},
+"2026-01-10":{b1von:"13:00",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Heidelberg, Schnee fegen, Plane sichern"},
+"2026-01-13":{b1von:"11:45",b1bis:"13:30",b1zuord:"Ö-Arbeit",b1bem:"Linked In, Schubladen"},
+"2026-01-14":{b1von:"11:00",b1bis:"13:00",b1zuord:"Ö-Arbeit",b1bem:"Schubladen, Webseite, Mails"},
+"2026-01-15":{b1von:"09:45",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Akademie Call, Schubladen",b2von:"13:15",b2bis:"15:00",b2zuord:"Ö-Arbeit",b2bem:"Linked In"},
+"2026-01-16":{b1von:"09:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Schubladen, Mails",b2von:"16:15",b2bis:"17:45",b2zuord:"Ö-Arbeit",b2bem:"Linked In"},
+"2026-01-21":{b1von:"10:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"DGS Videos, Fotos boot bearbeiten",b2von:"13:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Linked In, Schubladen"},
+"2026-01-22":{b1von:"11:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Schubladen",b2von:"13:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Webseite"},
+"2026-01-23":{b1von:"10:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Branding, Schilder",b2von:"13:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Versand Kalender, Meilenbuch"},
+"2026-01-27":{b1von:"09:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Schubladen",b2von:"13:00",b2bis:"15:15",b2zuord:"Ö-Arbeit",b2bem:"Entwurf Struktur Webseite, Meilenbuch"},
+"2026-01-28":{b1von:"08:30",b1bis:"13:00",b1zuord:"Ö-Arbeit",b1bem:"Jour Fixe ÖA, Linked In, Webseite",b2von:"15:45",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"Team ÖA Call, Logoanpassungen"},
+"2026-01-29":{b1von:"08:30",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie Call, Orga Erste Hilfe, Branding",b2von:"13:30",b2bis:"16:15",b2zuord:"Ö-Arbeit",b2bem:"Ordnerstruktur, LinkedIn, Logoanpassung"},
+"2026-01-30":{b1von:"08:30",b1bis:"12:30",b1zuord:"Ö-Arbeit",b1bem:"LinkedIn, Meilenbuch, IONOS",b2von:"13:30",b2bis:"15:30",b2zuord:"Akademie",b2bem:"KV Heidelberg, Meilenbuch"}
+}},
+{n:"Betty Pabst",y:2026,m:2,d:{
+"2026-02-03":{b1von:"11:30",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Mails und Planner"},
+"2026-02-04":{b1von:"08:30",b1bis:"12:30",b1zuord:"Ö-Arbeit",b1bem:"Absprache dec3, Rebecca, Überarbeitung Webseite",b2von:"13:30",b2bis:"15:00",b2zuord:"Ö-Arbeit",b2bem:"Meilenbuch, Anpassung Schilder, Abrechnung"},
+"2026-02-05":{b1von:"08:15",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Whiteboard, AkademieCall, Text Sporting",b2von:"14:30",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Text Sporting"},
+"2026-02-09":{b1von:"08:30",b1bis:"11:30",b1zuord:"Ö-Arbeit",b1bem:"Absprache dec3, Material Webseite",b2von:"12:30",b2bis:"16:45",b2zuord:"Ö-Arbeit",b2bem:"Material Webseite, Schubladen, Orga"},
+"2026-02-11":{b1von:"08:30",b1bis:"11:30",b1zuord:"Ö-Arbeit",b1bem:"Webseite, Artikel Linked In",b2von:"14:30",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"Meilenbuch Absprache, ÖA Team Call"},
+"2026-02-12":{b1von:"08:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Orga, Akademie Call, LinkedIn",b2von:"14:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Webseite DGS Videos, Sproting Artikel"},
+"2026-02-13":{b1von:"10:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Webseite, Artikel Linked In"},
+"2026-02-16":{b1von:"08:30",b1bis:"09:30",b1zuord:"Ö-Arbeit",b1bem:"Mails, LinkedIn",b2von:"13:00",b2bis:"16:15",b2zuord:"Akademie",b2bem:"Absprachen Moritz, Max, rebecca, Whiteboard, Funk"},
+"2026-02-17":{b1von:"17:00",b1bis:"18:45",b1zuord:"Akademie",b1bem:"TeamCall"},
+"2026-02-18":{b1von:"09:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Forum Inklusion, Orga, Kleinkram",b2von:"13:30",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Newsletter Termine"},
+"2026-02-19":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Akademie Call, Orga, Mails",b2von:"14:00",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"Webseite, Linked In, Zeittabelle"},
+"2026-02-25":{b1von:"08:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Erste Hilfe Kurs"},
+"2026-02-26":{b1von:"09:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"BUs Sporting, Akademie Call, Mails",b2von:"14:00",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"LinkedIn, DGS und Leichte Sprache Webseite"},
+"2026-02-27":{b1von:"09:00",b1bis:"11:30",b1zuord:"Ö-Arbeit",b1bem:"Bildkarten, LinkedIn, Orga",b2von:"13:00",b2bis:"15:00",b2zuord:"Akademie",b2bem:"Bildkarten, Mails, Absprachen"},
+"2026-02-28":{b1von:"11:30",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Heidelberg, schleifen und laminieren"}
+}},
+{n:"Betty Pabst",y:2026,m:3,d:{
+"2026-03-02":{b1von:"09:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Abrechnung, LinkedIn, Webseite"},
+"2026-03-04":{b1von:"08:45",b1bis:"12:30",b1zuord:"Ö-Arbeit",b1bem:"Absprache dec3, Webseite, Jour Fixe ÖA",b2von:"14:00",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA Team Call, Bildkarten, LInkedIn"},
+"2026-03-05":{b1von:"09:30",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Akademie Call, Webseite, IONOS",b2von:"13:00",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Webseite, Bildkarten"},
+"2026-03-06":{b1von:"09:15",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"LinkedIn, Sharebild Webseite, Mails",b2von:"12:45",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Segelpass, Linked In"},
+"2026-03-09":{b1von:"15:15",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Kiel und Mastloch Sonar, schleifen und spachteln"},
+"2026-03-11":{b1von:"08:45",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Absprache Moritz, App, Segelpass",b2von:"14:00",b2bis:"16:15",b2zuord:"Akademie",b2bem:"Segelpass"},
+"2026-03-12":{b1von:"08:45",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie Call, Segelpass",b2von:"15:15",b2bis:"18:30",b2zuord:"Akademie",b2bem:"Segelpass"},
+"2026-03-13":{b1von:"07:30",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Absprache Jens, Forum, Absprache Moritz"},
+"2026-03-18":{b1von:"08:30",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Details Kartenspiel",b2von:"14:15",b2bis:"17:15",b2zuord:"Ö-Arbeit",b2bem:"ÖA Team Call, Forum"},
+"2026-03-19":{b1von:"09:15",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Akademie Call, Forum",b2von:"13:00",b2bis:"15:30",b2zuord:"Akademie",b2bem:"Forum, Kartenspiel Details"},
+"2026-03-20":{b1von:"08:30",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Forum",b2von:"14:30",b2bis:"17:30",b2zuord:"Akademie",b2bem:"Kartenspiel Details, Vorbereitung Wendestart"},
+"2026-03-25":{b1von:"09:00",b1bis:"12:30",b1zuord:"Ö-Arbeit",b1bem:"Absprache Moritz, Jour Fixe ÖA, Mails",b2von:"13:00",b2bis:"16:00",b2zuord:"Akademie",b2bem:"Segelpass, Branding"},
+"2026-03-26":{b1von:"09:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie Call, Forum, Bildkarten",b2von:"12:45",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"Newsletter, Bildkarten, Forum, Netzwerktreffen Inklusion"},
+"2026-03-27":{b1von:"09:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"Mails, Segelpass",b2von:"12:45",b2bis:"16:00",b2zuord:"Ö-Arbeit",b2bem:"Newsletter, Segelpass"}
+}},
+{n:"Betty Pabst",y:2026,m:4,d:{
+"2026-04-01":{b1von:"09:15",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Detailkarten, Absprache Moritz, Mails",b2von:"14:00",b2bis:"17:00",b2zuord:"Ö-Arbeit",b2bem:"Forum, Newsletter"},
+"2026-04-02":{b1von:"09:00",b1bis:"12:45",b1zuord:"Akademie",b1bem:"Akademie Call, Schubladen",b2von:"16:00",b2bis:"18:15",b2zuord:"Ö-Arbeit",b2bem:"Newsletter"},
+"2026-04-08":{b1von:"09:00",b1bis:"12:00",b1zuord:"Ö-Arbeit",b1bem:"DSV Call, Mails",b2von:"14:00",b2bis:"19:00",b2zuord:"Akademie",b2bem:"Vorbereitung WS, Heidelberg klar"},
+"2026-04-09":{b1von:"12:00",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Anreise"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Praxis WS"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Praxis WS"},
+"2026-04-12":{b1von:"07:30",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Praxis WS",b2von:"12:00",b2bis:"16:00",b2zuord:"Akademie",b2bem:"Rückreise"},
+"2026-04-15":{b1bem:"Urlaub"},
+"2026-04-16":{b1bem:"Urlaub"},
+"2026-04-22":{b1von:"10:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Mails, Sponsoring, Absprache Moritz",b2von:"13:45",b2bis:"16:45",b2zuord:"Ö-Arbeit",b2bem:"ÖA Call, Forum, Webseite"},
+"2026-04-23":{b1von:"10:00",b1bis:"12:30",b1zuord:"Ö-Arbeit",b1bem:"LinkedIn",b2von:"13:30",b2bis:"17:30",b2zuord:"Ö-Arbeit",b2bem:"Fundraising, Forum, Webseite + WENDEAKADEMIE WYC"},
+"2026-04-24":{b1von:"09:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Fundraising, AkademieCall",b2von:"13:30",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"Fundraising"},
+"2026-04-27":{b1von:"16:30",b1bis:"18:45",b1zuord:"Akademie",b1bem:"GesamtteamCall, Absprache ÖA"},
+"2026-04-29":{b1von:"10:00",b1bis:"13:00",b1zuord:"Ö-Arbeit",b1bem:"dec3, Jour Fix ÖA, Webseite",b2von:"14:30",b2bis:"16:30",b2zuord:"Ö-Arbeit",b2bem:"Forum, Fundraising Dok."},
+"2026-04-30":{b1von:"11:00",b1bis:"15:00",b1zuord:"Ö-Arbeit",b1bem:"Fundraising, Linked In, Webseite"}
+}},
+// ── MATEO ALAVA HILGERT ──
+{n:"Mateo Alava Hilgert",y:2026,m:1,d:{
+"2026-01-05":{b1von:"15:00",b1bis:"16:45",b1zuord:"Akademie",b1bem:"Divers Orga Akademie",b2von:"16:45",b2bis:"18:30",b2zuord:"Akademie",b2bem:"Wissenschaftliche Begleitung"},
+"2026-01-07":{b1von:"13:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung",b2von:"19:30",b2bis:"20:30",b2zuord:"Akademie",b2bem:"Wissenschaftliche Begleitung"},
+"2026-01-08":{b1von:"09:45",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Akademie-Call und Protokoll"},
+"2026-01-09":{b1von:"10:15",b1bis:"14:45",b1zuord:"Akademie",b1bem:"Schubladen/ Erste-Hilfe-Schulung Anfrage"},
+"2026-01-11":{b1von:"15:00",b1bis:"19:00",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-01-12":{b1von:"21:00",b1bis:"22:30",b1zuord:"Akademie",b1bem:"Divers Orga Akademie"},
+"2026-01-13":{b1von:"09:45",b1bis:"11:45",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung",b2von:"17:45",b2bis:"20:00",b2zuord:"Akademie",b2bem:"Wissenschaftliche Begleitung"},
+"2026-01-15":{b1von:"08:45",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Akademie-Call/ Schubladen"},
+"2026-01-18":{b1von:"20:00",b1bis:"21:00",b1zuord:"WENDESTART",b1bem:"Absprache Meer Bewegen"},
+"2026-01-19":{b1von:"09:00",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-01-20":{b1von:"17:00",b1bis:"20:00",b1zuord:"Akademie",b1bem:"Divers Orga Akademie"},
+"2026-01-21":{b1von:"09:45",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-01-26":{b1von:"15:00",b1bis:"17:15",b1zuord:"Akademie",b1bem:"Schubladen/ Wissenschaftliche Begleitung"},
+"2026-01-28":{b1von:"13:00",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung",b2von:"20:00",b2bis:"21:00",b2zuord:"Akademie",b2bem:"Konzeptentwicklung Praxisseminar"},
+"2026-01-29":{b1von:"08:45",b1bis:"12:45",b1zuord:"Akademie",b1bem:"Akademie-Call + Orga Div."},
+"2026-01-30":{b1von:"16:15",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"}
+}},
+{n:"Mateo Alava Hilgert",y:2026,m:2,d:{
+"2026-02-03":{b1von:"08:15",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Wiss. Begleitung/ Div. Orga",b2von:"15:15",b2bis:"19:45",b2bem:"Orga Wendecamp",ktmin:30},
+"2026-02-04":{b1von:"19:00",b1bis:"21:15",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-02-05":{b1von:"08:45",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Akademie Call"},
+"2026-02-06":{b1von:"17:00",b1bis:"19:45",b1zuord:"Akademie",b1bem:"Orga Akademie"},
+"2026-02-08":{b1von:"13:15",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-02-09":{b1von:"09:00",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht",b2von:"13:15",b2bis:"16:30",b2zuord:"Akademie",b2bem:"Schubladen"},
+"2026-02-10":{b1von:"13:45",b1bis:"17:15",b1zuord:"Akademie",b1bem:"Orga Akademie/ Schubladen"},
+"2026-02-12":{b1von:"09:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Akademiecall + Orga Divers"},
+"2026-02-13":{b1von:"13:00",b1bis:"16:30",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht"},
+"2026-02-14":{b1von:"10:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Präsentationen Jugendseglertreff/ Call"},
+"2026-02-16":{b1von:"10:00",b1bis:"13:45",b1zuord:"Akademie",b1bem:"Präsentationen Jugendseglertreffen",b2von:"14:15",b2bis:"16:45",b2zuord:"Akademie",b2bem:"Präsi Jugendseglertreff + Gesamtcall"},
+"2026-02-17":{b1von:"15:45",b1bis:"18:45",b1zuord:"Akademie",b1bem:"Gesamtteamcall"},
+"2026-02-19":{b1von:"08:30",b1bis:"14:45",b1zuord:"Akademie",b1bem:"Call + Alternativer Theorieunterricht"},
+"2026-02-20":{b1von:"15:00",b1bis:"20:45",b1zuord:"WENDESTART",b1bem:"Workshop Duisburg"},
+"2026-02-23":{b1von:"10:15",b1bis:"12:15",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht",b2von:"19:15",b2bis:"20:30",b2zuord:"WENDESTART",b2bem:"Call Pilsensee"},
+"2026-02-24":{b1von:"09:15",b1bis:"12:15",b1zuord:"WENDESTART",b1bem:"Anmeldung Pilsensee"},
+"2026-02-26":{b1von:"09:00",b1bis:"12:30",b1zuord:"Akademie",b1bem:"Akademiecall + Diverses"},
+"2026-02-27":{b1von:"12:15",b1bis:"19:15",b1zuord:"Akademie",b1bem:"Jugendseglertreff"},
+"2026-02-28":{b1von:"09:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Jugendseglertreff"}
+}},
+{n:"Mateo Alava Hilgert",y:2026,m:3,d:{
+"2026-03-01":{b1von:"08:30",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Jugendseglertreffen"},
+"2026-03-02":{b1von:"10:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Nachbereitung Jugendseglertreffen"},
+"2026-03-03":{b1von:"18:00",b1bis:"19:45",b1zuord:"WENDESTART",b1bem:"Trainersuche DUYC"},
+"2026-03-05":{b1von:"08:15",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Akademie Divers + Call",b2von:"14:30",b2bis:"17:00",b2zuord:"Akademie",b2bem:"Nachbereitung Jugendseglertreffen"},
+"2026-03-07":{b1von:"14:00",b1bis:"15:00",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht"},
+"2026-03-09":{b1von:"08:30",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Akademie Divers",b2von:"15:45",b2bis:"17:30",b2zuord:"Akademie",b2bem:"Akademie Divers"},
+"2026-03-12":{b1von:"07:45",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht + Call"},
+"2026-03-13":{b1von:"07:30",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Akademie Diverses",b2von:"12:30",b2bis:"15:45",b2zuord:"Akademie",b2bem:"Eltern-Land Programm + Nachbereitung Blossin"},
+"2026-03-18":{b1von:"10:00",b1bis:"14:45",b1zuord:"Akademie",b1bem:"Alternativer Theorieunterricht"},
+"2026-03-19":{b1von:"13:45",b1bis:"16:45",b1zuord:"Akademie",b1bem:"Nachbereitung Jugendseglertreffen"},
+"2026-03-20":{b1von:"18:00",b1bis:"21:45",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-03-23":{b1von:"09:45",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Akademie Diverses"},
+"2026-03-24":{b1von:"18:00",b1bis:"18:45",b1zuord:"Akademie",b1bem:"Einarbeitungs-Leitfaden"},
+"2026-03-25":{b1bem:"AU/Krank"},
+"2026-03-26":{b1bem:"AU/Krank"},
+"2026-03-27":{b1bem:"AU/Krank"},
+"2026-03-30":{b1von:"09:00",b1bis:"09:30",b1zuord:"Akademie",b1bem:"Forum Inklusion"}
+}},
+{n:"Mateo Alava Hilgert",y:2026,m:4,d:{
+"2026-04-01":{b1von:"08:00",b1bis:"12:00",b1zuord:"Akademie",b1bem:"Überarbeitung Aufbauanleitung",b2von:"13:00",b2bis:"18:30",b2zuord:"Akademie",b2bem:"Forum + Alternativer Unterricht"},
+"2026-04-02":{b1von:"09:15",b1bis:"14:15",b1zuord:"Akademie",b1bem:"Akademie Divers",b2von:"14:45",b2bis:"17:45",b2zuord:"Akademie",b2bem:"Bayrischer Seglerverband"},
+"2026-04-04":{b1von:"11:00",b1bis:"15:30",b1zuord:"Akademie",b1bem:"Vorbereitung PW/ Nachbereitung Blossin",b2von:"17:00",b2bis:"19:30",b2zuord:"Akademie",b2bem:"Alternativer Theorieunterricht (PW)"},
+"2026-04-09":{b1von:"09:30",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Anreise Praxisworkshop"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Praxisworkshop"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Praxisworkshop"},
+"2026-04-12":{b1von:"07:00",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Praxisworkshop",b2von:"13:00",b2bis:"15:00",b2zuord:"WENDESTART",b2bem:"Transport Nürnberg → Pilsensee"},
+"2026-04-13":{b1von:"08:45",b1bis:"13:15",b1zuord:"Akademie",b1bem:"Abreise Praxisworkshop",b2von:"15:00",b2bis:"20:30",b2zuord:"WENDESTART",b2bem:"Transport Pilsensee → Fulda"},
+"2026-04-15":{b1von:"10:30",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Eltern-Land Programm"},
+"2026-04-16":{b1von:"08:45",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Seglerjugend Workshop",b2von:"14:45",b2bis:"17:15",b2zuord:"Akademie",b2bem:"Seglerjugend Workshop/ RKA"},
+"2026-04-21":{b1von:"13:15",b1bis:"17:15",b1zuord:"Akademie",b1bem:"Wissenschaftliche Begleitung"},
+"2026-04-24":{b1von:"10:45",b1bis:"17:15",b1zuord:"Akademie",b1bem:"Akademie Call + Diverses"},
+"2026-04-27":{b1von:"15:15",b1bis:"20:00",b1zuord:"Akademie",b1bem:"Protokoll, Anleitungen, GesamtCall"},
+"2026-04-29":{b1bem:"AU/Krank"},
+"2026-04-30":{b1bem:"AU/Krank"}
+}},
+// ── SIMON SCHEIDT ──
+{n:"Simon Scheidt",y:2026,m:1,d:{
+"2026-01-01":{ktmin:30},
+"2026-01-06":{b1von:"18:00",b1bis:"19:30",b1zuord:"Akademie",b1bem:"Ideensammlung Posts Jan/Feb/Mrz (ÖA)"},
+"2026-01-07":{ktmin:60},
+"2026-01-09":{b1von:"20:00",b1bis:"21:30",b1zuord:"WENDESTART",b1bem:"Bodenseewoche Absprachen",ktmin:30},
+"2026-01-11":{b1von:"15:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Wiss. Begleitung"},
+"2026-01-13":{b1von:"19:00",b1bis:"20:00",b1zuord:"Akademie",b1bem:"Vorbereitung Post (ÖA)",ktmin:30},
+"2026-01-14":{ktmin:30},
+"2026-01-17":{b1von:"11:30",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Boot DüDo Vortrag + Before/After (ÖA)"},
+"2026-01-18":{b1von:"09:30",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Boot DüDo Vortrag + Before/After (ÖA)"},
+"2026-01-19":{b1von:"18:00",b1bis:"19:30",b1zuord:"WENDESTART",b1bem:"Segelverband BW - Brainstorming"},
+"2026-01-21":{b1von:"18:00",b1bis:"19:30",b1zuord:"Akademie",b1bem:"Vorbereitung Post (ÖA)"},
+"2026-01-26":{ktmin:30},
+"2026-01-27":{b1von:"20:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Bodenseewoche Absprachen"},
+"2026-01-28":{b1von:"18:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Vorbereitung Pitch Bodenseewoche"},
+"2026-01-29":{ktmin:60},
+"2026-01-30":{b1von:"16:30",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Wiss. Begleitung"},
+"2026-01-31":{b1von:"10:00",b1bis:"12:00",b1zuord:"WENDESTART",b1bem:"Vorbereitung Pitch Bodenseewoche"}
+}},
+{n:"Simon Scheidt",y:2026,m:2,d:{
+"2026-02-02":{b1von:"18:00",b1bis:"20:00",b1zuord:"WENDESTART",b1bem:"Vorbereitung Pitch Bodenseewoche",ktmin:60},
+"2026-02-04":{b1von:"20:00",b1bis:"20:30",b1zuord:"Akademie",b1bem:"Absprache Wiss. Begleitung"},
+"2026-02-06":{b1von:"18:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Pitch IBW + Nachbesprechung",b2von:"17:00",b2bis:"18:00",b2zuord:"Akademie",b2bem:"Post (ÖA)",ktmin:30},
+"2026-02-09":{ktmin:30},
+"2026-02-13":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"Bearbeitung Videos Website (ÖA)"},
+"2026-02-16":{b1von:"14:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Bearbeitung Videos Website (ÖA)",ktmin:60},
+"2026-02-17":{b1von:"17:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"TPS Gesamtcall"},
+"2026-02-20":{b1von:"18:00",b1bis:"19:00",b1zuord:"WENDESTART",b1bem:"Gespräch IBW"},
+"2026-02-24":{b1von:"19:00",b1bis:"22:30",b1zuord:"WENDESTART",b1bem:"Themen IBW (Vereinskontakt)"},
+"2026-02-25":{b1von:"20:00",b1bis:"21:00",b1zuord:"WENDESTART",b1bem:"Themen IBW (Planung)",ktmin:30}
+}},
+{n:"Simon Scheidt",y:2026,m:3,d:{
+"2026-03-04":{b1von:"18:00",b1bis:"19:30",b1zuord:"WENDESTART",b1bem:"Abstimmung IBW"},
+"2026-03-08":{ktmin:90},
+"2026-03-10":{ktmin:60},
+"2026-03-12":{b1von:"19:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Themen IBW (Anträge Überarbeiten)",b2von:"18:00",b2bis:"18:30",b2zuord:"Akademie",b2bem:"ÖA (Post)"},
+"2026-03-16":{b1von:"19:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Personalplanung IBW"},
+"2026-03-17":{ktmin:60},
+"2026-03-18":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"ÖA Team Call"},
+"2026-03-19":{ktmin:30},
+"2026-03-21":{b1von:"14:00",b1bis:"16:00",b1zuord:"WENDESTART",b1bem:"Ausschreibung IBW"},
+"2026-03-23":{b1von:"20:00",b1bis:"22:30",b1zuord:"WENDESTART",b1bem:"Ausschreibung IBW",ktmin:60},
+"2026-03-26":{b1von:"20:00",b1bis:"22:00",b1zuord:"WENDESTART",b1bem:"Abstimmung Orga IBW",b2von:"17:00",b2bis:"18:00",b2zuord:"Akademie",b2bem:"ÖA Instagram Absprache"},
+"2026-03-27":{ktmin:30},
+"2026-03-29":{b1von:"17:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"Pressemitteilung YCN (ÖA)"},
+"2026-03-30":{ktmin:90},
+"2026-03-31":{ktmin:120}
+}},
+{n:"Simon Scheidt",y:2026,m:4,d:{
+"2026-04-02":{ktmin:60},
+"2026-04-03":{b1von:"15:00",b1bis:"16:30",b1zuord:"Akademie",b1bem:"ÖA Diverse Themen",ktmin:30},
+"2026-04-08":{b1von:"16:00",b1bis:"17:00",b1zuord:"Akademie",b1bem:"ÖA Diverse Themen"},
+"2026-04-09":{ktmin:90},
+"2026-04-13":{ktmin:30},
+"2026-04-14":{b1von:"20:00",b1bis:"22:00",b1zuord:"Akademie",b1bem:"Sichtung Material ÖA"},
+"2026-04-16":{ktmin:60},
+"2026-04-18":{b1von:"19:00",b1bis:"20:00",b1zuord:"Akademie",b1bem:"ÖA Diverse Themen"},
+"2026-04-19":{b1von:"11:00",b1bis:"16:00",b1zuord:"Akademie",b1bem:"ÖA Diverse Themen",b2von:"17:00",b2bis:"22:00",b2zuord:"WENDESTART",b2bem:"Wendestart IBW Bodensee"},
+"2026-04-20":{b1von:"19:00",b1bis:"21:00",b1zuord:"WENDESTART",b1bem:"Wendestart IBW Bodensee"},
+"2026-04-23":{ktmin:60},
+"2026-04-25":{ktmin:90},
+"2026-04-26":{ktmin:120},
+"2026-04-29":{ktmin:60}
+}},
+// ── CHRISTIAN BITTNER (nur Stunden, keine Zeiten – 09:00 + Stunden) ──
+{n:"Christian Bittner",y:2026,m:1,d:{
+"2026-01-02":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-08":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-09":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-12":{b1von:"09:00",b1bis:"13:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-15":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-19":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-22":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-28":{b1von:"09:00",b1bis:"10:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-29":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-01-30":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"}
+}},
+// Bittner Feb: nur Rechnung (4 Tage = 32h), keine Tagesdaten verfügbar
+{n:"Christian Bittner",y:2026,m:3,d:{
+"2026-03-02":{b1von:"09:00",b1bis:"10:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-05":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-07":{b1von:"09:00",b1bis:"17:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-11":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-12":{b1von:"09:00",b1bis:"13:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-16":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-19":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-23":{b1von:"09:00",b1bis:"13:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-24":{b1von:"09:00",b1bis:"15:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-25":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-26":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-27":{b1von:"09:00",b1bis:"15:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-28":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-03-30":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"}
+}},
+{n:"Christian Bittner",y:2026,m:4,d:{
+"2026-04-01":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-02":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-04":{b1von:"09:00",b1bis:"14:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-05":{b1von:"09:00",b1bis:"15:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-06":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-07":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-08":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-09":{b1von:"09:00",b1bis:"17:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-12":{b1von:"09:00",b1bis:"19:30",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-13":{b1von:"09:00",b1bis:"10:30",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-15":{b1von:"09:00",b1bis:"10:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-18":{b1von:"09:00",b1bis:"13:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-21":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-23":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-24":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-25":{b1von:"09:00",b1bis:"13:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-27":{b1von:"09:00",b1bis:"12:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"},
+"2026-04-30":{b1von:"09:00",b1bis:"11:00",b1zuord:"AKADEMIE",b1bem:"Akademie/ WK/ WS (importiert)"}
+}},
+// ── JANNE HANDERMANN (Dateien als '2025' bezeichnet, Daten laut Unterschrift 2026) ──
+{n:"Janne Handermann",y:2026,m:1,d:{
+"2026-01-02":{b1bem:"Urlaub"},
+"2026-01-04":{b1von:"14:15",b1bis:"14:45",b1zuord:"Akademie",b1bem:"Mails, Nachrichten"},
+"2026-01-05":{b1von:"17:30",b1bis:"18:15",b1zuord:"Ö-Arbeit",b1bem:"Social media"},
+"2026-01-08":{b1von:"19:30",b1bis:"20:15",b1zuord:"Ö-Arbeit",b1bem:"Besprechung post öa"},
+"2026-01-09":{b1von:"10:30",b1bis:"10:45",b1zuord:"Akademie",b1bem:"Call Sonar AF"},
+"2026-01-12":{b1von:"18:45",b1bis:"19:45",b1zuord:"Akademie",b1bem:"Wendeakademie"},
+"2026-01-14":{b1von:"15:30",b1bis:"19:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA Call, ÖA Arbeit",b2von:"19:15",b2bis:"21:30",b2zuord:"Akademie",b2bem:"Alternativer Theorieunterricht"},
+"2026-01-15":{b1von:"10:00",b1bis:"11:00",b1zuord:"Akademie",b1bem:"Akademie Call",b2von:"14:00",b2bis:"15:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA Messe"},
+"2026-01-20":{b1von:"19:30",b1bis:"21:30",b1zuord:"Ö-Arbeit",b1bem:"Timeline",b2von:"16:30",b2bis:"17:45",b2zuord:"Ö-Arbeit",b2bem:"Social Media"},
+"2026-01-21":{b1von:"18:55",b1bis:"22:10",b1zuord:"Ö-Arbeit",b1bem:"Timeline"},
+"2026-01-28":{b1von:"11:00",b1bis:"11:30",b1zuord:"Akademie",b1bem:"Mails, Nachrichten"},
+"2026-01-29":{b1von:"15:00",b1bis:"20:15",b1zuord:"Ö-Arbeit",b1bem:"Kooperationspartner Tag des.."},
+"2026-01-30":{b1von:"16:30",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Cyclone"},
+"2026-01-31":{b1von:"07:30",b1bis:"09:00",b1zuord:"Ö-Arbeit",b1bem:"Verbesserung Anordnung"}
+}},
+{n:"Janne Handermann",y:2026,m:2,d:{
+"2026-02-03":{b1von:"17:00",b1bis:"18:15",b1zuord:"Akademie",b1bem:"Std abrechnen, Nachrichten und Mails"},
+"2026-02-05":{b1von:"09:45",b1bis:"11:15",b1zuord:"Akademie",b1bem:"ÖA Call und Arbeit"},
+"2026-02-06":{b1von:"14:15",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Social Media, Vorbereitung Redaktionsplan"},
+"2026-02-09":{b1von:"13:00",b1bis:"14:00",b1zuord:"Akademie",b1bem:"Moritz Call, Einsicht best Practice"},
+"2026-02-10":{b1von:"12:15",b1bis:"13:00",b1zuord:"Akademie",b1bem:"Alternativer Unterricht"},
+"2026-02-17":{b1von:"16:45",b1bis:"19:00",b1zuord:"Akademie",b1bem:"Academy Call"},
+"2026-02-21":{b1bem:"Urlaub"},
+"2026-02-24":{b1von:"16:45",b1bis:"19:00",b1zuord:"Akademie",b1bem:"Mails, Nachrichten",b2von:"19:00",b2bis:"19:45",b2zuord:"Ö-Arbeit",b2bem:"Social Media, Instagram"},
+"2026-02-25":{b1bem:"AU/Krank"},
+"2026-02-26":{b1bem:"AU/Krank"},
+"2026-02-27":{b1bem:"AU/Krank"},
+"2026-02-28":{b1bem:"AU/Krank"}
+}},
+{n:"Janne Handermann",y:2026,m:3,d:{
+"2026-03-04":{b1von:"15:45",b1bis:"17:45",b1zuord:"Ö-Arbeit",b1bem:"ÖA Team Call, ÖA Arbeit"},
+"2026-03-06":{b1von:"17:00",b1bis:"20:45",b1zuord:"Ö-Arbeit",b1bem:"ÖA Arbeit, Orga"},
+"2026-03-09":{b1von:"08:45",b1bis:"10:15",b1zuord:"Akademie",b1bem:"STD abrechnen, Orga, Nachrichten"},
+"2026-03-11":{b1von:"18:45",b1bis:"20:00",b1zuord:"Akademie",b1bem:"Wendeakademie"},
+"2026-03-13":{b1bem:"Urlaub"},
+"2026-03-16":{b1von:"16:45",b1bis:"18:45",b1zuord:"Ö-Arbeit",b1bem:"Planner arbeiten, Whiteboard"},
+"2026-03-17":{b1von:"06:15",b1bis:"07:30",b1zuord:"Akademie",b1bem:"Mails, Nachrichten"},
+"2026-03-18":{b1von:"06:30",b1bis:"07:45",b1zuord:"Ö-Arbeit",b1bem:"Social Media"},
+"2026-03-19":{b1von:"07:00",b1bis:"09:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA Orga"},
+"2026-03-23":{b1von:"16:15",b1bis:"20:30",b1zuord:"Akademie",b1bem:"Orga, best Practice, Erfahrungsaustausch"},
+"2026-03-25":{b1von:"06:30",b1bis:"07:30",b1zuord:"Akademie",b1bem:"Nachrichten, best Practice"},
+"2026-03-26":{b1von:"15:30",b1bis:"18:00",b1zuord:"Akademie",b1bem:"Call (CB) best Practice",b2von:"18:00",b2bis:"19:30",b2zuord:"Ö-Arbeit",b2bem:"ÖA Absprache, Instagram Arbeit"},
+"2026-03-31":{b1von:"18:30",b1bis:"19:45",b1zuord:"Ö-Arbeit",b1bem:"Welttag ÖA Vorbereitung",b2von:"19:45",b2bis:"21:00",b2zuord:"Ö-Arbeit",b2bem:"Kugelschreiber Design Umsetzung"}
+}},
+{n:"Janne Handermann",y:2026,m:4,d:{
+"2026-04-02":{b1von:"08:00",b1bis:"10:45",b1zuord:"Ö-Arbeit",b1bem:"Post Instagram, Nachrichten checken"},
+"2026-04-08":{b1von:"19:30",b1bis:"20:30",b1zuord:"Akademie",b1bem:"Std März, Nachrichten checken"},
+"2026-04-09":{b1von:"14:00",b1bis:"18:45",b1zuord:"Akademie",b1bem:"Anreise WS"},
+"2026-04-10":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"WS"},
+"2026-04-11":{b1von:"09:00",b1bis:"18:30",b1zuord:"Akademie",b1bem:"WS"},
+"2026-04-12":{b1von:"07:30",b1bis:"16:30",b1zuord:"Akademie",b1bem:"WS plus Heimweg"},
+"2026-04-13":{b1von:"06:00",b1bis:"07:45",b1zuord:"Akademie",b1bem:"Suche Halle",b2von:"07:45",b2bis:"08:00",b2zuord:"Ö-Arbeit",b2bem:"Kontakt Pit für Malden Post"},
+"2026-04-21":{b1von:"21:00",b1bis:"22:15",b1zuord:"Ö-Arbeit",b1bem:"ÖA Whiteboard"},
+"2026-04-22":{b1von:"06:15",b1bis:"07:45",b1zuord:"Ö-Arbeit",b1bem:"Absprache, Kugelschreiber Angebot",b2von:"14:15",b2bis:"16:15",b2zuord:"Ö-Arbeit",b2bem:"ÖA Call"},
+"2026-04-23":{b1von:"15:30",b1bis:"16:00",b1zuord:"Akademie",b1bem:"Moritz AF Austausch"},
+"2026-04-24":{b1von:"11:00",b1bis:"13:30",b1zuord:"Akademie",b1bem:"Team Call, Nachrichten checken"},
+"2026-04-27":{b1von:"16:45",b1bis:"17:30",b1zuord:"Akademie",b1bem:"Academie Call"}
+}}
+];
+
+function importHistorical(){
+  if(!confirm('Historische Zeiterfassungsdaten (Jan–Apr 2026) für alle Mitarbeiter importieren?\n\nVorhandene Einträge werden NICHT überschrieben.\nImportierte Einträge erhalten Status „Genehmigt".')){return;}
+  const d=getData();
+  let imp=0,skip=0,noUser=[];
+  mutate(data=>{
+    for(const rec of HIST_IMPORT){
+      // Nutzer per Name finden (case-insensitive Teilsuche)
+      const nm=rec.n.toLowerCase();
+      const user=data.users.find(u=>{
+        const un=u.name.toLowerCase();
+        return un===nm||nm.split(' ').every(p=>un.includes(p));
+      });
+      if(!user){noUser.push(rec.n);skip++;continue;}
+      const k=entryKey(user.id,rec.y,rec.m);
+      const existing=data.entries[k];
+      if(existing&&Object.keys(existing.days||{}).length>0){skip++;continue;}
+      if(!data.entries[k]) data.entries[k]={};
+      data.entries[k].status='approved';
+      data.entries[k].days=rec.d;
+      imp++;
+    }
+  });
+  const nu=[...new Set(noUser)];
+  let msg=`Import abgeschlossen!\n✅ ${imp} Einträge importiert\n⏭ ${skip} übersprungen (vorhanden oder doppelt)`;
+  if(nu.length) msg+=`\n⚠️ Nicht gefunden: ${nu.join(', ')}`;
+  alert(msg);
+  renderSettings();
+}
+
+// ── Direkt-Import historischer Daten für einen einzelnen Mitarbeiter ──
+function importHistForUser(uid){
+  const user=getUser(uid);
+  if(!user){ toast('Mitarbeiter nicht gefunden','err'); return; }
+  const un=user.name.toLowerCase();
+  const recs=HIST_IMPORT.filter(rec=>{
+    const rn=rec.n.toLowerCase();
+    return rn===un||rn.split(' ').every(p=>un.includes(p))||un.split(' ').every(p=>rn.includes(p));
+  });
+  if(!recs.length){ toast('Keine historischen Daten für '+user.name+' in HIST_IMPORT','warn'); return; }
+  const months=recs.map(r=>MONTHS[r.m-1]+' '+r.y).join(', ');
+  if(!confirm('Historische Zeiterfassung für '+user.name+' importieren?\n\nMonate: '+months+'\n\nBereits vorhandene Zeiteinträge werden NICHT überschrieben.\nImportierte Monate erhalten Status „Genehmigt".')) return;
+  let imp=0,skip=0;
+  mutate(d=>{
+    if(!d.entries) d.entries={};
+    for(const rec of recs){
+      const k=entryKey(uid,rec.y,rec.m);
+      if(d.entries[k]&&d.entries[k].days){
+        const hasTimes=Object.values(d.entries[k].days).some(dd=>dd&&(dd.b1von||dd.b1bis||dd.b2von));
+        if(hasTimes){ skip++; continue; }
+      }
+      d.entries[k]={status:'approved',days:rec.d};
+      imp++;
+    }
+  });
+  if(imp>0) toast('✅ '+user.name+': '+imp+' Monate importiert'+(skip?' ('+skip+' bereits vorhanden)':''),'ok');
+  else toast('⏭ Alle Monate für '+user.name+' bereits vorhanden ('+skip+' übersprungen)','warn');
+  renderZeiterfassung();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2041,7 +2875,117 @@ function updateAbBadge(){
   const badge=document.getElementById('tab-ab-badge');
   if(badge){ badge.textContent=n; badge.style.display=n>0?'inline-block':'none'; }
 }
+function _syncAbViewButtons(){
+  const btnL=document.getElementById('btn-ab-list');
+  const btnC=document.getElementById('btn-ab-cal');
+  const nav=document.getElementById('ab-cal-nav');
+  if(btnL){ btnL.style.background=abViewMode==='list'?'var(--primary)':''; btnL.style.color=abViewMode==='list'?'#fff':''; btnL.style.borderColor=abViewMode==='list'?'var(--primary)':''; }
+  if(btnC){ btnC.style.background=abViewMode==='calendar'?'var(--primary)':''; btnC.style.color=abViewMode==='calendar'?'#fff':''; btnC.style.borderColor=abViewMode==='calendar'?'var(--primary)':''; }
+  if(nav) nav.style.display=abViewMode==='calendar'?'flex':'none';
+}
+function setAbView(mode){
+  abViewMode=mode;
+  _syncAbViewButtons();
+  renderAbwesenheiten();
+}
+function changeAbMonth(delta){
+  abCalMon+=delta;
+  if(abCalMon<1){abCalMon=12;abCalYear--;} if(abCalMon>12){abCalMon=1;abCalYear++;}
+  const t=document.getElementById('ab-cal-title'); if(t) t.textContent=MONTHS[abCalMon-1]+' '+abCalYear;
+  renderAbwesenheiten();
+}
+function renderAbCalendar(){
+  const d=getData();
+  const y=abCalYear,m=abCalMon;
+  const t=document.getElementById('ab-cal-title'); if(t) t.textContent=MONTHS[m-1]+' '+y;
+  const reqs=Object.values(d.vacRequests||{});
+  // Alle für den aktuellen User sichtbaren genehmigten Abwesenheiten
+  const visible=reqs.filter(r=>{ if(r.status!=='approved') return false; const u=getUser(r.userId); return u&&canSeeAbsence(cu,u); });
+  // Tages-Map aufbauen: ds → [{name,type,userId}]
+  const dayMap={};
+  visible.forEach(r=>{
+    let cur=new Date(r.startDate+'T12:00:00');
+    const end=new Date(r.endDate+'T12:00:00');
+    while(cur<=end){
+      const dsX=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
+      if(dsX.startsWith(`${y}-${String(m).padStart(2,'0')}`)){
+        if(!dayMap[dsX]) dayMap[dsX]=[];
+        dayMap[dsX].push({name:r.userName,type:r.type,userId:r.userId});
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+  const hols=getHolidays(y,cu.bundesland||'');
+  const dim=daysInMonth(y,m);
+  const today2=new Date(); const todayStr2=dateStr(today2.getFullYear(),today2.getMonth()+1,today2.getDate());
+  // Farbpalette für Personen
+  const COLORS=['#dbeafe','#fee2e2','#d1fae5','#fef3c7','#ede9fe','#fce7f3','#ffedd5','#e0f2fe','#fef9c3','#f0fdf4'];
+  const personMap=new Map();
+  Object.values(dayMap).flat().forEach(a=>{ if(!personMap.has(a.userId)) personMap.set(a.userId,a.name); });
+  const personList=[...personMap.entries()];
+  const colorFor=uid=>COLORS[personList.findIndex(([id])=>id===uid)%COLORS.length]||'#e8f0fe';
+  // Legende
+  let cal='<div class="ab-cal-wrap">';
+  if(personList.length>0){
+    cal+='<div class="ab-cal-legend">';
+    personList.forEach(([uid,name])=>{
+      cal+=`<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${colorFor(uid)};border:1px solid rgba(0,0,0,.1)"></span>${esc(name)}</span>`;
+    });
+    cal+='</div>';
+  }
+  // Kalender-Grid
+  cal+='<div class="ab-cal-grid">';
+  const GER_DAYS=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  GER_DAYS.forEach((dn,i)=>{ cal+=`<div class="ab-cal-dow${i>=5?' we':''}">${dn}</div>`; });
+  // Leerzellen vor dem 1.
+  const firstGer=(new Date(y,m-1,1).getDay()+6)%7;
+  for(let i=0;i<firstGer;i++) cal+='<div class="ab-cal-day empty"></div>';
+  // Tage
+  for(let dd=1;dd<=dim;dd++){
+    const ds=dateStr(y,m,dd);
+    const dw=new Date(y,m-1,dd).getDay();
+    const isWE=dw===0||dw===6;
+    let cls='ab-cal-day'+(isWE?' weekend':'')+(hols.has(ds)?' holiday-cell':'')+(ds===todayStr2?' today-cell':'');
+    const abs=dayMap[ds]||[];
+    const badges=abs.map(a=>{
+      const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Freistellung'?'📋':'📌';
+      const firstName=a.name.split(' ')[0];
+      return `<span class="ab-cal-badge" style="background:${colorFor(a.userId)};color:#1a1a2e" title="${esc(a.name)}: ${esc(a.type)}">${icon} ${esc(firstName)}</span>`;
+    }).join('');
+    const holNote=hols.has(ds)?'<span style="font-size:9px;color:var(--danger);display:block">Feiertag</span>':'';
+    cal+=`<div class="${cls}"><span class="ab-cal-dn${isWE?' we':''}">${dd}</span>${holNote}${badges}</div>`;
+  }
+  // Rest auffüllen
+  const total=firstGer+dim;
+  const fill=(7-total%7)%7;
+  for(let i=0;i<fill;i++) cal+='<div class="ab-cal-day empty"></div>';
+  cal+='</div></div>';
+  return cal;
+}
 function renderAbwesenheiten(){
+  _syncAbViewButtons();
+  // Kalenderansicht
+  if(abViewMode==='calendar'){
+    let calHtml=renderAbCalendar();
+    // Offene Anträge als Kurzliste unter dem Kalender
+    const d2=getData();
+    const reqs2=Object.values(d2.vacRequests||{});
+    const pending2=reqs2.filter(r=>{
+      if(r.status!=='pending') return false;
+      if(cu.role==='admin') return true;
+      if((cu.role==='leitung'||cu.role==='geschaeftsfuehrer')&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
+      return false;
+    });
+    if(pending2.length){
+      const fmtD2=ds=>{ const[yz,mz,dz]=ds.split('-'); return `${dz}.${mz}.`; };
+      calHtml+=`<section style="margin-top:20px"><h3 style="font-size:14px;font-weight:700;color:var(--warn);margin-bottom:8px">⏳ Offene Anträge (${pending2.length})</h3>`
+        +pending2.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--white);border:1.5px solid var(--warn);border-radius:8px;margin-bottom:6px;flex-wrap:wrap"><strong style="font-size:13px">${esc(r.userName)}</strong><span style="font-size:13px;color:var(--primary)">${esc(r.type)}: ${fmtD2(r.startDate)}–${fmtD2(r.endDate)}</span><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓</button><button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗</button></div></div>`).join('')
+        +'</section>';
+    }
+    document.getElementById('ab-content').innerHTML=calHtml;
+    updateAbBadge();
+    return;
+  }
   const d=getData();
   const isAdmin=cu.role==='admin';
   const isLeitung=cu.role==='leitung';
@@ -2457,11 +3401,136 @@ async function resetPasswordsOnly(){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ZEITSTEMPEL (Ein-/Ausstempeln mit direktem AZ-Übertrag)
+// ═══════════════════════════════════════════════════════════════
+const _STAMP_KEY='tp_zt_stamp';
+function getStamp(){ try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function updateZeitstempelBtn(){
+  const btn=document.getElementById('btn-zeitstempel');
+  if(!btn||!cu) return;
+  const stamp=getStamp();
+  const active=stamp&&stamp.uid===cu.id;
+  btn.textContent=active?'⏱ Gestempelt':'⏱ Stempeln';
+  if(active){ btn.classList.add('zs-active'); }
+  else { btn.classList.remove('zs-active'); }
+}
+function openZeitstempel(){
+  if(!cu||cu.role==='admin') return;
+  const stamp=getStamp();
+  if(stamp&&stamp.uid===cu.id){ _zsShowStop(stamp); } else { _zsShowStart(); }
+}
+function _zsShowStart(){
+  const now=new Date();
+  const tStr=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const dStr=now.toLocaleDateString('de-DE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  openModal(`<h3>⏱ Zeitstempel</h3>
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:38px;font-weight:700;color:var(--primary)">${tStr}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">${dStr}</div>
+    </div>
+    <div style="background:#f0fff4;border:1.5px solid var(--ok);border-radius:8px;padding:14px;text-align:center;margin-bottom:18px">
+      <div style="font-size:13px;color:var(--ok);font-weight:600">Noch nicht eingestempelt</div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="startZeitstempel()">▶ Einstempeln</button>
+    </div>`);
+}
+function _zsShowStop(stamp){
+  const start=new Date(stamp.startTime);
+  const now=new Date();
+  const eMin=Math.round((now-start)/60000);
+  const von=String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0');
+  const bis=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const elapsed=eMin>=60?`${Math.floor(eMin/60)} Std. ${eMin%60} Min.`:`${eMin} Min.`;
+  const user=getUser(cu.id)||cu;
+  const cats=getCatsForTeam(user.team||'');
+  const catOpts=cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  openModal(`<h3>⏱ Ausstempeln</h3>
+    <div style="background:#e8f0fe;border:1.5px solid var(--primary-l);border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--muted)">Eingestempelt seit <strong>${von}</strong></div>
+      <div style="font-size:22px;font-weight:700;color:var(--primary);margin-top:4px">${elapsed} &nbsp;·&nbsp; ${von} – ${bis}</div>
+    </div>
+    <div class="form-group"><label>Zuordnung / Kategorie</label>
+      <select id="zs-zuord" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+        <option value="">– Keine –</option>${catOpts}
+      </select></div>
+    <div class="form-group"><label>Bemerkung <span style="font-size:11px;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="zs-note" placeholder="z.B. Besprechung, Akademie-Call…" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></div>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="cancelZeitstempel()" style="margin-right:auto">🗑 Verwerfen</button>
+      <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
+      <button class="btn btn-warn" onclick="stopZeitstempel()">■ Ausstempeln &amp; übertragen</button>
+    </div>`);
+}
+function startZeitstempel(){
+  if(!cu||cu.role==='admin') return;
+  const stamp={uid:cu.id,startTime:new Date().toISOString(),startDate:new Date().toISOString().slice(0,10)};
+  try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
+  closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓','ok');
+}
+function cancelZeitstempel(){
+  if(!confirm('Stempel verwerfen? Die Zeit wird NICHT in die Zeiterfassung übertragen.')) return;
+  try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
+  closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.');
+}
+function stopZeitstempel(){
+  const stamp=getStamp();
+  if(!stamp||stamp.uid!==cu.id){ toast('Kein aktiver Stempel.','err'); return; }
+  const zuord=document.getElementById('zs-zuord')?.value||'';
+  const note=document.getElementById('zs-note')?.value.trim()||'';
+  const start=new Date(stamp.startTime);
+  const end=new Date();
+  const von=String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0');
+  const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
+  const ds=stamp.startDate;
+  const [sy,sm]=ds.split('-').map(Number);
+  mutate(d=>{
+    const k=entryKey(cu.id,sy,sm);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[k].days) d.entries[k].days={};
+    if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+    const day=d.entries[k].days[ds];
+    if(!day.b1von){
+      day.b1von=von; day.b1bis=bis;
+      if(zuord) day.b1zuord=zuord;
+      if(note) day.b1bem=note;
+    } else if(!day.b2von){
+      day.b2von=von; day.b2bis=bis;
+      if(zuord) day.b2zuord=zuord;
+      if(note) day.b2bem=note;
+    } else {
+      // Beide Blöcke belegt → Kleinteilig
+      const addMin2=Math.max(0,Math.round((end-start)/60000));
+      day.ktmin=(Number(day.ktmin||0)+addMin2);
+      if(zuord) day.ktzuord=zuord;
+    }
+  });
+  try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
+  closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
+  // Zeiterfassung neu rendern (ggf. Monat wechseln)
+  const vze=document.getElementById('view-zeiterfassung');
+  if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════════
 (function(){
   initFirebase().then(function(){
     document.getElementById('fb-loading').style.display='none';
+    // Gespeicherte Session wiederherstellen (überlebt F5-Reload)
+    try{
+      var savedUid=localStorage.getItem('tp_zt_session');
+      if(savedUid&&getUser(savedUid)){
+        cu=getUser(savedUid);
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').classList.add('visible');
+        try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); doLogout(); return; }
+        try{ updateAbBadge(); }catch(e){}
+        return;
+      }
+    }catch(e){}
     try{ populateLoginDropdown(); }
     catch(e){
       var el=document.getElementById('login-user-list');
