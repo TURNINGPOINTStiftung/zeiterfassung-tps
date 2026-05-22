@@ -57,6 +57,11 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .app-header .brand{font-size:15px;font-weight:700}
 .app-header .brand span{font-weight:400;font-size:12px;opacity:.7;margin-left:8px}
 .header-right{display:flex;align-items:center;gap:10px}
+.zoom-ctrl{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border-radius:20px;padding:3px 10px}
+.zoom-ctrl button{background:none;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:.85;transition:opacity .15s,background .15s}
+.zoom-ctrl button:hover{opacity:1;background:rgba(255,255,255,.2)}
+.zoom-ctrl #zoom-label{font-size:11px;font-weight:600;color:#fff;min-width:36px;text-align:center;opacity:.9;cursor:pointer}
+.zoom-ctrl #zoom-label:hover{opacity:1;text-decoration:underline}
 .user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:13px;line-height:1.3;cursor:pointer;transition:background .2s}
 .user-badge:hover{background:rgba(255,255,255,.28)}
 .user-badge .role{font-size:10px;opacity:.75;display:block;text-align:center}
@@ -328,6 +333,11 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   <header class="app-header">
     <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.22b</span></div>
     <div class="header-right">
+      <div class="zoom-ctrl no-print" title="Ansicht vergrößern / verkleinern (auch Strg+Mausrad oder Strg+0 zum Zurücksetzen)">
+        <button onclick="zoomStep(-1)" title="Verkleinern (Strg+–)">&#8722;</button>
+        <span id="zoom-label" onclick="zoomReset()" title="Klicken zum Zurücksetzen (Strg+0)">100%</span>
+        <button onclick="zoomStep(+1)" title="Vergrößern (Strg++)">&#43;</button>
+      </div>
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
@@ -3687,12 +3697,37 @@ function stopZeitstempel(){
 // BOOT
 // ─── Logo-Init ────────────────────────────────────────────────
 (function(){
-  // Logo in alle statischen Stellen einsetzen (src wird aus JS-Konstante gesetzt,
-  // damit der Wert nicht mehrfach im HTML steht)
   ['load-logo','login-logo-img','hdr-logo'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.src=_TPS_LOGO;
   });
 })();
+// ─── Zoom ─────────────────────────────────────────────────────
+const _ZOOM_KEY='tp_zt_zoom';
+let _zoom=parseFloat(localStorage.getItem(_ZOOM_KEY)||'1');
+function _applyZoom(z){
+  _zoom=Math.round(Math.max(0.5,Math.min(2.0,z))*10)/10;
+  document.body.style.zoom=_zoom;
+  localStorage.setItem(_ZOOM_KEY,_zoom);
+  const lbl=document.getElementById('zoom-label');
+  if(lbl) lbl.textContent=Math.round(_zoom*100)+'%';
+}
+function zoomStep(dir){ _applyZoom(_zoom+dir*0.1); }
+function zoomReset(){ _applyZoom(1); }
+// Initialer Zoom beim Laden
+_applyZoom(_zoom);
+// Strg+Mausrad
+window.addEventListener('wheel',function(e){
+  if(!e.ctrlKey) return;
+  e.preventDefault();
+  zoomStep(e.deltaY<0?1:-1);
+},{passive:false});
+// Strg++ / Strg+- / Strg+0
+window.addEventListener('keydown',function(e){
+  if(!e.ctrlKey) return;
+  if(e.key==='+'||e.key==='='){ e.preventDefault(); zoomStep(1); }
+  else if(e.key==='-'){ e.preventDefault(); zoomStep(-1); }
+  else if(e.key==='0'){ e.preventDefault(); zoomReset(); }
+});
 // ═══════════════════════════════════════════════════════════════
 (function(){
   initFirebase().then(function(){
