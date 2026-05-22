@@ -3424,17 +3424,12 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +'</div>'; // .bh-page
 }
 function printBuchhaltung(){
-  const bemCells=document.querySelectorAll('.bem-col');
-  const blockHeads=document.querySelectorAll('.block-head');
-  bemCells.forEach(el=>el.style.display='none');
-  blockHeads.forEach(el=>el.setAttribute('colspan','4'));
-  const u=getUser(viewEmpId||cu.id);
-  const prev=document.title;
-  document.title=pdfTitle(year,mon,u?u.name:'Zeiterfassung');
-  window.print();
-  document.title=prev;
-  bemCells.forEach(el=>el.style.display='');
-  blockHeads.forEach(el=>el.setAttribute('colspan','5'));
+  // Öffnet dasselbe gestaltete Popup wie die GF-Berichte
+  // (damit Mappings wie Ö-Arbeit→Akademie und die digitale Signatur greifen)
+  const uid=viewEmpId||cu.id;
+  const u=getUser(uid);
+  if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  _openPerEmpPrint([u],year,mon);
 }
 
 // ═══════════════════════════════════════════════════════════════
