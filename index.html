@@ -57,11 +57,12 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .app-header .brand{font-size:15px;font-weight:700}
 .app-header .brand span{font-weight:400;font-size:12px;opacity:.7;margin-left:8px}
 .header-right{display:flex;align-items:center;gap:10px}
-.zoom-ctrl{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.12);border-radius:20px;padding:3px 10px}
-.zoom-ctrl button{background:none;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:.85;transition:opacity .15s,background .15s}
+.zoom-ctrl{position:fixed;bottom:18px;right:18px;z-index:999;display:flex;align-items:center;gap:5px;background:#1a3a5c;border-radius:24px;padding:5px 12px;box-shadow:0 3px 12px rgba(0,0,0,.25)}
+.zoom-ctrl button{background:none;border:none;color:#fff;font-size:17px;font-weight:700;cursor:pointer;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:.85;transition:opacity .15s,background .15s}
 .zoom-ctrl button:hover{opacity:1;background:rgba(255,255,255,.2)}
-.zoom-ctrl #zoom-label{font-size:11px;font-weight:600;color:#fff;min-width:36px;text-align:center;opacity:.9;cursor:pointer}
+.zoom-ctrl #zoom-label{font-size:11px;font-weight:600;color:#fff;min-width:38px;text-align:center;opacity:.9;cursor:pointer;user-select:none}
 .zoom-ctrl #zoom-label:hover{opacity:1;text-decoration:underline}
+@media print{.zoom-ctrl{display:none}}
 .user-badge{background:rgba(255,255,255,.15);border-radius:20px;padding:5px 14px;font-size:13px;line-height:1.3;cursor:pointer;transition:background .2s}
 .user-badge:hover{background:rgba(255,255,255,.28)}
 .user-badge .role{font-size:10px;opacity:.75;display:block;text-align:center}
@@ -295,6 +296,13 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 </head>
 <body>
 
+<!-- ── Zoom-Widget (fixed, unten rechts) ── -->
+<div class="zoom-ctrl no-print" title="Ansicht vergrößern / verkleinern (Strg+Mausrad · Strg+0 = Reset)">
+  <button onclick="zoomStep(-1)" title="Verkleinern (Strg+–)">&#8722;</button>
+  <span id="zoom-label" onclick="zoomReset()" title="Klicken zum Zurücksetzen">100%</span>
+  <button onclick="zoomStep(+1)" title="Vergrößern (Strg++)">&#43;</button>
+</div>
+
 <div id="fb-loading" style="position:fixed;inset:0;background:linear-gradient(135deg,#1a3a5c 0%,#2d6099 100%);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Arial,sans-serif">
   <div style="font-size:42px;margin-bottom:18px">⏳</div>
   <img id="load-logo" src="" alt="TURNING POINT Stiftung" style="max-width:260px;height:auto;margin-bottom:10px;filter:brightness(0) invert(1)">
@@ -333,11 +341,6 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   <header class="app-header">
     <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.22b</span></div>
     <div class="header-right">
-      <div class="zoom-ctrl no-print" title="Ansicht vergrößern / verkleinern (auch Strg+Mausrad oder Strg+0 zum Zurücksetzen)">
-        <button onclick="zoomStep(-1)" title="Verkleinern (Strg+–)">&#8722;</button>
-        <span id="zoom-label" onclick="zoomReset()" title="Klicken zum Zurücksetzen (Strg+0)">100%</span>
-        <button onclick="zoomStep(+1)" title="Vergrößern (Strg++)">&#43;</button>
-      </div>
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
