@@ -628,6 +628,8 @@ function _migrate(d){
     if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
     // Stundenlimit für Freiberufliche sicherstellen
     if(u.role==='freiberuflich'&&u.maxHours===undefined) u.maxHours=0;
+    // Christian Bittner: Freiberufler mit 64h Monatslimit
+    if(u.id==='christian_bittner'){ u.role='freiberuflich'; if(!u.maxHours) u.maxHours=64; }
     // Arbeitstage pro Woche (Standard 5)
     if(!u.dpw||u.dpw<1) u.dpw=5;
   });
@@ -697,7 +699,8 @@ async function initFirebase(){
       data.users.some(u=>!u.dpw)||
       !data.vacRequests||
       !data.teamCats||
-      Object.values(data.entries||{}).some(e=>e&&!e.days);
+      Object.values(data.entries||{}).some(e=>e&&!e.days)||
+      data.users.some(u=>u.id==='christian_bittner'&&(u.role!=='freiberuflich'||!u.maxHours));
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
     for(const u of _dataCache.users){
@@ -785,6 +788,15 @@ function canSeeAbsence(viewer,target){
 function tMin(s){ if(!s||!s.includes(':')) return 0; const[h,m]=s.split(':').map(Number); return h*60+m; }
 function minFmt(n){ if(n<=0) return ''; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
 function hFmt(n){ if(n<=0) return '0:00'; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+// Minuten in Arbeitstage (8h = 1 Tag), Vierteltagsgenauigkeit
+function dayFmt(min){
+  if(min<=0) return '';
+  const d=Math.round(min/480*4)/4; // 480min = 8h
+  const whole=Math.floor(d), frac=Math.round((d-whole)*4);
+  const fracStr=['','¼','½','¾'][frac]||'';
+  const num=(whole>0?whole:'')+fracStr||'0';
+  return num+' '+(d===1&&!frac?'Tag':'Tage');
+}
 function diffMin(v,b){ const d=tMin(b)-tMin(v); return d>0?d:0; }
 function addMin(t,m){ const tot=tMin(t)+m; return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`; }
 function roundToQuarter(val){
@@ -1234,7 +1246,8 @@ function renderZeiterfassung(){
     tbody.appendChild(tr);
   }
 
-  document.getElementById('tfoot-total').textContent=hFmt(monthTotal);
+  const _tDays=dayFmt(monthTotal);
+  document.getElementById('tfoot-total').innerHTML=hFmt(monthTotal)+(_tDays?`<br><small style="font-size:10px;font-weight:400;opacity:.75">${_tDays}</small>`:``);
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
   renderSummary(uid,user,entry,monthTotal);
   renderZuordBreakdown(entry);
@@ -1256,12 +1269,16 @@ function renderSummary(uid,user,entry,istMin){
       const billedMin=Math.min(totalMin,maxH*60);
       const overflowMin=Math.max(0,totalMin-maxH*60);
       const underMin=Math.max(0,maxH*60-totalMin);
+      const maxDays=maxH/8;
+      const billedDayStr=dayFmt(billedMin);
+      const istDayStr=dayFmt(istMin);
+      const overDayStr=overflowMin>0?dayFmt(overflowMin):'';
       cards=[
-        {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+        {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:istDayStr?('= '+istDayStr+' (8h=1T)'):'tatsächlich geleistet'},
         {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
-        {lbl:'Verfügbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag'},
-        {lbl:'Abgerechnet (Limit '+maxH+' h)',big:hFmt(billedMin),sub:'max. Monatslimit',cls:billedMin>=maxH*60?'neg':'pos'},
-        {lbl:'Übertrag → nächster Monat',big:overflowMin>0?('+'+hFmt(overflowMin)):'–',sub:overflowMin>0?'wird vorgetragen':underMin>0?'unter Limit – kein Minus':'exakt auf Limit',cls:overflowMin>0?'pos':''},
+        {lbl:'Verfügbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag = '+dayFmt(totalMin)},
+        {lbl:'Abgerechnet (Limit '+maxH+' h / '+maxDays+' T)',big:hFmt(billedMin),sub:billedDayStr?('= '+billedDayStr+' – max. Limit'):'max. Monatslimit',cls:billedMin>=maxH*60?'neg':'pos'},
+        {lbl:'Übertrag → nächster Monat',big:overflowMin>0?('+'+hFmt(overflowMin)):'–',sub:overDayStr?('= +'+overDayStr+' werden vorgetragen'):overflowMin>0?'wird vorgetragen':underMin>0?'unter Limit – kein Minus':'exakt auf Limit',cls:overflowMin>0?'pos':''},
       ];
     } else {
       cards=[
