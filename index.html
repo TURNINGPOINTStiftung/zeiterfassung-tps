@@ -785,14 +785,8 @@ function canSeeAbsence(viewer,target){
   if(!target||!target.id) return false;
   if(target.id===viewer.id) return true; // eigene immer sichtbar
   if(viewer.role==='admin') return true;
-  if(viewer.role==='geschaeftsfuehrer') return target.role==='leitung'||target.role==='berater';
-  if(viewer.role==='leitung'){
-    // Eigene Teammitarbeiter
-    const t=getLeitungTeams(viewer);
-    if(!isManagerRole(target)&&(t.length===0||t.includes(target.team))) return true;
-    // Andere Leitung + GF
-    return target.role==='leitung'||target.role==='geschaeftsfuehrer';
-  }
+  if(viewer.role==='geschaeftsfuehrer') return true; // GF sieht alle Abwesenheiten
+  if(viewer.role==='leitung') return true; // Leitung sieht alle Abwesenheiten
   // Mitarbeiter / Freiberuflich: gleicher Team-Name
   return !!(viewer.team&&target.team&&viewer.team===target.team);
 }
