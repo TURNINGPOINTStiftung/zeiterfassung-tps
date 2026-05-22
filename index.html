@@ -628,8 +628,8 @@ function _migrate(d){
     if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
     // Stundenlimit für Freiberufliche sicherstellen
     if(u.role==='freiberuflich'&&u.maxHours===undefined) u.maxHours=0;
-    // Christian Bittner: Freiberufler mit 64h Monatslimit
-    if(u.id==='christian_bittner'){ u.role='freiberuflich'; if(!u.maxHours) u.maxHours=64; }
+    // Christian Bittner: Freiberufler mit 64h Monatslimit (match by ID oder Name)
+    if(u.id==='christian_bittner'||u.name==='Christian Bittner'){ u.role='freiberuflich'; if(!u.maxHours) u.maxHours=64; }
     // Arbeitstage pro Woche (Standard 5)
     if(!u.dpw||u.dpw<1) u.dpw=5;
   });
@@ -638,7 +638,7 @@ function _migrate(d){
   // Urlaub/AU-Einträge ohne Zeiten automatisch mit Tagesstunden befüllen
   for(const [k,entry] of Object.entries(d.entries||{})){
     if(!entry||!entry.days) continue;
-    const uid2=k.split('_')[0];
+    const uid2=k.slice(0,k.length-8); // {uid}_{YYYY}_{MM} → letzten 8 Zeichen abschneiden
     const usr=d.users.find(u=>u.id===uid2);
     if(!usr||(usr.wh||0)<=0) continue;
     const dMin=Math.round((usr.wh/(usr.dpw||5))*60);
@@ -700,7 +700,7 @@ async function initFirebase(){
       !data.vacRequests||
       !data.teamCats||
       Object.values(data.entries||{}).some(e=>e&&!e.days)||
-      data.users.some(u=>u.id==='christian_bittner'&&(u.role!=='freiberuflich'||!u.maxHours));
+      data.users.some(u=>(u.id==='christian_bittner'||u.name==='Christian Bittner')&&(u.role!=='freiberuflich'||!u.maxHours));
     let needsSave=needsCleanup;
     _dataCache=_migrate(data);
     for(const u of _dataCache.users){
@@ -2641,24 +2641,64 @@ function _openPerEmpPrint(emps,y,m){
     +'.pnav .pbtn:hover{background:#1e9147}'
     +'.pnav .pctr{flex:1;text-align:center;font-weight:700;font-size:13px;line-height:1.4}'
     +'.pnav .phint{font-size:10px;font-weight:400;opacity:.75;display:block}'
-    +'body{padding-top:60px}'
-    +'@media print{.pnav{display:none}body{padding-top:0}}';
+    +'body{padding-top:58px}'
+    +'@media print{.pnav{display:none!important}body{padding-top:0}}';
+  // Signatur-Pad JS (inline, in eigenes Fenster geschrieben)
+  const sigJS=''
+    // Zeichnen auf Canvas (Maus + Touch)
+    +'function bhSigInit(id){'
+    +'  var c=document.getElementById(id);if(!c)return;'
+    +'  var ctx=c.getContext("2d");'
+    +'  c.width=c.offsetWidth||400;c.height=c.offsetHeight||72;'
+    +'  ctx.strokeStyle="#1a3a5c";ctx.lineWidth=1.8;ctx.lineCap="round";ctx.lineJoin="round";'
+    +'  var drawing=false,lx=0,ly=0;'
+    +'  function getPos(e,c){'
+    +'    var r=c.getBoundingClientRect();'
+    +'    if(e.touches){return{x:e.touches[0].clientX-r.left,y:e.touches[0].clientY-r.top};}'
+    +'    return{x:e.clientX-r.left,y:e.clientY-r.top};'
+    +'  }'
+    +'  function start(e){e.preventDefault();drawing=true;var p=getPos(e,c);lx=p.x;ly=p.y;ctx.beginPath();ctx.moveTo(lx,ly);}'
+    +'  function move(e){if(!drawing)return;e.preventDefault();var p=getPos(e,c);ctx.lineTo(p.x,p.y);ctx.stroke();lx=p.x;ly=p.y;}'
+    +'  function stop(){drawing=false;}'
+    +'  c.addEventListener("mousedown",start);c.addEventListener("mousemove",move);'
+    +'  c.addEventListener("mouseup",stop);c.addEventListener("mouseleave",stop);'
+    +'  c.addEventListener("touchstart",start,{passive:false});c.addEventListener("touchmove",move,{passive:false});'
+    +'  c.addEventListener("touchend",stop);'
+    +'}'
+    +'function bhSigClear(id){var c=document.getElementById(id);if(!c)return;c.getContext("2d").clearRect(0,0,c.width,c.height);}'
+    // Alle Canvase initialisieren nach DOM-Aufbau
+    +'function bhInitAll(){'
+    +'  document.querySelectorAll(".bh-sig-canvas").forEach(function(c){bhSigInit(c.id);});'
+    +'}'
+    // Vor dem Druck: Canvas-Größe fixieren damit sie korrekt erscheint
+    +'window.addEventListener("beforeprint",function(){'
+    +'  document.querySelectorAll(".bh-sig-canvas").forEach(function(c){'
+    +'    c.width=c.offsetWidth||400;c.height=c.offsetHeight||72;'
+    +'  });'
+    +'});';
   win.document.write(
-    '<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Zeiterfassung</title>'
+    '<!DOCTYPE html><html lang="de"><head>'
+    +'<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'<title>Zeiterfassung</title>'
     +'<style>'+style+'</style></head><body>'
     +'<div class="pnav">'
     +'<button onclick="pPrev()">&#9664; Zur\xfcck</button>'
     +'<div class="pctr"><span id="pLabel"></span>'
-    +'<span class="phint">Drucken = 1 PDF pro Mitarbeiter &nbsp;|&nbsp; Weiter f\xfcr n\xe4chste Person</span></div>'
-    +'<button class="pbtn" onclick="window.print()">&#128438;&nbsp;Drucken / PDF</button>'
+    +'<span class="phint">&#128438; Drucken = 1 PDF pro Mitarbeiter &nbsp;&bull;&nbsp; Unterschrift vor dem Drucken leisten</span></div>'
+    +'<button class="pbtn" onclick="window.print()">&#128438;&nbsp;Drucken / PDF speichern</button>'
     +'<button onclick="pNext()">Weiter &#9654;</button>'
     +'</div>'
     +'<div id="pContent"></div>'
     +'<script>'
     +'var PP=window._pPages,PM=window._pMonths,PY=window._pY,PMN=window._pM,pc=0;'
-    +'function pShow(i){pc=i;var p=PP[i];document.getElementById("pContent").innerHTML=p.html;'
-    +'document.getElementById("pLabel").textContent=(i+1)+" / "+PP.length+":  "+p.name;'
-    +'document.title=PY+" "+PM[PMN-1]+" - "+p.name+" Zeiterfassung";}'
+    +sigJS
+    +'function pShow(i){'
+    +'  pc=i;var p=PP[i];'
+    +'  document.getElementById("pContent").innerHTML=p.html;'
+    +'  document.getElementById("pLabel").textContent=(i+1)+" / "+PP.length+":  "+p.name;'
+    +'  document.title=PY+" "+PM[PMN-1]+" - "+p.name+" Zeiterfassung";'
+    +'  setTimeout(bhInitAll,50);'  // Canvas nach DOM-Paint initialisieren
+    +'}'
     +'function pNext(){if(pc<PP.length-1)pShow(pc+1);}'
     +'function pPrev(){if(pc>0)pShow(pc-1);}'
     +'pShow(0);'
@@ -2675,22 +2715,56 @@ function printTeamBuchhaltung(){
 
 function _teamReportStyle(){
   return '*{box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,sans-serif;font-size:11px;color:#2c3e50;padding:10px}'
-    +'.emp-section{margin-bottom:16px}'
-    +'.emp-section h2{font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:3px;padding-bottom:4px;border-bottom:2px solid #1a3a5c}'
-    +'.emp-section .sub{font-size:10px;color:#7f8c8d;margin-bottom:8px}'
-    +'.emp-section .diff{font-size:10px;color:#7f8c8d;margin-top:6px}'
-    +'table{width:100%;border-collapse:collapse;font-size:10px}'
-    +'th{background:#1a3a5c;color:#fff;padding:5px 3px;text-align:center;font-size:9px;font-weight:700;white-space:nowrap}'
-    +'th.bh{background:#2d4f70}th.sp{background:#0e2235;width:5px;padding:0}th.l{text-align:left;padding-left:5px}'
-    +'td{padding:3px 3px;vertical-align:middle;border-bottom:1px solid #dde1e7;text-align:center}'
-    +'td.l{text-align:left;padding-left:5px;font-weight:700;font-size:9px;white-space:nowrap}'
-    +'td.sp{background:#e8edf2;width:5px;padding:0}td.sm{font-weight:700;color:#1a3a5c;font-size:10px}'
-    +'td.tt{font-weight:700;font-size:11px;color:#1a3a5c;background:rgba(26,58,92,.07)}'
+    +'body{font-family:Arial,sans-serif;font-size:10px;color:#2c3e50;background:#fff;padding:14px}'
+    // Seiten-Wrapper
+    +'.bh-page{max-width:940px;margin:0 auto;padding-bottom:20px}'
+    // Header
+    +'.bh-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:10px;border-bottom:3px solid #1a3a5c;margin-bottom:10px}'
+    +'.bh-hdr-left .org{font-size:16px;font-weight:700;color:#1a3a5c;line-height:1.2}'
+    +'.bh-hdr-left .sub{font-size:9.5px;color:#7f8c8d;margin-top:2px}'
+    +'.bh-hdr-right{text-align:right}'
+    +'.bh-hdr-right .ttl{font-size:13px;font-weight:700;color:#1a3a5c;letter-spacing:.8px}'
+    +'.bh-hdr-right .per{font-size:11px;color:#7f8c8d;margin-top:3px;font-weight:600}'
+    // Info-Raster
+    +'.bh-info{display:grid;grid-template-columns:1fr 1fr;gap:3px 20px;background:#f4f7fb;border:1px solid #dde1e7;border-radius:4px;padding:8px 12px;margin-bottom:10px}'
+    +'.bh-ir{display:flex;gap:6px;font-size:9.5px;align-items:baseline}'
+    +'.bh-ir b{color:#1a3a5c;min-width:108px;flex-shrink:0;font-size:9px;text-transform:uppercase;letter-spacing:.3px}'
+    // Tabelle
+    +'table{width:100%;border-collapse:collapse}'
+    +'th{background:#1a3a5c;color:#fff;padding:4px 3px;text-align:center;font-size:8px;font-weight:700;white-space:nowrap}'
+    +'th.bh{background:#2d4f70}th.sp{background:#0e2235;width:4px;padding:0}th.l{text-align:left;padding-left:5px}'
+    +'td{padding:2.5px 3px;vertical-align:middle;border-bottom:1px solid #e8ecf0;text-align:center;font-size:9px}'
+    +'td.l{text-align:left;padding-left:5px;font-weight:600;font-size:8.5px;white-space:nowrap}'
+    +'td.sp{background:#e8edf2;width:4px;padding:0}td.sm{font-weight:700;color:#1a3a5c;font-size:9px}'
+    +'td.tt{font-weight:700;font-size:10px;color:#1a3a5c;background:rgba(26,58,92,.06)}'
     +'.we{background:#fef3e2}.hol{background:#fff0f0!important}'
-    +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:5px 3px;text-align:center}'
+    +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:4px 3px;text-align:center;font-size:9px}'
     +'tfoot td.l{text-align:left;padding-left:5px}'
-    +'@media print{body{padding:0}@page{margin:1cm}}';
+    // Zusammenfassung
+    +'.bh-sum{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px}'
+    +'.bh-sc{flex:1;min-width:110px;background:#f4f7fb;border:1px solid #dde1e7;border-radius:4px;padding:6px 10px}'
+    +'.bh-sc.pos{border-color:#27ae60;background:#f0fff4}'
+    +'.bh-sc.neg{border-color:#c0392b;background:#fff0f0}'
+    +'.bh-sc .lbl{font-size:7.5px;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px}'
+    +'.bh-sc .val{font-size:15px;font-weight:700;color:#1a3a5c;margin:2px 0 1px}'
+    +'.bh-sc .sub{font-size:8px;color:#7f8c8d}'
+    // Unterschrift
+    +'.bh-sig{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid #dde1e7;padding-top:14px}'
+    +'.bh-sig-col h4{font-size:9px;font-weight:700;color:#1a3a5c;margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px}'
+    +'.bh-sig-canvas{width:100%;height:72px;border:1.5px solid #c0c8d8;border-radius:3px;background:#fafbfc;cursor:crosshair;display:block;touch-action:none}'
+    +'.bh-sig-actions{margin-top:4px;display:flex;gap:6px;align-items:center}'
+    +'.bh-sig-btn{font-size:8.5px;color:#7f8c8d;cursor:pointer;background:none;border:1px solid #ccc;border-radius:3px;padding:2px 8px}'
+    +'.bh-sig-hint{font-size:8px;color:#aab;flex:1}'
+    +'.bh-sig-meta{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}'
+    +'.bh-sig-meta label{font-size:8px;color:#7f8c8d;display:block;margin-bottom:1px}'
+    +'.bh-sig-meta input{width:100%;border:none;border-bottom:1px solid #c0c8d8;padding:2px 0 1px;font-size:9px;background:transparent;outline:none;color:#2c3e50}'
+    +'.bh-sig-meta .span2{grid-column:1/-1}'
+    +'@media print{'
+    +'body{padding:4px}'
+    +'.bh-sig-btn,.bh-sig-actions{display:none}'
+    +'.bh-sig-canvas{border-color:#888;cursor:default;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'@page{margin:1.2cm;size:A4}'
+    +'}';
 }
 
 function sendTeamReport(){
@@ -3195,34 +3269,86 @@ function renderBuchhaltungHTML(u,entry,y,m){
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
     monthTotal+=dayMin;
-    const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+String(y).slice(2);
+    const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
     const cls=hol?'hol':(we?'we':'');
     rows+='<tr'+(cls?' class="'+cls+'"':'')+'>'
-      +'<td class="l">'+dateFmt+(hol?'<br><span style="font-size:8px;color:#c0392b">Feiertag</span>':'')+'</td>'
+      +'<td class="l">'+dateFmt+(hol?'<br><span style="font-size:7.5px;color:#c0392b">Feiertag</span>':'')+'</td>'
       +'<td>'+kw+'</td>'
       +'<td>'+(we?'<b>':'')+dn+(we?'</b>':'')+'</td>'
       +'<td>'+(dd.b1von||'')+'</td>'
       +'<td>'+(dd.b1bis||'')+'</td>'
-      +'<td style="text-align:left;max-width:80px;overflow:hidden">'+(dd.b1zuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+(dd.b1zuord||'')+'</td>'
       +'<td class="sm">'+(b1min>0?minFmt(b1min):'')+'</td>'
       +'<td class="sp"></td>'
       +'<td>'+(dd.b2von||'')+'</td>'
       +'<td>'+(dd.b2bis||'')+'</td>'
-      +'<td style="text-align:left;max-width:80px;overflow:hidden">'+(dd.b2zuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+(dd.b2zuord||'')+'</td>'
       +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
       +'<td>'+(ktm>0?ktm:'')+'</td>'
-      +'<td style="text-align:left;max-width:70px;overflow:hidden">'+(dd.ktzuord||'')+'</td>'
+      +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+(dd.ktzuord||'')+'</td>'
       +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>'
       +'<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'
       +'</tr>';
   }
+
   const isFree=isFreelancer(u);
+  const maxH=isFree?(u.maxHours||0):0;
   const soll=monthSOLL(u,y,m);
-  const carryH=entry.carryover||0;
+  const carryH=isFree?getEffectiveCarryH(u.id,u,y,m):(entry.carryover||0);
   const diff=monthTotal-(soll-carryH*60);
-  return '<div class="emp-section">'
-    +'<h2>'+esc(u.name)+' &ndash; '+MONTHS[m-1]+' '+y+'</h2>'
-    +'<div class="sub">'+(u.city||'&ndash;')+' &middot; '+(isFree?'Freiberuflich':'Festangestellt, '+u.wh+'h/Woche')+'</div>'
+
+  // ── Zusammenfassungs-Karten ──
+  let sumCards='<div class="bh-sum">';
+  if(isFree&&maxH>0){
+    const totalMin=monthTotal+carryH*60;
+    const billedMin=Math.min(totalMin,maxH*60);
+    const overflowMin=Math.max(0,totalMin-maxH*60);
+    sumCards+=
+      '<div class="bh-sc"><div class="lbl">Geleistete Stunden</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'IST gesamt')+'</div></div>'
+      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>'
+      +'<div class="bh-sc"><div class="lbl">Abgerechnet (max. '+maxH+' h)</div><div class="val">'+hFmt(billedMin)+'</div><div class="sub">'+(dayFmt(billedMin)||'Monatslimit')+'</div></div>'
+      +'<div class="bh-sc '+(overflowMin>0?'pos':'')+'"><div class="lbl">Übertrag → nächster Monat</div><div class="val">'+(overflowMin>0?'+'+hFmt(overflowMin):'&ndash;')+'</div><div class="sub">'+(overflowMin>0?(dayFmt(overflowMin)||'wird vorgetragen'):'kein Übertrag')+'</div></div>';
+  } else if(isFree){
+    sumCards+=
+      '<div class="bh-sc"><div class="lbl">Geleistete Stunden</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'IST gesamt')+'</div></div>'
+      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>';
+  } else {
+    const diffCls=diff>=0?'pos':'neg';
+    sumCards+=
+      '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+u.wh+' h/Woche</div></div>'
+      +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
+      +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
+      +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+carryH+' h</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'');
+  }
+  sumCards+='</div>';
+
+  const empType=isFree?'Freiberuflich':'Festangestellt, '+u.wh+' h/Woche';
+  const statusLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[entry.status]||entry.status||'Entwurf';
+  // Canvas-ID eindeutig pro Mitarbeiter
+  const cid='s'+Math.random().toString(36).slice(2,8);
+
+  return '<div class="bh-page">'
+    // ── Kopfzeile ──
+    +'<div class="bh-hdr">'
+    +'<div class="bh-hdr-left">'
+    +'<div class="org">TURNING POINT Stiftung</div>'
+    +'<div class="sub">Akademie-Programm &ndash; Arbeitszeiterfassung</div>'
+    +'</div>'
+    +'<div class="bh-hdr-right">'
+    +'<div class="ttl">ARBEITSZEITNACHWEIS</div>'
+    +'<div class="per">'+MONTHS[m-1]+' '+y+'</div>'
+    +'</div>'
+    +'</div>'
+    // ── Mitarbeiter-Info ──
+    +'<div class="bh-info">'
+    +'<div class="bh-ir"><b>Name</b>'+esc(u.name)+'</div>'
+    +'<div class="bh-ir"><b>Monat / Jahr</b>'+MONTHS[m-1]+' '+y+'</div>'
+    +'<div class="bh-ir"><b>Team</b>'+esc(u.team||'&ndash;')+'</div>'
+    +'<div class="bh-ir"><b>Beschäftigung</b>'+empType+'</div>'
+    +'<div class="bh-ir"><b>Wohnort</b>'+esc(u.city||'&ndash;')+'</div>'
+    +'<div class="bh-ir"><b>Status</b>'+statusLabel+'</div>'
+    +'</div>'
+    // ── Stundentabelle ──
     +'<table>'
     +'<thead><tr>'
     +'<th class="l" rowspan="2">Datum</th><th rowspan="2">KW</th><th rowspan="2">Tag</th>'
@@ -3243,12 +3369,38 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +'<td>'+hFmt(monthTotal)+'</td>'
     +'</tr></tfoot>'
     +'</table>'
-    +'<div class="diff">IST: <strong>'+hFmt(monthTotal)+'</strong>'
-    +(isFree?'':' &nbsp;|&nbsp; SOLL: <strong>'+hFmt(soll)+'</strong>'
-      +' &nbsp;|&nbsp; Differenz: <strong style="color:'+(diff>=0?'#27ae60':'#c0392b')+'">'
-      +(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</strong>')
+    // ── Zusammenfassung ──
+    +sumCards
+    // ── Unterschriften ──
+    +'<div class="bh-sig">'
+    +'<div class="bh-sig-col">'
+    +'<h4>Unterschrift Mitarbeiter / in</h4>'
+    +'<canvas class="bh-sig-canvas" id="'+cid+'_ma"></canvas>'
+    +'<div class="bh-sig-actions">'
+    +'<button class="bh-sig-btn" onclick="bhSigClear(\''+cid+'_ma\')">&#10005; Löschen</button>'
+    +'<span class="bh-sig-hint">Mit Maus oder Finger unterschreiben</span>'
     +'</div>'
-    +'</div>';
+    +'<div class="bh-sig-meta">'
+    +'<div><label>Name</label><input type="text" value="'+esc(u.name)+'" readonly></div>'
+    +'<div><label>Datum</label><input type="text" id="'+cid+'_ma_dt" placeholder="TT.MM.JJJJ"></div>'
+    +'<div class="span2"><label>Ort</label><input type="text" value="'+esc(u.city||'')+'" placeholder="Ort"></div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="bh-sig-col">'
+    +'<h4>Unterschrift Vorgesetzte / r</h4>'
+    +'<canvas class="bh-sig-canvas" id="'+cid+'_vg"></canvas>'
+    +'<div class="bh-sig-actions">'
+    +'<button class="bh-sig-btn" onclick="bhSigClear(\''+cid+'_vg\')">&#10005; Löschen</button>'
+    +'<span class="bh-sig-hint">Mit Maus oder Finger unterschreiben</span>'
+    +'</div>'
+    +'<div class="bh-sig-meta">'
+    +'<div><label>Name</label><input type="text" placeholder="Name der Leitung"></div>'
+    +'<div><label>Datum</label><input type="text" placeholder="TT.MM.JJJJ"></div>'
+    +'<div class="span2"><label>Funktion</label><input type="text" value="Leitung Akademie-Programm"></div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'; // .bh-page
 }
 function printBuchhaltung(){
   const bemCells=document.querySelectorAll('.bem-col');
