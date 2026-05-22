@@ -723,7 +723,7 @@ function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
 function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
 function getEntry(uid,y,m){
   const d=getData(); const k=entryKey(uid,y,m);
-  if(!d.entries[k]){ d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}}; saveRaw(d); }
+  if(!d.entries[k]){ d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}}; }
   // Firebase entfernt leere Objekte – days:{} wird nicht gespeichert und fehlt beim nächsten Laden
   if(!d.entries[k].days) d.entries[k].days={};
   return d.entries[entryKey(uid,y,m)];
