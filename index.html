@@ -1084,8 +1084,8 @@ function initApp(){
   // Zeiterfassung: Admin hat keine eigene AZ
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=isAdmin?'none':'';
-  // Mitarbeiterübersicht: Leitung + Admin + GF (GF sieht Berater und Leitung)
-  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin||isGF)?'':'none';
+  // Mitarbeiterübersicht: nur Leitung + Admin (GF sieht KEINE Mitarbeiterübersicht mehr)
+  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF + Admin
   document.getElementById('tab-gfberichte').style.display=(isGF||isAdmin)?'':'none';
   // Abwesenheiten: alle Rollen
@@ -1108,7 +1108,7 @@ function initApp(){
   updateZeitstempelBtn();
   // Startansicht je Rolle
   if(isAdmin) switchView('uebersicht');
-  else if(isGF) switchView('uebersicht');
+  else if(isGF) switchView('gfberichte');
   else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
