@@ -1614,11 +1614,14 @@ function renderOverview(){
           +(curOverflow>0?` · <span style="color:var(--warn);font-weight:700">→ ${hFmt(curOverflow)} Übertrag</span>`:'')
         :'flexibel (kein Limit)')
       :`${u.wh}h/Woche`;
+    const canEditDpw=cu.role==='admin'||(cu.role==='leitung'&&canSeeEmployee(cu,u));
+    const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw('${u.id}')">✏ ${u.dpw||5} Tage/Wo</button>`:'';
     return `<div class="emp-card" onclick="openEmpMonth('${u.id}')">
       <h3>${u.name} ${roleChip}</h3>
       <div class="meta">${u.city||'–'} · ${freeMeta}${!isFree?` · Urlaub: ${u.al}T`:''}</div>
       <div class="meta">IST-Gesamt ${oy}: <strong>${hFmt(ist)} h</strong>${pending>0?` · <span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span>`:''}</div>
       <div class="months">${pills}</div>
+      ${dpwBtn}
     </div>`;
   };
 
@@ -1791,6 +1794,29 @@ function showAddUser(){
 function showEditUser(id){
   if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`);
+}
+// Leitung (+ Admin) kann Arbeitstage/Woche eines Teammitglieds anpassen
+function showEditDpw(id){
+  const u=getUser(id);
+  if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  if(cu.role!=='admin'&&!(cu.role==='leitung'&&canSeeEmployee(cu,u))){ toast('Kein Zugriff.','err'); return; }
+  openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${u.wh||0}&thinsp;h/Woche</p>
+    <div class="form-group">
+      <label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
+      <input id="edit-dpw-val" type="number" min="1" max="7" value="${u.dpw||5}" style="max-width:90px">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="saveEditDpw('${id}')">Speichern</button>
+    </div>`);
+}
+function saveEditDpw(id){
+  const val=parseInt(document.getElementById('edit-dpw-val').value)||5;
+  if(val<1||val>7){ toast('Bitte einen Wert zwischen 1 und 7 eingeben.','err'); return; }
+  mutate(d=>{ const u=d.users.find(x=>x.id===id); if(u) u.dpw=val; });
+  closeModal(); renderOverview();
+  toast('Arbeitstage pro Woche aktualisiert. ✓','ok');
 }
 function userForm(u={}){
   const allTeams=getTeams();
