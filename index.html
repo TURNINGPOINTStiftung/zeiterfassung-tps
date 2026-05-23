@@ -2,11 +2,20 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Zeiterfassung – TURNING POINT Stiftung</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a3a5c">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zeiterfassung">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -289,6 +298,108 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .ab-cal-badge{font-size:10px;padding:1px 5px;border-radius:8px;margin:1px 0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 /* ── Zeitstempel Button aktiv ── */
 #btn-zeitstempel.zs-active{background:var(--ok)!important;color:#fff!important;border-color:var(--ok)!important}
+
+/* ════════════════════════════════════════
+   MOBILE OPTIMIERUNG  (≤ 768px)
+   Betrifft nur kleine Bildschirme –
+   Desktop-Layout bleibt unverändert
+   ════════════════════════════════════════ */
+@media (max-width:768px){
+  /* ─ Root / Body ─ */
+  :root{--hdr:56px}
+  body{font-size:14px}
+
+  /* ─ Login ─ */
+  .login-card{width:100%;min-height:100vh;border-radius:0;padding:28px 20px;display:flex;flex-direction:column;justify-content:center}
+  .login-logo img{max-width:180px}
+  #login-user-list{max-height:240px}
+  .user-tile{padding:12px 14px;font-size:15px}
+
+  /* ─ Header ─ */
+  .app-header{padding:0 12px;gap:8px}
+  .app-header .brand span{display:none}
+  #hdr-logo{height:42px!important}
+  .header-right{gap:6px}
+  .user-badge{padding:4px 10px;font-size:12px}
+  #btn-zeitstempel{display:none!important}
+
+  /* ─ Navigation ─ */
+  .app-nav{padding:0 8px;gap:0}
+  .nav-tab{padding:10px 10px;font-size:12px}
+
+  /* ─ Content Padding ─ */
+  .app-content{padding:12px}
+
+  /* ─ Monatsnavigation ─ */
+  .month-nav{gap:6px}
+  .month-nav h2{font-size:16px;min-width:140px}
+  .month-nav>div:last-child{margin-left:0!important;width:100%;display:flex;gap:4px;flex-wrap:wrap}
+  .month-nav .btn-sm{font-size:11px;padding:5px 8px;flex:1;min-width:0;justify-content:center}
+
+  /* ─ Info Panel ─ */
+  .info-panel{gap:10px;padding:10px 12px}
+  .info-item .val{font-size:13px}
+  /* Weniger wichtige Info-Items ausblenden */
+  #info-city,#info-apd-wrap,#info-type-wrap{display:none}
+
+  /* ─ Tabelle: horizontal scrollbar, Eingaben touch-freundlicher ─ */
+  .tbl-wrap{border-radius:6px}
+  .zt td input[type=time]{width:68px;font-size:12px;padding:4px 3px;min-height:36px}
+  .zt td select.zuord{width:100px;font-size:11px;min-height:36px}
+  .zt td input.bem{font-size:11px;min-height:36px}
+  .zt td input.kt-min{min-height:36px}
+
+  /* ─ Action Bar ─ */
+  .action-bar{flex-direction:column;align-items:stretch;gap:8px;padding:12px}
+  .action-bar .info{font-size:12px}
+  .action-bar .btn{justify-content:center}
+
+  /* ─ Summary Cards ─ */
+  .summary-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+  .s-card .big{font-size:18px}
+
+  /* ─ Mitarbeiterübersicht ─ */
+  .emp-grid{grid-template-columns:1fr}
+  .emp-card{padding:14px}
+
+  /* ─ Einstellungen ─ */
+  .settings-row{grid-template-columns:1fr}
+
+  /* ─ GF Berichte ─ */
+  .gf-report-card{flex-direction:column;align-items:flex-start;gap:8px}
+  .gf-report-card .btn{width:100%;justify-content:center}
+
+  /* ─ Abwesenheiten ─ */
+  .ab-cal-day{min-height:50px;padding:3px 3px}
+  .ab-cal-badge{font-size:9px}
+  .upcoming-row{gap:6px}
+  .upcoming-row .upc-name{min-width:80px}
+
+  /* ─ Review Panel ─ */
+  .review-panel{padding:12px}
+
+  /* ─ Modal ─ */
+  .modal{width:98%;padding:18px 14px;max-height:90vh}
+
+  /* ─ Toast (volle Breite) ─ */
+  #toasts{left:12px;right:12px;bottom:12px}
+  .toast{text-align:center}
+
+  /* ─ Zoom Control: auf Mobile ausblenden (Pinch-Zoom funktioniert nativ) ─ */
+  .zoom-ctrl{display:none!important}
+
+  /* ─ Safe Area für iOS (Notch / Home-Indicator) ─ */
+  .app-header{padding-top:env(safe-area-inset-top)}
+  #toasts{padding-bottom:env(safe-area-inset-bottom)}
+}
+
+/* ════ Sehr kleine Phones (≤ 390px) ════ */
+@media (max-width:390px){
+  .nav-tab{padding:9px 7px;font-size:11px}
+  .month-nav h2{font-size:14px;min-width:120px}
+  .summary-grid{grid-template-columns:1fr}
+  .info-panel{gap:8px}
+}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -3519,6 +3630,35 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').r
 // SHARE / EMERGENCY RESET
 // ═══════════════════════════════════════════════════════════════
 function shareApp(){
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isAndroid=/android/i.test(navigator.userAgent);
+  const appUrl='https://turningpointstiftung.github.io/zeiterfassung-tps/';
+  openModal(
+    '<h3 style="margin-bottom:16px">📱 App installieren</h3>'
+    +'<p style="font-size:13px;color:var(--muted);margin-bottom:18px">Die Zeiterfassung kann als App auf dem Homescreen installiert werden – kein App Store nötig.</p>'
+    +'<div style="background:#f0f4f8;border-radius:8px;padding:14px 16px;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:8px">🍎 iOS (iPhone / iPad)</div>'
+    +'<ol style="font-size:12px;color:var(--text);padding-left:18px;line-height:1.8">'
+    +'<li>Safari öffnen und diese Seite aufrufen</li>'
+    +'<li>Unten auf <strong>Teilen</strong> tippen (□↑)</li>'
+    +'<li><strong>„Zum Home-Bildschirm"</strong> wählen</li>'
+    +'<li>Oben rechts <strong>Hinzufügen</strong> tippen</li>'
+    +'</ol></div>'
+    +'<div style="background:#f0f4f8;border-radius:8px;padding:14px 16px;margin-bottom:16px">'
+    +'<div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:8px">🤖 Android</div>'
+    +'<ol style="font-size:12px;color:var(--text);padding-left:18px;line-height:1.8">'
+    +'<li>APK-Datei herunterladen (Button unten)</li>'
+    +'<li>APK öffnen und Installation bestätigen</li>'
+    +'<li><em>Ggf. „Installation aus unbekannten Quellen" erlauben</em></li>'
+    +'</ol></div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button class="btn btn-ok" onclick="window.open(\''+appUrl+'\',\'_blank\')">🔗 App-Link öffnen / teilen</button>'
+    +'<button class="btn btn-outline" onclick="_downloadHtml()">⬇ HTML-Datei herunterladen</button>'
+    +'<button class="btn btn-outline" onclick="closeModal()">Schließen</button>'
+    +'</div>'
+  );
+}
+function _downloadHtml(){
   const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
   const blob=new Blob([html],{type:'text/html'});
   const url=URL.createObjectURL(blob);
@@ -3770,6 +3910,16 @@ window.addEventListener('keydown',function(e){
       +'<div style="font-size:13px;margin-top:10px;opacity:.8">Bitte Seite neu laden.<br><small>'+e.message+'</small></div>';
   });
 })();
+</script>
+
+<!-- Service Worker Registrierung (PWA) -->
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('service-worker.js')
+      .catch(()=>{}); // Fehler still ignorieren (z.B. beim lokalen Öffnen)
+  });
+}
 </script>
 </body>
 </html>
