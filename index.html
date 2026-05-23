@@ -382,13 +382,22 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .zt tbody td{padding:7px 6px;border-bottom:none!important;border-right:none!important;vertical-align:middle}
 
   /* ── Zeile 1: Tages-Header ── */
-  .zt td.date-c{grid-column:1/3;grid-row:1;background:var(--primary);color:#fff;padding:9px 10px;font-size:13px;font-weight:700;white-space:nowrap}
-  .zt td.kw-c{grid-column:3;grid-row:1;background:#1e4568;color:rgba(255,255,255,.7);padding:9px 4px;font-size:11px;text-align:center}
-  .zt td.day-c{grid-column:4;grid-row:1;background:#1e4568;color:#fff;padding:9px 4px;font-size:11px;font-weight:700;text-align:center}
-  .zt tbody tr.weekend td.date-c{background:#b87510}
-  .zt tbody tr.weekend td.kw-c,.zt tbody tr.weekend td.day-c{background:#9a620c}
-  .zt tbody tr.holiday td.date-c{background:var(--danger)}
-  .zt tbody tr.holiday td.kw-c,.zt tbody tr.holiday td.day-c{background:#a0281e}
+  /* Datum links: gross + fett */
+  .zt td.date-c{grid-column:1;grid-row:1;background:var(--primary);color:#fff;padding:10px 10px;font-size:16px;font-weight:800;white-space:nowrap;line-height:1.2;display:flex;flex-direction:column;justify-content:center}
+  /* Wochentag mittig: prominent */
+  .zt td.day-c{grid-column:2/4;grid-row:1;background:#1e4568;color:#fff;padding:10px 6px;font-size:18px;font-weight:700;text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;letter-spacing:.3px}
+  /* WE/Feiertag-Hinweis in day-c ausblenden (Farbe reicht) */
+  .zt td.day-c span{display:none}
+  /* KW rechts: klein, rechtsbuendig */
+  .zt td.kw-c{grid-column:4;grid-row:1;background:#1e4568;color:rgba(255,255,255,.8);padding:10px 8px;font-size:13px;font-weight:700;text-align:right;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;line-height:1}
+  .zt td.kw-c::before{content:"KW";display:block;font-size:9px;font-weight:600;opacity:.65;letter-spacing:.5px;margin-bottom:1px}
+  /* Weekend: warmes Amber */
+  .zt tbody tr.weekend td.date-c{background:#b06010}
+  .zt tbody tr.weekend td.day-c,.zt tbody tr.weekend td.kw-c{background:#925010}
+  /* Feiertag: Rot */
+  .zt tbody tr.holiday td.date-c{background:#b52a20}
+  .zt tbody tr.holiday td.day-c,.zt tbody tr.holiday td.kw-c{background:#9a1e16}
+  /* Heute: Akzent-Outline bleibt erhalten */
 
   /* ── Block 1 (Zeile 2+3) ── */
   .zt tbody td:nth-child(4){grid-column:1;grid-row:2;border-top:2px solid rgba(26,58,92,.25)!important;background:rgba(26,58,92,.03)}
