@@ -1335,9 +1335,10 @@ function initApp(){
   }
   // Zeitstempel-Button Status aktualisieren
   updateZeitstempelBtn();
-  // Startansicht je Rolle
+  // Startansicht je Rolle (Mobile: Stempel als Startseite)
   if(isAdmin) switchView('uebersicht');
   else if(isGF) switchView('gfberichte');
+  else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 }
 function rebuildEmpSelect(){
