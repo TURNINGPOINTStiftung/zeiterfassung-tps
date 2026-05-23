@@ -301,104 +301,169 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 
 /* ════════════════════════════════════════
    MOBILE OPTIMIERUNG  (≤ 768px)
-   Betrifft nur kleine Bildschirme –
-   Desktop-Layout bleibt unverändert
+   Desktop-Layout komplett unverändert
    ════════════════════════════════════════ */
 @media (max-width:768px){
-  /* ─ Root / Body ─ */
   :root{--hdr:56px}
-  body{font-size:14px}
 
   /* ─ Login ─ */
-  .login-card{width:100%;min-height:100vh;border-radius:0;padding:28px 20px;display:flex;flex-direction:column;justify-content:center}
-  .login-logo img{max-width:180px}
-  #login-user-list{max-height:240px}
-  .user-tile{padding:12px 14px;font-size:15px}
+  .login-card{width:100%;min-height:100vh;border-radius:0;padding:30px 20px;display:flex;flex-direction:column;justify-content:center}
+  .login-logo img{max-width:200px}
+  #login-user-list{max-height:260px}
+  .user-tile{padding:14px 16px;font-size:16px;min-height:52px}
 
   /* ─ Header ─ */
-  .app-header{padding:0 12px;gap:8px}
+  .app-header{padding:0 10px;gap:5px}
   .app-header .brand span{display:none}
-  #hdr-logo{height:42px!important}
-  .header-right{gap:6px}
-  .user-badge{padding:4px 10px;font-size:12px}
-  #btn-zeitstempel{display:none!important}
+  #hdr-logo{height:40px!important}
+  .header-right{gap:5px}
+  .user-badge{padding:5px 10px;font-size:12px}
+  #btn-zeitstempel{display:inline-flex!important;font-size:11px;padding:5px 8px}
 
   /* ─ Navigation ─ */
-  .app-nav{padding:0 8px;gap:0}
-  .nav-tab{padding:10px 10px;font-size:12px}
+  .app-nav{padding:0 6px;gap:0}
+  .nav-tab{padding:12px 10px;font-size:13px;font-weight:600}
 
-  /* ─ Content Padding ─ */
-  .app-content{padding:12px}
+  /* ─ Content ─ */
+  .app-content{padding:10px}
 
   /* ─ Monatsnavigation ─ */
   .month-nav{gap:6px}
-  .month-nav h2{font-size:16px;min-width:140px}
-  .month-nav>div:last-child{margin-left:0!important;width:100%;display:flex;gap:4px;flex-wrap:wrap}
-  .month-nav .btn-sm{font-size:11px;padding:5px 8px;flex:1;min-width:0;justify-content:center}
+  .month-nav h2{font-size:17px;min-width:150px}
+  .month-nav>div:last-child{margin-left:0!important;width:100%;display:flex;gap:5px;flex-wrap:wrap}
+  .month-nav .btn-sm{font-size:12px;padding:8px 10px;flex:1;min-width:0;justify-content:center}
 
   /* ─ Info Panel ─ */
-  .info-panel{gap:10px;padding:10px 12px}
-  .info-item .val{font-size:13px}
-  /* Weniger wichtige Info-Items ausblenden */
+  .info-panel{gap:12px;padding:12px 14px}
+  .info-item .val{font-size:14px}
   #info-city,#info-apd-wrap,#info-type-wrap{display:none}
 
-  /* ─ Tabelle: horizontal scrollbar, Eingaben touch-freundlicher ─ */
-  .tbl-wrap{border-radius:6px}
-  .zt td input[type=time]{width:68px;font-size:12px;padding:4px 3px;min-height:36px}
-  .zt td select.zuord{width:100px;font-size:11px;min-height:36px}
-  .zt td input.bem{font-size:11px;min-height:36px}
-  .zt td input.kt-min{min-height:36px}
+  /* ══════════════════════════════════════
+     ZEITERFASSUNGS-TABELLE: Card-Layout
+     Block 1 / Block 2 / KT / Gesamt
+     gestapelt – kein horizontales Scrollen
+     ══════════════════════════════════════ */
+  .tbl-wrap{overflow-x:visible;border:none;background:transparent;border-radius:0;box-shadow:none}
+  table.zt{display:block;min-width:0}
+  table.zt thead{display:none}
+  table.zt tbody{display:flex;flex-direction:column;gap:8px}
+
+  /* tfoot: Monatssumme als einfache Leiste */
+  table.zt tfoot{display:block;border-radius:10px;overflow:hidden;margin-top:4px}
+  table.zt tfoot tr{display:flex;flex-wrap:wrap}
+  table.zt tfoot td{display:block;flex:1;text-align:center;font-size:14px;padding:10px 8px!important}
+  table.zt tfoot td.l{flex:2;text-align:left;padding-left:14px!important}
+  table.zt tfoot td:empty,table.zt tfoot td.sep-c,table.zt tfoot td.b2-col,table.zt tfoot td.kt-col{display:none}
+
+  /* Jeder Tag = Card mit Grid-Layout */
+  .zt tbody tr{display:grid;grid-template-columns:72px 72px 1fr 54px;background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden}
+  .zt tbody tr.weekend{background:var(--weekend)}
+  .zt tbody tr.holiday{background:#fff0f0}
+  .zt tbody tr.today-row{outline:2.5px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+
+  /* Reset alle td */
+  .zt tbody td{padding:7px 6px;border-bottom:none!important;border-right:none!important;vertical-align:middle}
+
+  /* ── Zeile 1: Tages-Header ── */
+  .zt td.date-c{grid-column:1/3;grid-row:1;background:var(--primary);color:#fff;padding:9px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+  .zt td.kw-c{grid-column:3;grid-row:1;background:#1e4568;color:rgba(255,255,255,.7);padding:9px 4px;font-size:11px;text-align:center}
+  .zt td.day-c{grid-column:4;grid-row:1;background:#1e4568;color:#fff;padding:9px 4px;font-size:11px;font-weight:700;text-align:center}
+  .zt tbody tr.weekend td.date-c{background:#b87510}
+  .zt tbody tr.weekend td.kw-c,.zt tbody tr.weekend td.day-c{background:#9a620c}
+  .zt tbody tr.holiday td.date-c{background:var(--danger)}
+  .zt tbody tr.holiday td.kw-c,.zt tbody tr.holiday td.day-c{background:#a0281e}
+
+  /* ── Block 1 (Zeile 2+3) ── */
+  .zt tbody td:nth-child(4){grid-column:1;grid-row:2;border-top:2px solid rgba(26,58,92,.25)!important;background:rgba(26,58,92,.03)}
+  .zt tbody td:nth-child(5){grid-column:2;grid-row:2;border-top:2px solid rgba(26,58,92,.25)!important;background:rgba(26,58,92,.03)}
+  .zt tbody td:nth-child(6){grid-column:3/5;grid-row:2;border-top:2px solid rgba(26,58,92,.25)!important;background:rgba(26,58,92,.03)}
+  .zt tbody td:nth-child(7){grid-column:1/4;grid-row:3;background:rgba(26,58,92,.03)}
+  .zt tbody td:nth-child(8){grid-column:4;grid-row:3;background:rgba(26,58,92,.07);text-align:center;font-weight:700;font-size:14px;color:var(--primary)}
+  .zt tbody td:nth-child(4)::before{content:"Block 1";display:block;font-size:9px;font-weight:700;color:var(--primary);opacity:.55;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;line-height:1}
+
+  /* Separator: ausblenden */
+  .zt tbody td:nth-child(9){display:none!important}
+
+  /* ── Block 2 (Zeile 4+5) ── */
+  .zt tbody td:nth-child(10){grid-column:1;grid-row:4;border-top:2px solid rgba(45,79,112,.3)!important;background:rgba(45,79,112,.04)}
+  .zt tbody td:nth-child(11){grid-column:2;grid-row:4;border-top:2px solid rgba(45,79,112,.3)!important;background:rgba(45,79,112,.04)}
+  .zt tbody td:nth-child(12){grid-column:3/5;grid-row:4;border-top:2px solid rgba(45,79,112,.3)!important;background:rgba(45,79,112,.04)}
+  .zt tbody td:nth-child(13){grid-column:1/4;grid-row:5;background:rgba(45,79,112,.04)}
+  .zt tbody td:nth-child(14){grid-column:4;grid-row:5;background:rgba(45,79,112,.09);text-align:center;font-weight:700;font-size:14px;color:#2d4f70}
+  .zt tbody td:nth-child(10)::before{content:"Block 2";display:block;font-size:9px;font-weight:700;color:#2d4f70;opacity:.55;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;line-height:1}
+
+  /* ── Kleinteilig (Zeile 6) ── */
+  .zt tbody td:nth-child(15){grid-column:1;grid-row:6;border-top:1px solid var(--border)!important;background:var(--bg)}
+  .zt tbody td:nth-child(16){grid-column:2;grid-row:6;border-top:1px solid var(--border)!important;background:var(--bg);text-align:center;font-weight:700;font-size:13px;color:var(--muted)}
+  .zt tbody td:nth-child(15)::before{content:"KT";display:block;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;line-height:1}
+
+  /* ── Gesamt (Zeile 6 rechts) ── */
+  .zt td.total-c{grid-column:3/5;grid-row:6;border-top:1px solid var(--border)!important;background:rgba(26,58,92,.08);font-size:17px;font-weight:700;color:var(--primary);text-align:center;padding:10px 8px}
+  .zt td.total-c.over{color:var(--danger)}
+
+  /* Freiberuflich: Total nach Block 1 */
+  table.zt.no-b2-kt tbody td.total-c{grid-column:1/5!important;grid-row:4!important;border-top:2px solid rgba(26,58,92,.25)!important}
+
+  /* ── Touch-Inputs ── */
+  .zt td input[type=time]{width:100%;min-width:0;font-size:14px;padding:6px 3px;border:1.5px solid var(--border);border-radius:6px;min-height:42px;background:#fff}
+  .zt td select.zuord{width:100%;max-width:none;font-size:13px;padding:6px 4px;min-height:42px;border-radius:6px;border:1.5px solid var(--border)}
+  .zt td input.bem{width:100%;font-size:13px;padding:6px 8px;min-height:42px;border-radius:6px;border:1.5px solid var(--border)}
+  .zt td input.kt-min{width:100%;font-size:14px;padding:6px 4px;min-height:42px;border-radius:6px;border:1.5px solid var(--border);text-align:center}
+  .zt tbody tr.readonly td input,.zt tbody tr.readonly td select{background:#f0f2f5!important;pointer-events:none;border-color:transparent!important}
 
   /* ─ Action Bar ─ */
-  .action-bar{flex-direction:column;align-items:stretch;gap:8px;padding:12px}
-  .action-bar .info{font-size:12px}
-  .action-bar .btn{justify-content:center}
+  .action-bar{flex-direction:column;align-items:stretch;gap:10px;padding:14px}
+  .action-bar .info{font-size:13px}
+  .action-bar .btn{justify-content:center;padding:13px}
 
   /* ─ Summary Cards ─ */
-  .summary-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
-  .s-card .big{font-size:18px}
+  .summary-grid{grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+  .s-card .big{font-size:20px}
+  .s-card{padding:14px}
 
   /* ─ Mitarbeiterübersicht ─ */
   .emp-grid{grid-template-columns:1fr}
-  .emp-card{padding:14px}
+  .emp-card{padding:16px}
 
   /* ─ Einstellungen ─ */
   .settings-row{grid-template-columns:1fr}
 
   /* ─ GF Berichte ─ */
   .gf-report-card{flex-direction:column;align-items:flex-start;gap:8px}
-  .gf-report-card .btn{width:100%;justify-content:center}
+  .gf-report-card .btn{width:100%;justify-content:center;padding:12px}
 
   /* ─ Abwesenheiten ─ */
-  .ab-cal-day{min-height:50px;padding:3px 3px}
+  .ab-cal-day{min-height:52px;padding:3px}
   .ab-cal-badge{font-size:9px}
-  .upcoming-row{gap:6px}
+  .upcoming-row{gap:6px;font-size:13px}
   .upcoming-row .upc-name{min-width:80px}
 
   /* ─ Review Panel ─ */
-  .review-panel{padding:12px}
+  .review-panel{padding:14px}
+  .review-panel textarea{font-size:15px;min-height:80px}
 
   /* ─ Modal ─ */
-  .modal{width:98%;padding:18px 14px;max-height:90vh}
+  .modal{width:98%;padding:20px 14px;max-height:92vh}
 
-  /* ─ Toast (volle Breite) ─ */
-  #toasts{left:12px;right:12px;bottom:12px}
-  .toast{text-align:center}
+  /* ─ Toast ─ */
+  #toasts{left:10px;right:10px;bottom:10px}
+  .toast{text-align:center;font-size:14px;padding:12px 18px}
 
-  /* ─ Zoom Control: auf Mobile ausblenden (Pinch-Zoom funktioniert nativ) ─ */
+  /* ─ Zoom: ausblenden ─ */
   .zoom-ctrl{display:none!important}
 
-  /* ─ Safe Area für iOS (Notch / Home-Indicator) ─ */
+  /* ─ iOS Safe Areas ─ */
   .app-header{padding-top:env(safe-area-inset-top)}
   #toasts{padding-bottom:env(safe-area-inset-bottom)}
 }
 
-/* ════ Sehr kleine Phones (≤ 390px) ════ */
+/* ════ Sehr kleine Phones ≤ 390px ════ */
 @media (max-width:390px){
-  .nav-tab{padding:9px 7px;font-size:11px}
-  .month-nav h2{font-size:14px;min-width:120px}
+  .nav-tab{padding:10px 8px;font-size:12px}
+  .month-nav h2{font-size:15px;min-width:130px}
+  .zt tbody tr{grid-template-columns:65px 65px 1fr 48px}
+  .zt td input[type=time]{font-size:13px}
   .summary-grid{grid-template-columns:1fr}
-  .info-panel{gap:8px}
 }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
