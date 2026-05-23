@@ -298,12 +298,25 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .ab-cal-badge{font-size:10px;padding:1px 5px;border-radius:8px;margin:1px 0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 /* ── Zeitstempel Button aktiv ── */
 #btn-zeitstempel.zs-active{background:var(--ok)!important;color:#fff!important;border-color:var(--ok)!important}
+/* ── Mobile Stempel-Tab: auf Desktop immer ausblenden ── */
+.nav-stempel-mobile{display:none!important}
+/* ── Tablet (641px–1024px): Desktop-Tabellenlayout, groessere Touch-Ziele ── */
+@media (min-width:641px) and (max-width:1024px){
+  .btn{padding:10px 20px;font-size:14px}
+  .btn-sm{padding:7px 14px;font-size:13px}
+  .nav-tab{padding:13px 16px;font-size:14px}
+  .zt td input[type=time]{min-height:38px;font-size:12px}
+  .zt td select.zuord{min-height:38px}
+  .zt td input.bem{min-height:38px}
+  .emp-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .modal{max-width:600px}
+}
 
 /* ════════════════════════════════════════
    MOBILE OPTIMIERUNG  (≤ 768px)
    Desktop-Layout komplett unverändert
    ════════════════════════════════════════ */
-@media (max-width:768px){
+@media (max-width:640px){
   :root{--hdr:56px}
 
   /* ─ Login ─ */
@@ -323,6 +336,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   /* ─ Navigation ─ */
   .app-nav{padding:0 6px;gap:0}
   .nav-tab{padding:12px 10px;font-size:13px;font-weight:600}
+  /* ─ Stempel-Tab: auf Mobile anzeigen und hervorheben ─ */
+  .nav-stempel-mobile{display:flex!important;align-items:center;gap:5px;background:var(--accent);color:#fff!important;border-radius:6px;margin:4px 3px;padding:10px 14px!important;border-bottom:none!important;flex-shrink:0;font-weight:700}
+  .nav-stempel-mobile.zs-active{background:var(--ok)!important}
+  .nav-stempel-mobile:hover{background:#d05a28!important}
 
   /* ─ Content ─ */
   .app-content{padding:10px}
@@ -527,6 +544,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   </header>
 
   <nav class="app-nav" id="app-nav">
+    <div class="nav-tab nav-stempel-mobile" id="tab-stempeln-mobile" onclick="openZeitstempel()" style="display:none">&#x23F1; Stempeln</div>
     <div class="nav-tab active" data-view="zeiterfassung" onclick="if(cu)viewEmpId=cu.id;switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
     <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
@@ -1271,6 +1289,8 @@ function initApp(){
   // Zeitstempel-Button: alle außer Admin
   const btnZs=document.getElementById('btn-zeitstempel');
   if(btnZs) btnZs.style.display=isAdmin?'none':'inline-flex';
+  const tabZsMob=document.getElementById('tab-stempeln-mobile');
+  if(tabZsMob) tabZsMob.style.display=isAdmin?'none':'';
 
   if(isLeitung||isAdmin){
     populateUeberYear();
@@ -3811,6 +3831,9 @@ function updateZeitstempelBtn(){
   btn.textContent=active?'⏱ Gestempelt':'⏱ Stempeln';
   if(active){ btn.classList.add('zs-active'); }
   else { btn.classList.remove('zs-active'); }
+  // Mobiler Stempel-Tab synchronisieren
+  const tabMob=document.getElementById('tab-stempeln-mobile');
+  if(tabMob){ tabMob.textContent=active?'⏱ Gestempelt':'⏱ Stempeln'; tabMob.classList.toggle('zs-active',active); }
 }
 function openZeitstempel(){
   if(!cu||cu.role==='admin') return;
