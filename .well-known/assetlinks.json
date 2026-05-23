@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.turningpointstiftung.twa",
+        "sha256_cert_fingerprints": ["B7:1A:F3:F9:55:2D:35:51:82:E5:0D:49:1A:2A:A1:33:E2:62:AC:F0:F3:A9:44:7B:07:7A:98:56:70:6B:3C:8C"]
+      }
+    }]
