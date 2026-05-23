@@ -300,6 +300,30 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 #btn-zeitstempel.zs-active{background:var(--ok)!important;color:#fff!important;border-color:var(--ok)!important}
 /* ── Mobile Stempel-Tab: auf Desktop immer ausblenden ── */
 .nav-stempel-mobile{display:none!important}
+/* ── Stempel Vollbild-View ── */
+#view-stempeln{padding:0}
+.zs-page{display:flex;flex-direction:column;gap:14px;max-width:480px;margin:0 auto;padding:16px 14px 32px}
+.zs-clock-card{background:var(--primary);border-radius:16px;padding:28px 20px;text-align:center;color:#fff;box-shadow:0 4px 18px rgba(26,58,92,.25)}
+.zs-clock-card .zs-date{font-size:13px;opacity:.72;margin-bottom:8px;letter-spacing:.2px}
+.zs-clock-card .zs-time{font-size:54px;font-weight:800;line-height:1;letter-spacing:3px;font-variant-numeric:tabular-nums}
+.zs-status-card{border-radius:14px;padding:18px 20px;text-align:center}
+.zs-status-card.not-stamped{background:#f0fff4;border:2px solid var(--ok)}
+.zs-status-card.stamped{background:#e8f0fe;border:2px solid var(--primary-l)}
+.zs-status-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.zs-status-main{font-size:17px;font-weight:700}
+.zs-status-card.not-stamped .zs-status-main{color:var(--ok)}
+.zs-status-card.stamped .zs-status-main{color:var(--primary)}
+.zs-form-card{background:var(--white);border:1.5px solid var(--border);border-radius:14px;padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.zs-form-card .zs-field-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
+.zs-form-card select,.zs-form-card input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;background:#fff;min-height:48px;outline:none;transition:border-color .2s}
+.zs-form-card select:focus,.zs-form-card input[type=text]:focus{border-color:var(--primary-l)}
+.zs-action-card{display:flex;flex-direction:column;gap:10px}
+.btn-einstempeln{background:var(--ok)!important;color:#fff!important;padding:17px!important;font-size:17px!important;font-weight:700!important;border-radius:13px!important;border:none!important}
+.btn-einstempeln:hover{opacity:.9}
+.btn-ausstempeln{background:var(--warn)!important;color:#fff!important;padding:17px!important;font-size:17px!important;font-weight:700!important;border-radius:13px!important;border:none!important}
+.btn-ausstempeln:hover{opacity:.9}
+.btn-verwerfen{background:#fff!important;border:1.5px solid var(--danger)!important;color:var(--danger)!important;padding:13px!important;font-size:14px!important;border-radius:10px!important}
+.btn-verwerfen:hover{background:#fff5f5!important}
 /* ── Tablet (641px–1024px): Desktop-Tabellenlayout, groessere Touch-Ziele ── */
 @media (min-width:641px) and (max-width:1024px){
   .btn{padding:10px 20px;font-size:14px}
@@ -331,7 +355,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   #hdr-logo{height:40px!important}
   .header-right{gap:5px}
   .user-badge{padding:5px 10px;font-size:12px}
-  #btn-zeitstempel{display:inline-flex!important;font-size:11px;padding:5px 8px}
+  #btn-zeitstempel{display:none!important}
 
   /* ─ Navigation ─ */
   .app-nav{padding:0 6px;gap:0}
@@ -553,7 +577,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   </header>
 
   <nav class="app-nav" id="app-nav">
-    <div class="nav-tab nav-stempel-mobile" id="tab-stempeln-mobile" onclick="openZeitstempel()" style="display:none">&#x23F1; Stempeln</div>
+    <div class="nav-tab nav-stempel-mobile" id="tab-stempeln-mobile" data-view="stempeln" onclick="switchView('stempeln')" style="display:none">&#x23F1; Stempeln</div>
     <div class="nav-tab active" data-view="zeiterfassung" onclick="if(cu)viewEmpId=cu.id;switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
     <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
@@ -700,6 +724,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
       </div>
       <div id="ab-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
+
+    <!-- ─── Stempeln (mobile Vollbild-View) ─── -->
+    <div class="view" id="view-stempeln"></div>
 
     <!-- ─── Einstellungen ─── -->
     <div class="view" id="view-einstellungen">
@@ -1324,6 +1351,8 @@ function onEmpSelect(){
   renderZeiterfassung();
 }
 function switchView(v){
+  // Stop clock when leaving Stempel view
+  if(_zsClockInt){ clearInterval(_zsClockInt); _zsClockInt=null; }
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
   const vEl=document.getElementById('view-'+v); if(vEl) vEl.classList.add('active');
@@ -1333,6 +1362,7 @@ function switchView(v){
   if(v==='einstellungen') renderSettings();
   if(v==='gfberichte') renderGFBerichte();
   if(v==='abwesenheiten') renderAbwesenheiten();
+  if(v==='stempeln') renderStempelView();
 }
 function changeMonth(delta){
   mon+=delta;
@@ -3831,7 +3861,81 @@ async function resetPasswordsOnly(){
 // ZEITSTEMPEL (Ein-/Ausstempeln mit direktem AZ-Übertrag)
 // ═══════════════════════════════════════════════════════════════
 const _STAMP_KEY='tp_zt_stamp';
+let _zsClockInt=null;
 function getStamp(){ try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+
+// Stempel-Vollbild-View (Mobile)
+function renderStempelView(){
+  if(!cu||cu.role==='admin') return;
+  if(_zsClockInt){ clearInterval(_zsClockInt); _zsClockInt=null; }
+  const stamp=getStamp();
+  const active=stamp&&stamp.uid===cu.id;
+  const user=getUser(cu.id)||cu;
+  const cats=getCatsForTeam(user.team||'');
+  const catOpts=cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  let html='<div class="zs-page">';
+  // Clock card
+  html+=`<div class="zs-clock-card">
+    <div class="zs-date" id="zs-view-date"></div>
+    <div class="zs-time" id="zs-view-time">--:--:--</div>
+  </div>`;
+  // Status card
+  if(active){
+    const start=new Date(stamp.startTime);
+    const von=String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0');
+    html+=`<div class="zs-status-card stamped">
+      <div class="zs-status-label">Eingestempelt seit ${von} Uhr</div>
+      <div class="zs-status-main" id="zs-elapsed">–</div>
+    </div>`;
+  } else {
+    html+=`<div class="zs-status-card not-stamped">
+      <div class="zs-status-main">Noch nicht eingestempelt</div>
+    </div>`;
+  }
+  // Form fields (only when active stamp)
+  if(active){
+    html+=`<div class="zs-form-card">
+      <div><span class="zs-field-lbl">Zuordnung / Kategorie</span>
+        <select id="zs-zuord"><option value="">– Keine –</option>${catOpts}</select></div>
+      <div><span class="zs-field-lbl">Bemerkung <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></span>
+        <input type="text" id="zs-note" placeholder="z.B. Besprechung, Akademie-Call…"></div>
+    </div>`;
+  }
+  // Action buttons
+  html+='<div class="zs-action-card">';
+  if(active){
+    html+=`<button class="btn btn-ausstempeln" onclick="stopZeitstempel()">■ Ausstempeln &amp; übertragen</button>`;
+    html+=`<button class="btn btn-verwerfen" onclick="cancelZeitstempel()">🗑 Stempel verwerfen</button>`;
+  } else {
+    html+=`<button class="btn btn-einstempeln" onclick="startZeitstempel()">▶ Einstempeln</button>`;
+  }
+  html+='</div></div>';
+  document.getElementById('view-stempeln').innerHTML=html;
+  // Live clock + elapsed ticker
+  function _tick(){
+    const now=new Date();
+    const el=document.getElementById('zs-view-time');
+    if(el) el.textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+    const dl=document.getElementById('zs-view-date');
+    if(dl) dl.textContent=now.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    if(active&&stamp){
+      const start=new Date(stamp.startTime);
+      const totalSec=Math.floor((now-start)/1000);
+      const hh=Math.floor(totalSec/3600);
+      const mm=Math.floor((totalSec%3600)/60);
+      const ss=totalSec%60;
+      const el2=document.getElementById('zs-elapsed');
+      if(el2) el2.textContent=hh>0?`${hh} Std. ${mm} Min.`:`${mm} Min. ${String(ss).padStart(2,'0')} Sek.`;
+    }
+  }
+  _tick();
+  _zsClockInt=setInterval(_tick,1000);
+}
+function _refreshStempelView(){
+  const v=document.getElementById('view-stempeln');
+  if(v&&v.classList.contains('active')) renderStempelView();
+}
+
 function updateZeitstempelBtn(){
   const btn=document.getElementById('btn-zeitstempel');
   if(!btn||!cu) return;
@@ -3897,12 +4001,12 @@ function startZeitstempel(){
   if(!cu||cu.role==='admin') return;
   const stamp={uid:cu.id,startTime:new Date().toISOString(),startDate:new Date().toISOString().slice(0,10)};
   try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
-  closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓','ok');
+  closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓','ok'); _refreshStempelView();
 }
 function cancelZeitstempel(){
   if(!confirm('Stempel verwerfen? Die Zeit wird NICHT in die Zeiterfassung übertragen.')) return;
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
-  closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.');
+  closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.'); _refreshStempelView();
 }
 function stopZeitstempel(){
   const stamp=getStamp();
@@ -3938,6 +4042,7 @@ function stopZeitstempel(){
   });
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
+  _refreshStempelView();
   // Zeiterfassung neu rendern (ggf. Monat wechseln)
   const vze=document.getElementById('view-zeiterfassung');
   if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
