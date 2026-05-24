@@ -3293,6 +3293,15 @@ function approveVacRequest(id){
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   renderAbwesenheiten(); toast('Antrag genehmigt. ✓','ok');
 }
+function deleteVacRequest(id){
+  const r=getData().vacRequests?.[id];
+  if(!r) return;
+  if(r.userId!==cu.id||r.status!=='pending') return; // Sicherheitscheck
+  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  if(!confirm(`Antrag zurückziehen?\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nDieser Antrag wird unwiderruflich gelöscht.`)) return;
+  mutate(d=>{ if(d.vacRequests?.[id]) delete d.vacRequests[id]; });
+  renderAbwesenheiten(); toast('Antrag zurückgezogen.','');
+}
 function confirmRejectVac(id){
   const note=document.getElementById('reject-note').value.trim();
   if(!note){ toast('Bitte einen Ablehnungsgrund angeben.','err'); return; }
@@ -3446,6 +3455,9 @@ function renderAbwesenheiten(){
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
+    const delBtn=r.userId===cu.id&&r.status==='pending'
+      ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">🗑 Antrag zurückziehen</button></div>`
+      :'';
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
                 r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
     return `<div class="ab-card ab-${r.status}">
@@ -3458,7 +3470,7 @@ function renderAbwesenheiten(){
           </div>
           <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.team?` · ${esc(r.team)}`:''}</div>
           ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
-          ${extra}${rnBtns}
+          ${extra}${rnBtns}${delBtn}
         </div>
         <div style="font-size:11px;color:var(--muted);white-space:nowrap">${new Date(r.submittedAt).toLocaleDateString('de-DE')}</div>
       </div>
