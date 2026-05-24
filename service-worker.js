@@ -1,5 +1,5 @@
-// TPS Zeiterfassung – Service Worker v3 (Offline-Support)
-const CACHE = 'tps-ze-v3';
+// TPS Zeiterfassung – Service Worker v4 (Network-First für HTML)
+const CACHE = 'tps-ze-v4';
 const APP_SHELL = [
   '/zeiterfassung-tps/',
   '/zeiterfassung-tps/index.html',
@@ -35,8 +35,9 @@ self.addEventListener('activate', e => {
 
 // Fetch-Strategie:
 // - Firebase Realtime DB API → immer Netz (nie cachen)
-// - Firebase SDK JS-Dateien → Cache first (schon gecacht im Install)
-// - App-Shell → Network first mit Cache-Fallback
+// - Firebase SDK JS-Dateien → Cache first (unveränderlich, versioniert)
+// - index.html / manifest → Network first (damit Updates sofort ankommen)
+// - Alles andere → Network first mit Cache-Fallback
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
@@ -50,8 +51,8 @@ self.addEventListener('fetch', e => {
   // Nur GET cachen
   if (e.request.method !== 'GET') return;
 
-  // Firebase SDK + App-Shell: Cache first, dann Netz
-  if (SDK_URLS.some(u => url.startsWith(u)) || url.includes('/zeiterfassung-tps')) {
+  // Firebase SDK: Cache first (versionierte URLs, ändern sich nie)
+  if (SDK_URLS.some(u => url.startsWith(u))) {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached;
@@ -61,8 +62,22 @@ self.addEventListener('fetch', e => {
             caches.open(CACHE).then(c => c.put(e.request, clone));
           }
           return res;
-        }).catch(() => caches.match('/zeiterfassung-tps/'));
+        }).catch(() => caches.match(e.request));
       })
+    );
+    return;
+  }
+
+  // App-Shell (index.html, manifest.json): Network first → immer aktuelle Version
+  if (url.includes('/zeiterfassung-tps')) {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(e.request) || caches.match('/zeiterfassung-tps/'))
     );
     return;
   }
