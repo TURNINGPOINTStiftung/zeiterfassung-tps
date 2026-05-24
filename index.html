@@ -1082,14 +1082,16 @@ function roundToQuarter(val){
   if(m===60){h+=1;m=0;}
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
-// Schreibt "Übertrag 10h Korrektur" in die Bemerkung des Folgetags wenn Tagessumme > 10h
-function check10hCarryover(uid,y,m,ds){
+// 10h-Tageslimit: Überschuss als Zeiteintrag in Folgetag schreiben (rekursiv für Kaskaden)
+function check10hCarryover(uid,y,m,ds,depth){
+  if((depth||0)>31) return;
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
   const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const rounded=Math.round(raw/15)*15;
+  const rounded=raw>0?Math.round(raw/15)*15:0;
   if(rounded<=600) return;
   const overflow=rounded-600;
+  const bisStr=String(Math.floor(overflow/60)).padStart(2,'0')+':'+String(overflow%60).padStart(2,'0');
   const date=new Date(ds+'T12:00:00');
   date.setDate(date.getDate()+1);
   const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
@@ -1100,10 +1102,14 @@ function check10hCarryover(uid,y,m,ds){
     if(!d.entries[nK].days) d.entries[nK].days={};
     if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
     const nd=d.entries[nK].days[nDs];
-    if(!nd.b1bem||nd.b1bem.startsWith('Übertrag 10h'))
-      nd.b1bem='Übertrag 10h Korrektur (+'+minFmt(overflow)+')';
+    // Ersten freien Block belegen, sonst KT-Minuten addieren
+    if(!nd.b1von){ nd.b1von='00:00'; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
+    else if(!nd.b2von){ nd.b2von='00:00'; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
+    else { nd.ktmin=(Number(nd.ktmin||0)+overflow); }
   });
-  toast('⚠ Tageslimit 10h überschritten – Übertrag zum Folgetag notiert.','warn');
+  // Kaskade: prüfen ob Folgetag jetzt ebenfalls > 10h
+  check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
+  if(!depth) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
 }
 function td_tchange(ds,field,val){
   const uid=viewEmpId||cu.id;
@@ -1517,11 +1523,8 @@ function renderZeiterfassung(){
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
     const roundedDayMin=dayMin>0?Math.round(dayMin/15)*15:0; // auf 15-min-Schritt runden
-    const effDayMin=Math.min(roundedDayMin,600); // max 10h
-    const overflowMin=Math.max(0,roundedDayMin-600);
+    const effDayMin=Math.min(roundedDayMin,600); // max 10h (Übertrag via check10hCarryover)
     monthTotal+=effDayMin;
-
-    const over=roundedDayMin>600; // >10h → rot
 
     const tr=document.createElement('tr');
     if(we) tr.classList.add('weekend');
@@ -1550,7 +1553,7 @@ function renderZeiterfassung(){
       <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
-      <td class="total-c${over?' over':''}">${effDayMin>0?hFmt(effDayMin):''}${overflowMin>0?`<br><small style="font-size:9px;opacity:.7;font-weight:400">↓+${minFmt(overflowMin)}</small>`:''}</td>
+      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
     `;
     tbody.appendChild(tr);
   }
