@@ -1772,11 +1772,10 @@ function td_zuord(ds,field,val,wh,dpw){
 
 // Sync: Abwesenheit → Zeiterfassung (alle Arbeitstage im Zeitraum befüllen, überschreibt bestehende Einträge)
 function syncAbsenceToTimesheets(uid,user,type,from,to){
-  if((user.wh||0)<=0) return;
-  const mins=dailyMinutes(user);
+  const mins=dailyMinutes(user)||480; // Fallback: 8h wenn Wochenstunden nicht konfiguriert
   const cats=getCatsForTeam(user.team||'');
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
-  const bem=cats.includes(type)?'':type; // Typ als Bemerkung wenn keine eigene Kategorie
+  const bem=cats.includes(type)?'':type;
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
@@ -1792,6 +1791,31 @@ function syncAbsenceToTimesheets(uid,user,type,from,to){
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
           Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:''});
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+}
+// Zeiterfassung-Einträge einer Abwesenheit rückgängig machen (nur wenn Zuordnung noch stimmt)
+function clearAbsenceFromTimesheets(uid,user,type,from,to){
+  const cats=getCatsForTeam(user.team||'');
+  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
+  mutate(d=>{
+    let cur=new Date(from+'T12:00:00');
+    const endD=new Date(to+'T12:00:00');
+    while(cur<=endD){
+      const wd=cur.getDay();
+      if(wd!==0&&wd!==6){
+        const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
+        const ds=dateStr(y,m,day);
+        const hols=getHolidays(y,user.bundesland||'');
+        if(!hols.has(ds)){
+          const k=entryKey(uid,y,m);
+          const dd=d.entries?.[k]?.days?.[ds];
+          if(dd&&(dd.b1zuord===zuord||dd.b1bem===type||dd.b1zuord===type)){
+            Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
+          }
         }
       }
       cur.setDate(cur.getDate()+1);
@@ -3303,11 +3327,20 @@ function approveVacRequest(id){
 function deleteVacRequest(id){
   const r=getData().vacRequests?.[id];
   if(!r) return;
-  if(r.userId!==cu.id||r.status!=='pending') return; // Sicherheitscheck
+  if(r.userId!==cu.id) return;
+  const isAutoApproved=r.status==='approved'&&r.type==='AU/Krank';
+  if(r.status!=='pending'&&!isAutoApproved) return;
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
-  if(!confirm(`Antrag zurückziehen?\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nDieser Antrag wird unwiderruflich gelöscht.`)) return;
+  const label=r.status==='pending'?'Antrag zurückziehen':'Krankmeldung stornieren';
+  const extra=isAutoApproved?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
+  if(!confirm(`${label}?\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}${extra}`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]) delete d.vacRequests[id]; });
-  renderAbwesenheiten(); toast('Antrag zurückgezogen.','');
+  if(isAutoApproved){
+    const absUser=getUser(r.userId);
+    if(absUser) clearAbsenceFromTimesheets(r.userId,absUser,r.type,r.startDate,r.endDate);
+  }
+  renderAbwesenheiten();
+  toast(r.status==='pending'?'Antrag zurückgezogen.':'Krankmeldung storniert – Zeiteinträge entfernt.','');
 }
 function confirmRejectVac(id){
   const note=document.getElementById('reject-note').value.trim();
@@ -3462,8 +3495,11 @@ function renderAbwesenheiten(){
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
-    const delBtn=r.userId===cu.id&&r.status==='pending'
-      ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">🗑 Antrag zurückziehen</button></div>`
+    // Eigene ausstehende Anträge immer löschbar; auto-genehmigte (AU/Krank) ebenfalls
+    const canDelete=r.userId===cu.id&&(r.status==='pending'||(r.status==='approved'&&r.type==='AU/Krank'));
+    const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':'🗑 Krankmeldung stornieren';
+    const delBtn=canDelete
+      ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
       :'';
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
                 r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
