@@ -1770,10 +1770,13 @@ function td_zuord(ds,field,val,wh,dpw){
   renderZeiterfassung();
 }
 
-// Sync: Abwesenheiten (AU/Krank) → Zeiterfassung (alle Tage im Zeitraum befüllen)
-function syncSickToTimesheets(uid,user,from,to){
+// Sync: Abwesenheit → Zeiterfassung (alle Arbeitstage im Zeitraum befüllen, überschreibt bestehende Einträge)
+function syncAbsenceToTimesheets(uid,user,type,from,to){
   if((user.wh||0)<=0) return;
-  const sick=dailyMinutes(user);
+  const mins=dailyMinutes(user);
+  const cats=getCatsForTeam(user.team||'');
+  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
+  const bem=cats.includes(type)?'':type; // Typ als Bemerkung wenn keine eigene Kategorie
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
@@ -1788,13 +1791,15 @@ function syncSickToTimesheets(uid,user,from,to){
           if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-          Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',sick),b1zuord:'AU/Krank',b2von:'',b2bis:'',b2zuord:''});
+          Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:''});
         }
       }
       cur.setDate(cur.getDate()+1);
     }
   });
 }
+// Rückwärtskompatibilität
+function syncSickToTimesheets(uid,user,from,to){ syncAbsenceToTimesheets(uid,user,'AU/Krank',from,to); }
 function saveCarryover(){
   const uid=viewEmpId||cu.id;
   const v=parseFloat(document.getElementById('carryover-input').value)||0;
@@ -3265,8 +3270,8 @@ async function saveVacRequest(){
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-  // Richtung 1: AU/Krank in Abwesenheiten → Zeiterfassung automatisch befüllen
-  if(isSick) syncSickToTimesheets(targetUser.id,targetUser,from,to);
+  // Abwesenheit → Zeiterfassung automatisch befüllen (überschreibt bestehende Einträge)
+  if(autoApprove) syncAbsenceToTimesheets(targetUser.id,targetUser,type,from,to);
   closeModal(); renderAbwesenheiten();
   if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
   else toast('Antrag eingereicht – wartet auf Genehmigung. ✓','ok');
@@ -3289,9 +3294,11 @@ function approveVacRequest(id){
   const r=getData().vacRequests?.[id];
   if(!r) return;
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
-  if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?`)) return;
+  if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
-  renderAbwesenheiten(); toast('Antrag genehmigt. ✓','ok');
+  const absUser=getUser(r.userId);
+  if(absUser) syncAbsenceToTimesheets(r.userId,absUser,r.type,r.startDate,r.endDate);
+  renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 function deleteVacRequest(id){
   const r=getData().vacRequests?.[id];
