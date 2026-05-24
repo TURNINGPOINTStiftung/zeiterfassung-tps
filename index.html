@@ -360,10 +360,12 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   #btn-zeitstempel{display:none!important}
 
   /* ─ Navigation ─ */
-  .app-nav{padding:0 6px;gap:0}
-  .nav-tab{padding:17px 14px;font-size:15px;font-weight:600}
+  .app-nav{padding:6px 6px;gap:0;justify-content:center;flex-wrap:wrap}
+  .nav-tab{padding:14px 16px;font-size:15px;font-weight:600;border-radius:7px;margin:3px 2px;background:rgba(26,58,92,.07);border-bottom:3px solid transparent!important}
+  .nav-tab.active{background:var(--primary)!important;color:#fff!important;border-bottom-color:transparent!important}
+  .nav-tab:hover:not(.active){background:rgba(26,58,92,.14)!important;color:var(--primary)}
   /* ─ Stempel-Tab: auf Mobile anzeigen und hervorheben ─ */
-  .nav-stempel-mobile{display:flex!important;align-items:center;gap:6px;background:var(--accent);color:#fff!important;border-radius:6px;margin:5px 4px;padding:14px 18px!important;font-size:15px;border-bottom:none!important;flex-shrink:0;font-weight:700}
+  .nav-stempel-mobile{display:flex!important;align-items:center;gap:6px;background:var(--accent);color:#fff!important;border-radius:7px;margin:3px 2px;padding:14px 18px!important;font-size:15px;border-bottom:none!important;flex-shrink:0;font-weight:700}
   .nav-stempel-mobile.zs-active{background:var(--ok)!important}
   .nav-stempel-mobile:hover{background:#d05a28!important}
 
@@ -620,6 +622,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
         <div class="info-item" id="info-al-wrap"><label>Jahresurlaub</label><div class="val" id="info-al">–</div></div>
         <div class="info-item" id="info-apd-wrap"><label>Arbeitstag (h)</label><div class="val" id="info-apd">–</div></div>
         <div class="info-item" id="info-type-wrap"><label>Beschäftigung</label><div class="val" id="info-type">–</div></div>
+        <div class="info-item" id="info-diff-wrap" style="display:none"><label>± Stunden</label><div class="val" id="info-diff">–</div></div>
       </div>
 
       <div class="tbl-wrap">
@@ -909,9 +912,17 @@ function _migrate(d){
 }
 async function initFirebase(){
   // Anonym einloggen – schützt DB vor Fremdzugriff
-  await firebase.auth().signInAnonymously();
-  const snap=await _fbRef.once('value');
-  const fbData=snap.val();
+  // Timeout-Fallback: wenn kein Netz → Offline-Modus mit localStorage
+  let fbData=null;
+  const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
+  try{
+    await Promise.race([firebase.auth().signInAnonymously(),_timeout(5000)]);
+    const snap=await Promise.race([_fbRef.once('value'),_timeout(6000)]);
+    fbData=snap.val();
+  } catch(e){
+    console.warn('Firebase nicht erreichbar, Offline-Modus:',e.message);
+    _offlineMode=true;
+  }
 
   // localStorage als sekundäre Quelle (immer synchron aktuell)
   let lsData=null;
@@ -954,22 +965,42 @@ async function initFirebase(){
     for(const u of _dataCache.users){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
     }
-    if(needsSave){ _dataCache=_dataCache; await _fbRef.set(_dataCache); try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache));}catch(e){} }
-  } else {
+    if(needsSave){ _dataCache=_dataCache; try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache));}catch(e){} if(!_offlineMode) await _fbRef.set(_dataCache).catch(()=>{}); }
+  } else if(!_offlineMode){
     const d=freshData();
     for(const u of d.users){ u.pw=await hashPw(u.pw); }
     _dataCache=d;
-    await _fbRef.set(_dataCache);
+    await _fbRef.set(_dataCache).catch(()=>{});
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache));}catch(e){}
+  } else if(!_dataCache){
+    // Offline + keine LS-Daten: trotzdem starten mit leerem Datensatz
+    _dataCache=freshData();
   }
 }
 function getData(){ return _dataCache||freshData(); }
+let _offlineMode=false;
+let _pendingSync=false;
 function saveRaw(d){
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
-  return _fbRef.set(d).catch(e=>{ console.warn('Firebase sync error:',e); toast('⚠ Speichern fehlgeschlagen – bitte Seite neu laden.','err'); });
+  if(_offlineMode){ _pendingSync=true; return Promise.resolve(); }
+  return _fbRef.set(d).catch(e=>{
+    console.warn('Firebase sync error:',e);
+    _pendingSync=true;
+  });
 }
 function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
+// Online: Offline-Änderungen synchronisieren
+window.addEventListener('online',()=>{
+  _offlineMode=false;
+  if(_pendingSync&&_dataCache){
+    _fbRef.set(_dataCache).then(()=>{ _pendingSync=false; toast('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
+  }
+});
+window.addEventListener('offline',()=>{
+  _offlineMode=true;
+  toast('📵 Offline – Änderungen werden lokal gespeichert.','');
+});
 
 function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
 function getEntry(uid,y,m){
@@ -1051,6 +1082,29 @@ function roundToQuarter(val){
   if(m===60){h+=1;m=0;}
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
+// Schreibt "Übertrag 10h Korrektur" in die Bemerkung des Folgetags wenn Tagessumme > 10h
+function check10hCarryover(uid,y,m,ds){
+  const entry=getEntry(uid,y,m);
+  const day=(entry.days||{})[ds]||{};
+  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  const rounded=Math.round(raw/15)*15;
+  if(rounded<=600) return;
+  const overflow=rounded-600;
+  const date=new Date(ds+'T12:00:00');
+  date.setDate(date.getDate()+1);
+  const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
+  const nDs=dateStr(nY,nM,nD);
+  mutate(d=>{
+    const nK=entryKey(uid,nY,nM);
+    if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[nK].days) d.entries[nK].days={};
+    if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
+    const nd=d.entries[nK].days[nDs];
+    if(!nd.b1bem||nd.b1bem.startsWith('Übertrag 10h'))
+      nd.b1bem='Übertrag 10h Korrektur (+'+minFmt(overflow)+')';
+  });
+  toast('⚠ Tageslimit 10h überschritten – Übertrag zum Folgetag notiert.','warn');
+}
 function td_tchange(ds,field,val){
   const uid=viewEmpId||cu.id;
   setDay(uid,year,mon,ds,field,val);
@@ -1068,6 +1122,7 @@ function td_tchange(ds,field,val){
       if(rounded!==rawMin) setDay(uid,year,mon,ds,vonF,addMin(bis,-rounded));
     }
   }
+  check10hCarryover(uid,year,mon,ds);
   renderZeiterfassung();
 }
 function isoWeek(date){
@@ -1461,9 +1516,12 @@ function renderZeiterfassung(){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
-    monthTotal+=dayMin; // count ALL days incl. weekends
+    const roundedDayMin=dayMin>0?Math.round(dayMin/15)*15:0; // auf 15-min-Schritt runden
+    const effDayMin=Math.min(roundedDayMin,600); // max 10h
+    const overflowMin=Math.max(0,roundedDayMin-600);
+    monthTotal+=effDayMin;
 
-    const over=dayMin>600; // >10h → red
+    const over=roundedDayMin>600; // >10h → rot
 
     const tr=document.createElement('tr');
     if(we) tr.classList.add('weekend');
@@ -1492,7 +1550,7 @@ function renderZeiterfassung(){
       <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
-      <td class="total-c${over?' over':''}">${dayMin>0?hFmt(dayMin):''}</td>
+      <td class="total-c${over?' over':''}">${effDayMin>0?hFmt(effDayMin):''}${overflowMin>0?`<br><small style="font-size:9px;opacity:.7;font-weight:400">↓+${minFmt(overflowMin)}</small>`:''}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -1566,6 +1624,19 @@ function renderSummary(uid,user,entry,istMin){
     </div>`).join('');
 
   document.getElementById('carryover-input').value=carryH;
+  // ± Stunden im Info-Panel (direkt sichtbar ohne Scrollen)
+  const _dw=document.getElementById('info-diff-wrap');
+  const _de=document.getElementById('info-diff');
+  if(_de&&!isFree){
+    const _s=monthSOLL(user,year,mon);
+    const _c=getEffectiveCarryH(uid,user,year,mon);
+    const _d=istMin-(_s-_c*60);
+    _de.textContent=(_d>=0?'+':'')+hFmt(Math.abs(_d));
+    _de.className='val '+(_d>=0?'pos':'neg');
+    if(_dw) _dw.style.display='';
+  } else {
+    if(_dw) _dw.style.display='none';
+  }
 }
 
 // ── Zuordnung breakdown ──
@@ -3527,6 +3598,7 @@ function renderGFBerichte(){
 function renderBuchhaltungHTML(u,entry,y,m){
   // Für Akademie-Team: Ö-Arbeit wird in der Buchhaltungsversion als "Akademie" angezeigt
   const _bzuord=z=>(z==='Ö-Arbeit'&&u.team==='Akademie')?'Akademie':z;
+  const isFree=isFreelancer(u); // vor Loop: steuert Spalten-Layout
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,u.bundesland||'');
   let rows=''; let monthTotal=0;
@@ -3544,27 +3616,29 @@ function renderBuchhaltungHTML(u,entry,y,m){
     monthTotal+=dayMin;
     const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
     const cls=hol?'hol':(we?'we':'');
-    rows+='<tr'+(cls?' class="'+cls+'"':'')+'>'
+    let row='<tr'+(cls?' class="'+cls+'"':'')+'>'
       +'<td class="l">'+dateFmt+(hol?'<br><span style="font-size:7.5px;color:#c0392b">Feiertag</span>':'')+'</td>'
       +'<td>'+kw+'</td>'
       +'<td>'+(we?'<b>':'')+dn+(we?'</b>':'')+'</td>'
       +'<td>'+(dd.b1von||'')+'</td>'
       +'<td>'+(dd.b1bis||'')+'</td>'
       +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b1zuord||'')+'</td>'
-      +'<td class="sm">'+(b1min>0?minFmt(b1min):'')+'</td>'
-      +'<td class="sp"></td>'
-      +'<td>'+(dd.b2von||'')+'</td>'
-      +'<td>'+(dd.b2bis||'')+'</td>'
-      +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b2zuord||'')+'</td>'
-      +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
-      +'<td>'+(ktm>0?ktm:'')+'</td>'
-      +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
-      +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>'
-      +'<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'
-      +'</tr>';
+      +'<td class="sm">'+(b1min>0?minFmt(b1min):'')+'</td>';
+    if(!isFree){
+      row+='<td class="sp"></td>'
+        +'<td>'+(dd.b2von||'')+'</td>'
+        +'<td>'+(dd.b2bis||'')+'</td>'
+        +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b2zuord||'')+'</td>'
+        +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
+        +'<td>'+(ktm>0?ktm:'')+'</td>'
+        +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
+        +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>';
+    }
+    row+='<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'+'</tr>';
+    rows+=row;
   }
 
-  const isFree=isFreelancer(u);
+  // isFree already defined above
   const maxH=isFree?(u.maxHours||0):0;
   const soll=monthSOLL(u,y,m);
   const carryH=isFree?getEffectiveCarryH(u.id,u,y,m):(entry.carryover||0);
@@ -3645,19 +3719,23 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +'<thead><tr>'
     +'<th class="l" rowspan="2">Datum</th><th rowspan="2">KW</th><th rowspan="2">Tag</th>'
     +'<th colspan="4" class="bh">Block 1</th>'
-    +'<th class="sp" rowspan="2"></th>'
-    +'<th colspan="4" class="bh">Block 2</th>'
-    +'<th colspan="3">Kleinteilig</th>'
+    +(isFree?''
+      :'<th class="sp" rowspan="2"></th>'
+       +'<th colspan="4" class="bh">Block 2</th>'
+       +'<th colspan="3">Kleinteilig</th>')
     +'<th rowspan="2">Gesamt</th>'
     +'</tr><tr>'
     +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
-    +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
-    +'<th>Min</th><th>Zuordnung</th><th>&sum;</th>'
+    +(isFree?''
+      :'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
+       +'<th>Min</th><th>Zuordnung</th><th>&sum;</th>')
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'<tfoot><tr>'
     +'<td class="l" colspan="3">Monatssumme IST</td>'
-    +'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="3"></td>'
+    +(isFree
+      ?'<td colspan="4"></td>'
+      :'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="3"></td>')
     +'<td>'+hFmt(monthTotal)+'</td>'
     +'</tr></tfoot>'
     +'</table>'
