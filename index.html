@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27t</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27u</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -791,7 +791,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27t</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27u</div>
         </div>
       </div>
     </div>
@@ -1361,7 +1361,14 @@ function countZuord(entry,val){
   if(!entry||!entry.days) return 0;
   return Object.values(entry.days).filter(dd=>(dd.b1zuord||'')=== val).length;
 }
-function vacDays(entry){ return countZuord(entry,'Urlaub'); }
+function vacDays(entry){
+  // Halbe Urlaubstage zählen als 0,5
+  if(!entry||!entry.days) return 0;
+  return Object.values(entry.days).reduce((s,dd)=>{
+    if((dd.b1zuord||'')==='Urlaub') return s+(dd.halfDay?0.5:1);
+    return s;
+  },0);
+}
 function sickDays(entry){ return countZuord(entry,'AU/Krank'); }
 function totalVacUsed(uid,y){
   let used=0;
@@ -1889,12 +1896,14 @@ function td_zuord(ds,field,val,wh,dpw){
 }
 
 // Sync: Abwesenheit → Zeiterfassung (alle Arbeitstage im Zeitraum befüllen, überschreibt bestehende Einträge)
-function syncAbsenceToTimesheets(uid,user,type,from,to){
+function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
   const isAZA=type==='Arbeitszeitausgleich';
   // AU/Krank: wh/dpw (tatsächliche Tagesstunden); Urlaub etc.: wh/5 (5-Tage-Standard, dpw ignoriert)
-  const mins=type==='AU/Krank'
+  const fullMins=type==='AU/Krank'
     ? (dailyMinutes(user)||480)
     : (Math.round((user.wh||0)/5*60)||480);
+  // Halber Urlaubstag: halbe Stunden (nur bei type=Urlaub)
+  const mins=(halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
   const cats=getCatsForTeam(user.team||'');
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
   const bem=cats.includes(type)?'':type;
@@ -1916,7 +1925,7 @@ function syncAbsenceToTimesheets(uid,user,type,from,to){
             // AZA: nur Vermerk in Bemerkung – keine Stunden eintragen
             d.entries[k].days[ds].b1bem='Arbeitszeitausgleich';
           } else {
-            Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:''});
+            Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
           }
         }
       }
@@ -3510,6 +3519,12 @@ function showVacRequestForm(){
       <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${today}" oninput="calcVrDays()"></div>
       <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${today}" oninput="calcVrDays()"></div>
     </div>
+    <div id="vr-halfday-wrap" style="display:none;margin:-4px 0 10px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="vr-halfday" onchange="calcVrDays()" style="width:16px;height:16px">
+        <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
+      </label>
+    </div>
     <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
     <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:#fffbf5;border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:#856404">
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
@@ -3526,15 +3541,30 @@ function onVrTypeChange(){
   const t=document.getElementById('vr-type')?.value;
   const hint=document.getElementById('vr-krank-hint');
   if(hint) hint.style.display=t==='AU/Krank'?'block':'none';
+  // Halber-Tag-Option nur bei Urlaub sichtbar
+  const hdWrap=document.getElementById('vr-halfday-wrap');
+  if(hdWrap) hdWrap.style.display=t==='Urlaub'?'':'none';
+  if(t!=='Urlaub'){ const cb=document.getElementById('vr-halfday'); if(cb) cb.checked=false; }
+  calcVrDays();
 }
 function calcVrDays(){
   const f=document.getElementById('vr-from')?.value;
   const t=document.getElementById('vr-to')?.value;
+  const type=document.getElementById('vr-type')?.value||'Urlaub';
+  const halfDay=!!(document.getElementById('vr-halfday')?.checked);
   const info=document.getElementById('vr-days-info');
   const hint=document.getElementById('vr-week-hint');
+  const hdWrap=document.getElementById('vr-halfday-wrap');
+  // Halber-Tag nur anzeigen wenn Von=Bis und Urlaub
+  const singleDay=f&&t&&f===t;
+  if(hdWrap) hdWrap.style.display=(type==='Urlaub')?'':'none';
+  // Halbtag-Checkbox deaktivieren wenn Mehrtageszeitraum
+  const cb=document.getElementById('vr-halfday');
+  if(cb&&!singleDay) cb.checked=false;
   if(!f||!t||f>t){ if(info) info.textContent=''; return; }
   const wd=countWorkDays(f,t);
-  if(info) info.textContent=`→ ${wd} Arbeitstag${wd!==1?'e':''}`;
+  const effective=halfDay&&singleDay?0.5:wd;
+  if(info) info.textContent=`→ ${effective} Arbeitstag${effective!==1?'e':''}`;
   if(hint) hint.style.display=wd>5?'block':'none';
 }
 async function saveVacRequest(){
@@ -3542,6 +3572,7 @@ async function saveVacRequest(){
   const from=document.getElementById('vr-from').value;
   const to=document.getElementById('vr-to').value;
   const note=document.getElementById('vr-note')?.value.trim()||'';
+  const halfDay=!!(type==='Urlaub'&&from===to&&document.getElementById('vr-halfday')?.checked);
   if(!from||!to){ toast('Bitte Zeitraum auswählen.','err'); return; }
   if(from>to){ toast('Startdatum muss vor dem Enddatum liegen.','err'); return; }
   // Ziel-Mitarbeiter bestimmen (Manager kann für Teammitglied eintragen)
@@ -3553,13 +3584,13 @@ async function saveVacRequest(){
   const isLeiter=cu.role==='leitung';
   // AU/Krank, Eintragungen für andere, oder Leitung (kein GF-Schritt): sofort genehmigt
   const autoApprove=isSick||forOther||isLeiter;
-  const wd=countWorkDays(from,to);
+  const wd=halfDay?0.5:countWorkDays(from,to);
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
   const req={
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:targetUser.team||(getLeitungTeams(targetUser)[0]||''),
-    type, startDate:from, endDate:to, workDays:wd, note,
+    type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
     status:autoApprove?'approved':'pending',
     submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,
@@ -3568,7 +3599,7 @@ async function saveVacRequest(){
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
   // Abwesenheit → Zeiterfassung automatisch befüllen (überschreibt bestehende Einträge)
-  if(autoApprove) syncAbsenceToTimesheets(targetUser.id,targetUser,type,from,to);
+  if(autoApprove) syncAbsenceToTimesheets(targetUser.id,targetUser,type,from,to,halfDay);
   closeModal(); renderAbwesenheiten();
   if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
   else toast('Antrag eingereicht – wartet auf Genehmigung. ✓','ok');
@@ -3594,7 +3625,7 @@ function approveVacRequest(id){
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
-  if(absUser) syncAbsenceToTimesheets(r.userId,absUser,r.type,r.startDate,r.endDate);
+  if(absUser) syncAbsenceToTimesheets(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false);
   renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 function deleteVacRequest(id){
@@ -3785,7 +3816,7 @@ function renderAbwesenheiten(){
             <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(r.type)}</span>
             ${statusBadge(r.status)}
           </div>
-          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.team?` · ${esc(r.team)}`:''}</div>
+          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:#e8f4fd;color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
           ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
           ${extra}${rnBtns}${delBtn}
         </div>
@@ -3827,7 +3858,7 @@ function renderAbwesenheiten(){
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
         ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
         <span class="upc-type">${typeIcon}${esc(r.type)}</span>
-        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.team?` · ${esc(r.team)}`:''}</span>
+        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.halfDay?' ½':''}${r.team?` · ${esc(r.team)}`:''}</span>
         <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
       </div>`;
     }).join('');
