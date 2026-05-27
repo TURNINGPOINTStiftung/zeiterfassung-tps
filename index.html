@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27r</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27s</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -761,6 +761,20 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <input class="tag-input" id="new-team-input" placeholder="Neues Team…" onkeydown="if(event.key==='Enter')addTeam()">
             <button class="btn btn-ok btn-sm" onclick="addTeam()">+</button>
           </div>
+          <h3 style="margin-top:18px">Eigene Rollen</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Eigene Bezeichnungen für Rollen – Berechtigungen werden von der Basisrolle vererbt.</div>
+          <div id="custom-role-list"></div>
+          <div class="flex mt-14" style="gap:6px;flex-wrap:wrap">
+            <input class="tag-input" id="new-role-label" placeholder="Bezeichnung (z.B. Koordination)" style="flex:2;min-width:140px" onkeydown="if(event.key==='Enter')addCustomRole()">
+            <select id="new-role-base" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+              <option value="mitarbeiter">Mitarbeiter/in</option>
+              <option value="freiberuflich">Freiberuflich</option>
+              <option value="berater">Berater/in</option>
+              <option value="leitung">Leitungspersonal</option>
+              <option value="geschaeftsfuehrer">Geschäftsführung</option>
+            </select>
+            <button class="btn btn-ok btn-sm" onclick="addCustomRole()">+</button>
+          </div>
         </div>
       </div>
       <div class="settings-row" style="margin-top:14px">
@@ -777,7 +791,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27r</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27s</div>
         </div>
       </div>
     </div>
@@ -874,6 +888,7 @@ function _migrate(d){
   if(!d.vacRequests) d.vacRequests={};
   if(!d.teamCats) d.teamCats={};
   if(!d.stamps) d.stamps={};
+  if(!d.customRoles) d.customRoles=[];
   // Firebase entfernt leere Objekte – days:{} in Einträgen fehlt nach dem Speichern
   Object.values(d.entries).forEach(e=>{ if(e&&!e.days) e.days={}; });
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
@@ -1086,6 +1101,7 @@ function setEntryField(uid,y,m,field,val){
   });
 }
 function getUser(id){ return getData().users.find(u=>u.id===id); }
+function getCustomRoles(){ return getData().customRoles||[]; }
 function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
 function isBerater(u){ return u&&u.role==='berater'; }
 function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'||u.role==='admin'); }
@@ -1442,17 +1458,25 @@ function doLogout(){
 // ═══════════════════════════════════════════════════════════════
 // APP INIT & VIEW SWITCHING
 // ═══════════════════════════════════════════════════════════════
-function roleLabel(r){
+function _baseRoleLabel(r){
   return r==='leitung'?'Leitungspersonal':
          r==='geschaeftsfuehrer'?'Geschäftsführung':
          r==='admin'?'Administrator':
          r==='freiberuflich'?'Freiberuflich':
          r==='berater'?'Berater/in':'Mitarbeiter/in';
 }
+function roleLabel(r,u){
+  // Eigene Bezeichnung des Users hat Vorrang
+  if(u?.customRole){
+    const cr=getCustomRoles().find(c=>c.id===u.customRole);
+    if(cr) return cr.label;
+  }
+  return _baseRoleLabel(r);
+}
 function initApp(){
 
   document.getElementById('hdr-name').textContent=cu.name;
-  document.getElementById('hdr-role').textContent=roleLabel(cu.role);
+  document.getElementById('hdr-role').textContent=roleLabel(cu.role,cu);
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
   const isGF=cu.role==='geschaeftsfuehrer';
@@ -2053,7 +2077,7 @@ function renderOverview(){
       return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
     }).join('');
     const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'; }).length;
-    const roleChip=`<span class="chip chip-${u.role}">${u.role==='freiberuflich'?'★ Freiberuflich':'Festangestellt'}</span>`;
+    const roleChip=`<span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>`;
     const isFree=isFreelancer(u);
     const maxH=isFree?(u.maxHours||0):0;
     const curEntry=d.entries[entryKey(u.id,oy,om)]||{};
@@ -2155,7 +2179,7 @@ function renderSettings(){
   document.getElementById('user-list').innerHTML=d.users.map(u=>`
     <div class="user-row">
       <div>
-        <div class="name">${u.name} <span class="chip chip-${u.role}">${u.role==='leitung'?'Leitung':u.role==='geschaeftsfuehrer'?'GF':u.role==='admin'?'Admin':u.role==='freiberuflich'?'Freiberuflich':u.role==='berater'?'Berater':'Mitarbeiter'}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
+        <div class="name">${u.name} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -2169,6 +2193,13 @@ function renderSettings(){
   document.getElementById('team-list').innerHTML=teams.length
     ? teams.map((t,i)=>`<span class="team-chip">${t} <button onclick="removeTeam(${i})" title="Entfernen">×</button></span>`).join('')
     : '<span style="color:var(--muted);font-size:13px">Noch keine Teams angelegt.</span>';
+
+  // Custom Roles
+  const crs=getCustomRoles();
+  const crEl=document.getElementById('custom-role-list');
+  if(crEl) crEl.innerHTML=crs.length
+    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:10px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole('${esc(r.id)}')" title="Entfernen">×</button></span>`).join('')
+    : '<span style="color:var(--muted);font-size:13px">Noch keine eigenen Rollen.</span>';
 
   // Categories (per team)
   {
@@ -2213,6 +2244,21 @@ function addTeam(){
 function removeTeam(i){
   mutate(d=>{ d.teams.splice(i,1); });
   renderSettings(); populateUeberTeam();
+}
+function addCustomRole(){
+  const lbl=document.getElementById('new-role-label')?.value.trim();
+  const base=document.getElementById('new-role-base')?.value||'mitarbeiter';
+  if(!lbl){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
+  const id=lbl.toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,'');
+  const d=getData();
+  if((d.customRoles||[]).find(r=>r.id===id)){ toast('Bezeichnung bereits vorhanden.','err'); return; }
+  mutate(d=>{ if(!d.customRoles) d.customRoles=[]; d.customRoles.push({id,label:lbl,base}); });
+  document.getElementById('new-role-label').value='';
+  renderSettings(); toast('Rolle hinzugefügt.');
+}
+function removeCustomRole(id){
+  mutate(d=>{ d.customRoles=(d.customRoles||[]).filter(r=>r.id!==id); });
+  renderSettings();
 }
 function addCategory(){
   const inp=document.getElementById('new-cat-input'); if(!inp) return;
@@ -2308,13 +2354,22 @@ function userForm(u={}){
     <div class="form-group"><label>Rolle</label>
       ${u.id==='admin'
         ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
-        : `<select id="uf-role" onchange="toggleFreelancerFields()">
-        <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
-        <option value="freiberuflich"${isFree?' selected':''}>★ Freiberuflich</option>
-        <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
-        <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
-        <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
-      </select>`}
+        : (()=>{
+            const crs=getCustomRoles();
+            // Aktuell selektierter Wert: customRole → "custom:ID", sonst role
+            const selVal=u.customRole?`custom:${u.customRole}`:(u.role||'mitarbeiter');
+            const customGroup=crs.length
+              ? `<optgroup label="── Eigene Rollen ──">${crs.map(cr=>`<option value="custom:${esc(cr.id)}"${selVal===`custom:${cr.id}`?' selected':''}>${esc(cr.label)} (${_baseRoleLabel(cr.base)})</option>`).join('')}</optgroup>`
+              : '';
+            return `<select id="uf-role" onchange="toggleFreelancerFields()">
+              <option value="mitarbeiter"${selVal==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
+              <option value="freiberuflich"${selVal==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
+              <option value="berater"${selVal==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
+              <option value="leitung"${selVal==='leitung'?' selected':''}>Leitungspersonal</option>
+              <option value="geschaeftsfuehrer"${selVal==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+              ${customGroup}
+            </select>`;
+          })()}
     </div>
     <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
     <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
@@ -2330,11 +2385,22 @@ function userForm(u={}){
     </div>
     <script>toggleFreelancerFields()<\/script>`;
 }
-function toggleFreelancerFields(){
+function _resolveUfRole(){
+  // Gibt die Basis-Berechtigungsrolle zurück, auch wenn ein custom:ID gewählt ist
   const sel=document.getElementById('uf-role');
+  if(!sel) return 'mitarbeiter';
+  const v=sel.value;
+  if(v.startsWith('custom:')){
+    const cid=v.slice(7);
+    const cr=getCustomRoles().find(r=>r.id===cid);
+    return cr?cr.base:'mitarbeiter';
+  }
+  return v;
+}
+function toggleFreelancerFields(){
   const fields=document.getElementById('uf-employed-fields');
-  if(!sel||!fields) return;
-  const role=sel.value;
+  if(!fields) return;
+  const role=_resolveUfRole();
   fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
   const ff=document.getElementById('uf-freelancer-fields');
   if(ff) ff.style.display=role==='freiberuflich'?'':'none';
@@ -2343,7 +2409,15 @@ function toggleFreelancerFields(){
   if(s&&m2){ const isL=role==='leitung'; s.style.display=isL?'none':''; m2.style.display=isL?'':'none'; }
 }
 function collectUserForm(){
-  const role=document.getElementById('uf-role').value;
+  const rawRole=document.getElementById('uf-role').value;
+  // Custom-Rolle auflösen: "custom:koordination" → role=mitarbeiter, customRole='koordination'
+  let role=rawRole, customRole='';
+  if(rawRole.startsWith('custom:')){
+    const cid=rawRole.slice(7);
+    const cr=getCustomRoles().find(r=>r.id===cid);
+    role=cr?cr.base:'mitarbeiter';
+    customRole=cid;
+  }
   const isFree=role==='freiberuflich';
   const isLeitung=role==='leitung';
   const at=getTeams();
@@ -2354,6 +2428,7 @@ function collectUserForm(){
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     pw:document.getElementById('uf-pw').value,
     role,
+    customRole,
     team:isLeitung?'':(teamEl?teamEl.value:''),
     teams:isLeitung?teams:[],
     city:document.getElementById('uf-city').value.trim(),
