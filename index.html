@@ -1094,7 +1094,8 @@ function check10hCarryover(uid,y,m,ds,depth){
   const rounded=raw>0?Math.round(raw/15)*15:0;
   if(rounded<=600) return;
   const overflow=rounded-600;
-  const bisStr=String(Math.floor(overflow/60)).padStart(2,'0')+':'+String(overflow%60).padStart(2,'0');
+  const startStr='08:00';
+  const bisStr=addMin(startStr,overflow); // 08:00 + Überschuss-Minuten
   const date=new Date(ds+'T12:00:00');
   date.setDate(date.getDate()+1);
   const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
@@ -1106,8 +1107,8 @@ function check10hCarryover(uid,y,m,ds,depth){
     if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
     const nd=d.entries[nK].days[nDs];
     // Ersten freien Block belegen, sonst KT-Minuten addieren
-    if(!nd.b1von){ nd.b1von='00:00'; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
-    else if(!nd.b2von){ nd.b2von='00:00'; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
+    if(!nd.b1von){ nd.b1von=startStr; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
+    else if(!nd.b2von){ nd.b2von=startStr; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
     else { nd.ktmin=(Number(nd.ktmin||0)+overflow); }
   });
   // Kaskade: prüfen ob Folgetag jetzt ebenfalls > 10h
