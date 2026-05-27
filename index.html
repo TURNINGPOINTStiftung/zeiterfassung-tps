@@ -182,6 +182,8 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .s-card .sub{font-size:11px;color:var(--muted);margin-top:3px}
 .s-card .big.pos{color:var(--ok)}
 .s-card .big.neg{color:var(--danger)}
+.val.pos{color:var(--ok)!important;font-weight:700}
+.val.neg{color:var(--danger)!important;font-weight:700}
 
 /* ── Submit Bar ── */
 .action-bar{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -864,6 +866,7 @@ function _migrate(d){
   if(!d.teamReports) d.teamReports={};
   if(!d.vacRequests) d.vacRequests={};
   if(!d.teamCats) d.teamCats={};
+  if(!d.stamps) d.stamps={};
   // Firebase entfernt leere Objekte – days:{} in Einträgen fehlt nach dem Speichern
   Object.values(d.entries).forEach(e=>{ if(e&&!e.days) e.days={}; });
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
@@ -1114,18 +1117,23 @@ function check10hCarryover(uid,y,m,ds,depth){
 function td_tchange(ds,field,val){
   const uid=viewEmpId||cu.id;
   setDay(uid,year,mon,ds,field,val);
-  // Gesamtdauer auf volle Viertelstunden abrunden, Startzeit vorne anpassen
+  // Gesamtdauer auf volle Viertelstunden runden – Startzeit bleibt, Endzeit wird angepasst
+  // Abwesenheiten (Urlaub, AU/Krank, Freistellung) werden nicht gerundet
   const block=field.startsWith('b2')?'2':'1';
-  const vonF=`b${block}von`, bisF=`b${block}bis`;
+  const vonF=`b${block}von`, bisF=`b${block}bis`, zuordF=`b${block}zuord`;
   const entry=getEntry(uid,year,mon);
   const day=(entry.days||{})[ds]||{};
-  const von=field===vonF?val:(day[vonF]||'');
-  const bis=field===bisF?val:(day[bisF]||'');
-  if(von&&bis){
-    const rawMin=diffMin(von,bis);
-    if(rawMin>=15){
-      const rounded=Math.floor(rawMin/15)*15;
-      if(rounded!==rawMin) setDay(uid,year,mon,ds,vonF,addMin(bis,-rounded));
+  const zuord=day[zuordF]||'';
+  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Freistellung';
+  if(!isAbsence){
+    const von=field===vonF?val:(day[vonF]||'');
+    const bis=field===bisF?val:(day[bisF]||'');
+    if(von&&bis){
+      const rawMin=diffMin(von,bis);
+      if(rawMin>0){
+        const rounded=Math.round(rawMin/15)*15; // nächste Viertelstunde (auf/ab)
+        if(rounded!==rawMin&&rounded>0) setDay(uid,year,mon,ds,bisF,addMin(von,rounded));
+      }
     }
   }
   check10hCarryover(uid,year,mon,ds);
@@ -1522,7 +1530,10 @@ function renderZeiterfassung(){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
-    const roundedDayMin=dayMin>0?Math.round(dayMin/15)*15:0; // auf 15-min-Schritt runden
+    // Abwesenheiten (Urlaub, AU/Krank, Freistellung) nicht auf 15-min runden
+    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Freistellung'
+      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Freistellung';
+    const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
     const effDayMin=Math.min(roundedDayMin,600); // max 10h (Übertrag via check10hCarryover)
     monthTotal+=effDayMin;
 
@@ -1772,7 +1783,10 @@ function td_zuord(ds,field,val,wh,dpw){
 
 // Sync: Abwesenheit → Zeiterfassung (alle Arbeitstage im Zeitraum befüllen, überschreibt bestehende Einträge)
 function syncAbsenceToTimesheets(uid,user,type,from,to){
-  const mins=dailyMinutes(user)||480; // Fallback: 8h wenn Wochenstunden nicht konfiguriert
+  // AU/Krank: wh/dpw (tatsächliche Tagesstunden); Urlaub etc.: wh/5 (5-Tage-Standard, dpw ignoriert)
+  const mins=type==='AU/Krank'
+    ? (dailyMinutes(user)||480)
+    : (Math.round((user.wh||0)/5*60)||480);
   const cats=getCatsForTeam(user.team||'');
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
   const bem=cats.includes(type)?'':type;
@@ -4003,7 +4017,11 @@ async function resetPasswordsOnly(){
 // ═══════════════════════════════════════════════════════════════
 const _STAMP_KEY='tp_zt_stamp';
 let _zsClockInt=null;
-function getStamp(){ try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function getStamp(){
+  // Erst Firebase-Daten (cross-device), dann localStorage als Fallback
+  if(cu){ const d=getData(); if(d.stamps&&d.stamps[cu.id]) return d.stamps[cu.id]; }
+  try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; }
+}
 
 // Stempel-Vollbild-View (Mobile)
 function renderStempelView(){
@@ -4142,11 +4160,13 @@ function startZeitstempel(){
   if(!cu||cu.role==='admin') return;
   const stamp={uid:cu.id,startTime:new Date().toISOString(),startDate:new Date().toISOString().slice(0,10)};
   try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
+  mutate(d=>{ if(!d.stamps) d.stamps={}; d.stamps[cu.id]=stamp; });
   closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓','ok'); _refreshStempelView();
 }
 function cancelZeitstempel(){
   if(!confirm('Stempel verwerfen? Die Zeit wird NICHT in die Zeiterfassung übertragen.')) return;
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
+  mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
   closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.'); _refreshStempelView();
 }
 function stopZeitstempel(){
@@ -4182,6 +4202,7 @@ function stopZeitstempel(){
     }
   });
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
+  mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
   closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
   _refreshStempelView();
   // Zeiterfassung neu rendern (ggf. Monat wechseln)
