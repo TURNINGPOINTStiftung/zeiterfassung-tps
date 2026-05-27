@@ -1,5 +1,5 @@
-// TPS Zeiterfassung – Service Worker v5 (Network-First für HTML)
-const CACHE = 'tps-ze-v5';
+// TPS Zeiterfassung – Service Worker v6 (Network-First für HTML)
+const CACHE = 'tps-ze-v6';
 const APP_SHELL = [
   '/zeiterfassung-tps/',
   '/zeiterfassung-tps/index.html',

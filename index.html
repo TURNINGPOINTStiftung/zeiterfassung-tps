@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27j</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27k</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27j</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27k</div>
         </div>
       </div>
     </div>
@@ -1186,13 +1186,13 @@ function td_tchange(ds,field,val){
   const uid=viewEmpId||cu.id;
   setDay(uid,year,mon,ds,field,val);
   // Gesamtdauer auf volle Viertelstunden runden – Startzeit bleibt, Endzeit wird angepasst
-  // Abwesenheiten (Urlaub, AU/Krank, Freistellung) werden nicht gerundet
+  // Abwesenheiten (Urlaub, AU/Krank, Arbeitszeitausgleich) werden nicht gerundet
   const block=field.startsWith('b2')?'2':'1';
   const vonF=`b${block}von`, bisF=`b${block}bis`, zuordF=`b${block}zuord`;
   const entry=getEntry(uid,year,mon);
   const day=(entry.days||{})[ds]||{};
   const zuord=day[zuordF]||'';
-  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Freistellung';
+  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
   if(!isAbsence){
     const von=field===vonF?val:(day[vonF]||'');
     const bis=field===bisF?val:(day[bisF]||'');
@@ -1598,9 +1598,9 @@ function renderZeiterfassung(){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
-    // Abwesenheiten (Urlaub, AU/Krank, Freistellung) nicht auf 15-min runden
-    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Freistellung'
-      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Freistellung';
+    // Abwesenheiten (Urlaub, AU/Krank, Arbeitszeitausgleich) nicht auf 15-min runden
+    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
+      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
     const effDayMin=Math.min(roundedDayMin,600); // max 10h (Übertrag via check10hCarryover)
     monthTotal+=effDayMin;
@@ -3381,7 +3381,7 @@ function showVacRequestForm(){
       <select id="vr-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="onVrTypeChange()">
         <option value="Urlaub">Urlaub</option>
         <option value="AU/Krank">AU / Krank</option>
-        <option value="Freistellung">Freistellung</option>
+        <option value="Arbeitszeitausgleich">Arbeitszeitausgleich</option>
         <option value="Sonstiges">Sonstiges</option>
       </select></div>
     <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
@@ -3431,8 +3431,9 @@ async function saveVacRequest(){
   const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:cu;
   const forOther=targetUser.id!==cu.id;
   const isSick=type==='AU/Krank';
-  // AU/Krank und Eintragungen für andere: sofort genehmigt
-  const autoApprove=isSick||forOther;
+  const isLeiter=cu.role==='leitung';
+  // AU/Krank, Eintragungen für andere, oder Leitung (kein GF-Schritt): sofort genehmigt
+  const autoApprove=isSick||forOther||isLeiter;
   const wd=countWorkDays(from,to);
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
@@ -3481,7 +3482,8 @@ function deleteVacRequest(id){
   const r=getData().vacRequests?.[id];
   if(!r) return;
   if(r.userId!==cu.id) return;
-  const isAutoApproved=r.status==='approved'&&r.type==='AU/Krank';
+  const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung';
+  const isAutoApproved=r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf);
   if(r.status!=='pending'&&!isAutoApproved) return;
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
   const label=r.status==='pending'?'Antrag zurückziehen':'Krankmeldung stornieren';
@@ -3586,7 +3588,7 @@ function renderAbCalendar(){
     let cls='ab-cal-day'+(isWE?' weekend':'')+(hols.has(ds)?' holiday-cell':'')+(ds===todayStr2?' today-cell':'');
     const abs=dayMap[ds]||[];
     const badges=abs.map(a=>{
-      const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Freistellung'?'📋':'📌';
+      const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Arbeitszeitausgleich'?'📋':'📌';
       const firstName=a.name.split(' ')[0];
       return `<span class="ab-cal-badge" style="background:${colorFor(a.userId)};color:#1a1a2e" title="${esc(a.name)}: ${esc(a.type)}">${icon} ${esc(firstName)}</span>`;
     }).join('');
@@ -3648,9 +3650,9 @@ function renderAbwesenheiten(){
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
-    // Eigene ausstehende Anträge immer löschbar; auto-genehmigte (AU/Krank) ebenfalls
-    const canDelete=r.userId===cu.id&&(r.status==='pending'||(r.status==='approved'&&r.type==='AU/Krank'));
-    const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':'🗑 Krankmeldung stornieren';
+    // Eigene ausstehende Anträge immer löschbar; auto-genehmigte (AU/Krank, Leitung) ebenfalls
+    const canDelete=r.userId===cu.id&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||cu.role==='leitung')));
+    const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
       ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
       :'';
@@ -3702,7 +3704,7 @@ function renderAbwesenheiten(){
       }
       const showName=r.userId!==cu.id;
       const fmtShort=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.`; };
-      const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Freistellung'?'📋 ':'📌 ';
+      const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Arbeitszeitausgleich'?'📋 ':'📌 ';
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
         ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
         <span class="upc-type">${typeIcon}${esc(r.type)}</span>
