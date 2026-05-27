@@ -769,8 +769,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-outline btn-sm" onclick="exportData()">📥 Alle Daten exportieren (JSON)</button>
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
+            <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.22a</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27a</div>
         </div>
       </div>
     </div>
@@ -1110,24 +1111,28 @@ function check10hCarryover(uid,y,m,ds,depth){
     if(!nd.b1von){ nd.b1von=startStr; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
     else if(!nd.b2von){ nd.b2von=startStr; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
     else { nd.ktmin=(Number(nd.ktmin||0)+overflow); }
-    // ── Originaltag: Überschuss vom letzten Block abziehen → exakt 10h ──
-    const ok=entryKey(uid,y,m);
-    const od=d.entries[ok]?.days?.[ds];
-    if(od){
-      let toRemove=overflow;
-      // KT zuerst kürzen, dann Block 2, dann Block 1
-      if(toRemove>0&&Number(od.ktmin||0)>0){
-        const cut=Math.min(toRemove,Number(od.ktmin));
-        od.ktmin=Number(od.ktmin)-cut; toRemove-=cut;
-      }
-      if(toRemove>0&&od.b2von&&od.b2bis){
-        const b2m=diffMin(od.b2von,od.b2bis);
-        const cut=Math.min(toRemove,b2m);
-        od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut;
-      }
-      if(toRemove>0&&od.b1von&&od.b1bis){
-        const b1m=diffMin(od.b1von,od.b1bis);
-        od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove));
+    // ── Originaltag: nur beim ersten Aufruf (depth===0) Endzeit kürzen ──
+    // Rekursive Aufrufe dürfen die automatisch angelegten Übertrag-Einträge
+    // nicht nachträglich verändern, sonst entsteht eine Kaskade durch den ganzen Monat.
+    if(!depth){
+      const ok=entryKey(uid,y,m);
+      const od=d.entries[ok]?.days?.[ds];
+      if(od){
+        let toRemove=overflow;
+        // KT zuerst kürzen, dann Block 2, dann Block 1
+        if(toRemove>0&&Number(od.ktmin||0)>0){
+          const cut=Math.min(toRemove,Number(od.ktmin));
+          od.ktmin=Number(od.ktmin)-cut; toRemove-=cut;
+        }
+        if(toRemove>0&&od.b2von&&od.b2bis){
+          const b2m=diffMin(od.b2von,od.b2bis);
+          const cut=Math.min(toRemove,b2m);
+          od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut;
+        }
+        if(toRemove>0&&od.b1von&&od.b1bis){
+          const b1m=diffMin(od.b1von,od.b1bis);
+          od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove));
+        }
       }
     }
   });
@@ -2970,6 +2975,77 @@ function resetData(){
   localStorage.removeItem(STORAGE_KEY);
   toast('Daten gelöscht – Seite wird neu geladen…','err');
   setTimeout(()=>location.reload(),1200);
+}
+
+// Bereinigt fehlerhafte "Übertrag 10h Korrektur"-Einträge die durch den Kaskaden-Bug entstanden sind
+function showCarryoverCleanup(){
+  const d=getData();
+  const users=d.users.filter(u=>u.role!=='admin');
+  const userOpts=users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+  const now=new Date();
+  openModal(`<h3 style="margin-bottom:14px">🧹 Übertrag-Korrekturen bereinigen</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Entfernt alle automatisch angelegten „Übertrag 10h Korrektur"-Einträge für einen Mitarbeiter in einem Monat. Echte Arbeitszeiten bleiben erhalten.</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <label style="font-size:13px;font-weight:600">Mitarbeiter
+        <select id="cl-uid" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">${userOpts}</select>
+      </label>
+      <div style="display:flex;gap:8px">
+        <label style="font-size:13px;font-weight:600;flex:1">Jahr
+          <input id="cl-year" type="number" value="${now.getFullYear()}" min="2020" max="2099" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+        </label>
+        <label style="font-size:13px;font-weight:600;flex:1">Monat
+          <input id="cl-mon" type="number" value="${now.getMonth()+1}" min="1" max="12" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+        </label>
+      </div>
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-top:4px">
+        <input type="checkbox" id="cl-all-months"> <span>Alle Monate bereinigen (nicht nur den gewählten Monat)</span>
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn btn-danger btn-sm" onclick="runCarryoverCleanup()">Bereinigen</button>
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">Abbrechen</button>
+    </div>`);
+}
+
+function runCarryoverCleanup(){
+  const uid=document.getElementById('cl-uid').value;
+  const year=parseInt(document.getElementById('cl-year').value)||0;
+  const mon=parseInt(document.getElementById('cl-mon').value)||0;
+  const allMonths=document.getElementById('cl-all-months').checked;
+  if(!uid) return;
+  let removed=0;
+  mutate(d=>{
+    if(!d.entries) return;
+    Object.keys(d.entries).forEach(k=>{
+      if(!k.startsWith(uid+'_')) return;
+      // Monatsfilter
+      if(!allMonths){
+        const expected=entryKey(uid,year,mon);
+        if(k!==expected) return;
+      }
+      const daysObj=d.entries[k].days;
+      if(!daysObj) return;
+      Object.keys(daysObj).forEach(ds=>{
+        const day=daysObj[ds];
+        // b1-Block: wenn bem='Übertrag 10h Korrektur' → b1-Felder löschen
+        if(day.b1bem==='Übertrag 10h Korrektur'){
+          day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
+          removed++;
+        }
+        // b2-Block: wenn bem='Übertrag 10h Korrektur' → b2-Felder löschen
+        if(day.b2bem==='Übertrag 10h Korrektur'){
+          day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
+          removed++;
+        }
+        // leeren Tag-Eintrag komplett entfernen
+        const isEmpty=!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis&&!day.ktmin;
+        if(isEmpty) delete daysObj[ds];
+      });
+    });
+  });
+  closeModal();
+  renderZeiterfassung&&renderZeiterfassung();
+  toast(`✓ ${removed} Übertrag-Einträge entfernt.`,'ok');
 }
 
 // ═══════════════════════════════════════════════════════════════
