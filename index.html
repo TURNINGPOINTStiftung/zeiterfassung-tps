@@ -542,7 +542,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ── Zoom-Widget (fixed, unten rechts) ── -->
 <div class="zoom-ctrl no-print" title="Ansicht vergrößern / verkleinern (Strg+Mausrad · Strg+0 = Reset)">
   <button onclick="zoomStep(-1)" title="Verkleinern (Strg+–)">&#8722;</button>
-  <span id="zoom-label" onclick="zoomReset()" title="Klicken zum Zurücksetzen">100%</span>
+  <span id="zoom-label" onclick="zoomReset()" title="Klicken zum Zurücksetzen (120%)">120%</span>
   <button onclick="zoomStep(+1)" title="Vergrößern (Strg++)">&#43;</button>
 </div>
 
@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27z</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28a</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27z</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28a</div>
         </div>
       </div>
     </div>
@@ -4804,7 +4804,8 @@ function stopZeitstempel(){
 })();
 // ─── Zoom ─────────────────────────────────────────────────────
 const _ZOOM_KEY='tp_zt_zoom';
-let _zoom=parseFloat(localStorage.getItem(_ZOOM_KEY)||'1');
+const _ZOOM_DEFAULT=1.2;
+let _zoom=parseFloat(localStorage.getItem(_ZOOM_KEY)||String(_ZOOM_DEFAULT));
 function _applyZoom(z){
   _zoom=Math.round(Math.max(0.5,Math.min(2.0,z))*10)/10;
   document.body.style.zoom=_zoom;
@@ -4813,7 +4814,7 @@ function _applyZoom(z){
   if(lbl) lbl.textContent=Math.round(_zoom*100)+'%';
 }
 function zoomStep(dir){ _applyZoom(_zoom+dir*0.1); }
-function zoomReset(){ _applyZoom(1); }
+function zoomReset(){ _applyZoom(_ZOOM_DEFAULT); }
 // Initialer Zoom beim Laden
 _applyZoom(_zoom);
 // Strg+Mausrad
