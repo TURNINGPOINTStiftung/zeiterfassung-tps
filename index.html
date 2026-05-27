@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27q</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27r</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27q</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27r</div>
         </div>
       </div>
     </div>
@@ -4383,9 +4383,11 @@ async function startZeitstempel(){
       const val=snap.val(); if(val) _dataCache.entries[k]=val;
     }catch(e){}
   }
-  // Block wählen: Block 1 wenn er noch frei ist, sonst Block 2
+  // Block wählen: b1 wenn frei, b2 wenn b1 voll, 'kt' wenn beide Blöcke voll belegt
   const dayNow=(getEntry(cu.id,sy,sm).days||{})[startDate]||{};
-  const block=(dayNow.b1von&&dayNow.b1bis)?'b2':'b1';
+  const b1full=!!(dayNow.b1von&&dayNow.b1bis);
+  const b2full=!!(dayNow.b2von&&dayNow.b2bis);
+  const block=b1full?(b2full?'kt':'b2'):'b1';
   const stamp={uid:cu.id,startTime:now.toISOString(),startDate,von,block};
   try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
   mutate(d=>{
@@ -4394,9 +4396,10 @@ async function startZeitstempel(){
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[startDate]) d.entries[k].days[startDate]={};
-    // Startzeit direkt in den gewählten Block schreiben
+    // Startzeit nur schreiben wenn ein echter Block verfügbar ist
+    // block==='kt': beide Blöcke voll → kein von-Eintrag, Zeit komplett bei Ausstempeln zu ktmin
     if(block==='b1') d.entries[k].days[startDate].b1von=von;
-    else             d.entries[k].days[startDate].b2von=von;
+    else if(block==='b2') d.entries[k].days[startDate].b2von=von;
   });
   closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓ ('+von+')','ok'); _refreshStempelView();
   const vze=document.getElementById('view-zeiterfassung');
@@ -4442,10 +4445,12 @@ function stopZeitstempel(){
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
-    if(isShort){
-      // Block wieder freigeben (startZeitstempel hat nur b1von/b2von gesetzt, kein bis)
-      if(block==='b1'){ day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem=''; }
-      else if(block==='b2'){ day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem=''; }
+    if(isShort||block==='kt'){
+      // Block-Von freigeben – nur wenn startZeitstempel es gesetzt hat (von stimmt) und noch kein Bis eingetragen wurde
+      // b1zuord/b1bem werden NICHT angefasst – startZeitstempel hat sie nie gesetzt
+      if(block==='b1'&&day.b1von===von&&!day.b1bis) day.b1von='';
+      else if(block==='b2'&&day.b2von===von&&!day.b2bis) day.b2von='';
+      // block==='kt': beide Blöcke waren voll, kein von wurde geschrieben → nichts zu leeren
       // Minuten zu Kleinteiligem addieren
       day.ktmin=(Number(day.ktmin||0)+durationMin);
       // Zuordnung: erste gewinnt, weitere werden ignoriert (Kleinteiliges ist ein Sammeltopf)
