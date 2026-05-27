@@ -1101,15 +1101,35 @@ function check10hCarryover(uid,y,m,ds,depth){
   const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
   const nDs=dateStr(nY,nM,nD);
   mutate(d=>{
+    // ── Folgetag: Übertrag anlegen ──
     const nK=entryKey(uid,nY,nM);
     if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
     if(!d.entries[nK].days) d.entries[nK].days={};
     if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
     const nd=d.entries[nK].days[nDs];
-    // Ersten freien Block belegen, sonst KT-Minuten addieren
     if(!nd.b1von){ nd.b1von=startStr; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
     else if(!nd.b2von){ nd.b2von=startStr; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
     else { nd.ktmin=(Number(nd.ktmin||0)+overflow); }
+    // ── Originaltag: Überschuss vom letzten Block abziehen → exakt 10h ──
+    const ok=entryKey(uid,y,m);
+    const od=d.entries[ok]?.days?.[ds];
+    if(od){
+      let toRemove=overflow;
+      // KT zuerst kürzen, dann Block 2, dann Block 1
+      if(toRemove>0&&Number(od.ktmin||0)>0){
+        const cut=Math.min(toRemove,Number(od.ktmin));
+        od.ktmin=Number(od.ktmin)-cut; toRemove-=cut;
+      }
+      if(toRemove>0&&od.b2von&&od.b2bis){
+        const b2m=diffMin(od.b2von,od.b2bis);
+        const cut=Math.min(toRemove,b2m);
+        od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut;
+      }
+      if(toRemove>0&&od.b1von&&od.b1bis){
+        const b1m=diffMin(od.b1von,od.b1bis);
+        od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove));
+      }
+    }
   });
   // Kaskade: prüfen ob Folgetag jetzt ebenfalls > 10h
   check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
