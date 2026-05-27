@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27o</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27p</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27o</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27p</div>
         </div>
       </div>
     </div>
@@ -829,14 +829,14 @@ const _TPS_LOGO='data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZ
 
 const DEFAULT_CATS = [
   'Akademie','Wendeakademie','Wendekurs','Wendestart',
-  'Öffentlichkeitsarbeit','Social Media','Besprechung',
+  'Marketing / Öffentlichkeitsarbeit','Social Media','Besprechung',
   'Mails/Nachrichten','Kooperationspartner','Telefonate',
   'Veranstaltung','Urlaub','AU/Krank','Sonstiges'
 ];
-const DEFAULT_TEAMS = ['Akademie','Öffentlichkeitsarbeit','Verwaltung','Vereinsentwicklung'];
+const DEFAULT_TEAMS = ['Akademie','Marketing / Öffentlichkeitsarbeit','Verwaltung','Vereinsentwicklung'];
 const DEFAULT_TEAM_CATS = {
   'Akademie':           ['Akademie','Wendeakademie','Wendekurs','Wendestart','Wendetraining','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Urlaub','AU/Krank','Sonstiges'],
-  'Öffentlichkeitsarbeit': ['Öffentlichkeitsarbeit','Social Media','Kooperationspartner','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Urlaub','AU/Krank','Sonstiges'],
+  'Marketing / Öffentlichkeitsarbeit': ['Marketing / Öffentlichkeitsarbeit','Social Media','Kooperationspartner','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Urlaub','AU/Krank','Sonstiges'],
   'Verwaltung':         ['Verwaltung','Besprechung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges'],
   'Vereinsentwicklung': ['Vereinsentwicklung','Beratung','Netzwerkarbeit','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges']
 };
@@ -896,6 +896,19 @@ function _migrate(d){
   });
   // Vereinsentwicklung in Teams-Liste ergänzen wenn noch nicht vorhanden
   if(!d.teams.includes('Vereinsentwicklung')) d.teams.push('Vereinsentwicklung');
+  // "Öffentlichkeitsarbeit" → "Marketing / Öffentlichkeitsarbeit" umbenennen
+  const _renameÖ=(arr,old,nw)=>{ const i=arr.indexOf(old); if(i>=0) arr[i]=nw; };
+  _renameÖ(d.cats,'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
+  _renameÖ(d.teams,'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
+  if(d.teamCats&&d.teamCats['Öffentlichkeitsarbeit']&&!d.teamCats['Marketing / Öffentlichkeitsarbeit']){
+    d.teamCats['Marketing / Öffentlichkeitsarbeit']=d.teamCats['Öffentlichkeitsarbeit'];
+    delete d.teamCats['Öffentlichkeitsarbeit'];
+  }
+  if(d.teamCats&&d.teamCats['Marketing / Öffentlichkeitsarbeit']){
+    _renameÖ(d.teamCats['Marketing / Öffentlichkeitsarbeit'],'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
+  }
+  // User-Team umbenennen
+  d.users.forEach(u=>{ if(u.team==='Öffentlichkeitsarbeit') u.team='Marketing / Öffentlichkeitsarbeit'; });
   // Urlaub/AU-Einträge ohne Zeiten automatisch mit Tagesstunden befüllen
   for(const [k,entry] of Object.entries(d.entries||{})){
     if(!entry||!entry.days) continue;
@@ -3840,7 +3853,7 @@ function renderGFBerichte(){
 
 function renderBuchhaltungHTML(u,entry,y,m){
   // Für Akademie-Team: Ö-Arbeit wird in der Buchhaltungsversion als "Akademie" angezeigt
-  const _bzuord=z=>(z==='Ö-Arbeit'&&u.team==='Akademie')?'Akademie':z;
+  const _bzuord=z=>((z==='Ö-Arbeit'||z==='Öffentlichkeitsarbeit'||z==='Marketing / Öffentlichkeitsarbeit')&&u.team==='Akademie')?'Akademie':z;
   const isFree=isFreelancer(u); // vor Loop: steuert Spalten-Layout
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,u.bundesland||'');
