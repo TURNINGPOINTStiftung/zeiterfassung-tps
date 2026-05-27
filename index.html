@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27i</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27j</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27i</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27j</div>
         </div>
       </div>
     </div>
@@ -1007,6 +1007,11 @@ function _applyFirebaseSnap(val){
   if(!val||!_dataCache) return;
   _dataCache=_migrate(val);
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache)); }catch(e){}
+  // Stempel-localStorage leeren wenn Firebase keinen aktiven Stempel für diesen User kennt
+  // → verhindert dass der Timer auf einem anderen Gerät weiterläuft nach dem Ausstempeln
+  if(cu&&!(_dataCache.stamps&&_dataCache.stamps[cu.id])){
+    try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
+  }
   try{ updateZeitstempelBtn(); }catch(e){}
   try{ _refreshStempelView(); }catch(e){}
   try{ updateAbBadge(); }catch(e){}
@@ -4152,8 +4157,10 @@ async function resetPasswordsOnly(){
 const _STAMP_KEY='tp_zt_stamp';
 let _zsClockInt=null;
 function getStamp(){
-  // Erst Firebase-Daten (cross-device), dann localStorage als Fallback
-  if(cu){ const d=getData(); if(d.stamps&&d.stamps[cu.id]) return d.stamps[cu.id]; }
+  // Online: Firebase ist die einzige Wahrheit – kein localStorage-Fallback
+  // Damit stoppt der Timer auf allen Geräten sofort wenn der Stempel in Firebase gelöscht wird
+  if(cu&&!_offlineMode){ const d=getData(); return (d.stamps&&d.stamps[cu.id])||null; }
+  // Offline-Fallback: localStorage
   try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; }
 }
 
