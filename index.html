@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28d</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28e</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28d</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28e</div>
         </div>
       </div>
     </div>
@@ -2391,6 +2391,7 @@ function printJahresübersicht(uid,y){
   }).join('');
 
   const style=_teamReportStyle()
+    // Deckblatt
     +'.cover-page{max-width:940px;margin:0 auto;padding:20px 0 40px}'
     +'.cover-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:14px;border-bottom:4px solid #1a3a5c;margin-bottom:20px}'
     +'.org{font-size:22px;font-weight:700;color:#1a3a5c}'
@@ -2402,13 +2403,33 @@ function printJahresübersicht(uid,y){
     +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
     +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
     +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
+    // Monatsseiten: kompakt damit alles auf ein Blatt passt
     +'.month-page{max-width:940px;margin:0 auto}'
+    +'.month-page .bh-page{padding-bottom:0}'
+    +'.month-page .bh-hdr{padding-bottom:6px;margin-bottom:6px}'
+    +'.month-page .bh-hdr-left .org{font-size:13px}'
+    +'.month-page .bh-hdr-right .ttl{font-size:11px}'
+    +'.month-page .bh-hdr-right .per{font-size:9px}'
+    +'.month-page .bh-info{padding:5px 10px;margin-bottom:6px;gap:2px 16px}'
+    +'.month-page .bh-ir{font-size:8.5px}'
+    +'.month-page table th{padding:3px 2px!important;font-size:7.5px!important}'
+    +'.month-page table td{padding:2px 2.5px!important;font-size:8px!important}'
+    +'.month-page .bh-sum{margin-top:5px;gap:4px}'
+    +'.month-page .bh-sc{padding:4px 7px;min-width:80px}'
+    +'.month-page .bh-sc .val{font-size:12px;margin:1px 0}'
+    +'.month-page .bh-sc .lbl{font-size:6.5px}'
+    +'.month-page .bh-sc .sub{font-size:7px}'
+    +'.month-page .bh-sig{margin-top:8px;padding-top:8px;gap:12px}'
+    +'.month-page .bh-sig-col h4{font-size:7.5px;margin-bottom:4px}'
+    +'.month-page .bh-sig-line{min-height:32px}'
+    +'.month-page .bh-dig-sig{font-size:9px}'
+    // Print-Layout
     +'@media print{'
-    +'  .cover-page{page-break-after:always}'
-    +'  .month-page{page-break-after:always}'
-    +'  .month-page:last-child{page-break-after:avoid}'
+    +'  @page{margin:0.9cm;size:A4 portrait}'
     +'  body{padding:0}'
-    +'  @page{margin:1.2cm;size:A4}'
+    +'  .cover-page{page-break-after:always;page-break-inside:avoid}'
+    +'  .month-page{page-break-after:always;page-break-inside:avoid}'
+    +'  .month-page:last-child{page-break-after:avoid}'
     +'}';
 
   const printWin=window.open('','_blank','width=900,height=1000');
