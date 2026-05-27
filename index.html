@@ -287,19 +287,19 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .chip-berater{background:#fce7f3;color:#9d174d}
 /* ── Abwesenheiten Kalender ── */
 .ab-cal-wrap{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden}
-.ab-cal-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--border);font-size:11px;align-items:center}
+.ab-cal-legend{display:flex;gap:14px;flex-wrap:wrap;padding:12px 18px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12px;align-items:center}
 .ab-cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.ab-cal-dow{text-align:center;padding:7px 4px;font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)}
+.ab-cal-dow{text-align:center;padding:10px 4px;font-size:13px;font-weight:700;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)}
 .ab-cal-dow.we{color:var(--warn)}
-.ab-cal-day{min-height:70px;padding:4px 5px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.ab-cal-day{min-height:120px;padding:8px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
 .ab-cal-day:nth-child(7n){border-right:none}
 .ab-cal-day.empty{background:var(--row-alt)}
 .ab-cal-day.weekend{background:var(--weekend)}
 .ab-cal-day.today-cell{outline:2px solid var(--accent);outline-offset:-2px}
 .ab-cal-day.holiday-cell{background:#fff0f0}
-.ab-cal-dn{font-size:11px;font-weight:700;color:var(--text);display:block;margin-bottom:2px}
+.ab-cal-dn{font-size:14px;font-weight:700;color:var(--text);display:block;margin-bottom:4px}
 .ab-cal-dn.we{color:var(--warn)}
-.ab-cal-badge{font-size:10px;padding:1px 5px;border-radius:8px;margin:1px 0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ab-cal-badge{font-size:11px;padding:3px 7px;border-radius:8px;margin:2px 0;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.3}
 /* ── Zeitstempel Button aktiv ── */
 #btn-zeitstempel.zs-active{background:var(--ok)!important;color:#fff!important;border-color:var(--ok)!important}
 /* ── Mobile Stempel-Tab: auf Desktop immer ausblenden ── */
@@ -338,6 +338,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .zt td input.bem{min-height:38px}
   .emp-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
   .modal{max-width:600px}
+  /* Kalender Tablet */
+  .ab-cal-day{min-height:88px;padding:6px 7px}
+  .ab-cal-dn{font-size:13px}
+  .ab-cal-badge{font-size:10px;padding:2px 5px}
 }
 
 /* ════════════════════════════════════════
@@ -491,8 +495,11 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .gf-report-card .btn{width:100%;justify-content:center;padding:12px}
 
   /* ─ Abwesenheiten ─ */
-  .ab-cal-day{min-height:52px;padding:3px}
-  .ab-cal-badge{font-size:9px}
+  .ab-cal-day{min-height:64px;padding:4px 3px}
+  .ab-cal-dn{font-size:12px;margin-bottom:2px}
+  .ab-cal-dow{font-size:11px;padding:7px 2px}
+  .ab-cal-badge{font-size:9px;padding:2px 4px;margin:1px 0}
+  .ab-cal-legend{padding:8px 12px;font-size:11px;gap:8px}
   .upcoming-row{gap:6px;font-size:13px}
   .upcoming-row .upc-name{min-width:80px}
 
@@ -575,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27y</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27z</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -793,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27y</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27z</div>
         </div>
       </div>
     </div>
