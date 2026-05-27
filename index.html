@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27m</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27n</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27m</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27n</div>
         </div>
       </div>
     </div>
@@ -1853,15 +1853,14 @@ function td_zuord(ds,field,val,wh,dpw){
 
 // Sync: Abwesenheit → Zeiterfassung (alle Arbeitstage im Zeitraum befüllen, überschreibt bestehende Einträge)
 function syncAbsenceToTimesheets(uid,user,type,from,to){
+  const isAZA=type==='Arbeitszeitausgleich';
   // AU/Krank: wh/dpw (tatsächliche Tagesstunden); Urlaub etc.: wh/5 (5-Tage-Standard, dpw ignoriert)
   const mins=type==='AU/Krank'
     ? (dailyMinutes(user)||480)
     : (Math.round((user.wh||0)/5*60)||480);
   const cats=getCatsForTeam(user.team||'');
-  // AZA immer direkt als b1zuord='Arbeitszeitausgleich' schreiben – nicht über cat-Lookup
-  const isAZA=type==='Arbeitszeitausgleich';
-  const zuord=isAZA?'Arbeitszeitausgleich':(cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':''));
-  const bem=isAZA?'':(cats.includes(type)?'':type);
+  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
+  const bem=cats.includes(type)?'':type;
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
@@ -1876,7 +1875,12 @@ function syncAbsenceToTimesheets(uid,user,type,from,to){
           if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-          Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:''});
+          if(isAZA){
+            // AZA: nur Vermerk in Bemerkung – keine Stunden eintragen
+            d.entries[k].days[ds].b1bem='Arbeitszeitausgleich';
+          } else {
+            Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:''});
+          }
         }
       }
       cur.setDate(cur.getDate()+1);
@@ -1885,6 +1889,7 @@ function syncAbsenceToTimesheets(uid,user,type,from,to){
 }
 // Zeiterfassung-Einträge einer Abwesenheit rückgängig machen (nur wenn Zuordnung noch stimmt)
 function clearAbsenceFromTimesheets(uid,user,type,from,to){
+  const isAZA=type==='Arbeitszeitausgleich';
   const cats=getCatsForTeam(user.team||'');
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
   mutate(d=>{
@@ -1899,8 +1904,13 @@ function clearAbsenceFromTimesheets(uid,user,type,from,to){
         if(!hols.has(ds)){
           const k=entryKey(uid,y,m);
           const dd=d.entries?.[k]?.days?.[ds];
-          if(dd&&(dd.b1zuord===zuord||dd.b1bem===type||dd.b1zuord===type)){
-            Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
+          if(dd){
+            if(isAZA){
+              // AZA stornieren: nur Bemerkung entfernen
+              if(dd.b1bem==='Arbeitszeitausgleich') dd.b1bem='';
+            } else if(dd.b1zuord===zuord||dd.b1bem===type||dd.b1zuord===type){
+              Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
+            }
           }
         }
       }
