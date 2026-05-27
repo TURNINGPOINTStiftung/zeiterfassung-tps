@@ -575,7 +575,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27x</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27y</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -793,7 +793,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27x</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27y</div>
         </div>
       </div>
     </div>
@@ -4055,30 +4055,43 @@ function renderAbwesenheiten(){
     if(pending.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--warn);margin-bottom:10px">⏳ Offene Anträge (${pending.length})</h3>
       ${pending.map(card).join('')}</section>`;
+    // Team-Übersicht: nur aktuelle & zukünftige (keine vergangenen)
     const teamDone=reqs.filter(r=>{
       if(r.status==='pending'||r.userId===cu.id) return false;
+      if(r.endDate<todayStr) return false;
       if(isAdmin) return true;
       const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
-    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,60);
+    }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
     if(teamDone.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
       ${teamDone.map(card).join('')}</section>`;
   } else {
-    // Mitarbeiter / Freiberuflich: alle genehmigten Abwesenheiten der Firma
+    // Mitarbeiter / Freiberuflich: genehmigte Abwesenheiten der Firma (nur aktuelle & zukünftige)
     const teamAbs=reqs.filter(r=>{
       if(r.userId===cu.id) return false;
       if(r.status!=='approved') return false;
-      return true; // canSeeAbsence ist für alle immer true
-    }).sort((a,b)=>b.startDate.localeCompare(a.startDate)).slice(0,60);
+      if(r.endDate<todayStr) return false;
+      return true;
+    }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
     if(teamAbs.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Abwesenheiten im Unternehmen</h3>
       ${teamAbs.map(card).join('')}</section>`;
   }
-  // Eigene Anträge
+  // Eigene Anträge: aktuelle/zukünftige sichtbar, vergangene einklappbar
   const myReqs=reqs.filter(r=>r.userId===cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  const myActive=myReqs.filter(r=>r.endDate>=todayStr||r.status==='pending');
+  const myPast=myReqs.filter(r=>r.endDate<todayStr&&r.status!=='pending');
+  const pastToggle=myPast.length?`
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--muted);padding:6px 0;user-select:none">
+        🕓 Vergangene Abwesenheiten (${myPast.length})
+      </summary>
+      <div style="margin-top:8px;opacity:.8">${myPast.map(card).join('')}</div>
+    </details>`:'';
   html+=`<section>
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Meine Anträge</h3>
-    ${myReqs.length?myReqs.map(card).join(''):'<p style="color:var(--muted);font-size:13px">Noch keine Anträge gestellt.</p>'}
+    ${myActive.length?myActive.map(card).join(''):'<p style="color:var(--muted);font-size:13px">Keine aktiven oder geplanten Abwesenheiten.</p>'}
+    ${pastToggle}
   </section>`;
   document.getElementById('ab-content').innerHTML=html;
   updateAbBadge();
