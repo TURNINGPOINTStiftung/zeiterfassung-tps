@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27n</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27o</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27n</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27o</div>
         </div>
       </div>
     </div>
@@ -1135,52 +1135,51 @@ function check10hCarryover(uid,y,m,ds,depth){
   const day=(entry.days||{})[ds]||{};
   const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
   const rounded=raw>0?Math.round(raw/15)*15:0;
-  if(rounded<=600) return;
-  const overflow=rounded-600;
-  const startStr='08:00';
-  const bisStr=addMin(startStr,overflow); // 08:00 + Überschuss-Minuten
+  const overflow=Math.max(0,rounded-600);
   const date=new Date(ds+'T12:00:00');
   date.setDate(date.getDate()+1);
   const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
   const nDs=dateStr(nY,nM,nD);
+  let hadCarryover=false;
   mutate(d=>{
-    // ── Folgetag: Übertrag anlegen ──
     const nK=entryKey(uid,nY,nM);
-    if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-    if(!d.entries[nK].days) d.entries[nK].days={};
-    if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
-    const nd=d.entries[nK].days[nDs];
-    if(!nd.b1von){ nd.b1von=startStr; nd.b1bis=bisStr; nd.b1bem='Übertrag 10h Korrektur'; }
-    else if(!nd.b2von){ nd.b2von=startStr; nd.b2bis=bisStr; nd.b2bem='Übertrag 10h Korrektur'; }
-    else { nd.ktmin=(Number(nd.ktmin||0)+overflow); }
-    // ── Originaltag: nur beim ersten Aufruf (depth===0) Endzeit kürzen ──
-    // Rekursive Aufrufe dürfen die automatisch angelegten Übertrag-Einträge
-    // nicht nachträglich verändern, sonst entsteht eine Kaskade durch den ganzen Monat.
-    if(!depth){
-      const ok=entryKey(uid,y,m);
-      const od=d.entries[ok]?.days?.[ds];
-      if(od){
-        let toRemove=overflow;
-        // KT zuerst kürzen, dann Block 2, dann Block 1
-        if(toRemove>0&&Number(od.ktmin||0)>0){
-          const cut=Math.min(toRemove,Number(od.ktmin));
-          od.ktmin=Number(od.ktmin)-cut; toRemove-=cut;
-        }
-        if(toRemove>0&&od.b2von&&od.b2bis){
-          const b2m=diffMin(od.b2von,od.b2bis);
-          const cut=Math.min(toRemove,b2m);
-          od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut;
-        }
-        if(toRemove>0&&od.b1von&&od.b1bis){
-          const b1m=diffMin(od.b1von,od.b1bis);
-          od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove));
+    // ── Schritt 1: Bestehende Übertrag-Einträge vom Folgetag entfernen ──
+    const nd=d.entries?.[nK]?.days?.[nDs];
+    if(nd){
+      if(nd.b1bem==='Übertrag 10h Korrektur'){ nd.b1von=''; nd.b1bis=''; nd.b1zuord=''; nd.b1bem=''; hadCarryover=true; }
+      if(nd.b2bem==='Übertrag 10h Korrektur'){ nd.b2von=''; nd.b2bis=''; nd.b2zuord=''; nd.b2bem=''; hadCarryover=true; }
+    }
+    // ── Schritt 2: Neuen Übertrag anlegen wenn Overflow vorhanden ──
+    if(overflow>0){
+      const startStr='08:00', bisStr=addMin(startStr,overflow);
+      if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+      if(!d.entries[nK].days) d.entries[nK].days={};
+      if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
+      const nd2=d.entries[nK].days[nDs];
+      if(!nd2.b1von){ nd2.b1von=startStr; nd2.b1bis=bisStr; nd2.b1bem='Übertrag 10h Korrektur'; }
+      else if(!nd2.b2von){ nd2.b2von=startStr; nd2.b2bis=bisStr; nd2.b2bem='Übertrag 10h Korrektur'; }
+      else { nd2.ktmin=(Number(nd2.ktmin||0)+overflow); }
+      // Originaltag: nur beim ersten Aufruf (depth===0) Endzeit kürzen
+      if(!depth){
+        const ok=entryKey(uid,y,m);
+        const od=d.entries[ok]?.days?.[ds];
+        if(od){
+          let toRemove=overflow;
+          if(toRemove>0&&Number(od.ktmin||0)>0){ const cut=Math.min(toRemove,Number(od.ktmin)); od.ktmin=Number(od.ktmin)-cut; toRemove-=cut; }
+          if(toRemove>0&&od.b2von&&od.b2bis){ const b2m=diffMin(od.b2von,od.b2bis); const cut=Math.min(toRemove,b2m); od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut; }
+          if(toRemove>0&&od.b1von&&od.b1bis){ const b1m=diffMin(od.b1von,od.b1bis); od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove)); }
         }
       }
     }
+    // Leeren Folgetag-Eintrag aufräumen
+    const nd3=d.entries?.[nK]?.days?.[nDs];
+    if(nd3&&!nd3.b1von&&!nd3.b1bis&&!nd3.b2von&&!nd3.b2bis&&!Number(nd3.ktmin)&&!nd3.b1bem&&!nd3.b2bem){
+      delete d.entries[nK].days[nDs];
+    }
   });
-  // Kaskade: prüfen ob Folgetag jetzt ebenfalls > 10h
-  check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
-  if(!depth) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
+  // Kaskade: Folgetag neu prüfen (bei Overflow oder wenn vorher ein Übertrag existierte)
+  if(overflow>0||hadCarryover) check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
+  if(!depth&&overflow>0) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
 }
 function td_tchange(ds,field,val){
   const uid=viewEmpId||cu.id;
