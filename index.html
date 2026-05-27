@@ -573,11 +573,17 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27g</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27h</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
+      </div>
+      <div id="stempel-live" style="display:none;align-items:center;gap:6px;background:var(--ok);color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer" onclick="openZeitstempel()" class="no-print">
+        <span style="font-size:15px">⏱</span>
+        <span id="stempel-live-von"></span>
+        <span style="opacity:.75">·</span>
+        <span id="stempel-live-dur"></span>
       </div>
       <button class="btn btn-outline btn-sm no-print" id="btn-zeitstempel" onclick="openZeitstempel()" style="display:none">⏱ Stempeln</button>
       <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
@@ -771,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27g</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27h</div>
         </div>
       </div>
     </div>
@@ -4223,6 +4229,23 @@ function _refreshStempelView(){
   if(v&&v.classList.contains('active')) renderStempelView();
 }
 
+let _stempelLiveInt=null;
+function _stempelLiveTick(){
+  const chip=document.getElementById('stempel-live');
+  if(!chip||!cu) return;
+  const stamp=getStamp();
+  const active=stamp&&stamp.uid===cu.id;
+  if(!active){ chip.style.display='none'; return; }
+  const start=new Date(stamp.startTime);
+  const von=stamp.von||(String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0'));
+  const diffMs=Date.now()-start.getTime();
+  const totalMin=Math.floor(diffMs/60000);
+  const h=Math.floor(totalMin/60), m=totalMin%60;
+  const dur=h>0?`${h}h ${String(m).padStart(2,'0')}m`:`${m}m`;
+  document.getElementById('stempel-live-von').textContent=von;
+  document.getElementById('stempel-live-dur').textContent=dur;
+  chip.style.display='flex';
+}
 function updateZeitstempelBtn(){
   const btn=document.getElementById('btn-zeitstempel');
   if(!btn||!cu) return;
@@ -4234,6 +4257,15 @@ function updateZeitstempelBtn(){
   // Mobiler Stempel-Tab synchronisieren
   const tabMob=document.getElementById('tab-stempeln-mobile');
   if(tabMob){ tabMob.textContent=active?'⏱ Gestempelt':'⏱ Stempeln'; tabMob.classList.toggle('zs-active',active); }
+  // Live-Chip im Header
+  _stempelLiveTick();
+  if(active&&!_stempelLiveInt){
+    _stempelLiveInt=setInterval(_stempelLiveTick,1000);
+  } else if(!active&&_stempelLiveInt){
+    clearInterval(_stempelLiveInt); _stempelLiveInt=null;
+    const chip=document.getElementById('stempel-live');
+    if(chip) chip.style.display='none';
+  }
 }
 function openZeitstempel(){
   if(!cu||cu.role==='admin') return;
