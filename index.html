@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28c</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28d</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28c</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28d</div>
         </div>
       </div>
     </div>
@@ -887,7 +887,7 @@ const DEFAULT_USERS = [
   {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP',dpw:5}
 ];
 function freshData(){
-  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{}};
+  return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{},yearReports:{},_fixes:{}};
 }
 function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
@@ -898,6 +898,29 @@ function _migrate(d){
   if(!d.teamCats) d.teamCats={};
   if(!d.stamps) d.stamps={};
   if(!d.customRoles) d.customRoles=[];
+  if(!d.yearReports) d.yearReports={};
+  if(!d._fixes) d._fixes={};
+  // Einmalige Bereinigung: Kaskaden-Überträge aus 10h-Limit-Bug entfernen
+  if(!d._fixes.badCarryoverV2){
+    Object.keys(d.entries||{}).forEach(k=>{
+      const daysObj=d.entries[k]?.days;
+      if(!daysObj) return;
+      Object.keys(daysObj).forEach(ds=>{
+        const day=daysObj[ds];
+        const badTime=t=>t&&t.includes(':')&&parseInt(t.split(':')[0],10)>23;
+        if(day.b1bem==='Übertrag 10h Korrektur'){ day.b1von='';day.b1bis='';day.b1zuord='';day.b1bem=''; }
+        if(day.b2bem==='Übertrag 10h Korrektur'){ day.b2von='';day.b2bis='';day.b2zuord='';day.b2bem=''; }
+        if(Number(day.ktmin||0)>600) day.ktmin=0;
+        if(badTime(day.b1bis)){ day.b1von='';day.b1bis='';day.b1zuord='';day.b1bem=''; }
+        if(badTime(day.b2bis)){ day.b2von='';day.b2bis='';day.b2zuord='';day.b2bem=''; }
+        if(!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis&&!Number(day.ktmin)&&!day.b1bem&&!day.b2bem)
+          delete daysObj[ds];
+      });
+      if(d.entries[k].days&&Object.keys(d.entries[k].days).length===0)
+        delete d.entries[k].days;
+    });
+    d._fixes.badCarryoverV2=true;
+  }
   // Firebase entfernt leere Objekte – days:{} in Einträgen fehlt nach dem Speichern
   Object.values(d.entries).forEach(e=>{ if(e&&!e.days) e.days={}; });
   // Doppelte admin-Einträge entfernen (nur ersten behalten)
@@ -2289,6 +2312,7 @@ function openJahresübersicht(uid,y){
     </div>
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
+      <button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>
       <button class="btn btn-primary" onclick="printJahresübersicht('${uid}',${y})" style="width:auto">⬇ PDF herunterladen</button>
     </div>
   `,true);
@@ -2399,6 +2423,31 @@ function printJahresübersicht(uid,y){
     <script>window.onload=function(){window.print()}<\/script>
   </body></html>`);
   printWin.document.close();
+}
+
+function sendJahresbericht(uid,y){
+  const user=getUser(uid);
+  if(!user){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  const rKey=uid+'_'+y;
+  const existing=getData().yearReports?.[rKey];
+  const confirmMsg=existing
+    ?`Jahresbericht ${y} für ${user.name} wurde bereits am ${new Date(existing.submittedAt).toLocaleDateString('de-DE')} gesendet.\nNochmals senden und überschreiben?`
+    :`Jahresmappe ${y} (Deckblatt + 12 Zeiterfassungen) für ${user.name} an die Geschäftsführung senden?`;
+  if(!confirm(confirmMsg)) return;
+  const report={
+    id:rKey,
+    userId:uid,
+    userName:user.name,
+    team:user.team||'',
+    year:y,
+    submittedAt:new Date().toISOString(),
+    sentBy:cu.id,
+    sentByName:cu.name,
+    seenAt:null
+  };
+  mutate(d=>{ if(!d.yearReports) d.yearReports={}; d.yearReports[rKey]=report; });
+  closeModal();
+  toast(`Jahresbericht ${y} für ${user.name} an GF gesendet ✓`,'ok');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3689,6 +3738,15 @@ function markReportSeen(key){
   renderGFBerichte();
 }
 
+function viewYearReport(uid,y,key){
+  if(key) markYearReportSeen(key);
+  printJahresübersicht(uid,y);
+}
+function markYearReportSeen(key){
+  mutate(d=>{ if(d.yearReports&&d.yearReports[key]) d.yearReports[key].seenAt=new Date().toISOString(); });
+  renderGFBerichte();
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ABWESENHEITSANTRÄGE
 // ═══════════════════════════════════════════════════════════════
@@ -4134,11 +4192,42 @@ function renderGFBerichte(){
   const content=document.getElementById('gf-berichte-content');
   if(!content) return;
   const d=getData();
+
+  // ── Jahresberichte (oben) ──
+  const yearReports=Object.values(d.yearReports||{}).sort((a,b)=>b.year-a.year||a.userName.localeCompare(b.userName,'de'));
+  let html='';
+  if(yearReports.length){
+    const newYR=yearReports.filter(r=>!r.seenAt).length;
+    html+='<div class="gf-team-group" style="margin-bottom:28px">';
+    html+='<div class="gf-team-header"><span class="gf-team-name">📅 Jahresberichte</span>'
+      +(newYR?'<span class="gf-new-badge">'+newYR+' NEU</span>':'')
+      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+yearReports.length+' Bericht'+(yearReports.length!==1?'e':'')+'</span>'
+      +'</div><div>';
+    yearReports.forEach(r=>{
+      const dt=new Date(r.submittedAt);
+      const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+      const isNew=!r.seenAt;
+      html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
+        +'<div>'
+        +'<div class="gf-report-title">'+r.year+' – '+esc(r.userName)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+        +'<div class="gf-report-meta">'+esc(r.team||'–')+' · Gesendet von <strong>'+esc(r.sentByName||r.sentBy)+'</strong> · '+dtStr+'</div>'
+        +(r.seenAt?'<div class="gf-report-meta" style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</div>':'<div class="gf-report-meta" style="color:var(--warn);font-weight:700">Noch nicht geöffnet</div>')
+        +'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button class="btn btn-ok btn-sm" onclick="viewYearReport(\''+r.userId+'\','+r.year+',\''+r.id+'\')">📄 PDF / Drucken</button>'
+        +(isNew?'<button class="btn btn-outline btn-sm" onclick="markYearReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+        +'</div>'
+        +'</div>';
+    });
+    html+='</div></div>';
+  }
+
   const reports=Object.values(d.teamReports||{});
-  if(!reports.length){
+  if(!reports.length&&!yearReports.length){
     content.innerHTML='<p style="color:var(--muted);padding:20px 0">Noch keine Berichte eingegangen.</p>';
     return;
   }
+  if(!reports.length){ content.innerHTML=html; return; }
   // Group by team name
   const teamMap={};
   reports.forEach(function(r){
@@ -4148,7 +4237,6 @@ function renderGFBerichte(){
   });
   // Sort teams alphabetically
   const teams=Object.keys(teamMap).sort(function(a,b){ return a.localeCompare(b,'de'); });
-  let html='';
   teams.forEach(function(team){
     const teamReports=teamMap[team].slice().sort(function(a,b){
       if(b.year!==a.year) return b.year-a.year;
