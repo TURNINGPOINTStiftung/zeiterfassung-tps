@@ -771,7 +771,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27d</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27e</div>
         </div>
       </div>
     </div>
@@ -980,40 +980,16 @@ async function initFirebase(){
     // Offline + keine LS-Daten: trotzdem starten mit leerem Datensatz
     _dataCache=freshData();
   }
-  // Echtzeit-Listener auf Stamps + zugehörige Tageseinträge
-  // Wenn jemand auf einem anderen Gerät einstempelt, wird b1von sofort in
-  // _dataCache.entries aktualisiert, damit die Zeiterfassung es direkt zeigt.
-  if(!_offlineMode){
-    _fbRef.child('stamps').on('value', snap=>{
-      const stamps=snap.val()||{};
-      if(_dataCache) _dataCache.stamps=stamps;
-      // Für jeden aktiven Stempel den Tageseintrag frisch aus Firebase laden
-      Object.values(stamps).forEach(stamp=>{
-        if(!stamp||!stamp.startDate||!stamp.uid) return;
-        const parts=stamp.startDate.split('-').map(Number);
-        const k=entryKey(stamp.uid,parts[0],parts[1]);
-        _fbRef.child('entries').child(k).once('value').then(s=>{
-          if(!_dataCache) return;
-          const val=s.val();
-          if(val) _dataCache.entries[k]=val;
-          try{ updateZeitstempelBtn(); }catch(e){}
-          try{ _refreshStempelView(); }catch(e){}
-          try{
-            const vze=document.getElementById('view-zeiterfassung');
-            if(vze&&vze.classList.contains('active')) renderZeiterfassung();
-          }catch(e){}
-        }).catch(()=>{});
-      });
-      try{ updateZeitstempelBtn(); }catch(e){}
-      try{ _refreshStempelView(); }catch(e){}
-    });
-  }
+  // Echtzeit-Sync: alle Firebase-Änderungen (Stempel, Einträge, etc.) live empfangen
+  _setupRealtimeSync();
 }
 function getData(){ return _dataCache||freshData(); }
 let _offlineMode=false;
 let _pendingSync=false;
+let _lastWriteTime=0; // Zeitstempel letzter eigener Firebase-Write (Schleifenschutz)
 function saveRaw(d){
   _dataCache=d;
+  _lastWriteTime=Date.now();
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
   if(_offlineMode){ _pendingSync=true; return Promise.resolve(); }
   return _fbRef.set(d).catch(e=>{
@@ -1022,6 +998,26 @@ function saveRaw(d){
   });
 }
 function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
+// Echtzeit-Sync von Firebase → lokaler Cache (z.B. Stempel vom Handy)
+function _setupRealtimeSync(){
+  if(_offlineMode) return;
+  _fbRef.on('value', snap=>{
+    // Eigene Writes ignorieren (Firebase feuert den Listener auch für eigene Schreibvorgänge)
+    if(Date.now()-_lastWriteTime<4000) return;
+    const val=snap.val();
+    if(!val||!_dataCache) return;
+    _dataCache=_migrate(val);
+    try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache)); }catch(e){}
+    // UI aktualisieren
+    try{ updateZeitstempelBtn(); }catch(e){}
+    try{ _refreshStempelView(); }catch(e){}
+    try{ updateAbBadge(); }catch(e){}
+    try{
+      const vze=document.getElementById('view-zeiterfassung');
+      if(vze&&vze.classList.contains('active')) renderZeiterfassung();
+    }catch(e){}
+  });
+}
 // Online: Offline-Änderungen synchronisieren
 window.addEventListener('online',()=>{
   _offlineMode=false;
