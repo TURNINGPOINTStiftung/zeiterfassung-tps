@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28b</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28c</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28b</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28c</div>
         </div>
       </div>
     </div>
@@ -2300,6 +2300,7 @@ function printJahresübersicht(uid,y){
   if(!user) return;
   const isFree=isFreelancer(user);
 
+  // ── Deckblatt: Jahresübersicht ──
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
     const entry=d.entries[entryKey(uid,y,m)]||{};
@@ -2312,11 +2313,12 @@ function printJahresübersicht(uid,y){
     const st=entry.status||'draft';
     const stLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st;
     const diffStr=isFree?'–':((diff>=0?'+':'')+hFmt(Math.abs(diff)));
+    const diffColor=diff>=0?'#27ae60':'#c0392b';
     return `<tr>
       <td>${mn}</td>
       ${isFree?'':`<td class="r">${soll>0?hFmt(soll):'–'}</td>`}
       <td class="r">${ist>0?hFmt(ist):'–'}</td>
-      ${isFree?'':`<td class="r">${diffStr}</td><td class="r">${vac>0?vac+' T':'–'}</td><td class="r">${sick>0?sick+' T':'–'}</td>`}
+      ${isFree?'':`<td class="r" style="color:${diffColor};font-weight:700">${diffStr}</td><td class="r">${vac>0?vac+' T':'–'}</td><td class="r">${sick>0?sick+' T':'–'}</td>`}
       <td class="c">${stLabel}</td>
     </tr>`;
   }).join('');
@@ -2335,31 +2337,65 @@ function printJahresübersicht(uid,y){
     ?`<td class="r">${hFmt(totalIST)}</td>`
     :`<td class="r">${hFmt(totalSOLL)}</td><td class="r">${hFmt(totalIST)}</td><td class="r">${totalDiffStr}</td><td class="r">${totalVac>0?totalVac+' T':'–'}</td><td class="r">${totalSick>0?totalSick+' T':'–'}</td>`;
 
-  const printWin=window.open('','_blank','width=700,height=900');
+  const coverPage=`
+    <div class="cover-page">
+      <div class="cover-hdr">
+        <div>
+          <div class="org">TURNING POINT Stiftung</div>
+          <div class="org-sub">Jahresübersicht Zeiterfassung</div>
+        </div>
+        <div class="cover-right">
+          <div class="year-big">${y}</div>
+        </div>
+      </div>
+      <div class="emp-info">
+        <div class="emp-name">${esc(user.name)}</div>
+        <div class="emp-meta">${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'} · ${esc(user.team||'–')} · erstellt ${new Date().toLocaleDateString('de-DE')}</div>
+      </div>
+      <table>
+        <thead><tr><th class="l">Monat</th>${hdr}<th class="c">Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td class="l">Gesamt ${y}</td>${foot}<td></td></tr></tfoot>
+      </table>
+    </div>`;
+
+  // ── Monatliche Zeiterfassungen (1–12) ──
+  const monthPages=MONTHS.map((mn,i)=>{
+    const m=i+1;
+    const entry=getEntry(uid,y,m);
+    return `<div class="month-page">${renderBuchhaltungHTML(user,entry,y,m)}</div>`;
+  }).join('');
+
+  const style=_teamReportStyle()
+    +'.cover-page{max-width:940px;margin:0 auto;padding:20px 0 40px}'
+    +'.cover-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:14px;border-bottom:4px solid #1a3a5c;margin-bottom:20px}'
+    +'.org{font-size:22px;font-weight:700;color:#1a3a5c}'
+    +'.org-sub{font-size:12px;color:#7f8c8d;margin-top:3px}'
+    +'.cover-right .year-big{font-size:48px;font-weight:700;color:#1a3a5c;opacity:.15;line-height:1}'
+    +'.emp-info{margin-bottom:24px;padding:14px 18px;background:#f4f7fb;border:1px solid #dde1e7;border-radius:6px}'
+    +'.emp-name{font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px}'
+    +'.emp-meta{font-size:11px;color:#7f8c8d}'
+    +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
+    +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
+    +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
+    +'.month-page{max-width:940px;margin:0 auto}'
+    +'@media print{'
+    +'  .cover-page{page-break-after:always}'
+    +'  .month-page{page-break-after:always}'
+    +'  .month-page:last-child{page-break-after:avoid}'
+    +'  body{padding:0}'
+    +'  @page{margin:1.2cm;size:A4}'
+    +'}';
+
+  const printWin=window.open('','_blank','width=900,height=1000');
+  if(!printWin){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   printWin.document.write(`<!DOCTYPE html><html lang="de"><head>
-    <meta charset="UTF-8"><title>Jahresübersicht ${y} – ${esc(user.name)}</title>
-    <style>
-      body{font-family:Arial,sans-serif;font-size:12px;color:#2c3e50;padding:30px}
-      h1{font-size:17px;color:#1a3a5c;margin-bottom:4px}
-      .sub{font-size:12px;color:#7f8c8d;margin-bottom:20px}
-      table{width:100%;border-collapse:collapse}
-      th{background:#1a3a5c;color:#fff;padding:8px 10px;text-align:left;font-size:12px}
-      th.r,td.r{text-align:right}
-      th.c,td.c{text-align:center}
-      td{padding:7px 10px;border-bottom:1px solid #dde1e7;font-size:12px}
-      tfoot td{font-weight:700;border-top:2px solid #1a3a5c;background:#f8f9fb}
-      .footer{margin-top:30px;font-size:10px;color:#7f8c8d;border-top:1px solid #dde1e7;padding-top:10px}
-      @media print{body{padding:10px}}
-    </style>
+    <meta charset="UTF-8">
+    <title>Jahresmappe ${y} – ${esc(user.name)}</title>
+    <style>${style}</style>
   </head><body>
-    <h1>Jahresübersicht ${y}</h1>
-    <div class="sub">${esc(user.name)} · ${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'} · ${user.team||'–'}</div>
-    <table>
-      <thead><tr><th>Monat</th>${hdr}<th class="c">Status</th></tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr><td>Gesamt</td>${foot}<td></td></tr></tfoot>
-    </table>
-    <div class="footer">TURNING POINT Stiftung · Zeiterfassung · Erstellt am ${new Date().toLocaleDateString('de-DE')}</div>
+    ${coverPage}
+    ${monthPages}
     <script>window.onload=function(){window.print()}<\/script>
   </body></html>`);
   printWin.document.close();
@@ -3355,10 +3391,10 @@ function runCarryoverCleanup(){
     Object.keys(d.entries).forEach(k=>{
       const daysObj=d.entries[k].days;
       if(!daysObj) return;
-      // uid aus key: "uid_year_mm"
       const uid=k.split('_')[0];
       Object.keys(daysObj).forEach(ds=>{
         const day=daysObj[ds];
+        // b1/b2 mit Korrektur-Marker löschen
         if(day.b1bem==='Übertrag 10h Korrektur'){
           day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
           byUser[uid]=(byUser[uid]||0)+1; removed++;
@@ -3367,11 +3403,19 @@ function runCarryoverCleanup(){
           day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
           byUser[uid]=(byUser[uid]||0)+1; removed++;
         }
+        // ktmin > 600 ist kaskadierter Übertrag (manuelle Eingabe max. 240, normal max. ~480)
+        if(Number(day.ktmin||0)>600){
+          day.ktmin=0;
+          byUser[uid]=(byUser[uid]||0)+1; removed++;
+        }
+        // Zeit-Strings die durch addMin() als übergroße Stunden entstanden sind (z.B. "16664:40")
+        const badTime=t=>t&&t.includes(':')&&parseInt(t.split(':')[0],10)>23;
+        if(badTime(day.b1bis)){ day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem=''; byUser[uid]=(byUser[uid]||0)+1; removed++; }
+        if(badTime(day.b2bis)){ day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem=''; byUser[uid]=(byUser[uid]||0)+1; removed++; }
         // leeren Tag-Eintrag komplett entfernen
         if(!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis&&!Number(day.ktmin)&&!day.b1bem&&!day.b2bem)
           delete daysObj[ds];
       });
-      // leere days komplett entfernen
       if(d.entries[k].days&&Object.keys(d.entries[k].days).length===0)
         delete d.entries[k].days;
     });
@@ -3381,9 +3425,9 @@ function runCarryoverCleanup(){
   if(removed===0){
     toast('Keine Übertrag-Korrekturen gefunden – alles sauber ✓','ok');
   } else {
-    const d=getData();
+    const d2=getData();
     const detail=Object.entries(byUser).map(([uid,n])=>{ const u=getUser(uid); return `${u?u.name:uid}: ${n}`; }).join(', ');
-    toast(`✓ ${removed} Einträge entfernt (${detail})`,'ok');
+    toast(`✓ ${removed} Einträge bereinigt (${detail})`,'ok');
   }
 }
 
