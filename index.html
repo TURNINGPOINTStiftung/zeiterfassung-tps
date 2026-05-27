@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28a</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28b</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28a</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28b</div>
         </div>
       </div>
     </div>
@@ -3336,73 +3336,55 @@ function resetData(){
 
 // Bereinigt fehlerhafte "Übertrag 10h Korrektur"-Einträge die durch den Kaskaden-Bug entstanden sind
 function showCarryoverCleanup(){
-  const d=getData();
-  const users=d.users.filter(u=>u.role!=='admin');
-  const userOpts=users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
-  const now=new Date();
   openModal(`<h3 style="margin-bottom:14px">🧹 Übertrag-Korrekturen bereinigen</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Entfernt alle automatisch angelegten „Übertrag 10h Korrektur"-Einträge für einen Mitarbeiter in einem Monat. Echte Arbeitszeiten bleiben erhalten.</p>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <label style="font-size:13px;font-weight:600">Mitarbeiter
-        <select id="cl-uid" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">${userOpts}</select>
-      </label>
-      <div style="display:flex;gap:8px">
-        <label style="font-size:13px;font-weight:600;flex:1">Jahr
-          <input id="cl-year" type="number" value="${now.getFullYear()}" min="2020" max="2099" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
-        </label>
-        <label style="font-size:13px;font-weight:600;flex:1">Monat
-          <input id="cl-mon" type="number" value="${now.getMonth()+1}" min="1" max="12" style="width:100%;margin-top:4px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
-        </label>
-      </div>
-      <label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-top:4px">
-        <input type="checkbox" id="cl-all-months"> <span>Alle Monate bereinigen (nicht nur den gewählten Monat)</span>
-      </label>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entfernt alle automatisch angelegten „Übertrag 10h Korrektur"-Einträge. Echte Arbeitszeiten bleiben erhalten.</p>
+    <div style="background:#fff3cd;border:1.5px solid var(--warn);border-radius:8px;padding:12px 14px;font-size:13px;color:#856404;margin-bottom:16px">
+      ⚠ Bereinigt <strong>alle Mitarbeiter, alle Monate</strong> auf einmal. Diese Aktion kann nicht rückgängig gemacht werden.
     </div>
-    <div style="display:flex;gap:8px;margin-top:18px">
-      <button class="btn btn-danger btn-sm" onclick="runCarryoverCleanup()">Bereinigen</button>
-      <button class="btn btn-outline btn-sm" onclick="closeModal()">Abbrechen</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-danger" onclick="runCarryoverCleanup()" style="width:auto">🧹 Alle Korrekturen löschen</button>
+      <button class="btn btn-outline" onclick="closeModal()" style="width:auto">Abbrechen</button>
     </div>`);
 }
 
 function runCarryoverCleanup(){
-  const uid=document.getElementById('cl-uid').value;
-  const year=parseInt(document.getElementById('cl-year').value)||0;
-  const mon=parseInt(document.getElementById('cl-mon').value)||0;
-  const allMonths=document.getElementById('cl-all-months').checked;
-  if(!uid) return;
   let removed=0;
+  const byUser={};
   mutate(d=>{
     if(!d.entries) return;
     Object.keys(d.entries).forEach(k=>{
-      if(!k.startsWith(uid+'_')) return;
-      // Monatsfilter
-      if(!allMonths){
-        const expected=entryKey(uid,year,mon);
-        if(k!==expected) return;
-      }
       const daysObj=d.entries[k].days;
       if(!daysObj) return;
+      // uid aus key: "uid_year_mm"
+      const uid=k.split('_')[0];
       Object.keys(daysObj).forEach(ds=>{
         const day=daysObj[ds];
-        // b1-Block: wenn bem='Übertrag 10h Korrektur' → b1-Felder löschen
         if(day.b1bem==='Übertrag 10h Korrektur'){
           day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
-          removed++;
+          byUser[uid]=(byUser[uid]||0)+1; removed++;
         }
-        // b2-Block: wenn bem='Übertrag 10h Korrektur' → b2-Felder löschen
         if(day.b2bem==='Übertrag 10h Korrektur'){
           day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
-          removed++;
+          byUser[uid]=(byUser[uid]||0)+1; removed++;
         }
         // leeren Tag-Eintrag komplett entfernen
-        const isEmpty=!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis&&!day.ktmin;
-        if(isEmpty) delete daysObj[ds];
+        if(!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis&&!Number(day.ktmin)&&!day.b1bem&&!day.b2bem)
+          delete daysObj[ds];
       });
+      // leere days komplett entfernen
+      if(d.entries[k].days&&Object.keys(d.entries[k].days).length===0)
+        delete d.entries[k].days;
     });
   });
   closeModal();
-  renderZeiterfassung&&renderZeiterfassung();
-  toast(`✓ ${removed} Übertrag-Einträge entfernt.`,'ok');
+  try{ renderZeiterfassung(); }catch(e){}
+  if(removed===0){
+    toast('Keine Übertrag-Korrekturen gefunden – alles sauber ✓','ok');
+  } else {
+    const d=getData();
+    const detail=Object.entries(byUser).map(([uid,n])=>{ const u=getUser(uid); return `${u?u.name:uid}: ${n}`; }).join(', ');
+    toast(`✓ ${removed} Einträge entfernt (${detail})`,'ok');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
