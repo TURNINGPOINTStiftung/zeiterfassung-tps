@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27p</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27q</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27p</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27q</div>
         </div>
       </div>
     </div>
@@ -4433,14 +4433,25 @@ function stopZeitstempel(){
   const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
   const ds=stamp.startDate;
   const [sy,sm]=ds.split('-').map(Number);
+  const durationMin=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
+  // Unter 30 Minuten → zu Kleinteiligem aufsummieren statt eigenen Block belegen
+  const isShort=durationMin<30;
   mutate(d=>{
     const k=entryKey(cu.id,sy,sm);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
-    // Block direkt aus dem Stempel-Objekt – kein Raten mehr, kein Überschreiben fremder Blöcke
-    if(block==='b1'){
+    if(isShort){
+      // Block wieder freigeben (startZeitstempel hat nur b1von/b2von gesetzt, kein bis)
+      if(block==='b1'){ day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem=''; }
+      else if(block==='b2'){ day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem=''; }
+      // Minuten zu Kleinteiligem addieren
+      day.ktmin=(Number(day.ktmin||0)+durationMin);
+      // Zuordnung: erste gewinnt, weitere werden ignoriert (Kleinteiliges ist ein Sammeltopf)
+      if(zuord&&!day.ktzuord) day.ktzuord=zuord;
+    } else if(block==='b1'){
+      // Block direkt aus dem Stempel-Objekt – kein Raten mehr, kein Überschreiben fremder Blöcke
       day.b1von=von; day.b1bis=bis;  // von immer mitschreiben falls durch stale-data verloren
       if(zuord) day.b1zuord=zuord;
       if(note)  day.b1bem=note;
@@ -4450,15 +4461,22 @@ function stopZeitstempel(){
       if(note)  day.b2bem=note;
     } else {
       // Kein Block gespeichert (sehr alter Stempel ohne block-Feld) → Kleinteilig
-      const addMin2=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
-      day.ktmin=(Number(day.ktmin||0)+addMin2);
+      day.ktmin=(Number(day.ktmin||0)+durationMin);
       if(zuord) day.ktzuord=zuord;
+    }
+    // Leere Tageseinträge aufräumen
+    const dd=d.entries[k].days[ds];
+    if(dd&&!dd.b1von&&!dd.b1bis&&!dd.b2von&&!dd.b2bis&&!Number(dd.ktmin)&&!dd.b1bem&&!dd.b2bem){
+      delete d.entries[k].days[ds];
     }
   });
   check10hCarryover(cu.id,sy,sm,ds);
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
-  closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
+  const toastMsg=isShort
+    ? `Ausgestempelt – ${durationMin} Min. zu Kleinteiligem addiert ✓`
+    : 'Ausgestempelt – Zeiten übertragen ✓';
+  closeModal(); updateZeitstempelBtn(); toast(toastMsg,'ok');
   _refreshStempelView();
   const vze=document.getElementById('view-zeiterfassung');
   if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
