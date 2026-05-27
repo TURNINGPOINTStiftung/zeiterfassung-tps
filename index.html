@@ -582,7 +582,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28e</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28f</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -800,7 +800,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28e</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28f</div>
         </div>
       </div>
     </div>
@@ -1537,9 +1537,11 @@ function initApp(){
   // Tab-Sichtbarkeit je Rolle
   const isLeitung=cu.role==='leitung';
   const isBeraterRole=cu.role==='berater';
-  // Zeiterfassung: Admin hat keine eigene AZ
+  // GF ohne Zeiterfassung: noTimesheet-Flag gesetzt
+  const gfNoZE=isGF&&!!cu.noTimesheet;
+  // Zeiterfassung: Admin hat keine eigene AZ, GF optional deaktiviert
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=isAdmin?'none':'';
+  if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';
   // Mitarbeiterübersicht: nur Leitung + Admin (GF sieht KEINE Mitarbeiterübersicht mehr)
   document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
   // GF-Berichte: nur GF + Admin
@@ -1551,11 +1553,12 @@ function initApp(){
   // Teamberichte-Button: nur Leitung
   const btnTeam=document.getElementById('btn-teamberichte');
   if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
-  // Zeitstempel-Button: alle außer Admin
+  // Zeitstempel-Button: alle außer Admin und GF ohne ZE
+  const hideStempel=isAdmin||gfNoZE;
   const btnZs=document.getElementById('btn-zeitstempel');
-  if(btnZs) btnZs.style.display=isAdmin?'none':'inline-flex';
+  if(btnZs) btnZs.style.display=hideStempel?'none':'inline-flex';
   const tabZsMob=document.getElementById('tab-stempeln-mobile');
-  if(tabZsMob) tabZsMob.style.display=isAdmin?'none':'';
+  if(tabZsMob) tabZsMob.style.display=hideStempel?'none':'';
 
   if(isLeitung||isAdmin){
     populateUeberYear();
@@ -1567,6 +1570,7 @@ function initApp(){
   // Startansicht je Rolle (Mobile: Stempel als Startseite)
   if(isAdmin) switchView('uebersicht');
   else if(isGF) switchView('gfberichte');
+  else if(gfNoZE) switchView('gfberichte');
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 }
@@ -2477,17 +2481,22 @@ function sendJahresbericht(uid,y){
 function renderSettings(){
   const d=getData();
   // Users
-  document.getElementById('user-list').innerHTML=d.users.map(u=>`
-    <div class="user-row">
+  document.getElementById('user-list').innerHTML=d.users.map(u=>{
+    const isGFUser=u.role==='geschaeftsfuehrer';
+    const zeAktiv=!u.noTimesheet;
+    const zeToggle=isGFUser?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" title="${zeAktiv?'Zeiterfassung deaktivieren':'Zeiterfassung aktivieren'}" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`:'';
+    return `<div class="user-row">
       <div>
-        <div class="name">${u.name} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}${isGFUser&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        ${zeToggle}
         <button class="btn btn-outline btn-sm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
         ${u.id!==cu.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">×</button>`:''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   // Teams
   const teams=getTeams();
@@ -2760,6 +2769,15 @@ async function saveEditUser(id){
   await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
   closeModal(); renderSettings(); rebuildEmpSelect(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ cu=getUser(id); document.getElementById('hdr-name').textContent=cu.name; }
+}
+function toggleGFTimesheet(uid){
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid);
+    if(u&&u.role==='geschaeftsfuehrer') u.noTimesheet=!u.noTimesheet;
+  });
+  renderSettings();
+  toast('Zeiterfassung aktualisiert ✓','ok');
 }
 function deleteUser(id){
   if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
