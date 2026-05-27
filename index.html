@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27v</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27w</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -791,7 +791,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27v</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27w</div>
         </div>
       </div>
     </div>
@@ -915,12 +915,20 @@ function _migrate(d){
   const _renameÖ=(arr,old,nw)=>{ const i=arr.indexOf(old); if(i>=0) arr[i]=nw; };
   _renameÖ(d.cats,'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
   _renameÖ(d.teams,'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
-  if(d.teamCats&&d.teamCats['Öffentlichkeitsarbeit']&&!d.teamCats['Marketing / Öffentlichkeitsarbeit']){
-    d.teamCats['Marketing / Öffentlichkeitsarbeit']=d.teamCats['Öffentlichkeitsarbeit'];
-    delete d.teamCats['Öffentlichkeitsarbeit'];
-  }
-  if(d.teamCats&&d.teamCats['Marketing / Öffentlichkeitsarbeit']){
-    _renameÖ(d.teamCats['Marketing / Öffentlichkeitsarbeit'],'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
+  // teamCats-Keys müssen Firebase-kompatibel sein (kein / . # $ [ ])
+  // → _fk() encodiert, _fd() decodiert. Alle Zugriffe laufen über _fk(teamName).
+  if(d.teamCats){
+    // 1. Alten Rohkey 'Öffentlichkeitsarbeit' → encoded key 'Marketing %2F Öffentlichkeitsarbeit'
+    const _oldRaw='Öffentlichkeitsarbeit';
+    const _oldEnc=_fk(_oldRaw);  // 'Öffentlichkeitsarbeit' (kein verbotenes Zeichen)
+    const _newEnc=_fk('Marketing / Öffentlichkeitsarbeit'); // 'Marketing %2F Öffentlichkeitsarbeit'
+    // Falls noch Rohkey mit Slash vorhanden (aus fehlgeschlagener früherer Migration) → bereinigen
+    const _rawSlash='Marketing / Öffentlichkeitsarbeit';
+    if(d.teamCats[_rawSlash]){ if(!d.teamCats[_newEnc]) d.teamCats[_newEnc]=d.teamCats[_rawSlash]; delete d.teamCats[_rawSlash]; }
+    if(d.teamCats[_oldRaw]&&!d.teamCats[_newEnc]){ d.teamCats[_newEnc]=d.teamCats[_oldRaw]; }
+    if(d.teamCats[_oldRaw]) delete d.teamCats[_oldRaw];
+    if(d.teamCats[_oldEnc]&&_oldEnc!==_oldRaw&&!d.teamCats[_newEnc]){ d.teamCats[_newEnc]=d.teamCats[_oldEnc]; delete d.teamCats[_oldEnc]; }
+    if(d.teamCats[_newEnc]) _renameÖ(d.teamCats[_newEnc],'Öffentlichkeitsarbeit','Marketing / Öffentlichkeitsarbeit');
   }
   // User-Team umbenennen
   d.users.forEach(u=>{ if(u.team==='Öffentlichkeitsarbeit') u.team='Marketing / Öffentlichkeitsarbeit'; });
@@ -1102,6 +1110,9 @@ function setEntryField(uid,y,m,field,val){
 }
 function getUser(id){ return getData().users.find(u=>u.id===id); }
 function getCustomRoles(){ return getData().customRoles||[]; }
+// Firebase-Key-Encoding: . # $ / [ ] sind in Keys verboten
+function _fk(s){ return String(s).replace(/[.#$\/\[\]]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase()); }
+function _fd(s){ return String(s).replace(/%([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16))); }
 function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
 function isBerater(u){ return u&&u.role==='berater'; }
 function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='geschaeftsfuehrer'||u.role==='admin'); }
@@ -1574,7 +1585,10 @@ function catOptionsFree(selected=''){
 }
 function getCatsForTeam(teamName){
   const d=getData();
-  if(teamName&&d.teamCats&&Array.isArray(d.teamCats[teamName])) return d.teamCats[teamName];
+  if(teamName&&d.teamCats){
+    const arr=d.teamCats[_fk(teamName)];
+    if(Array.isArray(arr)) return arr;
+  }
   if(teamName&&DEFAULT_TEAM_CATS[teamName]) return DEFAULT_TEAM_CATS[teamName];
   return d.cats||[...DEFAULT_CATS];
 }
@@ -2240,8 +2254,8 @@ function renderSettings(){
     };
     let csHtml=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
     tms.forEach((t,i)=>{
-      const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[t]);
-      const arr=isCustom?dd2.teamCats[t]:getCatsForTeam(t);
+      const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[_fk(t)]);
+      const arr=isCustom?dd2.teamCats[_fk(t)]:getCatsForTeam(t);
       const note=isCustom?'':'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">↳ Vorkonfigurierte Kategorien – Änderungen gelten nur für dieses Team</div>';
       csHtml+=mkSection(t,'var(--primary)',arr,t,i+1,note);
     });
@@ -2284,10 +2298,11 @@ function addCategory(){
 }
 function removeCat(i){ mutate(d=>{ d.cats.splice(i,1); }); renderSettings(); }
 function _initTeamCats(d,teamName){
-  // Initialisiert teamCats[teamName] aus DEFAULT_TEAM_CATS oder globalem Fallback
+  // Initialisiert teamCats[_fk(teamName)] aus DEFAULT_TEAM_CATS oder globalem Fallback
   if(!d.teamCats) d.teamCats={};
-  if(!Array.isArray(d.teamCats[teamName])){
-    d.teamCats[teamName]=[...(DEFAULT_TEAM_CATS[teamName]||d.cats||DEFAULT_CATS)];
+  const k=_fk(teamName);
+  if(!Array.isArray(d.teamCats[k])){
+    d.teamCats[k]=[...(DEFAULT_TEAM_CATS[teamName]||d.cats||DEFAULT_CATS)];
   }
 }
 function addTeamCat(teamName,idx){
@@ -2297,7 +2312,8 @@ function addTeamCat(teamName,idx){
   mutate(d=>{
     if(teamName){
       _initTeamCats(d,teamName);
-      if(!d.teamCats[teamName].includes(val)) d.teamCats[teamName].push(val);
+      const _k=_fk(teamName);
+      if(!d.teamCats[_k].includes(val)) d.teamCats[_k].push(val);
     } else {
       if(!d.cats) d.cats=[...DEFAULT_CATS];
       if(!d.cats.includes(val)) d.cats.push(val);
@@ -2309,7 +2325,7 @@ function removeTeamCat(teamName,i){
   mutate(d=>{
     if(teamName){
       _initTeamCats(d,teamName);
-      d.teamCats[teamName].splice(i,1);
+      d.teamCats[_fk(teamName)].splice(i,1);
     } else {
       if(!d.cats) d.cats=[...DEFAULT_CATS];
       d.cats.splice(i,1);
