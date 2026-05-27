@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27f</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27g</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -771,7 +771,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27f</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27g</div>
         </div>
       </div>
     </div>
@@ -996,26 +996,35 @@ function saveRaw(d){
   });
 }
 function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
-// Echtzeit-Sync: Firebase-Änderungen anderer Geräte sofort in _dataCache übernehmen.
-// Kein Schleifenrisiko – der Listener schreibt nie zurück nach Firebase.
-// Firebase feuert den Listener auch für eigene Writes (lokales Echo), das ist harmlos:
-// _dataCache wird dann einfach mit denselben Daten überschrieben die wir gerade gesetzt haben.
+// Hilfsfunktion: aktuelle Firebase-Daten laden und UI aktualisieren
+function _applyFirebaseSnap(val){
+  if(!val||!_dataCache) return;
+  _dataCache=_migrate(val);
+  try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache)); }catch(e){}
+  try{ updateZeitstempelBtn(); }catch(e){}
+  try{ _refreshStempelView(); }catch(e){}
+  try{ updateAbBadge(); }catch(e){}
+  try{
+    const vze=document.getElementById('view-zeiterfassung');
+    if(vze&&vze.classList.contains('active')) renderZeiterfassung();
+  }catch(e){}
+}
+// Primär: WebSocket-Listener (feuert sofort bei jeder Änderung)
 function _setupRealtimeSync(){
   if(_offlineMode) return;
-  _fbRef.on('value', snap=>{
-    const val=snap.val();
-    if(!val||!_dataCache) return;
-    _dataCache=_migrate(val);
-    try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(_dataCache)); }catch(e){}
-    try{ updateZeitstempelBtn(); }catch(e){}
-    try{ _refreshStempelView(); }catch(e){}
-    try{ updateAbBadge(); }catch(e){}
-    try{
-      const vze=document.getElementById('view-zeiterfassung');
-      if(vze&&vze.classList.contains('active')) renderZeiterfassung();
-    }catch(e){}
-  });
+  _fbRef.on('value', snap=>{ _applyFirebaseSnap(snap.val()); });
 }
+// Fallback: alle 30s und bei Tab-Fokus einmalig per HTTP aus Firebase lesen
+// (greift wenn WebSockets durch Netzwerk/Firewall geblockt werden)
+async function _pollFirebase(){
+  if(_offlineMode||!_dataCache) return;
+  try{
+    const snap=await _fbRef.once('value');
+    _applyFirebaseSnap(snap.val());
+  }catch(e){}
+}
+setInterval(()=>{ if(!document.hidden) _pollFirebase(); },30000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
 // Online: Offline-Änderungen synchronisieren
 window.addEventListener('online',()=>{
   _offlineMode=false;
