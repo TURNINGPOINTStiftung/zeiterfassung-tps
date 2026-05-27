@@ -771,7 +771,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27b</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27c</div>
         </div>
       </div>
     </div>
@@ -4266,15 +4266,48 @@ function _zsShowStop(stamp){
 }
 function startZeitstempel(){
   if(!cu||cu.role==='admin') return;
-  const stamp={uid:cu.id,startTime:new Date().toISOString(),startDate:new Date().toISOString().slice(0,10)};
+  const now=new Date();
+  const von=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const startDate=now.toISOString().slice(0,10);
+  const stamp={uid:cu.id,startTime:now.toISOString(),startDate,von};
+  const [sy,sm]=startDate.split('-').map(Number);
   try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
-  mutate(d=>{ if(!d.stamps) d.stamps={}; d.stamps[cu.id]=stamp; });
-  closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓','ok'); _refreshStempelView();
+  mutate(d=>{
+    if(!d.stamps) d.stamps={};
+    d.stamps[cu.id]=stamp;
+    // Startzeitpunkt sofort in Zeiterfassung eintragen
+    const k=entryKey(cu.id,sy,sm);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[k].days) d.entries[k].days={};
+    if(!d.entries[k].days[startDate]) d.entries[k].days[startDate]={};
+    const day=d.entries[k].days[startDate];
+    if(!day.b1von) day.b1von=von;
+    else if(!day.b2von) day.b2von=von;
+  });
+  closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓ ('+von+')','ok'); _refreshStempelView();
+  // Zeiterfassung live aktualisieren damit die Startzeit sofort sichtbar ist
+  const vze=document.getElementById('view-zeiterfassung');
+  if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
 }
 function cancelZeitstempel(){
   if(!confirm('Stempel verwerfen? Die Zeit wird NICHT in die Zeiterfassung übertragen.')) return;
+  const stamp=getStamp();
+  if(stamp&&stamp.uid===cu.id&&stamp.von&&stamp.startDate){
+    const von=stamp.von, ds=stamp.startDate;
+    const [sy,sm]=ds.split('-').map(Number);
+    mutate(d=>{
+      const day=d.entries?.[entryKey(cu.id,sy,sm)]?.days?.[ds];
+      if(day){
+        // Nur die vom Stempel gesetzte Startzeit entfernen (Endzeit ist noch leer)
+        if(day.b1von===von&&!day.b1bis) day.b1von='';
+        else if(day.b2von===von&&!day.b2bis) day.b2von='';
+      }
+      if(d.stamps) delete d.stamps[cu.id];
+    });
+  } else {
+    mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
+  }
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
-  mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
   closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.'); _refreshStempelView();
 }
 function stopZeitstempel(){
@@ -4282,9 +4315,8 @@ function stopZeitstempel(){
   if(!stamp||stamp.uid!==cu.id){ toast('Kein aktiver Stempel.','err'); return; }
   const zuord=document.getElementById('zs-zuord')?.value||'';
   const note=document.getElementById('zs-note')?.value.trim()||'';
-  const start=new Date(stamp.startTime);
+  const von=stamp.von||'';
   const end=new Date();
-  const von=String(start.getHours()).padStart(2,'0')+':'+String(start.getMinutes()).padStart(2,'0');
   const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
   const ds=stamp.startDate;
   const [sy,sm]=ds.split('-').map(Number);
@@ -4294,21 +4326,37 @@ function stopZeitstempel(){
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
-    if(!day.b1von){
-      day.b1von=von; day.b1bis=bis;
+    // Block anhand der vom Einstempeln gesetzten Startzeit finden und Endzeit ergänzen
+    if(von&&day.b1von===von&&!day.b1bis){
+      day.b1bis=bis;
       if(zuord) day.b1zuord=zuord;
       if(note) day.b1bem=note;
-    } else if(!day.b2von){
-      day.b2von=von; day.b2bis=bis;
+    } else if(von&&day.b2von===von&&!day.b2bis){
+      day.b2bis=bis;
       if(zuord) day.b2zuord=zuord;
       if(note) day.b2bem=note;
+    } else if(day.b1von&&!day.b1bis){
+      // Fallback: b1von existiert aber stimmt nicht mit Stempel überein (manuell geändert)
+      day.b1bis=bis;
+      if(zuord) day.b1zuord=zuord;
+      if(note) day.b1bem=note;
+    } else if(day.b2von&&!day.b2bis){
+      day.b2bis=bis;
+      if(zuord) day.b2zuord=zuord;
+      if(note) day.b2bem=note;
+    } else if(!day.b1von){
+      // Kein Eintrag vorhanden (Stempel-Startzeit ging verloren)
+      day.b1von=von||bis; day.b1bis=bis;
+      if(zuord) day.b1zuord=zuord;
+      if(note) day.b1bem=note;
     } else {
       // Beide Blöcke belegt → Kleinteilig
-      const addMin2=Math.max(0,Math.round((end-start)/60000));
+      const addMin2=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
       day.ktmin=(Number(day.ktmin||0)+addMin2);
       if(zuord) day.ktzuord=zuord;
     }
   });
+  check10hCarryover(cu.id,sy,sm,ds);
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
   closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
