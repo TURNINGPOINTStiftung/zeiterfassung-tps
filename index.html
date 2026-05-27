@@ -573,7 +573,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27h</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.27i</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -777,7 +777,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27h</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.27i</div>
         </div>
       </div>
     </div>
@@ -4316,43 +4316,51 @@ function _zsShowStop(stamp){
       <button class="btn btn-warn" onclick="stopZeitstempel()">■ Ausstempeln &amp; übertragen</button>
     </div>`);
 }
-function startZeitstempel(){
+async function startZeitstempel(){
   if(!cu||cu.role==='admin') return;
   const now=new Date();
   const von=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   const startDate=now.toISOString().slice(0,10);
-  const stamp={uid:cu.id,startTime:now.toISOString(),startDate,von};
   const [sy,sm]=startDate.split('-').map(Number);
+  const k=entryKey(cu.id,sy,sm);
+  // Frisch aus Firebase lesen bevor wir den Block wählen – verhindert dass ein
+  // veralteter _dataCache den falschen Block auswählt und einen vorhandenen überschreibt
+  if(!_offlineMode&&_dataCache){
+    try{
+      const snap=await _fbRef.child('entries').child(k).once('value');
+      const val=snap.val(); if(val) _dataCache.entries[k]=val;
+    }catch(e){}
+  }
+  // Block wählen: Block 1 wenn er noch frei ist, sonst Block 2
+  const dayNow=(getEntry(cu.id,sy,sm).days||{})[startDate]||{};
+  const block=(dayNow.b1von&&dayNow.b1bis)?'b2':'b1';
+  const stamp={uid:cu.id,startTime:now.toISOString(),startDate,von,block};
   try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
   mutate(d=>{
     if(!d.stamps) d.stamps={};
     d.stamps[cu.id]=stamp;
-    // Startzeitpunkt sofort in Zeiterfassung eintragen
-    const k=entryKey(cu.id,sy,sm);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[startDate]) d.entries[k].days[startDate]={};
-    const day=d.entries[k].days[startDate];
-    if(!day.b1von) day.b1von=von;
-    else if(!day.b2von) day.b2von=von;
+    // Startzeit direkt in den gewählten Block schreiben
+    if(block==='b1') d.entries[k].days[startDate].b1von=von;
+    else             d.entries[k].days[startDate].b2von=von;
   });
   closeModal(); updateZeitstempelBtn(); toast('Eingestempelt ✓ ('+von+')','ok'); _refreshStempelView();
-  // Zeiterfassung live aktualisieren damit die Startzeit sofort sichtbar ist
   const vze=document.getElementById('view-zeiterfassung');
   if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
 }
 function cancelZeitstempel(){
   if(!confirm('Stempel verwerfen? Die Zeit wird NICHT in die Zeiterfassung übertragen.')) return;
   const stamp=getStamp();
-  if(stamp&&stamp.uid===cu.id&&stamp.von&&stamp.startDate){
-    const von=stamp.von, ds=stamp.startDate;
+  if(stamp&&stamp.uid===cu.id&&stamp.startDate){
+    const von=stamp.von||'', ds=stamp.startDate, block=stamp.block||'b1';
     const [sy,sm]=ds.split('-').map(Number);
     mutate(d=>{
       const day=d.entries?.[entryKey(cu.id,sy,sm)]?.days?.[ds];
       if(day){
-        // Nur die vom Stempel gesetzte Startzeit entfernen (Endzeit ist noch leer)
-        if(day.b1von===von&&!day.b1bis) day.b1von='';
-        else if(day.b2von===von&&!day.b2bis) day.b2von='';
+        if(block==='b1'&&day.b1von===von&&!day.b1bis) day.b1von='';
+        else if(block==='b2'&&day.b2von===von&&!day.b2bis) day.b2von='';
       }
       if(d.stamps) delete d.stamps[cu.id];
     });
@@ -4368,6 +4376,7 @@ function stopZeitstempel(){
   const zuord=document.getElementById('zs-zuord')?.value||'';
   const note=document.getElementById('zs-note')?.value.trim()||'';
   const von=stamp.von||'';
+  const block=stamp.block||'b1';
   const end=new Date();
   const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
   const ds=stamp.startDate;
@@ -4378,31 +4387,17 @@ function stopZeitstempel(){
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
-    // Block anhand der vom Einstempeln gesetzten Startzeit finden und Endzeit ergänzen
-    if(von&&day.b1von===von&&!day.b1bis){
-      day.b1bis=bis;
+    // Block direkt aus dem Stempel-Objekt – kein Raten mehr, kein Überschreiben fremder Blöcke
+    if(block==='b1'){
+      day.b1von=von; day.b1bis=bis;  // von immer mitschreiben falls durch stale-data verloren
       if(zuord) day.b1zuord=zuord;
-      if(note) day.b1bem=note;
-    } else if(von&&day.b2von===von&&!day.b2bis){
-      day.b2bis=bis;
+      if(note)  day.b1bem=note;
+    } else if(block==='b2'){
+      day.b2von=von; day.b2bis=bis;
       if(zuord) day.b2zuord=zuord;
-      if(note) day.b2bem=note;
-    } else if(day.b1von&&!day.b1bis){
-      // Fallback: b1von existiert aber stimmt nicht mit Stempel überein (manuell geändert)
-      day.b1bis=bis;
-      if(zuord) day.b1zuord=zuord;
-      if(note) day.b1bem=note;
-    } else if(day.b2von&&!day.b2bis){
-      day.b2bis=bis;
-      if(zuord) day.b2zuord=zuord;
-      if(note) day.b2bem=note;
-    } else if(!day.b1von){
-      // Kein Eintrag vorhanden (Stempel-Startzeit ging verloren)
-      day.b1von=von||bis; day.b1bis=bis;
-      if(zuord) day.b1zuord=zuord;
-      if(note) day.b1bem=note;
+      if(note)  day.b2bem=note;
     } else {
-      // Beide Blöcke belegt → Kleinteilig
+      // Kein Block gespeichert (sehr alter Stempel ohne block-Feld) → Kleinteilig
       const addMin2=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
       day.ktmin=(Number(day.ktmin||0)+addMin2);
       if(zuord) day.ktzuord=zuord;
@@ -4413,7 +4408,6 @@ function stopZeitstempel(){
   mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
   closeModal(); updateZeitstempelBtn(); toast('Ausgestempelt – Zeiten übertragen ✓','ok');
   _refreshStempelView();
-  // Zeiterfassung neu rendern (ggf. Monat wechseln)
   const vze=document.getElementById('view-zeiterfassung');
   if(vze&&vze.classList.contains('active')){ year=sy; mon=sm; renderZeiterfassung(); }
 }
