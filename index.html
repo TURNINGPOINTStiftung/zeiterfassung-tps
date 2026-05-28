@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28t</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28u</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28t</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28u</div>
         </div>
       </div>
     </div>
@@ -2278,6 +2278,68 @@ function renderOverview(){
       <div class="emp-grid">${users.map(renderCard).join('')}</div>
       ${renderTeamSendBar(team,users)}
     </div>`).join('');
+  content.innerHTML+=buildZuordSummary(employees,oy,om,d);
+}
+function buildZuordSummary(employees,oy,om,d){
+  if(!employees||!employees.length) return '';
+  // Monat: Zuordnung je Mitarbeiter
+  const mMaps=employees.map(u=>({name:u.name,map:zuordBreakdown(d.entries[entryKey(u.id,oy,om)]||{})}));
+  // Jahr: Summe über alle Monate je Mitarbeiter
+  const yMaps=employees.map(u=>{
+    const ymap={};
+    for(let m=1;m<=12;m++){
+      Object.entries(zuordBreakdown(d.entries[entryKey(u.id,oy,m)]||{})).forEach(([cat,min])=>{ymap[cat]=(ymap[cat]||0)+min;});
+    }
+    return {name:u.name,map:ymap};
+  });
+  // Alle Kategorien, sortiert nach Jahresgesamt absteigend
+  const allCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))].sort((a,b)=>{
+    const ta=yMaps.reduce((s,{map})=>s+(map[a]||0),0);
+    const tb=yMaps.reduce((s,{map})=>s+(map[b]||0),0);
+    return tb-ta;
+  });
+  const buildTable=(maps,cats,label)=>{
+    const rows=cats.map(cat=>{
+      const vals=maps.map(({map})=>map[cat]||0);
+      const tot=vals.reduce((a,b)=>a+b,0);
+      if(!tot) return '';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 10px;font-size:12px">${cat}</td>
+        ${vals.map(v=>`<td style="padding:5px 8px;text-align:right;font-size:12px;color:${v?'inherit':'var(--border)'}">${v?hFmt(v):'–'}</td>`).join('')}
+        <td style="padding:5px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--primary)">${hFmt(tot)}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+    if(!rows) return '';
+    const empTots=maps.map(({map})=>Object.values(map).reduce((a,b)=>a+b,0));
+    const grand=empTots.reduce((a,b)=>a+b,0);
+    return `<div style="margin-top:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)">${label}</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:350px">
+          <thead><tr style="background:var(--primary);color:#fff">
+            <th style="padding:6px 10px;text-align:left;font-size:11px;min-width:110px">Kategorie</th>
+            ${maps.map(({name})=>`<th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap">${name}</th>`).join('')}
+            <th style="padding:6px 10px;text-align:right;font-size:11px">Gesamt</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr style="background:#1a3a5c;color:#fff;font-weight:700">
+            <td style="padding:6px 10px;font-size:12px">Gesamt</td>
+            ${empTots.map(t=>`<td style="padding:6px 8px;text-align:right;font-size:12px">${t?hFmt(t):'–'}</td>`).join('')}
+            <td style="padding:6px 10px;text-align:right;font-size:12px">${hFmt(grand)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  };
+  const mTable=buildTable(mMaps,allCats,`${MONTHS[om-1]} ${oy}`);
+  const yTable=buildTable(yMaps,allCats,`Gesamtjahr ${oy}`);
+  if(!mTable&&!yTable) return '';
+  return `<div style="margin-top:28px;background:var(--white);border-radius:8px;border:1px solid var(--border);padding:20px 24px">
+    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:2px">Stunden nach Zuordnung</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:0">Alle sichtbaren Mitarbeiter · ${MONTHS[om-1]} ${oy}</p>
+    ${mTable}
+    ${yTable}
+  </div>`;
 }
 function openEmpMonth(uid){
   viewEmpId=uid;
