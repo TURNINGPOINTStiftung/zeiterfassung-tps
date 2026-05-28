@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28x</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28y</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28x</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28y</div>
         </div>
       </div>
     </div>
@@ -1660,7 +1660,8 @@ function getCatsForTeam(teamName){
 function catOptionsForUser(user,selected=''){
   if(isFreelancer(user)) return catOptionsFree(selected);
   const norm=normZuord(selected);
-  const cats=getCatsForTeam(user&&user.team||'').filter(c=>c!=='Ö-Arbeit'&&c!=='Öffentlichkeitsarbeit');
+  // normZuord auf alle Einträge + Set entfernt Duplikate (z.B. wenn Öffentlichkeitsarbeit + Marketing & Öffentlichkeitsarbeit beide gespeichert)
+  const cats=[...new Set(getCatsForTeam(user&&user.team||'').map(normZuord))];
   return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===norm?' selected':''}>${c}</option>`).join('');
 }
 
@@ -2300,17 +2301,19 @@ function buildZuordSummary(employees,oy,om,d){
   });
   // Kategorien ausschließen (Abwesenheiten)
   const EXCL_CATS=new Set(['Urlaub','AU/Krank','Veranstaltung AU','Arbeitszeitausgleich']);
-  // Alle relevanten Kategorien, sortiert nach Jahresgesamt absteigend
-  const allCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))]
-    .filter(c=>!EXCL_CATS.has(c))
+  // Basis: DEFAULT_CATS (normalisiert) + alle in Daten vorkommenden Kategorien, sortiert nach Jahresgesamt
+  const _baseCats=DEFAULT_CATS.map(normZuord).filter(c=>!EXCL_CATS.has(c));
+  const _dataCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))]
+    .filter(c=>!EXCL_CATS.has(c));
+  const allCats=[...new Set([..._baseCats,..._dataCats])]
     .sort((a,b)=>{
       const ta=yMaps.reduce((s,{map})=>s+(map[a]||0),0);
       const tb=yMaps.reduce((s,{map})=>s+(map[b]||0),0);
       return tb-ta;
     });
   const buildTable=(maps,cats,label)=>{
-    // Nur Kategorien mit mind. einem Wert anzeigen
-    const visCats=cats.filter(cat=>maps.some(({map})=>(map[cat]||0)>0));
+    // Alle Kategorien anzeigen, auch wenn noch keine Stunden eingetragen
+    const visCats=cats;
     if(!visCats.length) return '';
     // Zeilen = Mitarbeiter, Spalten = Kategorien
     const empRows=maps.map(({name,map})=>{
