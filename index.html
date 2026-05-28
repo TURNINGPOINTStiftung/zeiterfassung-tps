@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28u</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28v</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28u</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28v</div>
         </div>
       </div>
     </div>
@@ -2292,12 +2292,16 @@ function buildZuordSummary(employees,oy,om,d){
     }
     return {name:u.name,map:ymap};
   });
-  // Alle Kategorien, sortiert nach Jahresgesamt absteigend
-  const allCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))].sort((a,b)=>{
-    const ta=yMaps.reduce((s,{map})=>s+(map[a]||0),0);
-    const tb=yMaps.reduce((s,{map})=>s+(map[b]||0),0);
-    return tb-ta;
-  });
+  // Kategorien ausschließen (Abwesenheiten)
+  const EXCL_CATS=new Set(['Urlaub','AU/Krank','Veranstaltung AU','Arbeitszeitausgleich']);
+  // Alle relevanten Kategorien, sortiert nach Jahresgesamt absteigend
+  const allCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))]
+    .filter(c=>!EXCL_CATS.has(c))
+    .sort((a,b)=>{
+      const ta=yMaps.reduce((s,{map})=>s+(map[a]||0),0);
+      const tb=yMaps.reduce((s,{map})=>s+(map[b]||0),0);
+      return tb-ta;
+    });
   const buildTable=(maps,cats,label)=>{
     const rows=cats.map(cat=>{
       const vals=maps.map(({map})=>map[cat]||0);
@@ -2310,8 +2314,6 @@ function buildZuordSummary(employees,oy,om,d){
       </tr>`;
     }).filter(Boolean).join('');
     if(!rows) return '';
-    const empTots=maps.map(({map})=>Object.values(map).reduce((a,b)=>a+b,0));
-    const grand=empTots.reduce((a,b)=>a+b,0);
     return `<div style="margin-top:20px">
       <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)">${label}</div>
       <div style="overflow-x:auto">
@@ -2322,11 +2324,6 @@ function buildZuordSummary(employees,oy,om,d){
             <th style="padding:6px 10px;text-align:right;font-size:11px">Gesamt</th>
           </tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr style="background:#1a3a5c;color:#fff;font-weight:700">
-            <td style="padding:6px 10px;font-size:12px">Gesamt</td>
-            ${empTots.map(t=>`<td style="padding:6px 8px;text-align:right;font-size:12px">${t?hFmt(t):'–'}</td>`).join('')}
-            <td style="padding:6px 10px;text-align:right;font-size:12px">${hFmt(grand)}</td>
-          </tr></tfoot>
         </table>
       </div>
     </div>`;
