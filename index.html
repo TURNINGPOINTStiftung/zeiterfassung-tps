@@ -161,7 +161,6 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.sep-c{width:8px;background:#e8edf2;padding:0}
 .zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
-.zt tfoot td.pause-c{display:none!important}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
 .zt td.total-c.over{color:var(--danger)}
 /* weekend rows: visually distinct but still editable */
@@ -588,7 +587,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28i</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28j</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -676,8 +675,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <td class="sep-c sep-col"></td>
               <td class="b2-col" colspan="5"></td>
               <td class="kt-col" colspan="2"></td>
-              <td class="pause-c pause-col"></td>
-              <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
+              <td id="tfoot-total" colspan="2" style="text-align:center;font-size:14px">–</td>
             </tr>
           </tfoot>
         </table>
@@ -808,7 +806,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28i</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28j</div>
         </div>
       </div>
     </div>
