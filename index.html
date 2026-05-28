@@ -587,7 +587,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28g</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28h</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -807,7 +807,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28g</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28h</div>
         </div>
       </div>
     </div>
@@ -1433,6 +1433,24 @@ function zuordBreakdown(entry){
     add(dd.b1zuord,m1); add(dd.b2zuord,m2); add(dd.ktzuord,mk);
   });
   return map;
+}
+// Jahres-Pivot: Stunden nach Zuordnung pro Monat + Gesamt
+function buildZuordPivot(uid,y){
+  const d=getData();
+  const yearMap={}; // {cat:{1:min,...}}
+  for(let m=1;m<=12;m++){
+    const map=zuordBreakdown(d.entries[entryKey(uid,y,m)]||{});
+    Object.entries(map).forEach(([cat,min])=>{
+      if(!yearMap[cat]) yearMap[cat]={};
+      yearMap[cat][m]=(yearMap[cat][m]||0)+min;
+    });
+  }
+  const allCats=Object.keys(yearMap).sort((a,b)=>{
+    const ta=Object.values(yearMap[a]).reduce((x,v)=>x+v,0);
+    const tb=Object.values(yearMap[b]).reduce((x,v)=>x+v,0);
+    return tb-ta;
+  });
+  return {yearMap,allCats};
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2307,6 +2325,49 @@ function openJahresübersicht(uid,y){
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalVac>0?totalVac+'&thinsp;T':'–'}</td>
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalSick>0?totalSick+'&thinsp;T':'–'}</td>`;
 
+  // ── Stunden nach Zuordnung ──
+  const {yearMap,allCats}=buildZuordPivot(uid,y);
+  const MO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const tds=(p,a,r)=>`<td style="${p}">${a}</td>${r?`<td style="${p}font-weight:700">${r}</td>`:''}`;
+  let zuordSection='';
+  if(allCats.length>0){
+    const mHdr=MO.map(a=>`<th style="padding:5px 6px;text-align:right;font-size:10px;min-width:38px">${a}</th>`).join('');
+    const catRows=allCats.map(cat=>{
+      const rowTotal=Object.values(yearMap[cat]).reduce((a,v)=>a+v,0);
+      const cells=Array.from({length:12},(_,i)=>{
+        const min=yearMap[cat][i+1]||0;
+        return `<td style="padding:5px 6px;text-align:right;font-size:11px;color:${min>0?'var(--text)':'var(--border)'}">${min>0?minFmt(min):'–'}</td>`;
+      }).join('');
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px;font-size:11px;font-weight:600;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis">${esc(cat)}</td>
+        ${cells}
+        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:var(--primary);white-space:nowrap">${minFmt(rowTotal)}</td>
+      </tr>`;
+    }).join('');
+    const totalCells=Array.from({length:12},(_,i)=>{
+      const s=allCats.reduce((a,cat)=>a+(yearMap[cat][i+1]||0),0);
+      return `<td style="padding:5px 6px;text-align:right;font-size:11px;font-weight:700">${s>0?minFmt(s):'–'}</td>`;
+    }).join('');
+    const grand=allCats.reduce((a,cat)=>a+Object.values(yearMap[cat]).reduce((x,v)=>x+v,0),0);
+    zuordSection=`
+      <h4 style="margin:22px 0 10px;font-size:13px;font-weight:700;color:var(--primary);border-top:1px solid var(--border);padding-top:16px">Stunden nach Zuordnung</h4>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--primary);color:#fff">
+          <th style="padding:5px 8px;text-align:left;font-size:10px;min-width:110px">Kategorie</th>
+          ${mHdr}
+          <th style="padding:5px 8px;text-align:right;font-size:10px">Gesamt</th>
+        </tr></thead>
+        <tbody>${catRows}</tbody>
+        <tfoot><tr style="background:#1a3a5c;color:#fff">
+          <td style="padding:5px 8px;font-size:11px;font-weight:700">Gesamt</td>
+          ${totalCells}
+          <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700">${minFmt(grand)}</td>
+        </tr></tfoot>
+      </table>
+      </div>`;
+  }
+
   openModal(`
     <h3 style="margin-bottom:4px">Jahresübersicht ${y}</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:18px">${esc(user.name)} · ${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'}</div>
@@ -2325,6 +2386,7 @@ function openJahresübersicht(uid,y){
       </tr></tfoot>
     </table>
     </div>
+    ${zuordSection}
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
       <button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>
@@ -2376,6 +2438,34 @@ function printJahresübersicht(uid,y){
     ?`<td class="r">${hFmt(totalIST)}</td>`
     :`<td class="r">${hFmt(totalSOLL)}</td><td class="r">${hFmt(totalIST)}</td><td class="r">${totalDiffStr}</td><td class="r">${totalVac>0?totalVac+' T':'–'}</td><td class="r">${totalSick>0?totalSick+' T':'–'}</td>`;
 
+  // ── PDF: Stunden nach Zuordnung (Pivot) ──
+  const {yearMap:pYearMap,allCats:pAllCats}=buildZuordPivot(uid,y);
+  const pMO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  let pZuordTable='';
+  if(pAllCats.length>0){
+    const pMHdr=pMO.map(a=>`<th class="r" style="font-size:8px">${a}</th>`).join('');
+    const pCatRows=pAllCats.map(cat=>{
+      const rowTotal=Object.values(pYearMap[cat]).reduce((a,v)=>a+v,0);
+      const cells=Array.from({length:12},(_,i)=>{
+        const min=pYearMap[cat][i+1]||0;
+        return `<td class="r" style="color:${min>0?'inherit':'#ccc'}">${min>0?minFmt(min):'–'}</td>`;
+      }).join('');
+      return `<tr><td class="l" style="font-weight:600;max-width:120px;overflow:hidden">${esc(cat)}</td>${cells}<td class="r" style="font-weight:700">${minFmt(rowTotal)}</td></tr>`;
+    }).join('');
+    const pTotalCells=Array.from({length:12},(_,i)=>{
+      const s=pAllCats.reduce((a,cat)=>a+(pYearMap[cat][i+1]||0),0);
+      return `<td class="r">${s>0?minFmt(s):'–'}</td>`;
+    }).join('');
+    const pGrand=pAllCats.reduce((a,cat)=>a+Object.values(pYearMap[cat]).reduce((x,v)=>x+v,0),0);
+    pZuordTable=`
+      <div class="cover-section-title">Stunden nach Zuordnung</div>
+      <table>
+        <thead><tr><th class="l">Kategorie</th>${pMHdr}<th class="r">Gesamt</th></tr></thead>
+        <tbody>${pCatRows}</tbody>
+        <tfoot><tr><td class="l">Gesamt</td>${pTotalCells}<td class="r">${minFmt(pGrand)}</td></tr></tfoot>
+      </table>`;
+  }
+
   const coverPage=`
     <div class="cover-page">
       <div class="cover-hdr">
@@ -2396,6 +2486,7 @@ function printJahresübersicht(uid,y){
         <tbody>${rows}</tbody>
         <tfoot><tr><td class="l">Gesamt ${y}</td>${foot}<td></td></tr></tfoot>
       </table>
+      ${pZuordTable}
     </div>`;
 
   // ── Monatliche Zeiterfassungen (1–12) ──
@@ -2416,8 +2507,10 @@ function printJahresübersicht(uid,y){
     +'.emp-name{font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px}'
     +'.emp-meta{font-size:11px;color:#7f8c8d}'
     +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
+    +'th.r,td.r{text-align:right}th.c,td.c{text-align:center}'
     +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
     +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
+    +'.cover-section-title{font-size:13px;font-weight:700;color:#1a3a5c;margin:20px 0 8px;padding-top:16px;border-top:2px solid #dde1e7}'
     // Monatsseiten: kompakt damit alles auf ein Blatt passt
     +'.month-page{max-width:940px;margin:0 auto}'
     +'.month-page .bh-page{padding-bottom:0}'
