@@ -587,7 +587,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28k</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28l</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -675,7 +675,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <td class="sep-c sep-col"></td>
               <td class="b2-col" colspan="5"></td>
               <td class="kt-col" colspan="2"></td>
-              <td class="pause-col"></td>
+              <td id="tfoot-pause" class="pause-col" style="text-align:center"></td>
               <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
             </tr>
           </tfoot>
@@ -807,7 +807,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28k</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28l</div>
         </div>
       </div>
     </div>
@@ -1699,6 +1699,7 @@ function renderZeiterfassung(){
   const dim=daysInMonth(year,mon);
   const hols=getHolidays(year,user.bundesland||'');
   let monthTotal=0;
+  let monthPause=0;
 
   for(let d=1;d<=dim;d++){
     const ds=dateStr(year,mon,d);
@@ -1715,6 +1716,7 @@ function renderZeiterfassung(){
     const dayMin=b1min+b2min+ktm;
     // Automatische Pause: ab 6h=30min, ab 9h=45min (nur anzeigen, kein Abzug)
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
+    monthPause+=pauseMin;
     // Abwesenheiten (Urlaub, AU/Krank, Arbeitszeitausgleich) nicht auf 15-min runden
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
@@ -1757,6 +1759,8 @@ function renderZeiterfassung(){
 
   const _tDays=dayFmt(monthTotal);
   document.getElementById('tfoot-total').innerHTML=hFmt(monthTotal)+(_tDays?`<br><small style="font-size:10px;font-weight:400;opacity:.75">${_tDays}</small>`:``);
+  const _tp=document.getElementById('tfoot-pause');
+  if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
   renderSummary(uid,user,entry,monthTotal);
   renderZuordBreakdown(entry);
