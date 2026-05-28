@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28w</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28x</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28w</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28x</div>
         </div>
       </div>
     </div>
@@ -1430,6 +1430,11 @@ function totalVacUsed(uid,y){
   for(let m=1;m<=12;m++){ const e=getEntry(uid,y,m); used+=vacDays(e); }
   return used;
 }
+function normZuord(z){
+  if(!z) return z;
+  if(z==='Ö-Arbeit'||z==='Öffentlichkeitsarbeit') return 'Marketing & Öffentlichkeitsarbeit';
+  return z;
+}
 function zuordBreakdown(entry){
   const map={};
   if(!entry||!entry.days) return map;
@@ -1437,7 +1442,7 @@ function zuordBreakdown(entry){
     const m1=diffMin(dd.b1von||'',dd.b1bis||'');
     const m2=diffMin(dd.b2von||'',dd.b2bis||'');
     const mk=Number(dd.ktmin||0);
-    const add=(key,min)=>{ if(key&&min>0) map[key]=(map[key]||0)+min; };
+    const add=(key,min)=>{ if(key&&min>0){ const nk=normZuord(key); map[nk]=(map[nk]||0)+min; } };
     add(dd.b1zuord,m1); add(dd.b2zuord,m2); add(dd.ktzuord,mk);
   });
   return map;
@@ -1654,8 +1659,9 @@ function getCatsForTeam(teamName){
 }
 function catOptionsForUser(user,selected=''){
   if(isFreelancer(user)) return catOptionsFree(selected);
-  const cats=getCatsForTeam(user&&user.team||'');
-  return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+  const norm=normZuord(selected);
+  const cats=getCatsForTeam(user&&user.team||'').filter(c=>c!=='Ö-Arbeit'&&c!=='Öffentlichkeitsarbeit');
+  return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===norm?' selected':''}>${c}</option>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4501,7 +4507,7 @@ function renderGFBerichte(){
 
 function renderBuchhaltungHTML(u,entry,y,m){
   // Für Akademie-Team: Ö-Arbeit wird in der Buchhaltungsversion als "Akademie" angezeigt
-  const _bzuord=z=>((z==='Ö-Arbeit'||z==='Öffentlichkeitsarbeit'||z==='Marketing & Öffentlichkeitsarbeit')&&u.team==='Akademie')?'Akademie':z;
+  const _bzuord=z=>{ const norm=normZuord(z||''); return (norm==='Marketing & Öffentlichkeitsarbeit'&&u.team==='Akademie')?'Akademie':norm; };
   const isFree=isFreelancer(u); // vor Loop: steuert Spalten-Layout
   const dim=daysInMonth(y,m);
   const hols=getHolidays(y,u.bundesland||'');
