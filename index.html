@@ -163,8 +163,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
 .zt td.total-c.over{color:var(--danger)}
+/* Gesamt-Spalte aus Zeilen ausblenden (Monatssumme im tfoot bleibt) */
+.zt thead th.gesamt-col,.zt tbody td.total-c{display:none!important}
 /* weekend rows: visually distinct but still editable */
-.zt tr.weekend td.total-c,.zt tr.weekend td.sum-c{color:var(--warn)}
+.zt tr.weekend td.sum-c{color:var(--warn)}
 .zt tr.weekend td input[type=time],.zt tr.weekend td select,.zt tr.weekend td input.bem,.zt tr.weekend td input.kt-min{background:var(--weekend)}
 .zt td input[type=time]{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:76px;background:#fff}
 .zt td input[type=time]:focus{border-color:var(--primary-l);outline:none}
@@ -587,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28m</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28n</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -659,7 +661,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <th colspan="5" class="block-head b2-col">Block 2</th>
               <th colspan="2" class="kt-col">Kleinteilig</th>
               <th rowspan="2" class="pause-col">Pause</th>
-              <th rowspan="2">Gesamt</th>
+              <th rowspan="2" class="gesamt-col">Gesamt</th>
             </tr>
             <tr>
               <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
@@ -807,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28m</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28n</div>
         </div>
       </div>
     </div>
