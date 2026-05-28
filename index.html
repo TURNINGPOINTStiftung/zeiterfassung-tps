@@ -161,6 +161,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.sep-c{width:8px;background:#e8edf2;padding:0}
 .zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
+.zt tfoot td.pause-c{display:none!important}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
 .zt td.total-c.over{color:var(--danger)}
 /* weekend rows: visually distinct but still editable */
@@ -587,7 +588,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28h</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28i</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -807,7 +808,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28h</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28i</div>
         </div>
       </div>
     </div>
@@ -2522,6 +2523,7 @@ function printJahresübersicht(uid,y){
     +'.month-page .bh-ir{font-size:8.5px}'
     +'.month-page table th{padding:3px 2px!important;font-size:7.5px!important}'
     +'.month-page table td{padding:2px 2.5px!important;font-size:8px!important}'
+    +'.month-page table td.ps{font-size:7px!important;padding:2px 1px!important}'
     +'.month-page .bh-sum{margin-top:5px;gap:4px}'
     +'.month-page .bh-sc{padding:4px 7px;min-width:80px}'
     +'.month-page .bh-sc .val{font-size:12px;margin:1px 0}'
@@ -3805,6 +3807,7 @@ function _teamReportStyle(){
     +'td{padding:2.5px 3px;vertical-align:middle;border-bottom:1px solid #e8ecf0;border-right:1px solid #e0e4ea;text-align:center;font-size:9px}'
     +'td.l{text-align:left;padding-left:5px;font-weight:600;font-size:8.5px;white-space:nowrap}'
     +'td.sp{background:#e8edf2;width:4px;padding:0;border-right:none}td.sm{font-weight:700;color:#1a3a5c;font-size:9px}'
+    +'td.ps{font-size:8px;color:#7f8c8d;font-weight:600;text-align:center;white-space:nowrap}'
     +'td.tt{font-weight:700;font-size:10px;color:#1a3a5c;background:rgba(26,58,92,.06)}'
     +'.we{background:#fef3e2}.hol{background:#fff0f0!important}'
     +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:4px 3px;text-align:center;font-size:9px}'
@@ -4433,6 +4436,7 @@ function renderBuchhaltungHTML(u,entry,y,m){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
+    const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthTotal+=dayMin;
     const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
     const cls=hol?'hol':(we?'we':'');
@@ -4454,7 +4458,8 @@ function renderBuchhaltungHTML(u,entry,y,m){
         +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
         +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>';
     }
-    row+='<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'+'</tr>';
+    row+='<td class="ps">'+(pauseMin>0?minFmt(pauseMin):'')+'</td>'
+        +'<td class="tt">'+(dayMin>0?hFmt(dayMin):'')+'</td>'+'</tr>';
     rows+=row;
   }
 
@@ -4543,6 +4548,7 @@ function renderBuchhaltungHTML(u,entry,y,m){
       :'<th class="sp" rowspan="2"></th>'
        +'<th colspan="4" class="bh">Block 2</th>'
        +'<th colspan="3">Kleinteilig</th>')
+    +'<th rowspan="2" style="font-size:7px;min-width:28px">Pause</th>'
     +'<th rowspan="2">Gesamt</th>'
     +'</tr><tr>'
     +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
@@ -4556,6 +4562,7 @@ function renderBuchhaltungHTML(u,entry,y,m){
     +(isFree
       ?'<td colspan="4"></td>'
       :'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="3"></td>')
+    +'<td></td>'
     +'<td>'+hFmt(monthTotal)+'</td>'
     +'</tr></tfoot>'
     +'</table>'
