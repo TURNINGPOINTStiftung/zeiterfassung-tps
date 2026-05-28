@@ -163,10 +163,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
 .zt td.total-c.over{color:var(--danger)}
-/* Gesamt-Spalte aus Zeilen ausblenden (Monatssumme im tfoot bleibt) */
-.zt thead th.gesamt-col,.zt tbody td.total-c{display:none!important}
+/* ∑-Spalten Block 1 + Block 2 ausblenden */
+.zt thead th.sum-col,.zt tbody td.sum-col{display:none!important}
 /* weekend rows: visually distinct but still editable */
-.zt tr.weekend td.sum-c{color:var(--warn)}
+.zt tr.weekend td.total-c,.zt tr.weekend td.sum-c{color:var(--warn)}
 .zt tr.weekend td input[type=time],.zt tr.weekend td select,.zt tr.weekend td input.bem,.zt tr.weekend td input.kt-min{background:var(--weekend)}
 .zt td input[type=time]{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:76px;background:#fff}
 .zt td input[type=time]:focus{border-color:var(--primary-l);outline:none}
@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28o</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28p</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -656,16 +656,16 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <th class="l" rowspan="2">Datum</th>
               <th rowspan="2">KW</th>
               <th rowspan="2">Tag</th>
-              <th colspan="5" class="block-head">Block 1</th>
+              <th colspan="4" class="block-head">Block 1</th>
               <th class="sep-head sep-col" rowspan="2"></th>
-              <th colspan="5" class="block-head b2-col">Block 2</th>
+              <th colspan="4" class="block-head b2-col">Block 2</th>
               <th colspan="2" class="kt-col">Kleinteilig</th>
               <th rowspan="2" class="pause-col">Pause</th>
-              <th rowspan="2" class="gesamt-col">Gesamt</th>
+              <th rowspan="2">Gesamt</th>
             </tr>
             <tr>
-              <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th>∑</th>
-              <th class="b2-col">von</th><th class="b2-col">bis</th><th class="b2-col">Zuordnung</th><th class="bem-col b2-col">Bemerkung</th><th class="b2-col">∑</th>
+              <th>von</th><th>bis</th><th>Zuordnung</th><th class="bem-col">Bemerkung</th><th class="sum-col">∑</th>
+              <th class="b2-col">von</th><th class="b2-col">bis</th><th class="b2-col">Zuordnung</th><th class="bem-col b2-col">Bemerkung</th><th class="b2-col sum-col">∑</th>
               <th class="kt-col">Min</th><th class="kt-col">∑</th>
             </tr>
           </thead>
@@ -673,9 +673,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
           <tfoot>
             <tr>
               <td class="l" colspan="3">Monatssumme IST</td>
-              <td colspan="5"></td>
+              <td colspan="4"></td>
               <td class="sep-c sep-col"></td>
-              <td class="b2-col" colspan="5"></td>
+              <td class="b2-col" colspan="4"></td>
               <td class="kt-col" colspan="2"></td>
               <td id="tfoot-pause" class="pause-col" style="text-align:center"></td>
               <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28o</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28p</div>
         </div>
       </div>
     </div>
@@ -1734,13 +1734,13 @@ function renderZeiterfassung(){
       <td><input type="time" value="${b1bisDisp}" ${dis?'disabled':''} onchange="td_b1bis_change('${ds}',this.value)" title="${pauseMin>0&&!hasB2Work?'Abfahrtszeit (Arbeitsende + '+pauseMin+' Min Pause)':''}"></td>
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
-      <td class="sum-c">${b1min>0?minFmt(b1min):''}</td>
+      <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
       <td class="b2-col"><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
       <td class="b2-col"><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
       <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
-      <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
+      <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMin>0?minFmt(pauseMin):''}</td>
