@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28n</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28o</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28n</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28o</div>
         </div>
       </div>
     </div>
@@ -1206,14 +1206,10 @@ function roundToQuarter(val){
   if(m===60){h+=1;m=0;}
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
-// 10h-Tageslimit: Überschuss als Zeiteintrag in Folgetag schreiben (rekursiv für Kaskaden)
+// Bereinigung alter 10h-Übertrags-Einträge (Limit wurde entfernt)
 function check10hCarryover(uid,y,m,ds,depth){
   if((depth||0)>31) return;
-  const entry=getEntry(uid,y,m);
-  const day=(entry.days||{})[ds]||{};
-  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const rounded=raw>0?Math.round(raw/15)*15:0;
-  const overflow=Math.max(0,rounded-600);
+  const overflow=0; // 10h-Limit entfernt – kein neuer Übertrag mehr
   const date=new Date(ds+'T12:00:00');
   date.setDate(date.getDate()+1);
   const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
@@ -1227,37 +1223,14 @@ function check10hCarryover(uid,y,m,ds,depth){
       if(nd.b1bem==='Übertrag 10h Korrektur'){ nd.b1von=''; nd.b1bis=''; nd.b1zuord=''; nd.b1bem=''; hadCarryover=true; }
       if(nd.b2bem==='Übertrag 10h Korrektur'){ nd.b2von=''; nd.b2bis=''; nd.b2zuord=''; nd.b2bem=''; hadCarryover=true; }
     }
-    // ── Schritt 2: Neuen Übertrag anlegen wenn Overflow vorhanden ──
-    if(overflow>0){
-      const startStr='08:00', bisStr=addMin(startStr,overflow);
-      if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-      if(!d.entries[nK].days) d.entries[nK].days={};
-      if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
-      const nd2=d.entries[nK].days[nDs];
-      if(!nd2.b1von){ nd2.b1von=startStr; nd2.b1bis=bisStr; nd2.b1bem='Übertrag 10h Korrektur'; }
-      else if(!nd2.b2von){ nd2.b2von=startStr; nd2.b2bis=bisStr; nd2.b2bem='Übertrag 10h Korrektur'; }
-      else { nd2.ktmin=(Number(nd2.ktmin||0)+overflow); }
-      // Originaltag: nur beim ersten Aufruf (depth===0) Endzeit kürzen
-      if(!depth){
-        const ok=entryKey(uid,y,m);
-        const od=d.entries[ok]?.days?.[ds];
-        if(od){
-          let toRemove=overflow;
-          if(toRemove>0&&Number(od.ktmin||0)>0){ const cut=Math.min(toRemove,Number(od.ktmin)); od.ktmin=Number(od.ktmin)-cut; toRemove-=cut; }
-          if(toRemove>0&&od.b2von&&od.b2bis){ const b2m=diffMin(od.b2von,od.b2bis); const cut=Math.min(toRemove,b2m); od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut; }
-          if(toRemove>0&&od.b1von&&od.b1bis){ const b1m=diffMin(od.b1von,od.b1bis); od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove)); }
-        }
-      }
-    }
     // Leeren Folgetag-Eintrag aufräumen
     const nd3=d.entries?.[nK]?.days?.[nDs];
     if(nd3&&!nd3.b1von&&!nd3.b1bis&&!nd3.b2von&&!nd3.b2bis&&!Number(nd3.ktmin)&&!nd3.b1bem&&!nd3.b2bem){
       delete d.entries[nK].days[nDs];
     }
   });
-  // Kaskade: Folgetag neu prüfen (bei Overflow oder wenn vorher ein Übertrag existierte)
-  if(overflow>0||hadCarryover) check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
-  if(!depth&&overflow>0) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
+  // Kaskade: Folgetag nur bereinigen wenn dort ein alter Übertrag war
+  if(hadCarryover) check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
 }
 // b1bis: Abfahrtszeit → Arbeitsende zurückrechnen (Abfahrt = Arbeitsende + Pause)
 // Schwelle: Anwesenheit ≥6:30h → 30 Min Pause; ≥9:45h → 45 Min Pause
@@ -1740,7 +1713,7 @@ function renderZeiterfassung(){
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
-    const effDayMin=Math.min(roundedDayMin,600); // max 10h (Übertrag via check10hCarryover)
+    const effDayMin=roundedDayMin;
     monthTotal+=effDayMin;
 
     const tr=document.createElement('tr');
