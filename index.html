@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28v</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28w</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -809,7 +809,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28v</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28w</div>
         </div>
       </div>
     </div>
@@ -2303,27 +2303,35 @@ function buildZuordSummary(employees,oy,om,d){
       return tb-ta;
     });
   const buildTable=(maps,cats,label)=>{
-    const rows=cats.map(cat=>{
-      const vals=maps.map(({map})=>map[cat]||0);
-      const tot=vals.reduce((a,b)=>a+b,0);
-      if(!tot) return '';
+    // Nur Kategorien mit mind. einem Wert anzeigen
+    const visCats=cats.filter(cat=>maps.some(({map})=>(map[cat]||0)>0));
+    if(!visCats.length) return '';
+    // Zeilen = Mitarbeiter, Spalten = Kategorien
+    const empRows=maps.map(({name,map})=>{
+      const vals=visCats.map(cat=>map[cat]||0);
+      if(!vals.some(v=>v>0)) return '';
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:5px 10px;font-size:12px">${cat}</td>
+        <td style="padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap">${name}</td>
         ${vals.map(v=>`<td style="padding:5px 8px;text-align:right;font-size:12px;color:${v?'inherit':'var(--border)'}">${v?hFmt(v):'–'}</td>`).join('')}
-        <td style="padding:5px 10px;text-align:right;font-size:12px;font-weight:700;color:var(--primary)">${hFmt(tot)}</td>
       </tr>`;
     }).filter(Boolean).join('');
-    if(!rows) return '';
+    if(!empRows) return '';
+    // Gesamt-Zeile (Summe pro Kategorie)
+    const catTots=visCats.map(cat=>maps.reduce((s,{map})=>s+(map[cat]||0),0));
+    const gesamtRow=`<tr style="background:#1a3a5c;color:#fff;font-weight:700">
+      <td style="padding:6px 10px;font-size:12px">Gesamt</td>
+      ${catTots.map(t=>`<td style="padding:6px 8px;text-align:right;font-size:12px">${t?hFmt(t):'–'}</td>`).join('')}
+    </tr>`;
     return `<div style="margin-top:20px">
       <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)">${label}</div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;min-width:350px">
           <thead><tr style="background:var(--primary);color:#fff">
-            <th style="padding:6px 10px;text-align:left;font-size:11px;min-width:110px">Kategorie</th>
-            ${maps.map(({name})=>`<th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap">${name}</th>`).join('')}
-            <th style="padding:6px 10px;text-align:right;font-size:11px">Gesamt</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;min-width:120px">Mitarbeiter</th>
+            ${visCats.map(cat=>`<th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap">${cat}</th>`).join('')}
           </tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody>${empRows}</tbody>
+          <tfoot>${gesamtRow}</tfoot>
         </table>
       </div>
     </div>`;
