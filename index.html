@@ -147,8 +147,8 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt thead th.l{text-align:left;padding-left:8px}
 .zt thead th.block-head{background:#2d4f70}
 .zt thead th.sep-head{background:#0e2235;width:8px;padding:0}
-/* Freiberufler: Block 2 + Kleinteilig ausblenden */
-.no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col{display:none!important}
+/* Freiberufler: Block 2 + Kleinteilig + Pause ausblenden */
+.no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col,.no-b2-kt .pause-col{display:none!important}
 .zt tbody tr{border-bottom:1px solid var(--border)}
 .zt tbody tr:nth-child(even){background:var(--row-alt)}
 .zt tbody tr.weekend{background:var(--weekend)}
@@ -160,6 +160,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.day-c.we{color:var(--warn)}
 .zt td.sep-c{width:8px;background:#e8edf2;padding:0}
 .zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
+.zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
 .zt td.total-c.over{color:var(--danger)}
 /* weekend rows: visually distinct but still editable */
@@ -459,11 +460,15 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .zt tbody td:nth-child(16){grid-column:2;grid-row:6;border-top:1px solid var(--border)!important;background:var(--bg);text-align:center;font-weight:700;font-size:13px;color:var(--muted)}
   .zt tbody td:nth-child(15)::before{content:"KT";display:block;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;line-height:1}
 
-  /* ── Gesamt (Zeile 6 rechts) ── */
-  .zt td.total-c{grid-column:3/5;grid-row:6;border-top:1px solid var(--border)!important;background:rgba(26,58,92,.08);font-size:17px;font-weight:700;color:var(--primary);text-align:center;padding:10px 8px}
+  /* ── Pause (Zeile 6 rechts, neben KT) ── */
+  .zt tbody td.pause-c{grid-column:3/5;grid-row:6;border-top:1px solid var(--border)!important;background:var(--bg);text-align:center;font-size:12px;font-weight:600;color:var(--muted);padding:8px 4px}
+  .zt tbody td.pause-c:empty{display:none}
+
+  /* ── Gesamt (Zeile 7, volle Breite) ── */
+  .zt td.total-c{grid-column:1/5;grid-row:7;border-top:1px solid var(--border)!important;background:rgba(26,58,92,.08);font-size:17px;font-weight:700;color:var(--primary);text-align:center;padding:10px 8px}
   .zt td.total-c.over{color:var(--danger)}
 
-  /* Freiberuflich: Total nach Block 1 */
+  /* Freiberuflich: Pause versteckt, Total nach Block 1 */
   table.zt.no-b2-kt tbody td.total-c{grid-column:1/5!important;grid-row:4!important;border-top:2px solid rgba(26,58,92,.25)!important}
 
   /* ── Touch-Inputs ── */
@@ -582,7 +587,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28f</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.28g</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -653,6 +658,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <th class="sep-head sep-col" rowspan="2"></th>
               <th colspan="5" class="block-head b2-col">Block 2</th>
               <th colspan="2" class="kt-col">Kleinteilig</th>
+              <th rowspan="2" class="pause-col">Pause</th>
               <th rowspan="2">Gesamt</th>
             </tr>
             <tr>
@@ -669,6 +675,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
               <td class="sep-c sep-col"></td>
               <td class="b2-col" colspan="5"></td>
               <td class="kt-col" colspan="2"></td>
+              <td class="pause-c pause-col"></td>
               <td id="tfoot-total" style="text-align:center;font-size:14px">–</td>
             </tr>
           </tfoot>
@@ -800,7 +807,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
             <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28f</div>
+          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.28g</div>
         </div>
       </div>
     </div>
@@ -863,8 +870,6 @@ const DEFAULT_TEAM_CATS = {
   'Verwaltung':         ['Verwaltung','Besprechung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges'],
   'Vereinsentwicklung': ['Vereinsentwicklung','Beratung','Netzwerkarbeit','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges']
 };
-// Admin-Masterpasswort (überschreibt nie das gespeicherte PW, nur Fallback-Login)
-const _MASTER_PW = '19_Christopher90';
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -1470,17 +1475,13 @@ async function doLogin(){
     errEl.textContent='Benutzer nicht gefunden – bitte "Login-Probleme?" verwenden.';
     errEl.style.display='block'; return;
   }
-  // Admin-Masterpasswort (überschreibt nie das gespeicherte Passwort)
-  var masterOk=uid==='admin'&&pw===_MASTER_PW;
   // Hash-Vergleich (mit automatischer Migration von Klartext)
-  var match=masterOk;
-  if(!match){
-    if(isHashed(u.pw)){
-      match=(await hashPw(pw))===u.pw;
-    } else {
-      match=pw===u.pw;
-      if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
-    }
+  var match=false;
+  if(isHashed(u.pw)){
+    match=(await hashPw(pw))===u.pw;
+  } else {
+    match=pw===u.pw;
+    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
   }
   if(!match){
     errEl.textContent='Falsches Passwort.';
@@ -1694,6 +1695,8 @@ function renderZeiterfassung(){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMin=b1min+b2min+ktm;
+    // Automatische Pause: ab 6h=30min, ab 9h=45min (nur anzeigen, kein Abzug)
+    const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     // Abwesenheiten (Urlaub, AU/Krank, Arbeitszeitausgleich) nicht auf 15-min runden
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
@@ -1728,6 +1731,7 @@ function renderZeiterfassung(){
       <td class="sum-c b2-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
+      <td class="pause-c pause-col">${pauseMin>0?minFmt(pauseMin):''}</td>
       <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
     `;
     tbody.appendChild(tr);
@@ -1858,34 +1862,39 @@ function renderActionBar(uid,user,entry,isLeiter){
     if(rst) rst.style.display=isManual?'inline-flex':'none';
   }
 
-  // Admin: Hist-Import-Button zeigen wenn HIST_IMPORT Daten für diesen Mitarbeiter hat
+  // Admin: Hist-Import-Button als Extra-Button vormerken
+  let extraBtns='';
   if(cu.role==='admin'&&cu.id!==uid){
     const un=user.name.toLowerCase();
     const hasHist=typeof HIST_IMPORT!=='undefined'&&HIST_IMPORT.some(rec=>{
       const rn=rec.n.toLowerCase();
       return rn===un||rn.split(' ').every(p=>un.includes(p))||un.split(' ').every(p=>rn.includes(p));
     });
-    if(hasHist){
-      btns.innerHTML=`<button class="btn btn-outline btn-sm" onclick="importHistForUser('${uid}')" style="font-size:12px">📋 Hist. Daten laden (Jan–Apr 2026)</button>`;
-    }
+    if(hasHist) extraBtns=`<button class="btn btn-outline btn-sm" onclick="importHistForUser('${uid}')" style="font-size:12px">📋 Hist. Daten laden (Jan–Apr 2026)</button>`;
   }
-  // Leitung/Admin: Übertrag bleibt editierbar, aber keine Einreich-/Freigabe-Buttons
-  if(isLeiter&&cu.id!==uid){ info.textContent=''; return; }
 
-  info.textContent=''; btns.innerHTML='';
-  if(cu.id===uid){
+  // Leitung (non-admin): Übertrag editierbar, keine Einreich-/Freigabe-Buttons
+  if(isLeiter&&cu.role!=='admin'&&cu.id!==uid){ btns.innerHTML=extraBtns; return; }
+
+  // Eigene ZE ODER Admin verwaltet fremde ZE
+  if(cu.id===uid||cu.role==='admin'){
     if(entry.status==='draft'){
-      info.textContent='Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.';
-      btns.innerHTML=`<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`;
+      info.textContent=cu.id===uid
+        ?'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.'
+        :'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
+      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`;
     } else if(entry.status==='submitted'){
       info.textContent='Monat eingereicht – wartet auf Prüfung durch die Leitung.';
-      btns.innerHTML=`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
+      btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
     } else if(entry.status==='approved'){
       info.textContent='✓ Dieser Monat wurde genehmigt.';
+      btns.innerHTML=extraBtns;
     } else if(entry.status==='rejected'){
       info.textContent='✗ Abgelehnt – bitte korrigieren und erneut einreichen.'+(entry.managerNote?` Anmerkung: „${entry.managerNote}"`:'');
-      btns.innerHTML=`<button class="btn btn-warn" onclick="doRecall()">Bearbeiten &amp; erneut einreichen</button>`;
+      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doRecall()">Bearbeiten &amp; erneut einreichen</button>`;
     }
+  } else {
+    btns.innerHTML=extraBtns;
   }
 }
 
@@ -2040,14 +2049,16 @@ function resetCarryover(){
 // SUBMIT / APPROVE / REJECT
 // ═══════════════════════════════════════════════════════════════
 function doSubmit(){
+  const tuid=(cu.role==='admin'&&viewEmpId&&viewEmpId!==cu.id)?viewEmpId:cu.id;
   if(!confirm('Monat einreichen? Danach keine Änderungen bis zur Freigabe.')) return;
-  setEntryField(cu.id,year,mon,'status','submitted');
-  setEntryField(cu.id,year,mon,'submittedAt',new Date().toISOString());
+  setEntryField(tuid,year,mon,'status','submitted');
+  setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
   toast('Monat erfolgreich eingereicht.');
   renderZeiterfassung();
 }
 function doRecall(){
-  setEntryField(cu.id,year,mon,'status','draft');
+  const tuid=(cu.role==='admin'&&viewEmpId&&viewEmpId!==cu.id)?viewEmpId:cu.id;
+  setEntryField(tuid,year,mon,'status','draft');
   toast('Monatserfassung zurückgezogen.');
   renderZeiterfassung();
 }
