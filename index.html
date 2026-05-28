@@ -589,7 +589,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
   <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span>Zeiterfassung · v26.05.29b</span></div>
+    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span id="hdr-version">Zeiterfassung</span></div>
     <div class="header-right">
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
@@ -1563,6 +1563,9 @@ function initApp(){
   document.getElementById('hdr-role').textContent=roleLabel(cu.role,cu);
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
+  // Version nur für Admin und Moritz Kriese anzeigen
+  const _showVer=isAdmin||cu.name==='Moritz Kriese';
+  document.getElementById('hdr-version').textContent=_showVer?'Zeiterfassung · v26.05.29b':'Zeiterfassung';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date(); year=now.getFullYear(); mon=now.getMonth()+1;
   abCalYear=year; abCalMon=mon;
