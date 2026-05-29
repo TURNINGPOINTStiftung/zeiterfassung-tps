@@ -45,12 +45,14 @@
       <p>Arbeitszeiterfassung 2026</p>
     </div>
     <form onsubmit="doLogin();return false" autocomplete="on" style="width:100%">
-      <div class="form-group">
+      <div class="form-group" style="position:relative">
         <label for="login-user-input">Name</label>
-        <input type="text" id="login-user-input" list="login-users-datalist"
+        <input type="text" id="login-user-input"
                autocomplete="username" placeholder="Name eingeben …"
+               oninput="filterLoginUsers(this.value)"
+               onblur="hideLoginDropdown()"
                style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:#fff;color:var(--text);box-sizing:border-box">
-        <datalist id="login-users-datalist"></datalist>
+        <div id="login-user-dropdown" onmousedown="event.preventDefault()"></div>
       </div>
       <div class="form-group">
         <label for="login-pw">Passwort</label>

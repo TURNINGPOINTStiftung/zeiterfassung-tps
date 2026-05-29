@@ -3,6 +3,9 @@ import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
 import { getData, getUser, mutate } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 
+// Zwischenspeicher für Login-Autocomplete
+let _loginUsers = [];
+
 // ── Password hashing ──────────────────────────────────────────────
 export async function hashPw(pw){
   if(!pw) return '';
@@ -14,17 +17,10 @@ export function isHashed(pw){ return pw&&pw.length===64&&/^[0-9a-f]+$/.test(pw);
 
 // ── Login UI ──────────────────────────────────────────────────────
 export function populateLoginDropdown(){
-  const dl=document.getElementById('login-users-datalist');
-  if(!dl) return;
-  dl.innerHTML='';
-  let users=[];
-  try{ users=getData().users||[]; }catch(e){}
-  if(!users.length) users=DEFAULT_USERS.slice();
-  [...users].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(u=>{
-    const opt=document.createElement('option');
-    opt.value=u.name;
-    dl.appendChild(opt);
-  });
+  // Benutzerliste für Autocomplete cachen
+  try{ _loginUsers=getData().users||[]; }catch(e){}
+  if(!_loginUsers.length) _loginUsers=DEFAULT_USERS.slice();
+
   // Gespeicherten Benutzer wiederherstellen
   try{
     const rid=localStorage.getItem('tp_zt_remember');
@@ -38,6 +34,35 @@ export function populateLoginDropdown(){
       }
     }
   }catch(e){}
+}
+
+// ── Login-Autocomplete ─────────────────────────────────────────────
+export function filterLoginUsers(val){
+  const dd=document.getElementById('login-user-dropdown');
+  if(!dd) return;
+  const q=(val||'').trim().toLowerCase();
+  if(!q){ dd.style.display='none'; return; }
+  const filtered=_loginUsers
+    .filter(u=>u.name.toLowerCase().startsWith(q))
+    .sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  if(!filtered.length){ dd.style.display='none'; return; }
+  dd.innerHTML=filtered.map(u=>
+    `<div class="login-ac-item" data-name="${esc(u.name)}"
+          onclick="selectLoginUser(this.dataset.name)">${esc(u.name)}</div>`
+  ).join('');
+  dd.style.display='block';
+}
+
+export function hideLoginDropdown(){
+  const dd=document.getElementById('login-user-dropdown');
+  if(dd) dd.style.display='none';
+}
+
+export function selectLoginUser(name){
+  const inp=document.getElementById('login-user-input');
+  if(inp) inp.value=name;
+  hideLoginDropdown();
+  setTimeout(()=>document.getElementById('login-pw')?.focus(),50);
 }
 
 export async function doLogin(){
