@@ -1,4 +1,4 @@
-import { MONTHS } from '../config.js';
+import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel } from '../roles.js';
 import { esc, hFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
@@ -145,6 +145,10 @@ export function renderOverview(){
       </div>`;
     }
   };
+
+  // Erinnerungs-Button nur für Admin und GF anzeigen
+  const btnRem=document.getElementById('btn-reminders');
+  if(btnRem) btnRem.style.display=(cu.role==='admin'||cu.role==='geschaeftsfuehrer')?'':'none';
 
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
@@ -534,4 +538,123 @@ export function sendJahresbericht(uid,y){
   mutate(d=>{ if(!d.yearReports) d.yearReports={}; d.yearReports[rKey]=report; });
   closeModal();
   toast(`Jahresbericht ${y} für ${user.name} an GF gesendet ✓`,'ok');
+}
+
+// ── Zeiterfassungs-Erinnerungen ────────────────────────────────────
+export function sendTimesheetReminders(){
+  const cu=window.cu;
+  if(!cu||(cu.role!=='admin'&&cu.role!=='geschaeftsfuehrer')) return;
+
+  if(!EMAILJS_REMINDER_TEMPLATE_ID){
+    openModal(`<h3>⚙ Template fehlt</h3>
+      <p style="font-size:13px;color:var(--muted);margin:12px 0">
+        Bitte zuerst in EmailJS ein Erinnerungs-Template erstellen und die ID in
+        <code>js/config.js</code> bei <code>EMAILJS_REMINDER_TEMPLATE_ID</code> eintragen.
+      </p>
+      <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+    return;
+  }
+
+  const d=getData();
+  const now=new Date();
+
+  // Letzte 6 Monate als Auswahl
+  const months=[];
+  for(let i=1;i<=6;i++){
+    let m=now.getMonth()+1-i; // 1-indexed
+    let y=now.getFullYear();
+    if(m<=0){m+=12;y--;}
+    months.push({y,m,label:MONTHS[m-1]+' '+y});
+  }
+
+  const getPending=(y,m)=>{
+    const withMail=[], noMail=[];
+    d.users.forEach(u=>{
+      if(u.role==='admin'||u.role==='geschaeftsfuehrer') return;
+      const st=(d.entries[entryKey(u.id,y,m)]||{}).status||'draft';
+      if(st==='submitted'||st==='approved') return;
+      if(u.email) withMail.push(u);
+      else noMail.push(u);
+    });
+    return {withMail,noMail};
+  };
+
+  const buildPreview=(y,m)=>{
+    const {withMail,noMail}=getPending(y,m);
+    if(!withMail.length&&!noMail.length)
+      return `<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">
+        ✅ Alle Mitarbeiter haben für ${MONTHS[m-1]} ${y} bereits eingereicht.
+      </div>`;
+    const rows=withMail.map(u=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:600">${esc(u.name)}</span>
+        <span style="font-size:12px;color:var(--muted)">${esc(u.email)}</span>
+      </div>`).join('');
+    const noMailNote=noMail.length
+      ?`<div style="margin-top:8px;padding:8px 10px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
+          ⚠ Keine E-Mail hinterlegt (werden übersprungen): ${noMail.map(u=>esc(u.name)).join(', ')}
+        </div>`:'';
+    return `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px">
+        ${withMail.length} Erinnerung${withMail.length!==1?'en':''} werden gesendet:
+      </div>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0 10px">
+        ${rows||'<div style="padding:8px;font-size:13px;color:var(--muted)">Keine Empfänger mit hinterlegter E-Mail.</div>'}
+      </div>${noMailNote}`;
+  };
+
+  // Funktionen auf window für inline onchange/onclick
+  window._remMonths=months;
+  window._remPreview=()=>{
+    const idx=parseInt(document.getElementById('rem-mon-sel').value);
+    const mo=months[idx];
+    document.getElementById('rem-preview').innerHTML=buildPreview(mo.y,mo.m);
+  };
+  window._remSend=async()=>{
+    const idx=parseInt(document.getElementById('rem-mon-sel').value);
+    const mo=months[idx];
+    const {withMail}=getPending(mo.y,mo.m);
+    if(!withMail.length){closeModal();toast('Keine ausstehenden Einreichungen gefunden.','ok');return;}
+    document.getElementById('rem-btns').innerHTML=
+      '<div style="font-size:13px;color:var(--muted)">⏳ Wird gesendet…</div>';
+    const moLabel=MONTHS[mo.m-1]+' '+mo.y;
+    let sent=0,failed=0;
+    for(const u of withMail){
+      try{
+        await emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_REMINDER_TEMPLATE_ID,
+          {to_email:u.email,to_name:u.name,monat:moLabel,app_url:APP_URL},
+          EMAILJS_PUBLIC_KEY);
+        sent++;
+      }catch(e){ console.error('Reminder failed:',u.name,e); failed++; }
+    }
+    document.getElementById('rem-btns').innerHTML=
+      `<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724;width:100%">
+        ✅ ${sent} Erinnerung${sent!==1?'en':''} gesendet${failed?` · ⚠ ${failed} fehlgeschlagen`:''}
+      </div>
+      <div class="modal-btns" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="closeModal()">Schließen</button>
+      </div>`;
+  };
+
+  const firstMo=months[0];
+  const opts=months.map((mo,i)=>
+    `<option value="${i}"${i===0?' selected':''}>${mo.label}</option>`).join('');
+
+  openModal(`
+    <h3>🔔 Erinnerungen senden</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      Mitarbeiter die noch nicht eingereicht haben erhalten eine Erinnerungsmail.
+    </p>
+    <div class="form-group">
+      <label>Monat</label>
+      <select id="rem-mon-sel" onchange="_remPreview()"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:14px">
+        ${opts}
+      </select>
+    </div>
+    <div id="rem-preview" style="margin:12px 0">${buildPreview(firstMo.y,firstMo.m)}</div>
+    <div id="rem-btns" class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="_remSend()">🔔 Erinnerungen senden</button>
+    </div>
+  `);
 }
