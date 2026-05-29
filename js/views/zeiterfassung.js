@@ -64,7 +64,6 @@ export function renderZeiterfassung(){
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMin;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
-    const b1bisDisp=(!hasB2Work&&dd.b1von&&dd.b1bis&&pauseMin>0)?addMin(dd.b1bis,pauseMin):(dd.b1bis||'');
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
@@ -82,14 +81,14 @@ export function renderZeiterfassung(){
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
-      <td><input type="time" value="${dd.b1von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="time" value="${b1bisDisp}" ${dis?'disabled':''} onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1von" class="t-inp" placeholder="HH:MM" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" placeholder="HH:MM" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
-      <td class="b2-col"><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td class="b2-col"><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp" placeholder="HH:MM" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp" placeholder="HH:MM" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
       <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
@@ -324,9 +323,29 @@ export function td_zuord(ds,field,val,wh,dpw){
 
 export function td_b1bis_change(ds,val){ td_tchange(ds,'b1bis',val); }
 
+function _normTime(val){
+  if(!val) return '';
+  const v=val.trim();
+  if(!v.includes(':')) return '';
+  const[hs,ms]=v.split(':');
+  const h=parseInt(hs,10), m=parseInt(ms,10);
+  if(isNaN(h)||isNaN(m)||m<0||m>59||h<0||h>24) return '';
+  if(h===24&&m>0) return '';
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+export function fmtTimeIn(el){
+  const cur=el.value;
+  const digits=cur.replace(/[^0-9]/g,'');
+  if(digits.length>=3&&!cur.includes(':'))
+    el.value=digits.slice(0,2)+':'+digits.slice(2,4);
+}
+
 export function td_tchange(ds,field,val){
+  const _fid=document.activeElement?.id||null;
   const uid=window.viewEmpId||window.cu.id;
-  setDay(uid,window.year,window.mon,ds,field,val);
+  const normVal=_normTime(val);
+  setDay(uid,window.year,window.mon,ds,field,normVal);
   const block=field.startsWith('b2')?'2':'1';
   const vonF=`b${block}von`, bisF=`b${block}bis`, zuordF=`b${block}zuord`;
   const entry=getEntry(uid,window.year,window.mon);
@@ -334,8 +353,8 @@ export function td_tchange(ds,field,val){
   const zuord=day[zuordF]||'';
   const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
   if(!isAbsence){
-    const von=field===vonF?val:(day[vonF]||'');
-    const bis=field===bisF?val:(day[bisF]||'');
+    const von=field===vonF?normVal:(day[vonF]||'');
+    const bis=field===bisF?normVal:(day[bisF]||'');
     if(von&&bis){
       const rawMin=diffMin(von,bis);
       if(rawMin>0){
@@ -346,6 +365,7 @@ export function td_tchange(ds,field,val){
   }
   check10hCarryover(uid,window.year,window.mon,ds);
   renderZeiterfassung();
+  if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
 
 export function check10hCarryover(uid,y,m,ds,depth){

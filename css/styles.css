@@ -148,9 +148,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt thead th.sum-col,.zt tbody td.sum-col{display:none!important}
 /* weekend rows: visually distinct but still editable */
 .zt tr.weekend td.total-c,.zt tr.weekend td.sum-c{color:var(--warn)}
-.zt tr.weekend td input[type=time],.zt tr.weekend td select,.zt tr.weekend td input.bem,.zt tr.weekend td input.kt-min{background:var(--weekend)}
-.zt td input[type=time]{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:76px;background:#fff}
-.zt td input[type=time]:focus{border-color:var(--primary-l);outline:none}
+.zt tr.weekend td input.t-inp,.zt tr.weekend td select,.zt tr.weekend td input.bem,.zt tr.weekend td input.kt-min{background:var(--weekend)}
+.zt td input.t-inp{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:76px;background:#fff;font-family:monospace;text-align:center}
+.zt td input.t-inp:focus{border-color:var(--primary-l);outline:none}
 .zt td select.zuord{padding:3px 3px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:120px;background:#fff;max-width:140px}
 .zt td input.bem{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:100%;min-width:70px;background:#fff}
 .zt td input.kt-min{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:54px;text-align:center;background:#fff}
@@ -317,7 +317,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .btn{padding:10px 20px;font-size:14px}
   .btn-sm{padding:7px 14px;font-size:13px}
   .nav-tab{padding:13px 16px;font-size:14px}
-  .zt td input[type=time]{min-height:38px;font-size:12px}
+  .zt td input.t-inp{min-height:38px;font-size:12px}
   .zt td select.zuord{min-height:38px}
   .zt td input.bem{min-height:38px}
   .emp-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
@@ -455,7 +455,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   table.zt.no-b2-kt tbody td.total-c{grid-column:1/5!important;grid-row:4!important;border-top:2px solid rgba(26,58,92,.25)!important}
 
   /* ── Touch-Inputs ── */
-  .zt td input[type=time]{width:100%;min-width:0;font-size:14px;padding:6px 3px;border:1.5px solid var(--border);border-radius:6px;min-height:42px;background:#fff}
+  .zt td input.t-inp{width:100%;min-width:0;font-size:14px;padding:6px 3px;border:1.5px solid var(--border);border-radius:6px;min-height:42px;background:#fff;font-family:monospace;text-align:center}
   .zt td select.zuord{width:100%;max-width:none;font-size:13px;padding:6px 4px;min-height:42px;border-radius:6px;border:1.5px solid var(--border)}
   .zt td input.bem{width:100%;font-size:13px;padding:6px 8px;min-height:42px;border-radius:6px;border:1.5px solid var(--border)}
   .zt td input.kt-min{width:100%;font-size:14px;padding:6px 4px;min-height:42px;border-radius:6px;border:1.5px solid var(--border);text-align:center}
@@ -517,6 +517,6 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .nav-tab{padding:10px 8px;font-size:12px}
   .month-nav h2{font-size:15px;min-width:130px}
   .zt tbody tr{grid-template-columns:65px 65px 1fr 48px}
-  .zt td input[type=time]{font-size:13px}
+  .zt td input.t-inp{font-size:13px}
   .summary-grid{grid-template-columns:1fr}
 }
