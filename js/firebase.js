@@ -3,6 +3,15 @@ import { freshData, _migrate, getData, setDataCache } from './data.js';
 import { hashPw, isHashed } from './auth.js';
 
 export async function initFirebase(){
+  firebase.initializeApp({
+    apiKey:'AIzaSyA1SxyoH1NwIk6nWK66PNvV2EmvSwPJNOk',
+    authDomain:'zeiterfassung-tps.firebaseapp.com',
+    databaseURL:'https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app',
+    projectId:'zeiterfassung-tps',
+    storageBucket:'zeiterfassung-tps.firebasestorage.app',
+    messagingSenderId:'527053392310',
+    appId:'1:527053392310:web:37d12a851b0e5c0acb9917'
+  });
   const _fbRef=firebase.database().ref('zeiterfassung');
   window._fbRef=_fbRef;
   window._offlineMode=false;
