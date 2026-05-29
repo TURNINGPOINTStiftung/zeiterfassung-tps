@@ -13,6 +13,8 @@ export function openProfileModal(){
   openModal(`<h3>👤 Mein Profil</h3>
     <div class="form-group"><label>Name</label>
       <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
+    <div class="form-group"><label>E-Mail</label>
+      <input type="email" id="prof-email" value="${esc(cu.email||'')}" placeholder="vorname@beispiel.de" autocomplete="email"></div>
     <div class="form-group"><label>Wohnort</label>
       <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
     <div class="form-group"><label>Bundesland</label>
@@ -34,6 +36,7 @@ export function openProfileModal(){
 
 export async function saveProfile(){
   const cu=window.cu;
+  const email=document.getElementById('prof-email').value.trim();
   const city=document.getElementById('prof-city').value.trim();
   const bl=document.getElementById('prof-bl').value;
   const pwCur=document.getElementById('prof-pw-cur').value;
@@ -52,7 +55,7 @@ export async function saveProfile(){
   }
   await mutate(d=>{
     const u=d.users.find(x=>x.id===cu.id);
-    if(u){ u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; }
+    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; }
   });
   window.cu=getUser(cu.id);
   closeModal();
