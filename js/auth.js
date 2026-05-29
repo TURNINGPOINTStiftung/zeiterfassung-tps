@@ -13,42 +13,34 @@ export function isHashed(pw){ return pw&&pw.length===64&&/^[0-9a-f]+$/.test(pw);
 
 // ── Login UI ──────────────────────────────────────────────────────
 export function populateLoginDropdown(){
-  var list=document.getElementById('login-user-list');
-  var hidden=document.getElementById('login-user');
-  list.innerHTML='';
-  hidden.value='';
-  var users=[];
+  const sel=document.getElementById('login-user-select');
+  if(!sel) return;
+  sel.innerHTML='<option value="">– Bitte auswählen –</option>';
+  let users=[];
   try{ users=getData().users||[]; }catch(e){}
   if(!users.length) users=DEFAULT_USERS.slice();
-  users.forEach(function(u,i){
-    var tile=document.createElement('button');
-    tile.type='button';
-    tile.className='user-tile'+(i===0?' selected':'');
-    tile.setAttribute('data-uid',u.id);
-    tile.innerHTML=esc(u.name);
-    tile.onclick=function(){
-      list.querySelectorAll('.user-tile').forEach(function(t){ t.classList.remove('selected'); });
-      tile.classList.add('selected');
-    };
-    list.appendChild(tile);
+  [...users].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(u=>{
+    const opt=document.createElement('option');
+    opt.value=u.id;
+    opt.textContent=u.name;
+    sel.appendChild(opt);
   });
 }
 
 export async function doLogin(){
-  var errEl=document.getElementById('login-err');
-  var selectedTile=document.querySelector('#login-user-list .user-tile.selected');
-  if(!selectedTile){
-    errEl.textContent='Bitte eine Person auswählen.';
+  const errEl=document.getElementById('login-err');
+  const uid=document.getElementById('login-user-select').value;
+  if(!uid){
+    errEl.textContent='Bitte einen Namen auswählen.';
     errEl.style.display='block'; return;
   }
-  var uid=selectedTile.getAttribute('data-uid');
-  var pw=document.getElementById('login-pw').value;
-  var u=getUser(uid);
+  const pw=document.getElementById('login-pw').value;
+  const u=getUser(uid);
   if(!u){
-    errEl.textContent='Benutzer nicht gefunden – bitte "Login-Probleme?" verwenden.';
+    errEl.textContent='Benutzer nicht gefunden.';
     errEl.style.display='block'; return;
   }
-  var match=false;
+  let match=false;
   if(isHashed(u.pw)){
     match=(await hashPw(pw))===u.pw;
   } else {
@@ -77,46 +69,31 @@ export function doLogout(){
   populateLoginDropdown();
 }
 
-export function emergencyReset(){
-  var users=[];
+export function showForgotPassword(){
+  let users=[];
   try{ users=getData().users||[]; }catch(e){}
-  var rows='';
-  for(var i=0;i<users.length;i++){
-    var u=users[i];
-    rows+='<tr><td style="padding:5px 8px">'+esc(u.name)+'</td>'
-      +'<td style="padding:5px 8px;font-family:monospace;color:#1a3a5c">'+esc(u.id)+'</td>'
-      +'<td style="padding:5px 8px"><span class="chip chip-'+u.role+'">'+u.role+'</span></td></tr>';
-  }
-  if(!rows) rows='<tr><td colspan="3" style="padding:8px;color:#7f8c8d;text-align:center">Keine Benutzer lesbar</td></tr>';
-  var pwRows='';
-  for(var j=0;j<users.length;j++){
-    var uu=users[j];
-    var def=null;
-    for(var k=0;k<DEFAULT_USERS.length;k++){ if(DEFAULT_USERS[k].id===uu.id){ def=DEFAULT_USERS[k]; break; } }
-    if(def) pwRows+='<tr><td style="padding:2px 8px 2px 0">'+esc(uu.name)+'</td>'
-      +'<td style="padding:2px 8px 2px 0;font-family:monospace;color:#1a3a5c">'+def.pw+'</td></tr>';
-  }
-  openModal(
-    '<h3>Login-Hilfe</h3>'
-    +'<p style="font-size:13px;color:#7f8c8d;margin-bottom:14px">Gespeicherte Benutzer im System:</p>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">'
-    +'<thead><tr style="background:#f0f2f5"><th style="padding:5px 8px;text-align:left;font-size:11px">Name</th>'
-    +'<th style="padding:5px 8px;text-align:left;font-size:11px">Login-ID</th>'
-    +'<th style="padding:5px 8px;text-align:left;font-size:11px">Rolle</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>'
-    +'<p style="font-size:12px;color:#7f8c8d;margin-bottom:16px">Passw&ouml;rter &auml;ndern: nach Login unter <strong>Einstellungen &rarr; Mitarbeiter bearbeiten</strong>.</p>'
-    +'<details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#e67e22;cursor:pointer">Passw&ouml;rter auf Standard zur&uuml;cksetzen</summary>'
-    +'<p style="font-size:12px;color:#7f8c8d;margin:8px 0">Zeitdaten bleiben erhalten!</p>'
-    +(pwRows ? '<table style="font-size:12px;margin:6px 0 10px 0;border-collapse:collapse">'
-      +'<tr><th style="padding:2px 8px 2px 0;text-align:left;font-size:11px">Name</th>'
-      +'<th style="padding:2px 8px 2px 0;text-align:left;font-size:11px">Neues Passwort</th></tr>'
-      +pwRows+'</table>' : '')
-    +'<button class="btn btn-warn btn-sm" onclick="resetPasswordsOnly()">Passw&ouml;rter zur&uuml;cksetzen</button></details>'
-    +'<details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#c0392b;cursor:pointer">Notfall: Alle Daten l&ouml;schen</summary>'
-    +'<p style="font-size:12px;color:#7f8c8d;margin:8px 0">L&ouml;scht alle Zeitdaten. Nicht r&uuml;ckg&auml;ngig zu machen!</p>'
-    +'<button class="btn btn-danger btn-sm" onclick="doEmergencyReset()">Alles l&ouml;schen &amp; neu starten</button></details>'
-    +'<div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schlie&szlig;en</button></div>'
-  );
+  const admins=users.filter(u=>u.role==='admin'||u.role==='geschaeftsfuehrer');
+  const contactHtml=admins.length
+    ? admins.map(a=>`<div style="margin:4px 0;font-size:14px">👤 <strong>${esc(a.name)}</strong>${a.email?` – <a href="mailto:${esc(a.email)}" style="color:var(--primary)">${esc(a.email)}</a>`:''}</div>`).join('')
+    : '<div style="font-size:13px;color:var(--muted)">Bitte wende dich an den Administrator.</div>';
+  openModal(`<h3>Passwort vergessen?</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Passwörter können nur vom Administrator zurückgesetzt werden. Bitte wende dich an:</p>
+    <div style="background:#f0f4f8;border-radius:8px;padding:12px 14px;margin-bottom:16px">${contactHtml}</div>
+    <p style="font-size:12px;color:var(--muted)">Nach dem Login kannst du dein Passwort unter <strong>Profil → Passwort ändern</strong> selbst anpassen.</p>
+    <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>`);
+}
+
+export function emergencyReset(){
+  // Kept for admin use only – called from Einstellungen
+  openModal(`<h3>⚠ Notfall-Reset</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Diese Funktion ist nur für Administratoren.</p>
+    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#e67e22;cursor:pointer">Passwörter auf Standard zurücksetzen</summary>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0">Zeitdaten bleiben erhalten!</p>
+    <button class="btn btn-warn btn-sm" onclick="resetPasswordsOnly()">Passwörter zurücksetzen</button></details>
+    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#c0392b;cursor:pointer">Alle Daten löschen</summary>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0">Löscht alle Zeitdaten unwiderruflich!</p>
+    <button class="btn btn-danger btn-sm" onclick="doEmergencyReset()">Alles löschen &amp; neu starten</button></details>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button></div>`);
 }
 
 export function doEmergencyReset(){

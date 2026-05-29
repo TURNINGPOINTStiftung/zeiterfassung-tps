@@ -194,6 +194,7 @@ function userForm(u={}){
   return `
     <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
     <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
+    <div class="form-group"><label>E-Mail <span style="font-size:11px;color:var(--muted)">(für Passwort-Reset-Anfragen)</span></label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
     <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
     <div class="form-group"><label>Rolle</label>
       ${u.id==='admin'
@@ -270,6 +271,7 @@ function collectUserForm(){
   return {
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
+    email:document.getElementById('uf-email')?.value.trim()||'',
     pw:document.getElementById('uf-pw').value,
     role,
     customRole,
