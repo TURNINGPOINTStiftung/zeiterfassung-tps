@@ -20,10 +20,10 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .form-group input:focus{border-color:var(--primary-l)}
 .error-msg{color:var(--danger);font-size:13px;margin-top:8px;display:none}
 #login-user-list{max-height:220px;overflow-y:auto;padding-right:2px}
-.user-tile{width:100%;padding:10px 14px;margin-bottom:6px;border:2px solid var(--border);border-radius:7px;background:#fff;font-size:14px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:all .15s}
-.user-tile:hover{border-color:var(--primary-l);background:#f4f8ff}
-.user-tile.selected{border-color:var(--primary);background:#e8f0fe;font-weight:700}
-.user-tile .role-tag{font-size:11px;color:var(--muted);font-weight:400}
+/* ── Login-Autocomplete-Dropdown ── */
+#login-user-dropdown{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:200;max-height:220px;overflow-y:auto}
+.login-ac-item{padding:10px 14px;font-size:14px;cursor:pointer;transition:background .12s}
+.login-ac-item:hover{background:#eef2fa;color:var(--primary);font-weight:600}
 
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}

@@ -5,7 +5,8 @@ import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
          showForgotPassword, sendPasswordReset,
-         checkPasswordResetToken, saveResetPassword } from './auth.js';
+         checkPasswordResetToken, saveResetPassword,
+         filterLoginUsers, hideLoginDropdown, selectLoginUser } from './auth.js';
 import { initApp, switchView, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
 import { openModal, closeModal } from './utils.js';
@@ -65,6 +66,9 @@ window.showForgotPassword      = showForgotPassword;
 window.sendPasswordReset       = sendPasswordReset;
 window.checkPasswordResetToken = checkPasswordResetToken;
 window.saveResetPassword       = saveResetPassword;
+window.filterLoginUsers        = filterLoginUsers;
+window.hideLoginDropdown       = hideLoginDropdown;
+window.selectLoginUser         = selectLoginUser;
 
 // App navigation
 window.initApp          = initApp;
