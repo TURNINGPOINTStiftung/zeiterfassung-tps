@@ -4,7 +4,8 @@ import { _TPS_LOGO } from './config.js';
 import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
-         showForgotPassword } from './auth.js';
+         showForgotPassword, sendPasswordReset,
+         checkPasswordResetToken, saveResetPassword } from './auth.js';
 import { initApp, switchView, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
 import { openModal, closeModal } from './utils.js';
@@ -60,7 +61,10 @@ window.doLogout              = doLogout;
 window.emergencyReset        = emergencyReset;
 window.doEmergencyReset      = doEmergencyReset;
 window.resetPasswordsOnly    = resetPasswordsOnly;
-window.showForgotPassword    = showForgotPassword;
+window.showForgotPassword      = showForgotPassword;
+window.sendPasswordReset       = sendPasswordReset;
+window.checkPasswordResetToken = checkPasswordResetToken;
+window.saveResetPassword       = saveResetPassword;
 
 // App navigation
 window.initApp          = initApp;
@@ -215,6 +219,7 @@ initAuthEvents();
 initFirebase().then(function(){
   document.getElementById('fb-loading').style.display='none';
   initFirebaseEvents();
+  checkPasswordResetToken();
 
   // Restore saved session (survives F5 reload)
   try{
