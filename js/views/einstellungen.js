@@ -1,0 +1,335 @@
+import { DEFAULT_CATS, DEFAULT_TEAM_CATS } from '../config.js';
+import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
+import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel } from '../roles.js';
+import { esc, toast, openModal, closeModal } from '../utils.js';
+import { hashPw } from '../auth.js';
+import { getTeams, getCatsForTeam } from '../cats.js';
+
+export function renderSettings(){
+  const cu=window.cu;
+  const d=getData();
+  document.getElementById('user-list').innerHTML=d.users.map(u=>{
+    const isGFUser=u.role==='geschaeftsfuehrer';
+    const zeAktiv=!u.noTimesheet;
+    const zeToggle=isGFUser?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" title="${zeAktiv?'Zeiterfassung deaktivieren':'Zeiterfassung aktivieren'}" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`:'';
+    return `<div class="user-row">
+      <div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}${isGFUser&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}</div>
+        <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${zeToggle}
+        <button class="btn btn-outline btn-sm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
+        ${u.id!==cu.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">×</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const teams=getTeams();
+  document.getElementById('team-list').innerHTML=teams.length
+    ? teams.map((t,i)=>`<span class="team-chip">${t} <button onclick="removeTeam(${i})" title="Entfernen">×</button></span>`).join('')
+    : '<span style="color:var(--muted);font-size:13px">Noch keine Teams angelegt.</span>';
+
+  const crs=getCustomRoles();
+  const crEl=document.getElementById('custom-role-list');
+  if(crEl) crEl.innerHTML=crs.length
+    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:10px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole('${esc(r.id)}')" title="Entfernen">×</button></span>`).join('')
+    : '<span style="color:var(--muted);font-size:13px">Noch keine eigenen Rollen.</span>';
+
+  {
+    const tms=getTeams();
+    const dd2=getData();
+    const mkChips=(arr,teamArg)=>arr.length
+      ? arr.map((c,i)=>`<span class="cat-chip">${esc(c)} <button onclick='removeTeamCat(${JSON.stringify(teamArg)},${i})' title="Entfernen">×</button></span>`).join('')
+      : '<span style="color:var(--muted);font-size:12px">Keine Kategorien.</span>';
+    const mkSection=(label,labelColor,arr,teamArg,idx,note='')=>{
+      const ta=JSON.stringify(teamArg);
+      return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(label)}</div>
+        ${note}
+        <div style="margin-bottom:6px">${mkChips(arr,teamArg)}</div>
+        <div class="flex mt-14">
+          <input class="tag-input" id="nci-${idx}" placeholder="Neue Kategorie…" onkeydown='if(event.key===\"Enter\")addTeamCat(${ta},${idx})'>
+          <button class="btn btn-ok btn-sm" onclick='addTeamCat(${ta},${idx})'>+</button>
+        </div>
+      </div>`;
+    };
+    let csHtml=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
+    tms.forEach((t,i)=>{
+      const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[_fk(t)]);
+      const arr=isCustom?dd2.teamCats[_fk(t)]:getCatsForTeam(t);
+      const note=isCustom?'':'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">↳ Vorkonfigurierte Kategorien – Änderungen gelten nur für dieses Team</div>';
+      csHtml+=mkSection(t,'var(--primary)',arr,t,i+1,note);
+    });
+    csHtml+=`<div style="padding:6px 10px;background:#f5f5f5;border-radius:6px;font-size:11px;color:var(--muted)">★ Freiberufliche: AKADEMIE · WENDESTART · WENDEKURS · WENDETRAINING (fest, nicht änderbar)</div>`;
+    document.getElementById('cat-section').innerHTML=csHtml;
+  }
+}
+
+export function addTeam(){
+  const inp=document.getElementById('new-team-input'); const val=inp.value.trim();
+  if(!val) return;
+  mutate(d=>{ if(!d.teams) d.teams=[]; if(!d.teams.includes(val)) d.teams.push(val); });
+  inp.value=''; renderSettings(); window.populateUeberTeam?.(); toast('Team hinzugefügt.');
+}
+
+export function removeTeam(i){
+  mutate(d=>{ d.teams.splice(i,1); });
+  renderSettings(); window.populateUeberTeam?.();
+}
+
+export function addCustomRole(){
+  const lbl=document.getElementById('new-role-label')?.value.trim();
+  const base=document.getElementById('new-role-base')?.value||'mitarbeiter';
+  if(!lbl){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
+  const id=lbl.toLowerCase().replace(/[^a-z0-9äöüß]+/g,'_').replace(/^_|_$/g,'');
+  const d=getData();
+  if((d.customRoles||[]).find(r=>r.id===id)){ toast('Bezeichnung bereits vorhanden.','err'); return; }
+  mutate(d=>{ if(!d.customRoles) d.customRoles=[]; d.customRoles.push({id,label:lbl,base}); });
+  document.getElementById('new-role-label').value='';
+  renderSettings(); toast('Rolle hinzugefügt.');
+}
+
+export function removeCustomRole(id){
+  mutate(d=>{ d.customRoles=(d.customRoles||[]).filter(r=>r.id!==id); });
+  renderSettings();
+}
+
+export function addCategory(){
+  const inp=document.getElementById('new-cat-input'); if(!inp) return;
+  const val=inp.value.trim();
+  if(!val) return;
+  mutate(d=>{ if(!d.cats.includes(val)) d.cats.push(val); });
+  inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
+}
+
+export function removeCat(i){ mutate(d=>{ d.cats.splice(i,1); }); renderSettings(); }
+
+function _initTeamCats(d,teamName){
+  if(!d.teamCats) d.teamCats={};
+  const k=_fk(teamName);
+  if(!Array.isArray(d.teamCats[k])){
+    d.teamCats[k]=[...(DEFAULT_TEAM_CATS[teamName]||d.cats||DEFAULT_CATS)];
+  }
+}
+
+export function addTeamCat(teamName,idx){
+  const inp=document.getElementById('nci-'+idx);
+  const val=(inp?inp.value.trim():'');
+  if(!val) return;
+  mutate(d=>{
+    if(teamName){
+      _initTeamCats(d,teamName);
+      const _k=_fk(teamName);
+      if(!d.teamCats[_k].includes(val)) d.teamCats[_k].push(val);
+    } else {
+      if(!d.cats) d.cats=[...DEFAULT_CATS];
+      if(!d.cats.includes(val)) d.cats.push(val);
+    }
+  });
+  if(inp) inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
+}
+
+export function removeTeamCat(teamName,i){
+  mutate(d=>{
+    if(teamName){
+      _initTeamCats(d,teamName);
+      d.teamCats[_fk(teamName)].splice(i,1);
+    } else {
+      if(!d.cats) d.cats=[...DEFAULT_CATS];
+      d.cats.splice(i,1);
+    }
+  });
+  renderSettings();
+}
+
+export function showAddUser(){
+  const cu=window.cu;
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveNewUser()">Speichern</button></div>`);
+}
+
+export function showEditUser(id){
+  const cu=window.cu;
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`);
+}
+
+export function showEditDpw(id){
+  const cu=window.cu;
+  const u=getUser(id);
+  if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  if(cu.role!=='admin'&&!(cu.role==='leitung'&&canSeeEmployee(cu,u))){ toast('Kein Zugriff.','err'); return; }
+  openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${u.wh||0}&thinsp;h/Woche</p>
+    <div class="form-group">
+      <label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
+      <input id="edit-dpw-val" type="number" min="1" max="7" value="${u.dpw||5}" style="max-width:90px">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="saveEditDpw('${id}')">Speichern</button>
+    </div>`);
+}
+
+export function saveEditDpw(id){
+  const val=parseInt(document.getElementById('edit-dpw-val').value)||5;
+  if(val<1||val>7){ toast('Bitte einen Wert zwischen 1 und 7 eingeben.','err'); return; }
+  mutate(d=>{ const u=d.users.find(x=>x.id===id); if(u) u.dpw=val; });
+  closeModal(); window.renderOverview?.();
+  toast('Arbeitstage pro Woche aktualisiert. ✓','ok');
+}
+
+function userForm(u={}){
+  const allTeams=getTeams();
+  const userLeitungTeams=Array.isArray(u.teams)?u.teams:[];
+  const teamOpts=`<option value=""></option>`+allTeams.map(t=>`<option value="${t}"${u.team===t?' selected':''}>${t}</option>`).join('');
+  const teamChecks=allTeams.length?allTeams.map((t,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-team-cb-${i}" value="${esc(t)}"${userLeitungTeams.includes(t)?' checked':''}> ${esc(t)}</label>`).join(''):'<span style="color:var(--muted);font-size:12px">Noch keine Teams angelegt.</span>';
+  const BL=[['','– Bundesland –'],['BW','Baden-Württemberg'],['BY','Bayern'],['BE','Berlin'],
+    ['BB','Brandenburg'],['HB','Bremen'],['HH','Hamburg'],['HE','Hessen'],
+    ['MV','Mecklenburg-Vorpommern'],['NI','Niedersachsen'],['NW','Nordrhein-Westfalen'],
+    ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
+    ['SH','Schleswig-Holstein'],['TH','Thüringen']];
+  const blOpts=BL.map(([v,l])=>`<option value="${v}"${(u.bundesland||'')=== v?' selected':''}>${l}</option>`).join('');
+  return `
+    <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
+    <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
+    <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
+    <div class="form-group"><label>Rolle</label>
+      ${u.id==='admin'
+        ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
+        : (()=>{
+            const crs=getCustomRoles();
+            const selVal=u.customRole?`custom:${u.customRole}`:(u.role||'mitarbeiter');
+            const customGroup=crs.length
+              ? `<optgroup label="── Eigene Rollen ──">${crs.map(cr=>`<option value="custom:${esc(cr.id)}"${selVal===`custom:${cr.id}`?' selected':''}>${esc(cr.label)} (${_baseRoleLabel(cr.base)})</option>`).join('')}</optgroup>`
+              : '';
+            return `<select id="uf-role" onchange="toggleFreelancerFields()">
+              <option value="mitarbeiter"${selVal==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
+              <option value="freiberuflich"${selVal==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
+              <option value="berater"${selVal==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
+              <option value="leitung"${selVal==='leitung'?' selected':''}>Leitungspersonal</option>
+              <option value="geschaeftsfuehrer"${selVal==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+              ${customGroup}
+            </select>`;
+          })()}
+    </div>
+    <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
+    <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
+    <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
+    <div id="uf-employed-fields">
+      <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
+      <div class="form-group"><label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaub- &amp; Krankheitsstunden)</span></label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
+      <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
+      <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
+    </div>
+    <div id="uf-freelancer-fields" style="display:none">
+      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
+    </div>
+    <script>toggleFreelancerFields()<\/script>`;
+}
+
+export function _resolveUfRole(){
+  const sel=document.getElementById('uf-role');
+  if(!sel) return 'mitarbeiter';
+  const v=sel.value;
+  if(v.startsWith('custom:')){
+    const cid=v.slice(7);
+    const cr=getCustomRoles().find(r=>r.id===cid);
+    return cr?cr.base:'mitarbeiter';
+  }
+  return v;
+}
+
+export function toggleFreelancerFields(){
+  const fields=document.getElementById('uf-employed-fields');
+  if(!fields) return;
+  const role=_resolveUfRole();
+  fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
+  const ff=document.getElementById('uf-freelancer-fields');
+  if(ff) ff.style.display=role==='freiberuflich'?'':'none';
+  const s=document.getElementById('uf-team-single');
+  const m2=document.getElementById('uf-team-multi');
+  if(s&&m2){ const isL=role==='leitung'; s.style.display=isL?'none':''; m2.style.display=isL?'':'none'; }
+}
+
+function collectUserForm(){
+  const rawRole=document.getElementById('uf-role').value;
+  let role=rawRole, customRole='';
+  if(rawRole.startsWith('custom:')){
+    const cid=rawRole.slice(7);
+    const cr=getCustomRoles().find(r=>r.id===cid);
+    role=cr?cr.base:'mitarbeiter';
+    customRole=cid;
+  }
+  const isFree=role==='freiberuflich';
+  const isLeitung=role==='leitung';
+  const at=getTeams();
+  const teams=isLeitung?at.filter((_,i)=>{ const cb=document.getElementById(`uf-team-cb-${i}`); return cb&&cb.checked; }):[];
+  const teamEl=document.getElementById('uf-team');
+  return {
+    name:document.getElementById('uf-name').value.trim(),
+    id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
+    pw:document.getElementById('uf-pw').value,
+    role,
+    customRole,
+    team:isLeitung?'':(teamEl?teamEl.value:''),
+    teams:isLeitung?teams:[],
+    city:document.getElementById('uf-city').value.trim(),
+    bundesland:document.getElementById('uf-bl').value,
+    wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
+    dpw:isFree?5:parseInt(document.getElementById('uf-dpw')?.value)||5,
+    al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
+    prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
+    maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
+  };
+}
+
+export async function saveNewUser(){
+  const u=collectUserForm();
+  if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
+  if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
+  if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
+  u.pw=await hashPw(u.pw);
+  await mutate(d=>d.users.push(u));
+  closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
+}
+
+export async function saveEditUser(id){
+  const cu=window.cu;
+  const u=collectUserForm(); u.id=id;
+  if(id==='admin') u.role='admin';
+  if(u.pw){ u.pw=await hashPw(u.pw); }
+  else { const ex=getUser(id); if(ex) u.pw=ex.pw; }
+  await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
+  closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
+  if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
+}
+
+export function toggleGFTimesheet(uid){
+  const cu=window.cu;
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid);
+    if(u&&u.role==='geschaeftsfuehrer') u.noTimesheet=!u.noTimesheet;
+  });
+  renderSettings();
+  toast('Zeiterfassung aktualisiert ✓','ok');
+}
+
+export function deleteUser(id){
+  const cu=window.cu;
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
+  if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
+  mutate(d=>{
+    d.users=d.users.filter(u=>u.id!==id);
+    Object.keys(d.entries).forEach(k=>{ if(k.startsWith(id+'_')) delete d.entries[k]; });
+  });
+  renderSettings(); toast('Mitarbeiter gelöscht.','err');
+  if(window.viewEmpId===id){
+    const rem=getData().users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+    window.viewEmpId=rem.length?rem[0].id:null;
+    window.rebuildEmpSelect?.(); window.renderZeiterfassung?.();
+  }
+}

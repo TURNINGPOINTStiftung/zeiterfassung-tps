@@ -1,0 +1,533 @@
+import { MONTHS } from '../config.js';
+import { getEntry, getUser, setDay, setEntryField, mutate, entryKey } from '../data.js';
+import { isManagerRole, isFreelancer, isBerater, getLeitungTeams } from '../roles.js';
+import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
+import { catOptionsForUser, getCatsForTeam } from '../cats.js';
+import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST } from '../calc.js';
+import { fmtTs } from '../utils.js';
+
+export function renderZeiterfassung(){
+  const uid=window.viewEmpId||window.cu.id;
+  const user=getUser(uid);
+  if(!user){ document.getElementById('zt-body').innerHTML='<tr><td colspan="18" style="padding:20px;text-align:center;color:var(--muted)">Kein Mitarbeiter ausgewählt.</td></tr>'; return; }
+
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const entry=getEntry(uid,year,mon);
+  const isLeiter=isManagerRole(cu);
+  const isFree=isFreelancer(user);
+  const canEdit=(cu.id===uid&&entry.status==='draft')||
+                (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
+  const readonly=!canEdit;
+
+  const viewingOther=cu&&uid!==cu.id&&isManagerRole(cu);
+  const banner=document.getElementById('viewing-other-banner');
+  if(banner){
+    banner.style.display=viewingOther?'inline-flex':'none';
+    if(viewingOther){ const n=document.getElementById('viewing-other-name'); if(n) n.textContent=user.name; }
+  }
+
+  document.getElementById('month-title').innerHTML=`${MONTHS[mon-1]} <span onclick="openJahresübersicht('${uid}',${year})" title="Jahresübersicht ${year} öffnen" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${year}</span>`;
+  document.getElementById('info-name').textContent=user.name;
+  document.getElementById('info-team').textContent=user.role==='leitung'?(getLeitungTeams(user).join(', ')||'–'):(user.team||'–');
+  document.getElementById('info-city').textContent=user.city||'–';
+  document.getElementById('info-type').textContent=isFree?'Freiberuflich':'Festangestellt';
+  document.getElementById('info-wh').textContent=isFree?'flexibel':`${user.wh} h`;
+  document.getElementById('info-al').textContent=isFree?'–':`${user.al} Tage`;
+  document.getElementById('info-apd').textContent=isFree?'–':hFmt(dailyMinutes(user));
+  document.getElementById('info-al-wrap').style.display=isFree?'none':'';
+  document.getElementById('info-apd-wrap').style.display=isFree?'none':'';
+
+  const badges={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'};
+  const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
+  const badgeEl=document.getElementById('month-status-badge');
+  badgeEl.textContent=badges[entry.status]||'Entwurf';
+  badgeEl.className='status-badge '+(bCls[entry.status]||'s-draft');
+
+  const tbody=document.getElementById('zt-body');
+  tbody.innerHTML='';
+  const dim=daysInMonth(year,mon);
+  const hols=getHolidays(year,user.bundesland||'');
+  let monthTotal=0, monthPause=0;
+
+  for(let d=1;d<=dim;d++){
+    const ds=dateStr(year,mon,d);
+    const dd=(entry.days||{})[ds]||{};
+    const we=isWeekend(year,mon,d);
+    const hol=hols.has(ds);
+    const tod=isToday(year,mon,d);
+    const kw=isoWeek(new Date(year,mon-1,d));
+    const dn=dayName(year,mon,d);
+    const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
+    const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
+    const ktm=Number(dd.ktmin||0);
+    const dayMin=b1min+b2min+ktm;
+    const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
+    monthPause+=pauseMin;
+    const hasB2Work=!!(dd.b2von&&dd.b2bis);
+    const b1bisDisp=(!hasB2Work&&dd.b1von&&dd.b1bis&&pauseMin>0)?addMin(dd.b1bis,pauseMin):(dd.b1bis||'');
+    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
+      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
+    const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
+    const effDayMin=Math.min(roundedDayMin,600);
+    monthTotal+=effDayMin;
+
+    const tr=document.createElement('tr');
+    if(we) tr.classList.add('weekend');
+    if(hol) tr.classList.add('holiday');
+    if(tod) tr.classList.add('today-row');
+    if(readonly) tr.classList.add('readonly');
+    const dis=readonly;
+    const dateFmt=`${String(d).padStart(2,'0')}.${String(mon).padStart(2,'0')}.${String(year).slice(2)}`;
+    tr.innerHTML=`
+      <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
+      <td class="kw-c">${kw}</td>
+      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
+      <td><input type="time" value="${dd.b1von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="time" value="${b1bisDisp}" ${dis?'disabled':''} onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
+      <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
+      <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
+      <td class="sep-c sep-col"></td>
+      <td class="b2-col"><input type="time" value="${dd.b2von||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="time" value="${dd.b2bis||''}" ${dis?'disabled':''} onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
+      <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
+      <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
+      <td class="pause-c pause-col">${pauseMin>0?minFmt(pauseMin):''}</td>
+      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  const _tDays=dayFmt(monthTotal);
+  document.getElementById('tfoot-total').innerHTML=hFmt(monthTotal)+(_tDays?`<br><small style="font-size:10px;font-weight:400;opacity:.75">${_tDays}</small>`:'');
+  const _tp=document.getElementById('tfoot-pause');
+  if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
+  document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
+  renderSummary(uid,user,entry,monthTotal);
+  renderZuordBreakdown(entry);
+  renderActionBar(uid,user,entry,isLeiter);
+  renderReviewPanel(uid,entry,isLeiter);
+  renderSignature(user,entry);
+}
+
+function renderSummary(uid,user,entry,istMin){
+  const year=window.year, mon=window.mon;
+  const isFree=isFreelancer(user);
+  const carryH=getEffectiveCarryH(uid,user,year,mon);
+  let cards=[];
+  if(isFree){
+    const maxH=user.maxHours||0;
+    if(maxH>0){
+      const totalMin=istMin+carryH*60;
+      const billedMin=Math.min(totalMin,maxH*60);
+      const overflowMin=Math.max(0,totalMin-maxH*60);
+      const underMin=Math.max(0,maxH*60-totalMin);
+      const maxDays=maxH/8;
+      const billedDayStr=dayFmt(billedMin);
+      const istDayStr=dayFmt(istMin);
+      const overDayStr=overflowMin>0?dayFmt(overflowMin):'';
+      cards=[
+        {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:istDayStr?('= '+istDayStr+' (8h=1T)'):'tatsächlich geleistet'},
+        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
+        {lbl:'Verfügbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag = '+dayFmt(totalMin)},
+        {lbl:'Abgerechnet (Limit '+maxH+' h / '+maxDays+' T)',big:hFmt(billedMin),sub:billedDayStr?('= '+billedDayStr+' – max. Limit'):'max. Monatslimit',cls:billedMin>=maxH*60?'neg':'pos'},
+        {lbl:'Übertrag → nächster Monat',big:overflowMin>0?('+'+hFmt(overflowMin)):'–',sub:overDayStr?('= +'+overDayStr+' werden vorgetragen'):overflowMin>0?'wird vorgetragen':underMin>0?'unter Limit – kein Minus':'exakt auf Limit',cls:overflowMin>0?'pos':''},
+      ];
+    } else {
+      cards=[
+        {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
+      ];
+      const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
+      cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
+    }
+  } else {
+    const soll=monthSOLL(user,year,mon);
+    const diff=istMin-(soll-(carryH)*60);
+    const vd=vacDays(entry);
+    const sk=sickDays(entry);
+    const vacUsed=totalVacUsed(uid,year);
+    const vacLeft=user.al-vacUsed;
+    const sollDays=monthSOLLdays(user,year,mon);
+    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(Math.round((user.wh||0)/5*60))}`:'4 × Wochenarbeitszeit';
+    cards=[
+      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
+      {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
+      {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
+      {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUsed} von ${user.al} im Jahr`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:`Jahresurlaub ${user.al} Tage`},
+      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
+    ];
+  }
+  document.getElementById('summary-cards').innerHTML=cards.map(c=>`
+    <div class="s-card">
+      <div class="lbl">${c.lbl}</div>
+      <div class="big${c.cls?' '+c.cls:''}">${c.big}</div>
+      <div class="sub">${c.sub||''}</div>
+    </div>`).join('');
+  document.getElementById('carryover-input').value=carryH;
+  const _dw=document.getElementById('info-diff-wrap');
+  const _de=document.getElementById('info-diff');
+  if(_de&&!isFree){
+    const _s=monthSOLL(user,year,mon);
+    const _c=getEffectiveCarryH(uid,user,year,mon);
+    const _d=istMin-(_s-_c*60);
+    _de.textContent=(_d>=0?'+':'')+hFmt(Math.abs(_d));
+    _de.className='val '+(_d>=0?'pos':'neg');
+    if(_dw) _dw.style.display='';
+  } else {
+    if(_dw) _dw.style.display='none';
+  }
+}
+
+function renderZuordBreakdown(entry){
+  const map=zuordBreakdown(entry);
+  const total=Object.values(map).reduce((a,b)=>a+b,0)||1;
+  const sorted=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  const tbody=document.querySelector('#zuord-table tbody');
+  if(sorted.length===0){ tbody.innerHTML='<tr><td colspan="3" style="color:var(--muted);text-align:center">Noch keine Einträge</td></tr>'; return; }
+  tbody.innerHTML=sorted.map(([cat,min])=>{
+    const pct=Math.round(min/total*100);
+    return `<tr><td>${cat}</td><td style="text-align:right;font-weight:600">${hFmt(min)}</td><td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td></tr>`;
+  }).join('');
+}
+
+function renderActionBar(uid,user,entry,isLeiter){
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const bar=document.getElementById('action-bar');
+  const info=document.getElementById('action-info');
+  const btns=document.getElementById('action-btns');
+  const cw=document.getElementById('carryover-wrap');
+  bar.style.display='flex'; info.textContent=''; btns.innerHTML='';
+  const isFree=isFreelancer(user);
+  const showCarry=!isFree||(user.maxHours||0)>0;
+  cw.style.display=showCarry?'flex':'none';
+  if(showCarry){
+    const effCarry=getEffectiveCarryH(uid,user,year,mon);
+    const isManual=!!entry.carryoverManual;
+    const lbl=document.getElementById('carryover-label');
+    const lblText=isFree?'Stundenübertrag Vormonat (h):':'Übertrag Vormonat (h):';
+    if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
+    const inp=document.getElementById('carryover-input');
+    if(inp){ inp.value=effCarry; inp.min=isFree?0:-99; }
+    const rst=document.getElementById('carryover-reset');
+    if(rst) rst.style.display=isManual?'inline-flex':'none';
+  }
+  let extraBtns='';
+  if(cu.role==='admin'&&cu.id!==uid){
+    const un=user.name.toLowerCase();
+    const hasHist=typeof window.HIST_IMPORT!=='undefined'&&window.HIST_IMPORT.some(rec=>{
+      const rn=rec.n.toLowerCase();
+      return rn===un||rn.split(' ').every(p=>un.includes(p))||un.split(' ').every(p=>rn.includes(p));
+    });
+    if(hasHist) extraBtns=`<button class="btn btn-outline btn-sm" onclick="importHistForUser('${uid}')" style="font-size:12px">📋 Hist. Daten laden (Jan–Apr 2026)</button>`;
+  }
+  if(isLeiter&&cu.role!=='admin'&&cu.id!==uid){ btns.innerHTML=extraBtns; return; }
+  if(cu.id===uid||cu.role==='admin'){
+    if(entry.status==='draft'){
+      info.textContent=cu.id===uid?'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.':'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
+      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`;
+    } else if(entry.status==='submitted'){
+      info.textContent='Monat eingereicht – wartet auf Prüfung durch die Leitung.';
+      btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
+    } else if(entry.status==='approved'){
+      info.textContent='✓ Dieser Monat wurde genehmigt.';
+      btns.innerHTML=extraBtns;
+    } else if(entry.status==='rejected'){
+      info.textContent='✗ Abgelehnt – bitte korrigieren und erneut einreichen.'+(entry.managerNote?` Anmerkung: „${entry.managerNote}"`:'');
+      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doRecall()">Bearbeiten &amp; erneut einreichen</button>`;
+    }
+  } else {
+    btns.innerHTML=extraBtns;
+  }
+}
+
+function renderReviewPanel(uid,entry,isLeiter){
+  const cu=window.cu;
+  const panel=document.getElementById('review-panel');
+  if(!isLeiter||cu.id===uid){ panel.style.display='none'; return; }
+  const viewedUser=getUser(uid);
+  if(isBerater(viewedUser)&&cu.role==='leitung'){ panel.style.display='none'; return; }
+  if(entry.status==='draft'){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  document.getElementById('review-note').value=entry.managerNote||'';
+}
+
+export function renderSignature(user,entry){
+  const area=document.getElementById('sig-area');
+  const city=user.city||'';
+  const today=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const ortDat=entry.submittedAt?`${city}${city?', ':''}${fmtTs(entry.submittedAt).split(' ')[0]}`:`${city}${city?', ':''}${today}`;
+  let empSig='';
+  if(entry.status==='submitted'||entry.status==='approved'||entry.status==='rejected'){
+    empSig=`<div class="dig-sig">✍ Digital eingereicht<br>${user.name}<span class="ts">${fmtTs(entry.submittedAt)}</span></div>`;
+  } else {
+    empSig=`<span class="dig-sig"><span class="pending">Noch nicht eingereicht</span></span>`;
+  }
+  let mgSig='';
+  if(entry.status==='approved'||entry.status==='rejected'){
+    const reviewer=entry.reviewedBy?getUser(entry.reviewedBy):null;
+    const rName=reviewer?reviewer.name:'Leitung';
+    const action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
+    mgSig=`<div class="dig-sig">${action}<br>${rName}<span class="ts">${fmtTs(entry.reviewedAt)}</span>${entry.managerNote?`<span class="ts" style="color:var(--danger)">${entry.managerNote}</span>`:''}</div>`;
+  } else {
+    mgSig=`<span class="dig-sig"><span class="pending">Ausstehend</span></span>`;
+  }
+  area.innerHTML=`
+    <div class="sig-block"><div class="lbl">Ort / Datum</div><div class="sig-line"><span style="font-size:12px;font-weight:600">${ortDat}</span></div></div>
+    <div class="sig-block"><div class="lbl">Unterschrift Mitarbeiter/in</div><div class="sig-line">${empSig}</div></div>
+    <div class="sig-block"><div class="lbl">Geprüft – Unterschrift Leitung</div><div class="sig-line">${mgSig}</div></div>`;
+}
+
+export function td_change(ds,field,val){
+  const uid=window.viewEmpId||window.cu.id;
+  setDay(uid,window.year,window.mon,ds,field,val);
+  renderZeiterfassung();
+}
+
+export function td_zuord(ds,field,val,wh,dpw){
+  const uid=window.viewEmpId||window.cu.id;
+  const cu=window.cu;
+  setDay(uid,window.year,window.mon,ds,field,val);
+  if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
+    const dMin=Math.round(wh/((dpw||5))*60);
+    setDay(uid,window.year,window.mon,ds,'b1von','08:00');
+    setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
+    setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
+  }
+  if(field==='b1zuord'){
+    const u=getUser(uid)||cu;
+    if(val==='AU/Krank'){
+      mutate(d=>{
+        if(!d.vacRequests) d.vacRequests={};
+        const rk=`${uid}_${ds}_${ds}`;
+        if(!d.vacRequests[rk])
+          d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
+            type:'AU/Krank',startDate:ds,endDate:ds,workDays:1,note:'',
+            status:'approved',submittedAt:new Date().toISOString(),
+            reviewedBy:cu.id,reviewedAt:new Date().toISOString(),
+            reviewNote:'Automatisch aus Zeiterfassung'};
+      });
+    } else {
+      mutate(d=>{
+        const rk=`${uid}_${ds}_${ds}`;
+        if(d.vacRequests&&d.vacRequests[rk]&&d.vacRequests[rk].type==='AU/Krank')
+          delete d.vacRequests[rk];
+      });
+    }
+  }
+  renderZeiterfassung();
+}
+
+export function td_b1bis_change(ds,val){ td_tchange(ds,'b1bis',val); }
+
+export function td_tchange(ds,field,val){
+  const uid=window.viewEmpId||window.cu.id;
+  setDay(uid,window.year,window.mon,ds,field,val);
+  const block=field.startsWith('b2')?'2':'1';
+  const vonF=`b${block}von`, bisF=`b${block}bis`, zuordF=`b${block}zuord`;
+  const entry=getEntry(uid,window.year,window.mon);
+  const day=(entry.days||{})[ds]||{};
+  const zuord=day[zuordF]||'';
+  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
+  if(!isAbsence){
+    const von=field===vonF?val:(day[vonF]||'');
+    const bis=field===bisF?val:(day[bisF]||'');
+    if(von&&bis){
+      const rawMin=diffMin(von,bis);
+      if(rawMin>0){
+        const rounded=Math.round(rawMin/15)*15;
+        if(rounded!==rawMin&&rounded>0) setDay(uid,window.year,window.mon,ds,bisF,addMin(von,rounded));
+      }
+    }
+  }
+  check10hCarryover(uid,window.year,window.mon,ds);
+  renderZeiterfassung();
+}
+
+export function check10hCarryover(uid,y,m,ds,depth){
+  if((depth||0)>31) return;
+  const entry=getEntry(uid,y,m);
+  const day=(entry.days||{})[ds]||{};
+  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  const rounded=raw>0?Math.round(raw/15)*15:0;
+  const overflow=Math.max(0,rounded-600);
+  const date=new Date(ds+'T12:00:00');
+  date.setDate(date.getDate()+1);
+  const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
+  const nDs=dateStr(nY,nM,nD);
+  let hadCarryover=false;
+  mutate(d=>{
+    const nK=entryKey(uid,nY,nM);
+    const nd=d.entries?.[nK]?.days?.[nDs];
+    if(nd){
+      if(nd.b1bem==='Übertrag 10h Korrektur'){ nd.b1von=''; nd.b1bis=''; nd.b1zuord=''; nd.b1bem=''; hadCarryover=true; }
+      if(nd.b2bem==='Übertrag 10h Korrektur'){ nd.b2von=''; nd.b2bis=''; nd.b2zuord=''; nd.b2bem=''; hadCarryover=true; }
+    }
+    if(overflow>0){
+      const startStr='08:00', bisStr=addMin(startStr,overflow);
+      if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+      if(!d.entries[nK].days) d.entries[nK].days={};
+      if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
+      const nd2=d.entries[nK].days[nDs];
+      if(!nd2.b1von){ nd2.b1von=startStr; nd2.b1bis=bisStr; nd2.b1bem='Übertrag 10h Korrektur'; }
+      else if(!nd2.b2von){ nd2.b2von=startStr; nd2.b2bis=bisStr; nd2.b2bem='Übertrag 10h Korrektur'; }
+      else { nd2.ktmin=(Number(nd2.ktmin||0)+overflow); }
+      if(!depth){
+        const ok=entryKey(uid,y,m);
+        const od=d.entries[ok]?.days?.[ds];
+        if(od){
+          let toRemove=overflow;
+          if(toRemove>0&&Number(od.ktmin||0)>0){ const cut=Math.min(toRemove,Number(od.ktmin)); od.ktmin=Number(od.ktmin)-cut; toRemove-=cut; }
+          if(toRemove>0&&od.b2von&&od.b2bis){ const b2m=diffMin(od.b2von,od.b2bis); const cut=Math.min(toRemove,b2m); od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut; }
+          if(toRemove>0&&od.b1von&&od.b1bis){ const b1m=diffMin(od.b1von,od.b1bis); od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove)); }
+        }
+      }
+    }
+    const nd3=d.entries?.[nK]?.days?.[nDs];
+    if(nd3&&!nd3.b1von&&!nd3.b1bis&&!nd3.b2von&&!nd3.b2bis&&!Number(nd3.ktmin)&&!nd3.b1bem&&!nd3.b2bem){
+      delete d.entries[nK].days[nDs];
+    }
+  });
+  if(overflow>0||hadCarryover) check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
+  if(!depth&&overflow>0) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
+}
+
+export function saveCarryover(){
+  const uid=window.viewEmpId||window.cu.id;
+  const v=parseFloat(document.getElementById('carryover-input').value)||0;
+  mutate(d=>{
+    const k=entryKey(uid,window.year,window.mon);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    d.entries[k].carryover=v;
+    d.entries[k].carryoverManual=true;
+  });
+  renderZeiterfassung();
+}
+
+export function resetCarryover(){
+  const uid=window.viewEmpId||window.cu.id;
+  mutate(d=>{
+    const k=entryKey(uid,window.year,window.mon);
+    if(d.entries[k]){ d.entries[k].carryover=0; d.entries[k].carryoverManual=false; }
+  });
+  renderZeiterfassung();
+}
+
+export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
+  const isAZA=type==='Arbeitszeitausgleich';
+  const fullMins=type==='AU/Krank'?(dailyMinutes(user)||480):(Math.round((user.wh||0)/5*60)||480);
+  const mins=(halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
+  const cats=getCatsForTeam(user.team||'');
+  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
+  const bem=cats.includes(type)?'':type;
+  mutate(d=>{
+    let cur=new Date(from+'T12:00:00');
+    const endD=new Date(to+'T12:00:00');
+    while(cur<=endD){
+      const wd=cur.getDay();
+      if(wd!==0&&wd!==6){
+        const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
+        const ds=dateStr(y,m,day);
+        const hols=getHolidays(y,user.bundesland||'');
+        if(!hols.has(ds)){
+          const k=entryKey(uid,y,m);
+          if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+          if(!d.entries[k].days) d.entries[k].days={};
+          if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+          if(isAZA){
+            d.entries[k].days[ds].b1bem='Arbeitszeitausgleich';
+          } else {
+            Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
+          }
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+}
+
+export function clearAbsenceFromTimesheets(uid,user,type,from,to){
+  const isAZA=type==='Arbeitszeitausgleich';
+  const cats=getCatsForTeam(user.team||'');
+  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
+  mutate(d=>{
+    let cur=new Date(from+'T12:00:00');
+    const endD=new Date(to+'T12:00:00');
+    while(cur<=endD){
+      const wd=cur.getDay();
+      if(wd!==0&&wd!==6){
+        const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
+        const ds=dateStr(y,m,day);
+        const hols=getHolidays(y,user.bundesland||'');
+        if(!hols.has(ds)){
+          const k=entryKey(uid,y,m);
+          const dd=d.entries?.[k]?.days?.[ds];
+          if(dd){
+            if(isAZA){ if(dd.b1bem==='Arbeitszeitausgleich') dd.b1bem=''; }
+            else if(dd.b1zuord===zuord||dd.b1bem===type||dd.b1zuord===type){
+              Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
+            }
+          }
+        }
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+}
+
+export function syncSickToTimesheets(uid,user,from,to){ syncAbsenceToTimesheets(uid,user,'AU/Krank',from,to); }
+
+export function doSubmit(){
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
+  if(!confirm('Monat einreichen? Danach keine Änderungen bis zur Freigabe.')) return;
+  setEntryField(tuid,year,mon,'status','submitted');
+  setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
+  toast('Monat erfolgreich eingereicht.');
+  renderZeiterfassung();
+}
+
+export function doRecall(){
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
+  setEntryField(tuid,year,mon,'status','draft');
+  toast('Monatserfassung zurückgezogen.');
+  renderZeiterfassung();
+}
+
+export function doApprove(){
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const uid=window.viewEmpId;
+  const note=document.getElementById('review-note').value;
+  if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können genehmigt werden.','err'); return; }
+  setEntryField(uid,year,mon,'status','approved');
+  setEntryField(uid,year,mon,'managerNote',note);
+  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
+  setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  toast('Zeiterfassung genehmigt.','ok'); renderZeiterfassung(); window.renderOverview?.();
+}
+
+export function doReject(){
+  const year=window.year, mon=window.mon, cu=window.cu;
+  const uid=window.viewEmpId;
+  const note=document.getElementById('review-note').value;
+  if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können abgelehnt werden.','err'); return; }
+  if(!note.trim()){ toast('Bitte einen Ablehnungsgrund eingeben.','err'); return; }
+  setEntryField(uid,year,mon,'status','rejected');
+  setEntryField(uid,year,mon,'managerNote',note);
+  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
+  setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  toast('Zeiterfassung abgelehnt.','err'); renderZeiterfassung(); window.renderOverview?.();
+}
+
+export function doResetToDraft(){
+  const year=window.year, mon=window.mon;
+  setEntryField(window.viewEmpId,year,mon,'status','draft');
+  setEntryField(window.viewEmpId,year,mon,'managerNote','');
+  toast('Zurück auf Entwurf gesetzt.');
+  renderZeiterfassung();
+}
