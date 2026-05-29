@@ -10,7 +10,7 @@ import { openModal, closeModal } from './utils.js';
 
 // ── View modules ───────────────────────────────────────────────────
 import { renderZeiterfassung, renderSignature, td_change, td_zuord,
-         td_b1bis_change, td_tchange, check10hCarryover, saveCarryover,
+         td_b1bis_change, td_tchange, fmtTimeIn, check10hCarryover, saveCarryover,
          resetCarryover, syncAbsenceToTimesheets, clearAbsenceFromTimesheets,
          syncSickToTimesheets, doSubmit, doRecall, doApprove, doReject,
          doResetToDraft } from './views/zeiterfassung.js';
@@ -82,6 +82,7 @@ window.td_change                 = td_change;
 window.td_zuord                  = td_zuord;
 window.td_b1bis_change           = td_b1bis_change;
 window.td_tchange                = td_tchange;
+window.fmtTimeIn                 = fmtTimeIn;
 window.check10hCarryover         = check10hCarryover;
 window.saveCarryover             = saveCarryover;
 window.resetCarryover            = resetCarryover;
