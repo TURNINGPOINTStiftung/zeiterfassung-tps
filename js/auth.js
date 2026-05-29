@@ -1,4 +1,5 @@
-import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY } from './config.js';
+import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
+         EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL } from './config.js';
 import { getData, getUser, mutate } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 
@@ -69,18 +70,144 @@ export function doLogout(){
   populateLoginDropdown();
 }
 
+function _emailjsReady(){
+  return EMAILJS_PUBLIC_KEY && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID;
+}
+
+function _genResetToken(){
+  const arr=new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 export function showForgotPassword(){
+  if(!_emailjsReady()){
+    // Fallback: show admin contact if EmailJS not configured
+    let users=[];
+    try{ users=getData().users||[]; }catch(e){}
+    const admins=users.filter(u=>u.role==='admin'||u.role==='geschaeftsfuehrer');
+    const contactHtml=admins.length
+      ? admins.map(a=>`<div style="margin:4px 0;font-size:14px">👤 <strong>${esc(a.name)}</strong>${a.email?` – <a href="mailto:${esc(a.email)}" style="color:var(--primary)">${esc(a.email)}</a>`:''}</div>`).join('')
+      : '<div style="font-size:13px;color:var(--muted)">Bitte wende dich an den Administrator.</div>';
+    openModal(`<h3>Passwort vergessen?</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Bitte wende dich an:</p>
+      <div style="background:#f0f4f8;border-radius:8px;padding:12px 14px;margin-bottom:16px">${contactHtml}</div>
+      <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>`);
+    return;
+  }
+  openModal(`<h3>🔑 Passwort vergessen?</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      Gib deine E-Mail-Adresse ein. Du erhältst einen Link zum Zurücksetzen.
+    </p>
+    <div class="form-group">
+      <label for="reset-email">E-Mail-Adresse</label>
+      <input type="email" id="reset-email" placeholder="deine@email.de" autocomplete="email"
+             onkeydown="if(event.key==='Enter') sendPasswordReset()">
+    </div>
+    <div id="reset-msg" style="margin-top:8px"></div>
+    <div class="modal-btns" id="reset-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="sendPasswordReset()">Link senden</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('reset-email')?.focus(),100);
+}
+
+export async function sendPasswordReset(){
+  const emailEl=document.getElementById('reset-email');
+  const msgEl=document.getElementById('reset-msg');
+  const btnsEl=document.getElementById('reset-btns');
+  const email=(emailEl?.value||'').trim();
+  if(!email){
+    msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Bitte E-Mail-Adresse eingeben.</div>';
+    return;
+  }
+  btnsEl.innerHTML='<div style="font-size:13px;color:var(--muted)">⏳ Wird gesendet…</div>';
+
   let users=[];
   try{ users=getData().users||[]; }catch(e){}
-  const admins=users.filter(u=>u.role==='admin'||u.role==='geschaeftsfuehrer');
-  const contactHtml=admins.length
-    ? admins.map(a=>`<div style="margin:4px 0;font-size:14px">👤 <strong>${esc(a.name)}</strong>${a.email?` – <a href="mailto:${esc(a.email)}" style="color:var(--primary)">${esc(a.email)}</a>`:''}</div>`).join('')
-    : '<div style="font-size:13px;color:var(--muted)">Bitte wende dich an den Administrator.</div>';
-  openModal(`<h3>Passwort vergessen?</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Passwörter können nur vom Administrator zurückgesetzt werden. Bitte wende dich an:</p>
-    <div style="background:#f0f4f8;border-radius:8px;padding:12px 14px;margin-bottom:16px">${contactHtml}</div>
-    <p style="font-size:12px;color:var(--muted)">Nach dem Login kannst du dein Passwort unter <strong>Profil → Passwort ändern</strong> selbst anpassen.</p>
-    <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>`);
+  const user=users.find(u=>u.email&&u.email.toLowerCase()===email.toLowerCase());
+
+  const showSuccess=()=>{
+    msgEl.innerHTML='';
+    btnsEl.innerHTML='<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">✅ Falls diese E-Mail hinterlegt ist, erhältst du gleich einen Reset-Link.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
+  };
+
+  // Always show success (don't reveal if email exists – security)
+  if(!user){ showSuccess(); return; }
+
+  const token=_genResetToken();
+  const expiry=Date.now()+3600000; // 1 Stunde
+
+  try{
+    await firebase.database().ref('pwResetTokens/'+token).set({uid:user.id, expiry});
+  }catch(e){
+    btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">Fehler. Bitte versuche es erneut.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
+    return;
+  }
+
+  const resetLink=APP_URL+'?pw_reset='+token;
+  try{
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: user.email,
+      to_name:  user.name,
+      reset_link: resetLink
+    }, EMAILJS_PUBLIC_KEY);
+    showSuccess();
+  }catch(e){
+    firebase.database().ref('pwResetTokens/'+token).remove().catch(()=>{});
+    btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">E-Mail konnte nicht gesendet werden. Bitte versuche es erneut.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
+  }
+}
+
+export async function checkPasswordResetToken(){
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('pw_reset');
+  if(!token) return;
+  window.history.replaceState({},'',window.location.pathname);
+  try{
+    const snap=await firebase.database().ref('pwResetTokens/'+token).once('value');
+    const data=snap.val();
+    if(!data||data.expiry<Date.now()){
+      openModal(`<h3>Link abgelaufen</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Dieser Reset-Link ist abgelaufen oder wurde bereits verwendet.</p>
+        <div class="modal-btns">
+          <button class="btn btn-primary" onclick="closeModal();showForgotPassword()">Neuen Link anfordern</button>
+        </div>`);
+      return;
+    }
+    const user=getUser(data.uid);
+    openModal(`<h3>🔑 Neues Passwort</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Hallo <strong>${esc(user?.name||'')}</strong>! Bitte wähle ein neues Passwort.</p>
+      <div class="form-group">
+        <label>Neues Passwort</label>
+        <input type="password" id="new-pw-1" placeholder="Mindestens 4 Zeichen" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter') saveResetPassword('${token}','${data.uid}')">
+      </div>
+      <div class="form-group">
+        <label>Passwort bestätigen</label>
+        <input type="password" id="new-pw-2" placeholder="Wiederholen" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter') saveResetPassword('${token}','${data.uid}')">
+      </div>
+      <div id="new-pw-msg" style="margin-top:8px"></div>
+      <div class="modal-btns">
+        <button class="btn btn-primary" onclick="saveResetPassword('${token}','${data.uid}')">Passwort speichern</button>
+      </div>`);
+    setTimeout(()=>document.getElementById('new-pw-1')?.focus(),100);
+  }catch(e){ console.error('Reset-Token Fehler:',e); }
+}
+
+export async function saveResetPassword(token,uid){
+  const pw1=document.getElementById('new-pw-1')?.value||'';
+  const pw2=document.getElementById('new-pw-2')?.value||'';
+  const msgEl=document.getElementById('new-pw-msg');
+  if(pw1.length<4){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 4 Zeichen.</div>'; return; }
+  if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
+  const hash=await hashPw(pw1);
+  await mutate(d=>{ const u=d.users.find(x=>x.id===uid); if(u) u.pw=hash; });
+  await firebase.database().ref('pwResetTokens/'+token).remove().catch(()=>{});
+  closeModal();
+  toast('✅ Passwort gespeichert. Du kannst dich jetzt einloggen.','ok');
+  populateLoginDropdown();
 }
 
 export function emergencyReset(){
