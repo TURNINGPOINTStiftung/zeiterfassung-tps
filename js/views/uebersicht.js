@@ -146,10 +146,6 @@ export function renderOverview(){
     }
   };
 
-  // Erinnerungs-Button nur für Admin und GF anzeigen
-  const btnRem=document.getElementById('btn-reminders');
-  if(btnRem) btnRem.style.display=(cu.role==='admin'||cu.role==='geschaeftsfuehrer')?'':'none';
-
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
     content.innerHTML='<p style="color:var(--muted)">Keine Mitarbeiter gefunden.</p>'; return;
