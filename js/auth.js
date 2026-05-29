@@ -14,46 +14,67 @@ export function isHashed(pw){ return pw&&pw.length===64&&/^[0-9a-f]+$/.test(pw);
 
 // ── Login UI ──────────────────────────────────────────────────────
 export function populateLoginDropdown(){
-  const sel=document.getElementById('login-user-select');
-  if(!sel) return;
-  sel.innerHTML='<option value="">– Bitte auswählen –</option>';
+  const dl=document.getElementById('login-users-datalist');
+  if(!dl) return;
+  dl.innerHTML='';
   let users=[];
   try{ users=getData().users||[]; }catch(e){}
   if(!users.length) users=DEFAULT_USERS.slice();
   [...users].sort((a,b)=>a.name.localeCompare(b.name,'de')).forEach(u=>{
     const opt=document.createElement('option');
-    opt.value=u.id;
-    opt.textContent=u.name;
-    sel.appendChild(opt);
+    opt.value=u.name;
+    dl.appendChild(opt);
   });
+  // Gespeicherten Benutzer wiederherstellen
+  try{
+    const rid=localStorage.getItem('tp_zt_remember');
+    if(rid){
+      const ru=getUser(rid);
+      if(ru){
+        const inp=document.getElementById('login-user-input');
+        if(inp&&!inp.value) inp.value=ru.name;
+        const cb=document.getElementById('login-remember');
+        if(cb) cb.checked=true;
+      }
+    }
+  }catch(e){}
 }
 
 export async function doLogin(){
   const errEl=document.getElementById('login-err');
-  const uid=document.getElementById('login-user-select').value;
-  if(!uid){
-    errEl.textContent='Bitte einen Namen auswählen.';
+  const inp=document.getElementById('login-user-input');
+  const name=(inp?.value||'').trim();
+  if(!name){
+    errEl.textContent='Bitte einen Namen eingeben.';
     errEl.style.display='block'; return;
   }
-  const pw=document.getElementById('login-pw').value;
-  const u=getUser(uid);
+  let users=[];
+  try{ users=getData().users||[]; }catch(e){}
+  const u=users.find(x=>x.name.toLowerCase()===name.toLowerCase());
   if(!u){
     errEl.textContent='Benutzer nicht gefunden.';
     errEl.style.display='block'; return;
   }
+  const pw=document.getElementById('login-pw').value;
   let match=false;
   if(isHashed(u.pw)){
     match=(await hashPw(pw))===u.pw;
   } else {
     match=pw===u.pw;
-    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===uid);if(x)x.pw=h;}); }
+    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===u.id);if(x)x.pw=h;}); }
   }
   if(!match){
     errEl.textContent='Falsches Passwort.';
     errEl.style.display='block'; return;
   }
-  window.cu=getUser(uid);
-  try{ localStorage.setItem('tp_zt_session',uid); }catch(e){}
+  // Angemeldet bleiben: Benutzer-ID speichern oder löschen
+  try{
+    const cb=document.getElementById('login-remember');
+    if(cb?.checked) localStorage.setItem('tp_zt_remember',u.id);
+    else localStorage.removeItem('tp_zt_remember');
+  }catch(e){}
+  window.cu=getUser(u.id);
+  try{ localStorage.setItem('tp_zt_session',u.id); }catch(e){}
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
@@ -67,6 +88,9 @@ export function doLogout(){
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-pw').value='';
+  // Eingabefeld leeren, damit populateLoginDropdown ggf. gespeicherten Namen einträgt
+  const inp=document.getElementById('login-user-input');
+  if(inp) inp.value='';
   populateLoginDropdown();
 }
 
@@ -243,5 +267,6 @@ export async function resetPasswordsOnly(){
 }
 
 export function initAuthEvents(){
+  // Enter auf Passwort-Feld → Anmelden (Fallback; Form-Submit macht dasselbe)
   document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 }
