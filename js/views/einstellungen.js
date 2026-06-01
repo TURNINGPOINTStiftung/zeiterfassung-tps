@@ -1,6 +1,6 @@
 import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
-import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel } from '../roles.js';
+import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate } from '../roles.js';
 import { esc, toast, openModal, closeModal } from '../utils.js';
 import { hashPw } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
@@ -306,7 +306,20 @@ function userForm(u={}){
     </div>
     <div class="uf-section-head">📍 Standort</div>
     <div class="uf-grid2">
-    <div class="form-group"><label>Team(s)</label><div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
+    <div class="form-group"><label>Team(s) <span style="font-size:11px;color:var(--muted)">(aktuell)</span></label>
+      <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
+    </div>
+    ${u.id?(()=>{
+      const hist=(u.teamHistory||[]).sort((a,b)=>b.fromDate.localeCompare(a.fromDate));
+      const histHtml=hist.length?hist.map(h=>`<div style="font-size:12px;padding:3px 0;display:flex;gap:8px"><span style="color:var(--muted)">${h.fromDate}</span><span>${esc(h.team||'(kein)')}</span></div>`).join(''):'<span style="font-size:12px;color:var(--muted)">Noch kein Verlauf</span>';
+      return `<div class="form-group"><label>Team-Verlauf</label>
+        <div style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:6px;max-height:100px;overflow-y:auto">${histHtml}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted)">Wechsel ab:</span>
+          <input type="date" id="uf-team-change-date" value="${new Date().toISOString().slice(0,10)}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        </div>
+      </div>`;
+    })():''}
     </div>
     <div class="uf-grid2">
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
@@ -404,6 +417,18 @@ export async function saveEditUser(id){
   if(id==='admin') u.role='admin';
   if(u.pw){ u.pw=await hashPw(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; }
+  // Team-Verlauf: wenn primäres Team gewechselt hat → History-Eintrag hinzufügen
+  const existing=getUser(id);
+  const newTeam=u.teams[0]||u.team||'';
+  const oldTeam=existing?.teams?.[0]||existing?.team||'';
+  if(newTeam&&newTeam!==oldTeam){
+    const changeDate=document.getElementById('uf-team-change-date')?.value||new Date().toISOString().slice(0,10);
+    const existHist=Array.isArray(existing?.teamHistory)?existing.teamHistory:[];
+    u.teamHistory=[...existHist.filter(h=>h.fromDate!==changeDate),{team:newTeam,fromDate:changeDate}]
+      .sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
+  } else {
+    u.teamHistory=existing?.teamHistory||u.teamHistory;
+  }
   await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }

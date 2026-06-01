@@ -2,7 +2,7 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
-import { hasPermission } from '../roles.js';
+import { hasPermission, getTeamForDate } from '../roles.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
@@ -129,7 +129,7 @@ export async function saveVacRequest(){
   const now=new Date().toISOString();
   const req={
     id:key, userId:targetUser.id, userName:targetUser.name,
-    team:targetUser.team||(getLeitungTeams(targetUser)[0]||''),
+    team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
     status:autoApprove?'approved':'pending',
     submittedAt:now,
