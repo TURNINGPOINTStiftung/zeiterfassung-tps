@@ -60,8 +60,11 @@ export async function initFirebase(){
       !data.teamCats||
       Object.values(data.entries||{}).some(e=>e&&!e.days)||
       data.users.some(u=>(u.id==='christian_bittner'||u.name==='Christian Bittner')&&(u.role!=='freiberuflich'||!u.maxHours));
+    const hadPauseMig=!!(data._fixes&&data._fixes.pauseMigrationV2);
     let needsSave=needsCleanup;
     let migrated=_migrate(data);
+    // Wenn die Pause-Migration gerade gelaufen ist → unbedingt nach Firebase speichern
+    if(!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1) needsSave=true;
     for(const u of migrated.users){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
     }
@@ -82,9 +85,14 @@ export async function initFirebase(){
 
 function _applyFirebaseSnap(val){
   if(!val||!getData()) return;
+  const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const migrated=_migrate(val);
   setDataCache(migrated);
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated)); }catch(e){}
+  // Migration-Flag nach Firebase schreiben damit sie nicht wiederholt läuft
+  if(!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1){
+    _fbRef.set(migrated).catch(()=>{});
+  }
   if(window.cu&&!(migrated.stamps&&migrated.stamps[window.cu.id])){
     try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   }
