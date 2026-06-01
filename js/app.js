@@ -17,7 +17,7 @@ export function initApp(){
   window.abCalYear=window.year; window.abCalMon=window.mon;
   window.viewEmpId=cu.id;
 
-  const gfNoZE=isGF&&!!cu.noTimesheet;
+  const gfNoZE=(isGF||cu.role==='leitung')&&!!cu.noTimesheet;
   const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';
@@ -40,8 +40,8 @@ export function initApp(){
   }
   window.updateZeitstempelBtn?.();
   if(isAdmin) switchView('uebersicht');
+  else if(gfNoZE) switchView(hasPermission('tab_uebersicht',role)?'uebersicht':'gfberichte');
   else if(hasPermission('tab_gfberichte',role)&&!hasPermission('tab_uebersicht',role)) switchView('gfberichte');
-  else if(gfNoZE) switchView('gfberichte');
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 }

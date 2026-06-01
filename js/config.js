@@ -18,7 +18,7 @@ export const APP_URL = 'https://turningpointstiftung.github.io/zeiterfassung-tps
 export const DEFAULT_PERMISSIONS = {
   tab_uebersicht:      ['leitung','geschaeftsfuehrer'],
   tab_gfberichte:      ['geschaeftsfuehrer'],
-  btn_teamberichte:    ['leitung'],        // „An GF senden" in ZE-Header
+  btn_teamberichte:    [],                  // „An GF senden" nur in Übersicht (nicht ZE-Header)
   btn_jahresbericht:   ['leitung'],        // „An GF senden" in Jahresübersicht
   btn_erinnerungen:    ['leitung'],        // „Erinnerungen senden"
   genehmigung_abwesenheit: ['leitung','geschaeftsfuehrer'],
