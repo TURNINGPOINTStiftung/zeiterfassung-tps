@@ -643,6 +643,7 @@ export function resetCarryover(){
 }
 
 export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
+  if(isFreelancer(user)) return; // Freiberufler: keine Zeiteinträge aus Abwesenheiten
   const isAZA=type==='Arbeitszeitausgleich';
   const fullMins=type==='AU/Krank'?(dailyMinutes(user)||480):(Math.round((user.wh||0)/5*60)||480);
   const mins=(halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
