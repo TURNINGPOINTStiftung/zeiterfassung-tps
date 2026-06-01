@@ -8,8 +8,9 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 export function dayMinutes(dd){
   if(!dd) return 0;
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  // Bei Abwesenheiten (Urlaub, Krank, AZA) keine Auto-Pause abziehen
+  // Keine Auto-Pause bei: Abwesenheit, Zwei-Block-Einträgen (Pause liegt im Gap)
   if(_isAbsDay(dd)) return gross;
+  if(dd.b2von&&dd.b2bis) return gross; // Zwei-Block: Pause = Gap zwischen Blöcken
   const autoPause=gross>=540?45:gross>=360?30:0;
   return Math.max(0,gross-autoPause);
 }
