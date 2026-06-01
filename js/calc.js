@@ -2,10 +2,14 @@ import { diffMin, daysInMonth, dateStr, getHolidays } from './utils.js';
 import { getData, getEntry, entryKey } from './data.js';
 import { isFreelancer } from './roles.js';
 
+const _ABS_CATS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(dd.b1bem))); }
+
 export function dayMinutes(dd){
   if(!dd) return 0;
-  // Brutto: b1+b2+Kleinteilig; Pause wird automatisch abgezogen (§ dt. ArbZG)
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  // Bei Abwesenheiten (Urlaub, Krank, AZA) keine Auto-Pause abziehen
+  if(_isAbsDay(dd)) return gross;
   const autoPause=gross>=540?45:gross>=360?30:0;
   return Math.max(0,gross-autoPause);
 }
