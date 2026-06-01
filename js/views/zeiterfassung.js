@@ -90,13 +90,13 @@ export function renderZeiterfassung(){
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b1von',this.value)"></td>
       <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
-      <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
+      <td><select id="sel_${ds}_b1zuord" class="zuord" ${dis?'disabled':''} onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
       <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2von',this.value)"></td>
       <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
+      <td class="b2-col"><select id="sel_${ds}_b2zuord" class="zuord" ${dis?'disabled':''} onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
@@ -318,6 +318,8 @@ export function td_change(ds,field,val){
 }
 
 export function td_zuord(ds,field,val,wh,dpw){
+  const _fid=window._ztNextFocusId||document.activeElement?.id||null;
+  window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
   const cu=window.cu;
   setDay(uid,window.year,window.mon,ds,field,val);
@@ -352,6 +354,7 @@ export function td_zuord(ds,field,val,wh,dpw){
     }
   }
   renderZeiterfassung();
+  if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
 
 export function td_b1bis_change(ds,val){
@@ -411,11 +414,15 @@ export function fmtTimeIn(el){
 }
 
 export function focusNextTInp(el){
-  const all=Array.from(document.querySelectorAll('.t-inp:not([disabled])'));
+  // Zeitfelder + Zuordnungs-Dropdowns in Dokumentreihenfolge
+  const all=Array.from(document.querySelectorAll(
+    '#zt .t-inp:not([disabled]), #zt select.zuord:not([disabled])'
+  ));
   const idx=all.indexOf(el);
   if(idx>=0&&idx<all.length-1){
-    window._ztNextFocusId=all[idx+1].id; // merken für td_tchange nach Re-Render
-    all[idx+1].focus();
+    const next=all[idx+1];
+    window._ztNextFocusId=next.id||null;
+    next.focus();
   }
 }
 
