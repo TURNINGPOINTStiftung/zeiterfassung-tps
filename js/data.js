@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY, DEFAULT_CATS, DEFAULT_TEAMS, DEFAULT_USERS } from './config.js';
-import { addMin, diffMin } from './utils.js';
+import { addMin, diffMin, getHolidays } from './utils.js';
 
 // ── Internal state ────────────────────────────────────────────────
 let _dataCache = null;
@@ -53,7 +53,7 @@ export function _migrate(d){
     d._fixes.pauseMigrationV2=true;
   }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
   // ── Alle Abwesenheiten: fehlende Bemerkungen + ggf. Zeiteinträge nachträglich anlegen
-  // V2: mit Feiertags-Prüfung (V1 hatte diesen Check nicht → konnte Extra-Urlaubstage erzeugen)
+  try{
   if(!d._fixes.allAbsBemerkungV2){
     // Einträge die V1 fälschlicherweise auf Feiertagen erstellt hat, rückgängig machen
     const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
@@ -129,6 +129,7 @@ export function _migrate(d){
     d._fixes.allAbsBemerkung=true;
     d._fixes.allAbsBemerkungV2=true;
   }
+  }catch(e){ console.error('AbsBemerkung-Migration Fehler (ignoriert):',e); }
   // ── Freiberufler-Cleanup: durch Abwesenheitssync entstandene Zeiteinträge löschen
   if(!d._fixes.freelancerAbsCleanup){
     const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
@@ -145,7 +146,7 @@ export function _migrate(d){
       });
     });
     d._fixes.freelancerAbsCleanup=true;
-  }
+  } }catch(e){ console.error('FreelancerCleanup Fehler (ignoriert):',e); }
   // ──────────────────────────────────────────────────────────────
   if(!d._fixes.badCarryoverV2){
     Object.keys(d.entries||{}).forEach(k=>{
