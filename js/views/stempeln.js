@@ -9,6 +9,50 @@ export function getStamp(){
   try{ const s=localStorage.getItem(_STAMP_KEY); return s?JSON.parse(s):null; }catch(e){ return null; }
 }
 
+// Startzeitpunkt eines laufenden Stempels anpassen (z.B. wenn b1von manuell korrigiert)
+export function syncStempelVon(von){
+  const cu=window.cu;
+  const stamp=getStamp();
+  if(!stamp||stamp.uid!==cu.id) return;
+  const[h,m]=von.split(':').map(Number);
+  const newStart=new Date(stamp.startDate+'T00:00:00');
+  newStart.setHours(h,m,0,0);
+  const newStamp={...stamp,von,startTime:newStart.toISOString()};
+  try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(newStamp)); }catch(e){}
+  mutate(d=>{ if(d.stamps) d.stamps[cu.id]=newStamp; });
+  updateZeitstempelBtn(); _refreshStempelView();
+}
+
+// Stempel mit bestimmter Startzeit starten (aus manuellem Zeiterfassungs-Eintrag)
+export function startZeitstempelAt(von){
+  const cu=window.cu;
+  if(!cu||cu.role==='admin') return;
+  if(getStamp()) return; // läuft bereits
+  const today=new Date().toISOString().slice(0,10);
+  const[h,m]=von.split(':').map(Number);
+  const startTime=new Date(today+'T00:00:00');
+  startTime.setHours(h,m,0,0);
+  const[sy,sm]=today.split('-').map(Number);
+  const k=entryKey(cu.id,sy,sm);
+  const dayNow=(getEntry(cu.id,sy,sm).days||{})[today]||{};
+  const b1full=!!(dayNow.b1von&&dayNow.b1bis);
+  const b2full=!!(dayNow.b2von&&dayNow.b2bis);
+  const block=b1full?(b2full?'kt':'b2'):'b1';
+  const stamp={uid:cu.id,startTime:startTime.toISOString(),startDate:today,von,block};
+  try{ localStorage.setItem(_STAMP_KEY,JSON.stringify(stamp)); }catch(e){}
+  mutate(d=>{
+    if(!d.stamps) d.stamps={};
+    d.stamps[cu.id]=stamp;
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    if(!d.entries[k].days) d.entries[k].days={};
+    if(!d.entries[k].days[today]) d.entries[k].days[today]={};
+    if(block==='b1') d.entries[k].days[today].b1von=von;
+    else if(block==='b2') d.entries[k].days[today].b2von=von;
+  });
+  updateZeitstempelBtn(); _refreshStempelView();
+  toast(`Stempel automatisch gestartet (${von}) ✓`,'ok');
+}
+
 export function renderStempelView(){
   const cu=window.cu;
   if(!cu||cu.role==='admin') return;

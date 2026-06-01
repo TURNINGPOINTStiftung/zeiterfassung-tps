@@ -442,10 +442,34 @@ export function focusNextTInp(el){
 }
 
 export function td_tchange(ds,field,val){
-  // Wenn Enter/Tab gedrückt wurde, ist _nextFocusId gesetzt → bevorzugen (race-condition-safe)
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
   window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
+
+  // ── Stempel-Synchronisation ────────────────────────────────────
+  // Nur für den eingeloggten User, nur heute
+  if(field==='b1von'&&uid===window.cu?.id){
+    const today=new Date().toISOString().slice(0,10);
+    if(ds===today){
+      const normV=_normTime(val);
+      if(normV){
+        const stamp=window.getStamp?.();
+        if(stamp&&stamp.uid===window.cu.id&&stamp.startDate===today){
+          // Laufender Stempel → Startzeit synchronisieren
+          window.syncStempelVon?.(normV);
+        } else if(!stamp){
+          // Kein Stempel → in 30 Sek. automatisch starten
+          clearTimeout(window._ztAutoStampTimer);
+          window._ztAutoStampTimer=setTimeout(()=>{
+            if(!window.getStamp?.()) window.startZeitstempelAt?.(normV);
+          },30000);
+        }
+      } else {
+        clearTimeout(window._ztAutoStampTimer);
+      }
+    }
+  }
+  // ────────────────────────────────────────────────────────────────
   const normVal=_normTime(val);
   setDay(uid,window.year,window.mon,ds,field,normVal);
   const block=field.startsWith('b2')?'2':'1';

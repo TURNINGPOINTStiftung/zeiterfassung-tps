@@ -260,56 +260,64 @@
 
     <!-- ─── Einstellungen ─── -->
     <div class="view" id="view-einstellungen">
-      <h2 style="font-size:19px;font-weight:700;color:var(--primary);margin-bottom:16px">Einstellungen</h2>
-      <div class="settings-row">
-        <div class="s-box">
-          <h3>Mitarbeiter verwalten</h3>
-          <div id="user-list"></div>
-          <div class="mt-14">
-            <button class="btn btn-ok btn-sm" onclick="showAddUser()">+ Mitarbeiter hinzufügen</button>
-          </div>
+
+      <!-- ── Mitarbeiter ── -->
+      <div class="s-box" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="margin:0">👥 Mitarbeiter</h3>
+          <button class="btn btn-ok btn-sm" onclick="showAddUser()">+ Hinzufügen</button>
         </div>
+        <div id="user-list"></div>
+      </div>
+
+      <!-- ── Organisation + Daten ── -->
+      <div class="settings-row" style="margin-bottom:16px">
         <div class="s-box">
-          <h3>Teams</h3>
+          <h3>🏢 Teams</h3>
           <div id="team-list"></div>
           <div class="flex mt-14">
             <input class="tag-input" id="new-team-input" placeholder="Neues Team…" onkeydown="if(event.key==='Enter')addTeam()">
             <button class="btn btn-ok btn-sm" onclick="addTeam()">+</button>
           </div>
-          <h3 style="margin-top:18px">Eigene Rollen</h3>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Eigene Bezeichnungen für Rollen – Berechtigungen werden von der Basisrolle vererbt.</div>
+          <h3 style="margin-top:20px">🎖 Eigene Rollen</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Anzeigebezeichnungen – Rechte kommen von der Systemrolle.</div>
           <div id="custom-role-list"></div>
           <div class="flex mt-14" style="gap:6px;flex-wrap:wrap">
-            <input class="tag-input" id="new-role-label" placeholder="Bezeichnung (z.B. Koordination)" style="flex:2;min-width:140px" onkeydown="if(event.key==='Enter')addCustomRole()">
-            <select id="new-role-base" style="flex:1;min-width:130px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+            <input class="tag-input" id="new-role-label" placeholder="Bezeichnung…" style="flex:2;min-width:120px" onkeydown="if(event.key==='Enter')addCustomRole()">
+            <select id="new-role-base" style="flex:1;min-width:120px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
               <option value="mitarbeiter">Mitarbeiter/in</option>
               <option value="freiberuflich">Freiberuflich</option>
               <option value="berater">Berater/in</option>
-              <option value="leitung">Leitungspersonal</option>
+              <option value="leitung">Leitung</option>
               <option value="geschaeftsfuehrer">Geschäftsführung</option>
             </select>
             <button class="btn btn-ok btn-sm" onclick="addCustomRole()">+</button>
           </div>
         </div>
-      </div>
-      <div class="settings-row" style="margin-top:14px">
         <div class="s-box">
-          <h3>Zuordnungskategorien</h3>
-          <div id="cat-section"></div>
-          <div id="permissions-section"></div>
-        </div>
-        <div class="s-box">
-          <h3>Daten</h3>
+          <h3>💾 Daten</h3>
           <div style="display:flex;flex-direction:column;gap:10px">
             <button class="btn btn-ok btn-sm" onclick="shareApp()">⬇ App herunterladen / teilen</button>
             <button class="btn btn-outline btn-sm" onclick="exportData()">📥 Alle Daten exportieren (JSON)</button>
             <label class="btn btn-outline btn-sm" style="cursor:pointer">📤 Daten importieren (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
-            <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
             <button class="btn btn-outline btn-sm" onclick="showCarryoverCleanup()">🧹 Übertrag-Korrekturen bereinigen</button>
+            <button class="btn btn-danger btn-sm" onclick="resetData()">🗑 Alle Daten zurücksetzen</button>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:var(--muted)">Version v26.05.29b</div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">Version v26.05.29b</div>
         </div>
       </div>
+
+      <!-- ── Kategorien ── -->
+      <div class="s-box" style="margin-bottom:16px">
+        <h3>📋 Zuordnungskategorien</h3>
+        <div id="cat-section"></div>
+      </div>
+
+      <!-- ── Berechtigungen ── -->
+      <div class="s-box">
+        <div id="permissions-section"></div>
+      </div>
+
     </div>
   </main>
 </div>
