@@ -168,9 +168,9 @@ export function calcVrDays(){
   let effective;
   if(type==='Urlaub'&&mode==='manual'){
     effective=parseFloat(document.getElementById('vr-manual-days')?.value)||1;
-    // Deckel: dpw Urlaubstage pro Kalenderwoche
+    // Deckel: max 5 Urlaubstage pro Kalenderwoche (z.B. zum Minus-Ausgleich)
     const weeks=Math.max(1,Math.ceil(weekdays/5));
-    effective=Math.min(effective,weeks*dpw);
+    effective=Math.min(effective,weeks*5);
   } else if(type==='Urlaub'){
     effective=halfDay&&singleDay?0.5:autoDays;
     const manualEl=document.getElementById('vr-manual-days');
@@ -205,7 +205,7 @@ export async function saveVacRequest(){
   if(halfDay){ wd=0.5; }
   else if(type==='Urlaub'&&mode==='manual'){
     const weeks=Math.max(1,Math.ceil(weekdays/5));
-    wd=Math.min(parseFloat(document.getElementById('vr-manual-days')?.value)||1,weeks*dpw);
+    wd=Math.min(parseFloat(document.getElementById('vr-manual-days')?.value)||1,weeks*5);
   } else if(type==='Urlaub'){
     wd=countVacationDays(from,to,targetUser); // nach Profil (Werktage/Woche gedeckelt auf dpw)
   } else {
