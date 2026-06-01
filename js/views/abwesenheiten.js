@@ -1,8 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getData, getUser, mutate } from '../data.js';
-import { canSeeEmployee, canSeeAbsence, getLeitungTeams } from '../roles.js';
+import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
-import { hasPermission, getTeamForDate } from '../roles.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
