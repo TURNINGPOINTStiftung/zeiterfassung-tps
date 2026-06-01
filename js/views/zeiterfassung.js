@@ -14,6 +14,10 @@ export function renderZeiterfassung(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const entry=getEntry(uid,year,mon);
   const isLeiter=isManagerRole(cu);
+
+  // "An GF senden"-Button nur für Leitung sichtbar halten
+  const _btnTeam=document.getElementById('btn-teamberichte');
+  if(_btnTeam) _btnTeam.style.display=(cu.role==='leitung')?'':'none';
   const isFree=isFreelancer(user);
   const canEdit=(cu.id===uid&&entry.status==='draft')||
                 (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
