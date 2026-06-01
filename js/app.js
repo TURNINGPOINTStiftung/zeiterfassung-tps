@@ -17,7 +17,9 @@ export function initApp(){
   window.abCalYear=window.year; window.abCalMon=window.mon;
   window.viewEmpId=cu.id;
 
-  const gfNoZE=(isGF||cu.role==='leitung')&&!!cu.noTimesheet;
+  // noTimesheet: ZE komplett weg (GF-Konzept)
+  // noReport: ZE bleibt, aber privat — kein Einreichen, GF hat keinen Zugriff (Leitungs-Konzept)
+  const gfNoZE=isGF&&!!cu.noTimesheet;
   const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';

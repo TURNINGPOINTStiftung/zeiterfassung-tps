@@ -41,7 +41,7 @@ import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport,
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
          addCategory, removeCat, addTeamCat, removeTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
-         _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, deleteUser,
+         _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
          saveNewUser, saveEditUser } from './views/einstellungen.js';
 
 // ── Utility / print modules ────────────────────────────────────────
@@ -181,6 +181,7 @@ window.saveEditDpw           = saveEditDpw;
 window._resolveUfRole        = _resolveUfRole;
 window.toggleFreelancerFields= toggleFreelancerFields;
 window.toggleGFTimesheet     = toggleGFTimesheet;
+window.toggleLeitungReport   = toggleLeitungReport;
 window.deleteUser            = deleteUser;
 window.saveNewUser           = saveNewUser;
 window.saveEditUser          = saveEditUser;

@@ -27,6 +27,8 @@ export function canSeeEmployee(mgr,emp){
   if(!emp) return false;
   if(mgr.role==='admin') return true;
   if(mgr.role==='geschaeftsfuehrer'){
+    // Mitarbeiter mit noReport (private ZE, nicht reportpflichtig) sind für GF unsichtbar
+    if(emp.noReport) return false;
     if(emp.role==='leitung'||emp.role==='berater') return true;
     if(emp.role==='admin'||emp.role==='geschaeftsfuehrer') return false;
     return !teamHasLeitung(emp.team);

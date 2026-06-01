@@ -233,9 +233,12 @@ function renderActionBar(uid,user,entry,isLeiter){
   }
   if(isLeiter&&cu.role!=='admin'&&cu.id!==uid){ btns.innerHTML=extraBtns; return; }
   if(cu.id===uid||cu.role==='admin'){
+    const isNoReport=cu.id===uid&&!!getUser(uid)?.noReport;
     if(entry.status==='draft'){
-      info.textContent=cu.id===uid?'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.':'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
-      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`;
+      info.textContent=cu.id===uid
+        ?(isNoReport?'Zeiten erfassen – keine Einreichung erforderlich.':'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.')
+        :'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
+      btns.innerHTML=extraBtns+(isNoReport?'': `<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`);
     } else if(entry.status==='submitted'){
       info.textContent='Monat eingereicht – wartet auf Prüfung durch die Leitung.';
       btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
