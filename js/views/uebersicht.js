@@ -146,6 +146,10 @@ export function renderOverview(){
     }
   };
 
+  // Erinnerungs-Button: nur für Leitung und Admin, nicht für GF
+  const btnRem=document.getElementById('btn-reminders');
+  if(btnRem) btnRem.style.display=(cu.role==='leitung'||cu.role==='admin')?'':'none';
+
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
     content.innerHTML='<p style="color:var(--muted)">Keine Mitarbeiter gefunden.</p>'; return;
@@ -539,7 +543,7 @@ export function sendJahresbericht(uid,y){
 // ── Zeiterfassungs-Erinnerungen ────────────────────────────────────
 export function sendTimesheetReminders(){
   const cu=window.cu;
-  if(!cu||(cu.role!=='admin'&&cu.role!=='geschaeftsfuehrer')) return;
+  if(!cu||(cu.role!=='admin'&&cu.role!=='leitung')) return;
 
   if(!EMAILJS_REMINDER_TEMPLATE_ID){
     openModal(`<h3>⚙ Template fehlt</h3>
