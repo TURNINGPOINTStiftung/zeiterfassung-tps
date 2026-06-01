@@ -214,16 +214,16 @@ export function updateAbBadge(){
 }
 
 function _syncAbViewButtons(){
-  const abViewMode=window.abViewMode||'list';
-  const btnL=document.getElementById('btn-ab-list');
-  const btnC=document.getElementById('btn-ab-cal');
-  const btnY=document.getElementById('btn-ab-year');
+  const mode=window.abViewMode||'list';
+  const sub=window.abCalSubView||'month';
+  const _btn=(id,active)=>{ const b=document.getElementById(id); if(!b) return; b.style.background=active?'var(--primary)':''; b.style.color=active?'#fff':''; b.style.borderColor=active?'var(--primary)':''; };
+  _btn('btn-ab-list',mode==='list');
+  _btn('btn-ab-cal',mode==='calendar');
+  _btn('btn-ab-week',mode==='calendar'&&sub==='week');
+  _btn('btn-ab-month',mode==='calendar'&&sub==='month');
+  _btn('btn-ab-year2',mode==='calendar'&&sub==='year');
   const nav=document.getElementById('ab-cal-nav');
-  const _setBtn=(btn,active)=>{ if(!btn) return; btn.style.background=active?'var(--primary)':''; btn.style.color=active?'#fff':''; btn.style.borderColor=active?'var(--primary)':''; };
-  _setBtn(btnL,abViewMode==='list');
-  _setBtn(btnC,abViewMode==='calendar');
-  _setBtn(btnY,abViewMode==='year');
-  if(nav) nav.style.display=abViewMode==='calendar'?'flex':'none';
+  if(nav) nav.style.display=mode==='calendar'?'flex':'none';
 }
 
 export function setAbView(mode){
@@ -232,11 +232,35 @@ export function setAbView(mode){
   renderAbwesenheiten();
 }
 
-export function changeAbMonth(delta){
-  window.abCalMon+=delta;
-  if(window.abCalMon<1){window.abCalMon=12;window.abCalYear--;} if(window.abCalMon>12){window.abCalMon=1;window.abCalYear++;}
-  const t=document.getElementById('ab-cal-title'); if(t) t.textContent=MONTHS[window.abCalMon-1]+' '+window.abCalYear;
+export function setAbSubView(sub){
+  window.abCalSubView=sub;
+  _syncAbViewButtons();
   renderAbwesenheiten();
+}
+
+// Einheitliche Navigation für Woche/Monat/Jahr
+export function changeAbNav(delta){
+  const sub=window.abCalSubView||'month';
+  if(sub==='week'){
+    const ms=new Date((window.abCalWeekStart||_thisMonday())+'T12:00:00');
+    ms.setDate(ms.getDate()+delta*7);
+    window.abCalWeekStart=ms.toISOString().slice(0,10);
+  } else if(sub==='year'){
+    window.abCalYear=(window.abCalYear||new Date().getFullYear())+delta;
+  } else {
+    window.abCalMon+=delta;
+    if(window.abCalMon<1){window.abCalMon=12;window.abCalYear--;} if(window.abCalMon>12){window.abCalMon=1;window.abCalYear++;}
+  }
+  renderAbwesenheiten();
+}
+
+// Rückwärtskompatibilität
+export function changeAbMonth(delta){ changeAbNav(delta); }
+
+function _thisMonday(){
+  const d=new Date(); const wd=d.getDay();
+  d.setDate(d.getDate()-(wd===0?6:wd-1));
+  return d.toISOString().slice(0,10);
 }
 
 export function renderAbCalendar(){
@@ -305,13 +329,13 @@ export function renderAbwesenheiten(){
   const cu=window.cu;
   const abViewMode=window.abViewMode||'list';
   _syncAbViewButtons();
-  if(abViewMode==='year'){
-    document.getElementById('ab-content').innerHTML=renderAbCalendarYear();
-    updateAbBadge();
-    return;
-  }
   if(abViewMode==='calendar'){
-    let calHtml=renderAbCalendar();
+    const sub=window.abCalSubView||'month';
+    let calHtml='';
+    if(sub==='year') calHtml=renderAbCalendarYear();
+    else if(sub==='week') calHtml=renderAbCalendarWeek();
+    else calHtml=renderAbCalendar();
+    let pendingHtml='';
     const d2=getData();
     const reqs2=Object.values(d2.vacRequests||{});
     const pending2=reqs2.filter(r=>{
@@ -464,77 +488,123 @@ export function renderAbwesenheiten(){
   updateAbBadge();
 }
 
-// ── Jahresübersicht ────────────────────────────────────────────────
-export function renderAbCalendarYear(){
-  const cu=window.cu;
-  const y=window.abCalYear||new Date().getFullYear();
-  const d=getData();
-  const reqs=Object.values(d.vacRequests||{}).filter(r=>{
+// ── Hilfsfunktionen für Kalender ──────────────────────────────────
+function _buildDayMap(reqs,cu,filterFn){
+  const COLORS=['#dbeafe','#fee2e2','#d1fae5','#fef3c7','#ede9fe','#fce7f3','#ffedd5','#e0f2fe','#fef9c3','#f0fdf4'];
+  const visible=reqs.filter(r=>{
     if(r.status!=='approved') return false;
-    const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
+    const u=getUser(r.userId); return u&&canSeeAbsence(cu,u)&&(!filterFn||filterFn(r));
   });
-  // Alle Abwesenheiten des Jahres in dayMap sammeln
   const dayMap={};
-  reqs.forEach(r=>{
+  visible.forEach(r=>{
     let cur=new Date(r.startDate+'T12:00:00');
     const end=new Date(r.endDate+'T12:00:00');
     while(cur<=end){
-      if(cur.getFullYear()===y){
-        const ds=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
-        if(!dayMap[ds]) dayMap[ds]=[];
-        dayMap[ds].push({name:r.userName,type:r.type,userId:r.userId});
-      }
+      const ds=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
+      if(!dayMap[ds]) dayMap[ds]=[];
+      dayMap[ds].push({name:r.userName,type:r.type,userId:r.userId});
       cur.setDate(cur.getDate()+1);
     }
   });
-  const COLORS=['#dbeafe','#fee2e2','#d1fae5','#fef3c7','#ede9fe','#fce7f3','#ffedd5','#e0f2fe','#fef9c3','#f0fdf4'];
   const personMap=new Map();
   Object.values(dayMap).flat().forEach(a=>{ if(!personMap.has(a.userId)) personMap.set(a.userId,a.name); });
   const personList=[...personMap.entries()];
   const colorFor=uid=>COLORS[personList.findIndex(([id])=>id===uid)%COLORS.length]||'#e8f0fe';
-  const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
+  return {dayMap,personList,colorFor};
+}
 
-  // Jahres-Selektor + Legende
-  let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-    <button class="btn btn-outline btn-sm" onclick="window.abCalYear=(window.abCalYear||new Date().getFullYear())-1;renderAbwesenheiten()">◀</button>
-    <span style="font-size:16px;font-weight:700;color:var(--primary)">${y}</span>
-    <button class="btn btn-outline btn-sm" onclick="window.abCalYear=(window.abCalYear||new Date().getFullYear())+1;renderAbwesenheiten()">▶</button>
-  </div>`;
-  if(personList.length){
-    html+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">';
-    personList.forEach(([uid,name])=>{
-      html+=`<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colorFor(uid)};border:1px solid rgba(0,0,0,.1)"></span>${esc(name)}</span>`;
-    });
-    html+='</div>';
+function _legend(personList,colorFor){
+  if(!personList.length) return '';
+  return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">'
+    +personList.map(([uid,name])=>`<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colorFor(uid)};border:1px solid rgba(0,0,0,.1)"></span>${esc(name)}</span>`).join('')
+    +'</div>';
+}
+
+// ── Wochenansicht ─────────────────────────────────────────────────
+export function renderAbCalendarWeek(){
+  const cu=window.cu;
+  if(!window.abCalWeekStart) window.abCalWeekStart=_thisMonday();
+  const monday=new Date(window.abCalWeekStart+'T12:00:00');
+  const sunday=new Date(monday); sunday.setDate(sunday.getDate()+6);
+  const d=getData();
+  const reqs=Object.values(d.vacRequests||{});
+  const{dayMap,personList,colorFor}=_buildDayMap(reqs,cu);
+  const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
+  const fmtShort=ds=>{ const[,m2,d2]=ds.split('-'); return `${d2}.${m2}.`; };
+  const mondayStr=monday.toISOString().slice(0,10);
+  const sundayStr=sunday.toISOString().slice(0,10);
+  const GER=['Mo','Di','Mi','Do','Fr','Sa','So'];
+  // Update title
+  const t=document.getElementById('ab-cal-title');
+  if(t) t.textContent=fmtShort(mondayStr)+' – '+fmtShort(sundayStr)+sunday.getFullYear();
+  let html=_legend(personList,colorFor);
+  html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
+  for(let i=0;i<7;i++){
+    const day=new Date(monday); day.setDate(day.getDate()+i);
+    const ds=day.toISOString().slice(0,10);
+    const dw=day.getDay(); // 0=Sun
+    const isWE=dw===0||dw===6;
+    const hols=getHolidays(day.getFullYear(),cu.bundesland||'');
+    const isHol=hols.has(ds);
+    const abs=dayMap[ds]||[];
+    const isToday=ds===todayStr;
+    html+=`<div style="background:#fff;border:${isToday?'2px solid var(--primary)':'1.5px solid var(--border)'};border-radius:8px;overflow:hidden">
+      <div style="background:${isWE||isHol?'#f3f4f6':'var(--primary)'};color:${isWE||isHol?'var(--muted)':'#fff'};font-size:12px;font-weight:700;padding:5px 8px;text-align:center">
+        ${GER[i]}<br><span style="font-size:11px;font-weight:400">${fmtShort(ds)}</span>${isHol?'<br><span style="font-size:9px;color:var(--danger)">Feiertag</span>':''}
+      </div>
+      <div style="padding:6px;min-height:60px">
+        ${abs.length?abs.map(a=>{
+          const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Arbeitszeitausgleich'?'📋':'📌';
+          return `<div style="font-size:11px;padding:2px 4px;border-radius:4px;background:${colorFor(a.userId)};margin-bottom:2px">${icon} ${esc(a.name)}</div>`;
+        }).join(''):'<span style="font-size:11px;color:var(--border)">–</span>'}
+      </div>
+    </div>`;
   }
-  // 12 Mini-Monate
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">';
+  html+='</div>';
+  return html;
+}
+
+// ── Jahresansicht ─────────────────────────────────────────────────
+export function renderAbCalendarYear(){
+  const cu=window.cu;
+  const y=window.abCalYear||new Date().getFullYear();
+  const d=getData();
+  const reqs=Object.values(d.vacRequests||{});
+  const{dayMap,personList,colorFor}=_buildDayMap(reqs,cu,r=>r.startDate.startsWith(y)||r.endDate.startsWith(y)||r.startDate.slice(0,4)===String(y)||r.endDate.slice(0,4)===String(y));
+  const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
+  // Update title
+  const t=document.getElementById('ab-cal-title'); if(t) t.textContent=String(y);
+  let html=_legend(personList,colorFor);
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">';
   for(let m=1;m<=12;m++){
     const hols=getHolidays(y,cu.bundesland||'');
     const dim=daysInMonth(y,m);
     const firstGer=(new Date(y,m-1,1).getDay()+6)%7;
-    html+=`<div style="background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
-      <div style="background:var(--primary);color:#fff;font-size:12px;font-weight:700;padding:5px 8px">${MONTHS[m-1]}</div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;padding:4px">
-        ${['Mo','Di','Mi','Do','Fr','Sa','So'].map((dn,i)=>`<div style="text-align:center;font-weight:600;color:${i>=5?'var(--warn)':'var(--muted)';padding:1px 0">${dn}</div>`).join('')}
-        ${Array(firstGer).fill('<div></div>').join('')}
-        ${Array.from({length:dim},(_,i)=>{
-          const dd=i+1;
-          const ds=dateStr(y,m,dd);
-          const dw=new Date(y,m-1,dd).getDay();
-          const isWE=dw===0||dw===6;
-          const isHol=hols.has(ds);
-          const abs=dayMap[ds]||[];
-          const isToday=ds===todayStr;
-          const bg=abs.length?colorFor(abs[0].userId):(isWE||isHol?'#f3f4f6':'');
-          const border=isToday?'2px solid var(--primary)':'1px solid transparent';
-          const title=abs.map(a=>a.name+': '+a.type).join(', ')+(isHol?' (Feiertag)':'');
-          const dot=abs.length>1?`<span style="position:absolute;top:0;right:0;width:5px;height:5px;border-radius:50%;background:var(--danger)"></span>`:'';
-          return `<div style="position:relative;text-align:center;padding:1px 0;border-radius:3px;background:${bg};border:${border};cursor:${abs.length?'pointer':'default'}"
-            title="${esc(title)}">${dd}${dot}</div>`;
-        }).join('')}
-      </div>
-    </div>`;
+    const GER_SHORT=['Mo','Di','Mi','Do','Fr','Sa','So'];
+    const dowHeaders=GER_SHORT.map((dn,i)=>{
+      const we=i>=5;
+      return '<div style="text-align:center;font-weight:600;font-size:9px;color:'+(we?'var(--warn)':'var(--muted)')+'">'+dn+'</div>';
+    }).join('');
+    const empties=Array(firstGer).fill('<div></div>').join('');
+    const days=Array.from({length:dim},(_,idx)=>{
+      const dd=idx+1;
+      const ds=dateStr(y,m,dd);
+      const dw=new Date(y,m-1,dd).getDay();
+      const isWE=dw===0||dw===6;
+      const isHol=hols.has(ds);
+      const abs=dayMap[ds]||[];
+      const isToday=ds===todayStr;
+      const bg=abs.length?colorFor(abs[0].userId):(isWE||isHol?'#f0f0f0':'');
+      const bdr=isToday?'2px solid var(--primary)':'1px solid transparent';
+      const tip=abs.map(a=>a.name+': '+a.type).join('\n')+(isHol?'\nFeiertag':'');
+      const dot=abs.length>1?'<span style="position:absolute;top:0;right:0;width:4px;height:4px;border-radius:50%;background:var(--danger)"></span>':'';
+      return '<div title="'+esc(tip)+'" style="position:relative;text-align:center;font-size:9px;padding:2px 0;border-radius:2px;background:'+bg+';border:'+bdr+'">'+dd+dot+'</div>';
+    }).join('');
+    html+='<div style="background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">'
+      +'<div style="background:var(--primary);color:#fff;font-size:12px;font-weight:700;padding:5px 8px">'+MONTHS[m-1]+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;padding:4px;font-size:9px">'
+      +dowHeaders+empties+days
+      +'</div></div>';
   }
   html+='</div>';
   return html;
