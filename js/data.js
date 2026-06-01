@@ -52,11 +52,18 @@ export function _migrate(d){
     d._fixes.pauseMigrationV1=true;
     d._fixes.pauseMigrationV2=true;
   }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
-  // ── Freiberufler-Abwesenheiten: fehlende Bemerkungen nachträglich eintragen
-  if(!d._fixes.freelancerAbsBemerkung){
-    const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+  // ── Alle Abwesenheiten: fehlende Bemerkungen + ggf. Zeiteinträge nachträglich anlegen
+  if(!d._fixes.allAbsBemerkung){
+    const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
     Object.values(d.vacRequests||{}).forEach(req=>{
-      if(req.status!=='approved'||!freeIds.has(req.userId)) return;
+      if(req.status!=='approved') return;
+      const u=userMap[req.userId]; if(!u) return;
+      const isFree=u.role==='freiberuflich';
+      const wh=u.wh||0; const dpw=u.dpw||5;
+      const vhpd=u.vacHoursPerDay||Math.round(wh/(dpw||5))||8;
+      const fullMins=isFree?0:(req.type==='AU/Krank'
+        ?(Math.round(wh*60/(dpw||5))||480)
+        :(vhpd*60)||480);
       let cur=new Date(req.startDate+'T12:00:00');
       const endD=new Date(req.endDate+'T12:00:00');
       while(cur<=endD){
@@ -69,13 +76,22 @@ export function _migrate(d){
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
           const day=d.entries[k].days[ds];
-          // Nur Bemerkung setzen, keine Zeitfelder überschreiben
-          if(!day.b1bem) day.b1bem=req.type||'Abwesenheit';
+          if(isFree){
+            if(!day.b1bem) day.b1bem=req.type||'Abwesenheit';
+          } else {
+            // Festangestellte: Zeiten setzen falls noch nicht vorhanden, Bemerkung immer ergänzen
+            if(!day.b1von&&fullMins>0&&req.type!=='Arbeitszeitausgleich'){
+              day.b1von='08:00'; day.b1bis=addMin('08:00',fullMins);
+              day.b1zuord=req.type; day.b2von=''; day.b2bis='';
+            }
+            if(!day.b1bem&&req.type==='Arbeitszeitausgleich') day.b1bem='Arbeitszeitausgleich';
+          }
         }
         cur.setDate(cur.getDate()+1);
       }
     });
-    d._fixes.freelancerAbsBemerkung=true;
+    d._fixes.freelancerAbsBemerkung=true; // Rückwärtskompatibilität
+    d._fixes.allAbsBemerkung=true;
   }
   // ── Freiberufler-Cleanup: durch Abwesenheitssync entstandene Zeiteinträge löschen
   if(!d._fixes.freelancerAbsCleanup){
