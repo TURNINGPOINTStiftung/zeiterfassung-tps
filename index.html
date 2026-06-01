@@ -237,16 +237,20 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
         <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Abwesenheiten &amp; Urlaub</h2>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-outline btn-sm" id="btn-ab-list" onclick="setAbView('list')" title="Listenansicht">☰ Liste</button>
-          <button class="btn btn-outline btn-sm" id="btn-ab-cal" onclick="setAbView('calendar')" title="Monatskalender">📅 Monat</button>
-          <button class="btn btn-outline btn-sm" id="btn-ab-year" onclick="setAbView('year')" title="Jahresübersicht">📆 Jahr</button>
+          <button class="btn btn-outline btn-sm" id="btn-ab-list" onclick="setAbView('list')">☰ Liste</button>
+          <button class="btn btn-outline btn-sm" id="btn-ab-cal" onclick="setAbView('calendar')">📅 Kalender</button>
           <button class="btn btn-ok btn-sm" onclick="showVacRequestForm()">+ Abwesenheit beantragen</button>
         </div>
       </div>
-      <div id="ab-cal-nav" style="display:none;align-items:center;gap:10px;margin-bottom:16px">
-        <button class="btn btn-outline btn-sm" onclick="changeAbMonth(-1)">◀</button>
+      <div id="ab-cal-nav" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" id="btn-ab-nav-prev" onclick="changeAbNav(-1)">◀</button>
         <span id="ab-cal-title" style="font-size:15px;font-weight:700;color:var(--primary);min-width:160px;text-align:center">–</span>
-        <button class="btn btn-outline btn-sm" onclick="changeAbMonth(1)">▶</button>
+        <button class="btn btn-outline btn-sm" id="btn-ab-nav-next" onclick="changeAbNav(1)">▶</button>
+        <div style="margin-left:12px;display:flex;gap:4px">
+          <button class="btn btn-outline btn-sm" id="btn-ab-week"  onclick="setAbSubView('week')">Woche</button>
+          <button class="btn btn-outline btn-sm" id="btn-ab-month" onclick="setAbSubView('month')">Monat</button>
+          <button class="btn btn-outline btn-sm" id="btn-ab-year2" onclick="setAbSubView('year')">Jahr</button>
+        </div>
       </div>
       <div id="ab-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
