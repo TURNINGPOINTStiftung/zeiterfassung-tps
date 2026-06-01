@@ -53,17 +53,50 @@ export function _migrate(d){
     d._fixes.pauseMigrationV2=true;
   }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
   // ── Alle Abwesenheiten: fehlende Bemerkungen + ggf. Zeiteinträge nachträglich anlegen
-  if(!d._fixes.allAbsBemerkung){
+  // V2: mit Feiertags-Prüfung (V1 hatte diesen Check nicht → konnte Extra-Urlaubstage erzeugen)
+  if(!d._fixes.allAbsBemerkungV2){
+    // Einträge die V1 fälschlicherweise auf Feiertagen erstellt hat, rückgängig machen
     const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
+    // Erst: fehlerhafte Feiertags-Einträge aus V1 löschen
+    if(d._fixes.allAbsBemerkung){
+      Object.values(d.vacRequests||{}).forEach(req=>{
+        if(req.status!=='approved') return;
+        const u=userMap[req.userId]; if(!u||u.role==='freiberuflich') return;
+        const holFree=u.holidaysLikeSunday!==false;
+        let cur=new Date(req.startDate+'T12:00:00');
+        const endD=new Date(req.endDate+'T12:00:00');
+        while(cur<=endD){
+          const wd=cur.getDay();
+          if(wd!==0&&wd!==6){
+            const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
+            const ds=`${y}-${String(m).padStart(2,'0')}-${String(dd2).padStart(2,'0')}`;
+            if(holFree){
+              // Feiertags-Import rückgängig wenn b1zuord=req.type und kein b2 gesetzt
+              const hols=getHolidays(y,u.bundesland||'');
+              if(hols.has(ds)){
+                const k=`${u.id}_${y}_${String(m).padStart(2,'0')}`;
+                const day=d.entries?.[k]?.days?.[ds];
+                if(day&&day.b1zuord===req.type&&!day.b2von){
+                  day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
+                  if(!Object.values(day).some(v=>v)) delete d.entries[k].days[ds];
+                }
+              }
+            }
+          }
+          cur.setDate(cur.getDate()+1);
+        }
+      });
+    }
+    // Jetzt sauber mit Feiertags-Prüfung neu eintragen
     Object.values(d.vacRequests||{}).forEach(req=>{
       if(req.status!=='approved') return;
       const u=userMap[req.userId]; if(!u) return;
       const isFree=u.role==='freiberuflich';
+      const holFree=u.holidaysLikeSunday!==false;
       const wh=u.wh||0; const dpw=u.dpw||5;
       const vhpd=u.vacHoursPerDay||Math.round(wh/(dpw||5))||8;
       const fullMins=isFree?0:(req.type==='AU/Krank'
-        ?(Math.round(wh*60/(dpw||5))||480)
-        :(vhpd*60)||480);
+        ?(Math.round(wh*60/(dpw||5))||480):(vhpd*60)||480);
       let cur=new Date(req.startDate+'T12:00:00');
       const endD=new Date(req.endDate+'T12:00:00');
       while(cur<=endD){
@@ -71,27 +104,30 @@ export function _migrate(d){
         if(wd!==0&&wd!==6){
           const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
           const ds=`${y}-${String(m).padStart(2,'0')}-${String(dd2).padStart(2,'0')}`;
-          const k=`${req.userId}_${y}_${String(m).padStart(2,'0')}`;
-          if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-          if(!d.entries[k].days) d.entries[k].days={};
-          if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-          const day=d.entries[k].days[ds];
-          if(isFree){
-            if(!day.b1bem) day.b1bem=req.type||'Abwesenheit';
-          } else {
-            // Festangestellte: Zeiten setzen falls noch nicht vorhanden, Bemerkung immer ergänzen
-            if(!day.b1von&&fullMins>0&&req.type!=='Arbeitszeitausgleich'){
-              day.b1von='08:00'; day.b1bis=addMin('08:00',fullMins);
-              day.b1zuord=req.type; day.b2von=''; day.b2bis='';
+          const hols=getHolidays(y,u.bundesland||'');
+          if(!holFree||!hols.has(ds)){
+            const k=`${u.id}_${y}_${String(m).padStart(2,'0')}`;
+            if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+            if(!d.entries[k].days) d.entries[k].days={};
+            if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+            const day=d.entries[k].days[ds];
+            if(isFree){
+              if(!day.b1bem) day.b1bem=req.type||'Abwesenheit';
+            } else {
+              if(!day.b1von&&fullMins>0&&req.type!=='Arbeitszeitausgleich'){
+                day.b1von='08:00'; day.b1bis=addMin('08:00',fullMins);
+                day.b1zuord=req.type; day.b2von=''; day.b2bis='';
+              }
+              if(!day.b1bem&&req.type==='Arbeitszeitausgleich') day.b1bem='Arbeitszeitausgleich';
             }
-            if(!day.b1bem&&req.type==='Arbeitszeitausgleich') day.b1bem='Arbeitszeitausgleich';
           }
         }
         cur.setDate(cur.getDate()+1);
       }
     });
-    d._fixes.freelancerAbsBemerkung=true; // Rückwärtskompatibilität
+    d._fixes.freelancerAbsBemerkung=true;
     d._fixes.allAbsBemerkung=true;
+    d._fixes.allAbsBemerkungV2=true;
   }
   // ── Freiberufler-Cleanup: durch Abwesenheitssync entstandene Zeiteinträge löschen
   if(!d._fixes.freelancerAbsCleanup){
