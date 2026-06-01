@@ -182,9 +182,9 @@ export function saveEditDpw(id){
 
 function userForm(u={}){
   const allTeams=getTeams();
-  const userLeitungTeams=Array.isArray(u.teams)?u.teams:[];
-  const teamOpts=`<option value=""></option>`+allTeams.map(t=>`<option value="${t}"${u.team===t?' selected':''}>${t}</option>`).join('');
-  const teamChecks=allTeams.length?allTeams.map((t,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-team-cb-${i}" value="${esc(t)}"${userLeitungTeams.includes(t)?' checked':''}> ${esc(t)}</label>`).join(''):'<span style="color:var(--muted);font-size:12px">Noch keine Teams angelegt.</span>';
+  // Teams: alle Rollen können mehrere Teams haben
+  const userTeams=Array.isArray(u.teams)&&u.teams.length?u.teams:(u.team?[u.team]:[]);
+  const teamChecks=allTeams.length?allTeams.map((t,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-team-cb-${i}" value="${esc(t)}"${userTeams.includes(t)?' checked':''}> ${esc(t)}</label>`).join(''):'<span style="color:var(--muted);font-size:12px">Noch keine Teams angelegt.</span>';
   const BL=[['','– Bundesland –'],['BW','Baden-Württemberg'],['BY','Bayern'],['BE','Berlin'],
     ['BB','Brandenburg'],['HB','Bremen'],['HH','Hamburg'],['HE','Hessen'],
     ['MV','Mecklenburg-Vorpommern'],['NI','Niedersachsen'],['NW','Nordrhein-Westfalen'],
@@ -215,13 +215,18 @@ function userForm(u={}){
             </select>`;
           })()}
     </div>
-    <div class="form-group"><label>Team</label><div id="uf-team-single"><select id="uf-team">${teamOpts}</select></div><div id="uf-team-multi" style="display:none;padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
+    <div class="form-group"><label>Team(s)</label><div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
     <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
     <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     <div id="uf-employed-fields">
       <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
       <div class="form-group"><label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaub- &amp; Krankheitsstunden)</span></label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
       <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
+      <div class="form-group">
+        <label>Stunden pro Urlaubstag <span style="font-size:11px;color:var(--muted)">(Standard: Tagesarbeitszeit)</span></label>
+        <input id="uf-vhpd" type="number" min="1" max="24" step="0.5"
+               value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
+      </div>
       <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">
@@ -249,9 +254,7 @@ export function toggleFreelancerFields(){
   fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
   const ff=document.getElementById('uf-freelancer-fields');
   if(ff) ff.style.display=role==='freiberuflich'?'':'none';
-  const s=document.getElementById('uf-team-single');
-  const m2=document.getElementById('uf-team-multi');
-  if(s&&m2){ const isL=role==='leitung'; s.style.display=isL?'none':''; m2.style.display=isL?'':'none'; }
+  // Alle Rollen zeigen Multi-Team-Auswahl (uf-team-single wurde entfernt)
 }
 
 function collectUserForm(){
@@ -264,10 +267,11 @@ function collectUserForm(){
     customRole=cid;
   }
   const isFree=role==='freiberuflich';
-  const isLeitung=role==='leitung';
   const at=getTeams();
-  const teams=isLeitung?at.filter((_,i)=>{ const cb=document.getElementById(`uf-team-cb-${i}`); return cb&&cb.checked; }):[];
-  const teamEl=document.getElementById('uf-team');
+  // Alle Rollen können mehrere Teams haben
+  const teams=at.filter((_,i)=>{ const cb=document.getElementById(`uf-team-cb-${i}`); return cb&&cb.checked; });
+  const wh=isFree?0:parseFloat(document.getElementById('uf-wh')?.value)||20;
+  const dpw=isFree?5:parseInt(document.getElementById('uf-dpw')?.value)||5;
   return {
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
@@ -275,13 +279,14 @@ function collectUserForm(){
     pw:document.getElementById('uf-pw').value,
     role,
     customRole,
-    team:isLeitung?'':(teamEl?teamEl.value:''),
-    teams:isLeitung?teams:[],
+    team:teams[0]||'',   // primäres Team (Rückwärtskompatibilität)
+    teams,
     city:document.getElementById('uf-city').value.trim(),
     bundesland:document.getElementById('uf-bl').value,
-    wh:isFree?0:parseFloat(document.getElementById('uf-wh').value)||20,
-    dpw:isFree?5:parseInt(document.getElementById('uf-dpw')?.value)||5,
+    wh,
+    dpw,
     al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
+    vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(wh/dpw)||8),
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
   };

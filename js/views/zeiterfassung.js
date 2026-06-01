@@ -64,7 +64,7 @@ export function renderZeiterfassung(){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const dayMin=b1min+b2min+ktm;
+    const dayMin=b1min+b2min-ktm; // ktmin = Pause → abgezogen
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMin;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
@@ -85,14 +85,14 @@ export function renderZeiterfassung(){
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
-      <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${ktm>0&&dd.b1bis?(addMin(dd.b1bis,-ktm)||dd.b1bis):dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
       <td class="b2-col"><select class="zuord" ${dis?'disabled':''} onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
@@ -287,6 +287,20 @@ export function renderSignature(user,entry){
 
 export function td_change(ds,field,val){
   const uid=window.viewEmpId||window.cu.id;
+  if(field==='ktmin'){
+    // Wenn Pause geändert wird, b1bis (Abfahrtszeit) neu berechnen
+    // sodass die Netto-Arbeitszeit konstant bleibt
+    const entry=getEntry(uid,window.year,window.mon);
+    const day=(entry.days||{})[ds]||{};
+    const oldKtm=Number(day.ktmin||0);
+    const newKtm=Number(val||0);
+    const b1bis=day.b1bis||'';
+    if(b1bis){
+      const netEnd=oldKtm>0?addMin(b1bis,-oldKtm):b1bis; // Netto-Ende = Abfahrt − alte Pause
+      const newDep=newKtm>0?addMin(netEnd,newKtm):netEnd;  // neue Abfahrt = Netto + neue Pause
+      setDay(uid,window.year,window.mon,ds,'b1bis',newDep);
+    }
+  }
   setDay(uid,window.year,window.mon,ds,field,val);
   renderZeiterfassung();
 }
@@ -296,10 +310,13 @@ export function td_zuord(ds,field,val,wh,dpw){
   const cu=window.cu;
   setDay(uid,window.year,window.mon,ds,field,val);
   if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
-    const dMin=Math.round(wh/((dpw||5))*60);
+    const u=getUser(uid)||cu;
+    const vhpd=u?.vacHoursPerDay||Math.round(wh/(dpw||5))||8;
+    const dMin=vhpd*60;
     setDay(uid,window.year,window.mon,ds,'b1von','08:00');
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
     setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
+    setDay(uid,window.year,window.mon,ds,'ktmin',''); // keine Pause bei Abwesenheit
   }
   if(field==='b1zuord'){
     const u=getUser(uid)||cu;
@@ -325,7 +342,32 @@ export function td_zuord(ds,field,val,wh,dpw){
   renderZeiterfassung();
 }
 
-export function td_b1bis_change(ds,val){ td_tchange(ds,'b1bis',val); }
+export function td_b1bis_change(ds,val){
+  const _fid=document.activeElement?.id||null;
+  const uid=window.viewEmpId||window.cu.id;
+  const entry=getEntry(uid,window.year,window.mon);
+  const day=(entry.days||{})[ds]||{};
+  const ktm=Number(day.ktmin||0);
+  const normVal=_normTime(val);
+  if(!normVal){
+    setDay(uid,window.year,window.mon,ds,'b1bis','');
+  } else {
+    // Eingabe = Netto-Arbeitsende → auf 15-Min. runden, dann Pause aufaddieren
+    const von=day.b1von||'';
+    const zuord=day.b1zuord||'';
+    const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
+    let roundedNet=normVal;
+    if(von&&!isAbsence){
+      const rawMin=diffMin(von,normVal);
+      if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
+    }
+    const departure=ktm>0?addMin(roundedNet,ktm):roundedNet;
+    setDay(uid,window.year,window.mon,ds,'b1bis',departure);
+  }
+  check10hCarryover(uid,window.year,window.mon,ds);
+  renderZeiterfassung();
+  if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
+}
 
 function _normTime(val){
   if(!val) return '';
@@ -343,6 +385,12 @@ export function fmtTimeIn(el){
   const digits=cur.replace(/[^0-9]/g,'');
   if(digits.length>=3&&!cur.includes(':'))
     el.value=digits.slice(0,2)+':'+digits.slice(2,4);
+}
+
+export function focusNextTInp(el){
+  const all=Array.from(document.querySelectorAll('.t-inp:not([disabled])'));
+  const idx=all.indexOf(el);
+  if(idx>=0&&idx<all.length-1) all[idx+1].focus();
 }
 
 export function td_tchange(ds,field,val){
@@ -376,7 +424,7 @@ export function check10hCarryover(uid,y,m,ds,depth){
   if((depth||0)>31) return;
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
-  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')-Number(day.ktmin||0);
   const rounded=raw>0?Math.round(raw/15)*15:0;
   const overflow=Math.max(0,rounded-600);
   const date=new Date(ds+'T12:00:00');

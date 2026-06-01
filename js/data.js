@@ -47,7 +47,7 @@ export function _migrate(d){
   });
   d.users.forEach(u=>{
     if(u.bundesland===undefined) u.bundesland='';
-    if(u.role==='leitung'&&!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[];
+    if(!Array.isArray(u.teams)) u.teams=u.team?[u.team]:[]; // alle Rollen bekommen teams-Array
     if(u.role==='admin'&&u.id!=='admin') u.role='mitarbeiter';
     if(u.role==='freiberuflich'&&u.maxHours===undefined) u.maxHours=0;
     if(u.id==='christian_bittner'||u.name==='Christian Bittner'){ u.role='freiberuflich'; if(!u.maxHours) u.maxHours=64; }
