@@ -118,7 +118,6 @@ export function renderZeiterfassung(){
     const effDayMin=Math.min(roundedDayMin,600);
     monthTotal+=effDayMin;
 
-    const kw=isoWeek(new Date(year,mon-1,d));
     const tr=document.createElement('tr');
     if(we) tr.classList.add('weekend');
     if(hol) tr.classList.add('holiday');
