@@ -77,15 +77,11 @@ export function loginKeyNav(e){
     if(!open) return; // Form-Submit übernimmt
     e.preventDefault();
     const items=Array.from(dd.querySelectorAll('.login-ac-item'));
+    if(!items.length) return;
+    // Markierten Eintrag nehmen – falls keiner markiert ist, den ersten
     const idx=window._loginDropIdx??-1;
-    if(idx>=0&&items[idx]){
-      selectLoginUser(items[idx].dataset.name);
-    } else if(items.length===1){
-      selectLoginUser(items[0].dataset.name);
-    } else {
-      hideLoginDropdown();
-      document.getElementById('login-pw')?.focus();
-    }
+    const target=idx>=0&&items[idx]?items[idx]:items[0];
+    selectLoginUser(target.dataset.name);
 
   } else if(e.key==='Escape'){
     hideLoginDropdown();
