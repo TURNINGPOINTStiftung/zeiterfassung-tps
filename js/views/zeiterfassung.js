@@ -89,7 +89,7 @@ export function renderZeiterfassung(){
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${pauseMinAuto>0&&dd.b1bis&&!dd.b2von?(addMin(dd.b1bis,-pauseMinAuto)||dd.b1bis):dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
