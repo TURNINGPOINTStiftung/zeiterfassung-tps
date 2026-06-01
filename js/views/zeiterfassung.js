@@ -6,6 +6,7 @@ import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
+// v2026-06-fix
 export function renderZeiterfassung(){
   const uid=window.viewEmpId||window.cu.id;
   const user=getUser(uid);
