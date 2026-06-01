@@ -62,6 +62,23 @@ export function showVacRequestForm(){
         <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
       </label>
     </div>
+    <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Urlaubstage berechnen:</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" checked onchange="calcVrDays()">
+          Nach Wochenarbeitszeit <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" onchange="calcVrDays()">
+          Anzahl selbst eingeben:
+          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="1"
+            style="width:70px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
+            oninput="calcVrDays()">
+          <span style="font-size:11px;color:var(--muted)">(max 5/Woche)</span>
+        </label>
+      </div>
+    </div>
     <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
     <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:#fffbf5;border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:#856404">
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
@@ -79,6 +96,8 @@ export function onVrTypeChange(){
   const t=document.getElementById('vr-type')?.value;
   const hint=document.getElementById('vr-krank-hint');
   if(hint) hint.style.display=t==='AU/Krank'?'block':'none';
+  const modeWrap=document.getElementById('vr-count-mode-wrap');
+  if(modeWrap) modeWrap.style.display=t==='Urlaub'?'block':'none';
   const hdWrap=document.getElementById('vr-halfday-wrap');
   if(hdWrap) hdWrap.style.display=t==='Urlaub'?'':'none';
   if(t!=='Urlaub'){ const cb=document.getElementById('vr-halfday'); if(cb) cb.checked=false; }
@@ -93,18 +112,43 @@ export function calcVrDays(){
   const info=document.getElementById('vr-days-info');
   const hint=document.getElementById('vr-week-hint');
   const hdWrap=document.getElementById('vr-halfday-wrap');
+  const modeWrap=document.getElementById('vr-count-mode-wrap');
   const singleDay=f&&t&&f===t;
   if(hdWrap) hdWrap.style.display=(type==='Urlaub')?'':'none';
+  if(modeWrap) modeWrap.style.display=(type==='Urlaub')?'block':'none';
   const cb=document.getElementById('vr-halfday');
   if(cb&&!singleDay) cb.checked=false;
   if(!f||!t||f>t){ if(info) info.textContent=''; return; }
   const d2=getData();
   const empId=document.getElementById('vr-emp')?.value||'';
   const vrUser=empId?d2.users.find(u=>u.id===empId)||window.cu:window.cu;
-  const wd=countWorkDays(f,t,vrUser);
-  const effective=halfDay&&singleDay?0.5:wd;
-  if(info) info.textContent=`→ ${effective} Arbeitstag${effective!==1?'e':''}`;
-  if(hint) hint.style.display=wd>5?'block':'none';
+  const weekdays=countWorkDays(f,t,vrUser); // Mo-Fr (mit Feiertagscheck)
+  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
+  let effective;
+  if(type==='Urlaub'&&mode==='manual'){
+    effective=parseFloat(document.getElementById('vr-manual-days')?.value)||1;
+    // Max 5 Urlaubstage pro Woche
+    const maxPerWeek=5;
+    const weeks=Math.ceil(weekdays/5);
+    effective=Math.min(effective,weeks*maxPerWeek);
+  } else if(type==='Urlaub'){
+    // Automatisch: proportional nach Arbeitstagen/Woche
+    const dpw=vrUser?.dpw||5;
+    const raw=dpw>=5?weekdays:weekdays*(dpw/5);
+    effective=halfDay&&singleDay?0.5:Math.round(raw*2)/2; // auf 0.5 gerundet
+    // Hint für Nutzer zeigen
+    const autoHint=document.getElementById('vr-mode-auto-hint');
+    if(autoHint&&dpw<5) autoHint.textContent=`(${dpw} Tage/Woche → ${effective} von ${weekdays} Werktagen)`;
+    else if(autoHint) autoHint.textContent='';
+    if(mode!=='manual'){
+      const manualEl=document.getElementById('vr-manual-days');
+      if(manualEl) manualEl.value=effective;
+    }
+  } else {
+    effective=halfDay&&singleDay?0.5:weekdays;
+  }
+  if(info) info.textContent=`→ ${effective} Urlaubstag${effective!==1?'e':''}`;
+  if(hint) hint.style.display=weekdays>5?'block':'none';
 }
 
 export async function saveVacRequest(){
@@ -123,7 +167,18 @@ export async function saveVacRequest(){
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
   const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich';
-  const wd=halfDay?0.5:countWorkDays(from,to,targetUser);
+  const weekdays=countWorkDays(from,to,targetUser);
+  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
+  let wd;
+  if(halfDay){ wd=0.5; }
+  else if(type==='Urlaub'&&mode==='manual'){
+    wd=parseFloat(document.getElementById('vr-manual-days')?.value)||weekdays;
+  } else if(type==='Urlaub'){
+    const dpw=targetUser?.dpw||5;
+    wd=dpw>=5?weekdays:Math.round(weekdays*(dpw/5)*2)/2;
+  } else {
+    wd=weekdays;
+  }
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
   const req={
