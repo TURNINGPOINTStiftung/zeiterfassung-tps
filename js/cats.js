@@ -29,6 +29,12 @@ export function getCatsForTeam(teamName){
 export function catOptionsForUser(user,selected=''){
   if(isFreelancer(user)) return catOptionsFree(selected);
   const norm=normZuord(selected);
-  const cats=[...new Set(getCatsForTeam(user&&user.team||'').map(normZuord))];
+  // Alle Teams des Nutzers berücksichtigen (mehrere Teams möglich)
+  const userTeams=Array.isArray(user?.teams)&&user.teams.length
+    ? user.teams : (user?.team ? [user.team] : []);
+  const cats=[...new Set(
+    (userTeams.length?userTeams:[''])
+    .flatMap(t=>getCatsForTeam(t).map(normZuord))
+  )];
   return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===norm?' selected':''}>${c}</option>`).join('');
 }

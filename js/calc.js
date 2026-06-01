@@ -4,7 +4,8 @@ import { isFreelancer } from './roles.js';
 
 export function dayMinutes(dd){
   if(!dd) return 0;
-  return diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  // ktmin = Pause → wird abgezogen (nicht addiert)
+  return diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')-Number(dd.ktmin||0);
 }
 export function monthIST(entry){
   if(!entry||!entry.days) return 0;
