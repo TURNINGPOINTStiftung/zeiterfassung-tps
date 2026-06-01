@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY, DEFAULT_CATS, DEFAULT_TEAMS, DEFAULT_USERS } from './config.js';
-import { addMin } from './utils.js';
+import { addMin, diffMin } from './utils.js';
 
 // ── Internal state ────────────────────────────────────────────────
 let _dataCache = null;
@@ -19,6 +19,26 @@ export function _migrate(d){
   if(!d.customRoles) d.customRoles=[];
   if(!d.yearReports) d.yearReports={};
   if(!d._fixes) d._fixes={};
+
+  // ── Pause-Migration (einmalig) ─────────────────────────────────
+  // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
+  // Nach Einführung der Pause-Abziehung in der Formel würden sie zu wenig zeigen.
+  if(!d._fixes.pauseMigrationV1){
+    const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+    Object.values(d.entries||{}).forEach(entry=>{
+      Object.values(entry.days||{}).forEach(day=>{
+        if(!day||!day.b1von||!day.b1bis) return;
+        if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
+        if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
+        if(day._pauseMigrated) return;
+        const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
+        const autoPause=gross>=540?45:gross>=360?30:0;
+        if(autoPause>0){ day.b1bis=addMin(day.b1bis,autoPause); day._pauseMigrated=true; }
+      });
+    });
+    d._fixes.pauseMigrationV1=true;
+  }
+  // ──────────────────────────────────────────────────────────────
   if(!d._fixes.badCarryoverV2){
     Object.keys(d.entries||{}).forEach(k=>{
       const daysObj=d.entries[k]?.days;
