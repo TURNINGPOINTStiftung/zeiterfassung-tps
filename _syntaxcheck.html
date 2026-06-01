@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>PENDING</title></head>
+<body>
+<script>
+// Lädt alle App-Module dynamisch und meldet Syntax-/Import-Fehler.
+// Wird headless von Edge geladen; das Ergebnis steht in document.title + #out.
+window.firebase = { initializeApp(){}, database(){ return { ref(){ return { once(){return Promise.resolve({val:()=>null})}, on(){}, child(){return this}, set(){return Promise.resolve()} } }; }, auth(){ return { signInAnonymously(){return Promise.resolve()} }; } };
+const mods = [
+  'config','utils','data','roles','calc','cats','auth','firebase','app','zoom','print','import-data','data-mgmt','profile',
+  'views/zeiterfassung','views/uebersicht','views/abwesenheiten','views/stempeln','views/gfberichte','views/einstellungen'
+];
+(async () => {
+  const errs = [];
+  for (const m of mods) {
+    try { await import('./js/' + m + '.js'); }
+    catch (e) { errs.push(m + ': ' + (e.message || e)); }
+  }
+  const out = document.createElement('pre');
+  out.id = 'out';
+  if (errs.length === 0) { document.title = 'SYNTAX_OK'; out.textContent = 'SYNTAX_OK'; }
+  else { document.title = 'SYNTAX_FAIL'; out.textContent = 'SYNTAX_FAIL\n' + errs.join('\n'); }
+  document.body.appendChild(out);
+})();
+</script>
+</body></html>
