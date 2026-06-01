@@ -642,16 +642,27 @@ export function resetCarryover(){
   renderZeiterfassung();
 }
 
+// ISO-Wochenschlüssel (Jahr+KW) für Pro-Woche-Deckelung
+function _isoWeekKey(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
+  const firstThu=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  const week=1+Math.round(((t-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
+  return t.getUTCFullYear()+'-'+week;
+}
+
 export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
   const isFree=isFreelancer(user);
   const isAZA=type==='Arbeitszeitausgleich';
+  const holFree=user.holidaysLikeSunday!==false;
+  const dpw=Math.max(1,Math.min(7,user.dpw||5));
   const cats=getCatsForTeam(user.team||'');
   const zuord=(!isFree&&cats.includes(type))?type:((!isFree&&cats.includes('Sonstiges'))?'Sonstiges':'');
-  const bem=(!isFree&&cats.includes(type))?'':type; // Abwesenheitstyp als Bemerkung
-  // Stunden nur für Festangestellte (nicht Freiberufler)
-  const fullMins=isFree?0:(type==='AU/Krank'?(dailyMinutes(user)||480):(Math.round((user.wh||0)/5*60)||480));
-  const mins=(!isFree&&halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
+  const bem=(!isFree&&cats.includes(type))?'':type;
+  // Stunden pro Urlaubs-/Kranktag = Wochenstunden ÷ Arbeitstage (z.B. Mateo 16/2 = 8h)
+  const dailyMin=isFree?0:(dailyMinutes(user)||480);
   mutate(d=>{
+    const perWeek={}; // KW → bereits eingetragene Tage (Deckel dpw)
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
     while(cur<=endD){
@@ -660,7 +671,7 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
         const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
         const ds=dateStr(y,m,day);
         const hols=getHolidays(y,user.bundesland||'');
-        if(!hols.has(ds)){
+        if(!holFree||!hols.has(ds)){
           const k=entryKey(uid,y,m);
           if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
           if(!d.entries[k].days) d.entries[k].days={};
@@ -668,11 +679,20 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
           if(isAZA){
             d.entries[k].days[ds].b1bem='Arbeitszeitausgleich';
           } else if(isFree){
-            // Freiberufler: nur Bemerkung eintragen, keine Zeitfelder
+            // Freiberufler: nur Bemerkung, keine Zeitfelder
             d.entries[k].days[ds].b1bem=type;
           } else {
-            // Festangestellte: Zeiten + Zuordnung + Bemerkung
-            Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
+            const wk=_isoWeekKey(cur);
+            const used=perWeek[wk]||0;
+            // Nur bis dpw Tage pro Woche Stunden eintragen
+            if(used<dpw){
+              const mins=halfDay&&type==='Urlaub'?Math.round(dailyMin/2):dailyMin;
+              Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
+              perWeek[wk]=used+(halfDay&&type==='Urlaub'?0.5:1);
+            } else {
+              // Über dpw hinaus: nur Bemerkung (kein Arbeitstag → keine Stunden)
+              d.entries[k].days[ds].b1bem=bem||type;
+            }
           }
         }
       }
