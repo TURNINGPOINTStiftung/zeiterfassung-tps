@@ -364,6 +364,20 @@ export function td_b1bis_change(ds,val){
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
   window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
+
+  // Wenn Endzeit heute manuell eingetragen → laufenden Stempel stoppen
+  if(uid===window.cu?.id){
+    const today=new Date().toISOString().slice(0,10);
+    if(ds===today){
+      const stamp=window.getStamp?.();
+      if(stamp&&stamp.uid===uid&&stamp.startDate===today){
+        clearTimeout(window._ztAutoStampTimer);
+        window.stopZeitstempel?.();
+        return; // stopZeitstempel übernimmt das Re-Render
+      }
+    }
+  }
+
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
   const normVal=_normTime(val);
@@ -422,10 +436,14 @@ export function fmtTimeIn(el){
   const cur=el.value;
   if(cur.includes(':')) return;
   const digits=cur.replace(/[^0-9]/g,'');
-  if(digits.length===4)
-    el.value=digits.slice(0,2)+':'+digits.slice(2,4);       // 0900 → 09:00
-  else if(digits.length===3)
-    el.value='0'+digits[0]+':'+digits.slice(1,3);            // 800 → 08:00
+  if(digits.length===4){
+    el.value=digits.slice(0,2)+':'+digits.slice(2,4);        // 1430 → 14:30
+  } else if(digits.length===3){
+    // Nur formatieren wenn die ersten 2 Ziffern > 23 (also keine gültige Stunde mehr)
+    // → 800: "80" > 23 → 08:00 ✓  |  143 (als Prefix von 1430): "14" ≤ 23 → warten
+    if(parseInt(digits.slice(0,2),10)>23)
+      el.value='0'+digits[0]+':'+digits.slice(1,3);
+  }
 }
 
 export function focusNextTInp(el){

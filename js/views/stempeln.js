@@ -1,6 +1,6 @@
 import { _STAMP_KEY } from '../config.js';
 import { getData, getDataCache, getEntry, entryKey, mutate } from '../data.js';
-import { esc, toast, openModal, closeModal } from '../utils.js';
+import { esc, toast, openModal, closeModal, diffMin, addMin } from '../utils.js';
 import { getCatsForTeam } from '../cats.js';
 
 export function getStamp(){
@@ -280,13 +280,22 @@ function _recomputeFromSessions(day){
   day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
   day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
   day.ktmin=0;
+  // Hilfsfunktion: auto-Pause auf Netto-Ende addieren (konsistent mit manueller Eingabe)
+  function _bisWithPause(von,netBis){
+    if(!von||!netBis) return netBis;
+    const netMin=diffMin(von,netBis);
+    const tryGross=netMin+30;
+    const autoPause=tryGross>=540?45:tryGross>=360?30:0;
+    return autoPause>0?addMin(netBis,autoPause):netBis;
+  }
   if(top2[0]){
-    day.b1von=top2[0].von; day.b1bis=top2[0].bis;
+    day.b1von=top2[0].von;
+    day.b1bis=_bisWithPause(top2[0].von,top2[0].bis); // Pause addieren
     if(top2[0].zuord) day.b1zuord=top2[0].zuord;
     if(top2[0].note)  day.b1bem=top2[0].note;
   }
   if(top2[1]){
-    day.b2von=top2[1].von; day.b2bis=top2[1].bis;
+    day.b2von=top2[1].von; day.b2bis=top2[1].bis; // B2 ohne extra Pause
     if(top2[1].zuord) day.b2zuord=top2[1].zuord;
     if(top2[1].note)  day.b2bem=top2[1].note;
   }
