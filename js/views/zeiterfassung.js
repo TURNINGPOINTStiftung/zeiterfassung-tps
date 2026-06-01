@@ -325,7 +325,10 @@ export function td_zuord(ds,field,val,wh,dpw){
   setDay(uid,window.year,window.mon,ds,field,val);
   if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
     const u=getUser(uid)||cu;
-    const vhpd=u?.vacHoursPerDay||Math.round(wh/(dpw||5))||8;
+    // Urlaub: vacHoursPerDay (individuell konfigurierbar)
+    // AU/Krank: immer anteilige Wochenarbeitszeit (wh ÷ dpw)
+    const dailyH=Math.round(wh/(dpw||5))||8;
+    const vhpd=val==='Urlaub'?(u?.vacHoursPerDay||dailyH):dailyH;
     const dMin=vhpd*60;
     setDay(uid,window.year,window.mon,ds,'b1von','08:00');
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
