@@ -643,13 +643,14 @@ export function resetCarryover(){
 }
 
 export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
-  if(isFreelancer(user)) return; // Freiberufler: keine Zeiteinträge aus Abwesenheiten
+  const isFree=isFreelancer(user);
   const isAZA=type==='Arbeitszeitausgleich';
-  const fullMins=type==='AU/Krank'?(dailyMinutes(user)||480):(Math.round((user.wh||0)/5*60)||480);
-  const mins=(halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
   const cats=getCatsForTeam(user.team||'');
-  const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
-  const bem=cats.includes(type)?'':type;
+  const zuord=(!isFree&&cats.includes(type))?type:((!isFree&&cats.includes('Sonstiges'))?'Sonstiges':'');
+  const bem=(!isFree&&cats.includes(type))?'':type; // Abwesenheitstyp als Bemerkung
+  // Stunden nur für Festangestellte (nicht Freiberufler)
+  const fullMins=isFree?0:(type==='AU/Krank'?(dailyMinutes(user)||480):(Math.round((user.wh||0)/5*60)||480));
+  const mins=(!isFree&&halfDay&&type==='Urlaub')?Math.round(fullMins/2):fullMins;
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
@@ -666,7 +667,11 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
           if(isAZA){
             d.entries[k].days[ds].b1bem='Arbeitszeitausgleich';
+          } else if(isFree){
+            // Freiberufler: nur Bemerkung eintragen, keine Zeitfelder
+            d.entries[k].days[ds].b1bem=type;
           } else {
+            // Festangestellte: Zeiten + Zuordnung + Bemerkung
             Object.assign(d.entries[k].days[ds],{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:zuord,b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
           }
         }
