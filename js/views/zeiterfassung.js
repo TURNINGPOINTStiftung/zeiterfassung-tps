@@ -401,9 +401,18 @@ export function td_b1bis_change(ds,val){
 function _normTime(val){
   if(!val) return '';
   const v=val.trim();
-  if(!v.includes(':')) return '';
-  const[hs,ms]=v.split(':');
-  const h=parseInt(hs,10), m=parseInt(ms,10);
+  let h,m;
+  if(!v.includes(':')){
+    // Numerische Kurzform: 8→08:00, 16→16:00, 800→08:00, 830→08:30, 1430→14:30
+    const digits=v.replace(/[^0-9]/g,'');
+    if(!digits) return '';
+    if(digits.length<=2){ h=parseInt(digits,10); m=0; }
+    else if(digits.length===3){ h=parseInt(digits[0],10); m=parseInt(digits.slice(1),10); }
+    else { h=parseInt(digits.slice(0,2),10); m=parseInt(digits.slice(2,4),10); }
+  } else {
+    const[hs,ms]=v.split(':');
+    h=parseInt(hs,10); m=parseInt(ms,10);
+  }
   if(isNaN(h)||isNaN(m)||m<0||m>59||h<0||h>24) return '';
   if(h===24&&m>0) return '';
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
@@ -411,9 +420,12 @@ function _normTime(val){
 
 export function fmtTimeIn(el){
   const cur=el.value;
+  if(cur.includes(':')) return;
   const digits=cur.replace(/[^0-9]/g,'');
-  if(digits.length>=3&&!cur.includes(':'))
-    el.value=digits.slice(0,2)+':'+digits.slice(2,4);
+  if(digits.length===4)
+    el.value=digits.slice(0,2)+':'+digits.slice(2,4);       // 0900 → 09:00
+  else if(digits.length===3)
+    el.value='0'+digits[0]+':'+digits.slice(1,3);            // 800 → 08:00
 }
 
 export function focusNextTInp(el){
