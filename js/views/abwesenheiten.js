@@ -2,6 +2,7 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
+import { hasPermission } from '../roles.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
@@ -368,8 +369,9 @@ export function renderAbwesenheiten(){
   }[s]||'');
   const canReview=r=>{
     if(r.status!=='pending') return false;
+    if(!hasPermission('genehmigung_abwesenheit',cu.role)) return false;
     if(isAdmin) return true;
-    if((isLeitung||isGF)&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
+    if(r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
     return false;
   };
   const card=r=>{
