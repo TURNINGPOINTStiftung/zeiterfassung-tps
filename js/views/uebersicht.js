@@ -1,6 +1,6 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
-import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel } from '../roles.js';
+import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission } from '../roles.js';
 import { esc, hFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
 import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam } from '../cats.js';
@@ -36,7 +36,7 @@ export function renderOverview(){
   const filterTeam=document.getElementById('ueber-team').value;
   const d=getData();
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
-  const canSend=cu.role==='leitung'||cu.role==='admin';
+  const canSend=hasPermission('btn_teamberichte',cu.role);
 
   let employees;
   if(cu.role==='geschaeftsfuehrer'){
@@ -148,7 +148,7 @@ export function renderOverview(){
 
   // Erinnerungs-Button: nur für Leitung und Admin, nicht für GF
   const btnRem=document.getElementById('btn-reminders');
-  if(btnRem) btnRem.style.display=(cu.role==='leitung'||cu.role==='admin')?'':'none';
+  if(btnRem) btnRem.style.display=hasPermission('btn_erinnerungen',cu.role)?'':'none';
 
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
@@ -243,7 +243,7 @@ export function openJahresübersicht(uid,y){
   const user=getUser(uid);
   if(!user) return;
   const isFree=isFreelancer(user);
-  const canSendGF=cu&&(cu.role==='leitung'||cu.role==='admin');
+  const canSendGF=cu&&hasPermission('btn_jahresbericht',cu.role);
 
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;

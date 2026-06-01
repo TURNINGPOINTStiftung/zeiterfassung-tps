@@ -37,7 +37,7 @@ import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
 import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport,
          markYearReportSeen, sendTeamReport, sendTeamReportForTeam } from './views/gfberichte.js';
 
-import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole,
+import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
          addCategory, removeCat, addTeamCat, removeTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, deleteUser,
@@ -162,6 +162,7 @@ window.sendTeamReportForTeam= sendTeamReportForTeam;
 
 // Einstellungen view
 window.renderSettings        = renderSettings;
+window.savePermission        = savePermission;
 window.addTeam               = addTeam;
 window.removeTeam            = removeTeam;
 window.addCustomRole         = addCustomRole;

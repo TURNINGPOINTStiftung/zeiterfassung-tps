@@ -1,7 +1,6 @@
 import { MONTHS } from './config.js';
 import { getUser } from './data.js';
-import { isManagerRole } from './roles.js';
-import { roleLabel } from './roles.js';
+import { isManagerRole, hasPermission, roleLabel } from './roles.js';
 import { dailyMinutes } from './calc.js';
 
 export function initApp(){
@@ -18,30 +17,31 @@ export function initApp(){
   window.abCalYear=window.year; window.abCalMon=window.mon;
   window.viewEmpId=cu.id;
 
-  const isLeitung=cu.role==='leitung';
   const gfNoZE=isGF&&!!cu.noTimesheet;
+  const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';
-  document.getElementById('tab-uebersicht').style.display=(isLeitung||isAdmin)?'':'none';
-  document.getElementById('tab-gfberichte').style.display=(isGF||isAdmin)?'':'none';
+  document.getElementById('tab-uebersicht').style.display=hasPermission('tab_uebersicht',role)?'':'none';
+  document.getElementById('tab-gfberichte').style.display=hasPermission('tab_gfberichte',role)?'':'none';
   document.getElementById('tab-abwesenheiten').style.display='';
   document.getElementById('tab-einstellungen').style.display=isAdmin?'':'none';
   const btnTeam=document.getElementById('btn-teamberichte');
-  if(btnTeam) btnTeam.style.display=isLeitung?'':'none';
-  const hideStempel=isAdmin||gfNoZE;
+  if(btnTeam) btnTeam.style.display=hasPermission('btn_teamberichte',role)?'':'none';
+  const hideStempel=isAdmin||gfNoZE||!hasPermission('stempel',role);
   const btnZs=document.getElementById('btn-zeitstempel');
   if(btnZs) btnZs.style.display=hideStempel?'none':'inline-flex';
   const tabZsMob=document.getElementById('tab-stempeln-mobile');
   if(tabZsMob) tabZsMob.style.display=hideStempel?'none':'';
 
-  if(isLeitung||isAdmin){
+  if(hasPermission('tab_uebersicht',role)){
     window.populateUeberYear?.();
     window.populateUeberMon?.();
     window.populateUeberTeam?.();
   }
   window.updateZeitstempelBtn?.();
   if(isAdmin) switchView('uebersicht');
-  else if(isGF||gfNoZE) switchView('gfberichte');
+  else if(hasPermission('tab_gfberichte',role)&&!hasPermission('tab_uebersicht',role)) switchView('gfberichte');
+  else if(gfNoZE) switchView('gfberichte');
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 }

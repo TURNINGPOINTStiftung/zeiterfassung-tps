@@ -1,4 +1,4 @@
-import { DEFAULT_CATS, DEFAULT_TEAM_CATS } from '../config.js';
+import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel } from '../roles.js';
 import { esc, toast, openModal, closeModal } from '../utils.js';
@@ -64,6 +64,80 @@ export function renderSettings(){
     csHtml+=`<div style="padding:6px 10px;background:#f5f5f5;border-radius:6px;font-size:11px;color:var(--muted)">★ Freiberufliche: AKADEMIE · WENDESTART · WENDEKURS · WENDETRAINING (fest, nicht änderbar)</div>`;
     document.getElementById('cat-section').innerHTML=csHtml;
   }
+
+  // ── Berechtigungs-Matrix ──
+  const permEl=document.getElementById('permissions-section');
+  if(permEl) renderPermissionsMatrix(permEl);
+}
+
+// Berechtigungs-Matrix rendern + speichern
+const PERM_DEFS=[
+  {key:'tab_uebersicht',       label:'Tab: Mitarbeiterübersicht anzeigen'},
+  {key:'tab_gfberichte',       label:'Tab: GF-Berichte anzeigen'},
+  {key:'btn_teamberichte',     label:'Button: „An GF senden" (Zeiterfassung)'},
+  {key:'btn_jahresbericht',    label:'Button: „An GF senden" (Jahresübersicht)'},
+  {key:'btn_erinnerungen',     label:'Button: „Erinnerungen senden"'},
+  {key:'genehmigung_abwesenheit', label:'Funktion: Abwesenheiten genehmigen / ablehnen'},
+  {key:'stempel',              label:'Funktion: Zeitstempel nutzen'},
+];
+const PERM_ROLES=[
+  {key:'mitarbeiter',      label:'Mitarbeiter'},
+  {key:'berater',          label:'Berater'},
+  {key:'freiberuflich',    label:'Freiberuflich'},
+  {key:'leitung',          label:'Leitung'},
+  {key:'geschaeftsfuehrer',label:'GF'},
+];
+
+function renderPermissionsMatrix(el){
+  const d=getData();
+  const perms=d.rolePermissions||{};
+  const getVal=(pk,rk)=>{
+    if(rk==='admin') return true;
+    return Array.isArray(perms[pk])?perms[pk].includes(rk):DEFAULT_PERMISSIONS[pk]?.includes(rk)??false;
+  };
+  const hdrs=PERM_ROLES.map(r=>`<th style="text-align:center;font-size:11px;padding:6px 8px;min-width:60px">${r.label}</th>`).join('');
+  const rows=PERM_DEFS.map(p=>{
+    const cells=PERM_ROLES.map(r=>{
+      const checked=getVal(p.key,r.key);
+      return `<td style="text-align:center;padding:5px">
+        <input type="checkbox" data-perm="${p.key}" data-role="${r.key}" ${checked?'checked':''}
+               style="cursor:pointer;width:16px;height:16px"
+               onchange="savePermission(this.dataset.perm,this.dataset.role,this.checked)">
+      </td>`;
+    }).join('');
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="font-size:12px;padding:7px 10px;color:var(--text)">${p.label}</td>
+      ${cells}
+      <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">✓</span></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=`
+    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:20px">🔐 Berechtigungen</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Admin hat immer alle Rechte. Änderungen gelten sofort.</p>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
+      <thead><tr style="background:var(--primary);color:#fff">
+        <th style="text-align:left;padding:8px 10px;font-size:12px">Berechtigung</th>
+        ${hdrs}
+        <th style="text-align:center;font-size:11px;padding:6px 8px">Admin</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+export function savePermission(permKey,role,checked){
+  mutate(d=>{
+    if(!d.rolePermissions) d.rolePermissions={};
+    const cur=Array.isArray(d.rolePermissions[permKey])
+      ? [...d.rolePermissions[permKey]]
+      : [...(DEFAULT_PERMISSIONS[permKey]||[])];
+    const idx=cur.indexOf(role);
+    if(checked&&idx===-1) cur.push(role);
+    if(!checked&&idx>=0) cur.splice(idx,1);
+    d.rolePermissions[permKey]=cur;
+  });
+  // App-Navigation sofort aktualisieren
+  window.initApp?.();
 }
 
 export function addTeam(){

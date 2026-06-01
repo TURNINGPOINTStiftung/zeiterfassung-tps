@@ -1,4 +1,16 @@
 import { getData, getCustomRoles } from './data.js';
+import { DEFAULT_PERMISSIONS } from './config.js';
+
+// Prüft ob eine Rolle eine bestimmte Berechtigung hat
+// Admin hat immer alle Berechtigungen
+export function hasPermission(permission, role){
+  if(role==='admin') return true;
+  const d=getData();
+  const perms=(d.rolePermissions&&d.rolePermissions[permission])
+    ?? DEFAULT_PERMISSIONS[permission]
+    ?? [];
+  return perms.includes(role);
+}
 
 export function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
 export function isBerater(u){ return u&&u.role==='berater'; }
