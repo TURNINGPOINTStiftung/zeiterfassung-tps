@@ -67,8 +67,8 @@ export function renderZeiterfassung(){
     const dayMinGross=b1min+b2min+ktm;
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
-    // Bei Abwesenheiten keine auto-Pause – nur bei echter Arbeitszeit
-    const pauseMinAuto=isAbsDay?0:(dayMinGross>=540?45:dayMinGross>=360?30:0);
+    // Keine auto-Pause bei: Abwesenheit, Zwei-Block-Einträgen (Pause liegt im Gap)
+    const pauseMinAuto=(isAbsDay||hasB2Work)?0:(dayMinGross>=540?45:dayMinGross>=360?30:0);
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMinAuto;
@@ -520,7 +520,8 @@ export function check10hCarryover(uid,y,m,ds,depth){
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
   const rawGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const rawPause=rawGross>=540?45:rawGross>=360?30:0;
+  const _hasB2day=!!(day.b2von&&day.b2bis);
+  const rawPause=_hasB2day?0:(rawGross>=540?45:rawGross>=360?30:0);
   const raw=Math.max(0,rawGross-rawPause);
   const rounded=raw>0?Math.round(raw/15)*15:0;
   const overflow=Math.max(0,rounded-600);
