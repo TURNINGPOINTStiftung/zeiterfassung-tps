@@ -64,14 +64,15 @@ export function renderZeiterfassung(){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const dayMinGross=b1min+b2min+ktm;                          // Brutto inkl. Kleinteilig
-    const pauseMinAuto=dayMinGross>=540?45:dayMinGross>=360?30:0; // § ArbZG auto-Pause
-    const dayMin=Math.max(0,dayMinGross-pauseMinAuto);           // Netto
+    const dayMinGross=b1min+b2min+ktm;
+    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
+      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
+    // Bei Abwesenheiten keine auto-Pause – nur bei echter Arbeitszeit
+    const pauseMinAuto=isAbsDay?0:(dayMinGross>=540?45:dayMinGross>=360?30:0);
+    const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMinAuto;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
-    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
-      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
     const effDayMin=Math.min(roundedDayMin,600);
     monthTotal+=effDayMin;
