@@ -1,6 +1,25 @@
 import { getData, getCustomRoles } from './data.js';
 import { DEFAULT_PERMISSIONS } from './config.js';
 
+// Liefert das korrekte Team eines Users für ein bestimmtes Datum.
+// Berücksichtigt die Team-Geschichte (teamHistory).
+export function getTeamForDate(user, dateStr){
+  if(!user) return '';
+  const hist=user.teamHistory;
+  if(Array.isArray(hist)&&hist.length){
+    // Neuester Eintrag, dessen fromDate <= dateStr
+    const sorted=[...hist].sort((a,b)=>b.fromDate.localeCompare(a.fromDate));
+    const e=sorted.find(h=>h.fromDate<=dateStr);
+    if(e) return e.team||'';
+    // Datum vor erstem Eintrag → ältesten nehmen
+    return sorted[sorted.length-1]?.team||user.team||'';
+  }
+  return user.team||'';
+}
+
+// Hilfsfunktion: YYYY-MM-01 aus year/month
+export function monthStartDate(y,m){ return `${y}-${String(m).padStart(2,'0')}-01`; }
+
 // Prüft ob eine Rolle eine bestimmte Berechtigung hat
 // Admin hat immer alle Berechtigungen
 export function hasPermission(permission, role){

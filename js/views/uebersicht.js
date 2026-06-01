@@ -1,6 +1,6 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
-import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission } from '../roles.js';
+import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
 import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam } from '../cats.js';
@@ -38,24 +38,27 @@ export function renderOverview(){
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
   const canSend=hasPermission('btn_teamberichte',cu.role);
 
+  const mDateFilter=monthStartDate(oy,om);
   let employees;
   if(cu.role==='geschaeftsfuehrer'){
     employees=d.users.filter(u=>canSeeEmployee(cu,u));
     if(filterTeam) employees=employees.filter(u=>{
       if(u.role==='leitung') return getLeitungTeams(u).includes(filterTeam)||getLeitungTeams(u).length===0;
-      return u.team===filterTeam;
+      return getTeamForDate(u,mDateFilter)===filterTeam;
     });
   } else if(cu.role==='admin'){
     employees=d.users.filter(u=>u.role!=='admin');
-    if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
+    if(filterTeam) employees=employees.filter(u=>getTeamForDate(u,mDateFilter)===filterTeam);
   } else {
     employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
     if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
   }
 
+  // Team für den gewählten Monat ermitteln (History-aware)
+  const mDate=monthStartDate(oy,om);
   const teamMap={};
   employees.forEach(u=>{
-    const t=isManagerRole(u)?'Leitungsteam':(u.team||'(kein Team)');
+    const t=isManagerRole(u)?'Leitungsteam':(getTeamForDate(u,mDate)||'(kein Team)');
     if(!teamMap[t]) teamMap[t]=[];
     teamMap[t].push(u);
   });
