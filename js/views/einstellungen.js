@@ -310,13 +310,27 @@ function userForm(u={}){
       <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
     </div>
     ${u.id?(()=>{
-      const hist=(u.teamHistory||[]).sort((a,b)=>b.fromDate.localeCompare(a.fromDate));
-      const histHtml=hist.length?hist.map(h=>`<div style="font-size:12px;padding:3px 0;display:flex;gap:8px"><span style="color:var(--muted)">${h.fromDate}</span><span>${esc(h.team||'(kein)')}</span></div>`).join(''):'<span style="font-size:12px;color:var(--muted)">Noch kein Verlauf</span>';
-      return `<div class="form-group"><label>Team-Verlauf</label>
-        <div style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:6px;max-height:100px;overflow-y:auto">${histHtml}</div>
+      const hist=(u.teamHistory||[]).sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
+      const histRows=hist.map((h,i)=>`
+        <div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+          <input type="date" value="${h.fromDate}" style="padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;width:130px"
+            onchange="updateTeamHistEntry('${u.id}',${i},this.value,'team')">
+          <select style="flex:1;padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px"
+            onchange="updateTeamHistEntry('${u.id}',${i},this.value,'date')">
+            <option value="">– kein Team –</option>
+            ${getTeams().map(t=>`<option value="${esc(t)}"${h.team===t?' selected':''}>${esc(t)}</option>`).join('')}
+          </select>
+          <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:11px"
+            onclick="deleteTeamHistEntry('${u.id}',${i})">×</button>
+        </div>`).join('');
+      return `<div class="form-group"><label>📅 Team-Verlauf <span style="font-size:11px;color:var(--muted)">(editierbar)</span></label>
+        <div style="border:1.5px solid var(--border);border-radius:6px;padding:6px;margin-bottom:8px;max-height:160px;overflow-y:auto">
+          ${histRows||'<span style="font-size:12px;color:var(--muted)">Noch kein Verlauf.</span>'}
+        </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:12px;color:var(--muted)">Wechsel ab:</span>
+          <span style="font-size:12px;color:var(--muted)">Eintrag hinzufügen:</span>
           <input type="date" id="uf-team-change-date" value="${new Date().toISOString().slice(0,10)}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+          <button class="btn btn-ok btn-sm" onclick="addTeamHistEntry('${u.id}')">+ Eintrag</button>
         </div>
       </div>`;
     })():''}
@@ -433,6 +447,47 @@ export async function saveEditUser(id){
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }
+
+// ── Team-History Admin-Funktionen ─────────────────────────────────
+export function addTeamHistEntry(uid){
+  const dateEl=document.getElementById('uf-team-change-date');
+  const date=dateEl?.value||new Date().toISOString().slice(0,10);
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid); if(!u) return;
+    if(!Array.isArray(u.teamHistory)) u.teamHistory=[];
+    // Aktuelles primäres Team als Standardwert
+    const curTeam=u.teams?.[0]||u.team||'';
+    u.teamHistory.push({team:curTeam,fromDate:date});
+    u.teamHistory.sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
+  });
+  showEditUser(uid); // Modal neu öffnen mit aktuellen Daten
+  toast('Eintrag hinzugefügt','ok');
+}
+
+export function updateTeamHistEntry(uid,idx,val,changed){
+  // changed = 'team' oder 'date' – aber wir speichern den ganzen Eintrag neu
+  // Da wir nur onchange auf einem Feld haben, lesen wir alle Inputs neu
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid); if(!u||!Array.isArray(u.teamHistory)) return;
+    if(idx>=u.teamHistory.length) return;
+    // Wert direkt setzen (Datum oder Team je nach changed)
+    if(changed==='team') u.teamHistory[idx].fromDate=val;
+    else u.teamHistory[idx].team=val;
+    u.teamHistory.sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
+  });
+  toast('Gespeichert','ok');
+}
+
+export function deleteTeamHistEntry(uid,idx){
+  if(!confirm('Eintrag löschen?')) return;
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid); if(!u||!Array.isArray(u.teamHistory)) return;
+    u.teamHistory.splice(idx,1);
+  });
+  showEditUser(uid);
+  toast('Eintrag gelöscht','ok');
+}
+// ───────────────────────────────────────────────────────────────────
 
 export function toggleGFTimesheet(uid){
   const cu=window.cu;

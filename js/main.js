@@ -39,6 +39,7 @@ import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport,
          markYearReportSeen, sendTeamReport, sendTeamReportForTeam } from './views/gfberichte.js';
 
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
+         addTeamHistEntry, updateTeamHistEntry, deleteTeamHistEntry,
          addCategory, removeCat, addTeamCat, removeTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
@@ -167,6 +168,9 @@ window.sendTeamReportForTeam= sendTeamReportForTeam;
 // Einstellungen view
 window.renderSettings        = renderSettings;
 window.savePermission        = savePermission;
+window.addTeamHistEntry      = addTeamHistEntry;
+window.updateTeamHistEntry   = updateTeamHistEntry;
+window.deleteTeamHistEntry   = deleteTeamHistEntry;
 window.addTeam               = addTeam;
 window.removeTeam            = removeTeam;
 window.addCustomRole         = addCustomRole;
