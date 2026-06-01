@@ -1,4 +1,4 @@
-// TPS Zeiterfassung – Service Worker v17
+// TPS Zeiterfassung – Service Worker v18
 // Strategie: NUR Firebase-SDK cachen; alle App-Dateien immer vom Netz holen.
 // Beim Aktivieren werden alle Clients automatisch neu geladen.
 const CACHE = 'tps-ze-v15';
