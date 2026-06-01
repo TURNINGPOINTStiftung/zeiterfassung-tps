@@ -1,6 +1,6 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, setDay, setEntryField, mutate, entryKey } from '../data.js';
-import { isManagerRole, isFreelancer, isBerater, getLeitungTeams } from '../roles.js';
+import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST } from '../calc.js';
@@ -17,7 +17,7 @@ export function renderZeiterfassung(){
 
   // "An GF senden"-Button nur für Leitung sichtbar halten
   const _btnTeam=document.getElementById('btn-teamberichte');
-  if(_btnTeam) _btnTeam.style.display=(cu.role==='leitung')?'':'none';
+  if(_btnTeam) _btnTeam.style.display=hasPermission('btn_teamberichte',cu.role)?'':'none';
   const isFree=isFreelancer(user);
   const canEdit=(cu.id===uid&&entry.status==='draft')||
                 (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
