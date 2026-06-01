@@ -20,6 +20,10 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .form-group input:focus{border-color:var(--primary-l)}
 .error-msg{color:var(--danger);font-size:13px;margin-top:8px;display:none}
 #login-user-list{max-height:220px;overflow-y:auto;padding-right:2px}
+/* ── Abwesenheiten-Kalender: Standard 140% Zoom ── */
+.ab-cal-wrap{zoom:1.4}
+/* ── Werkstudent: Wochen über 20h rot markieren ── */
+.wstd-over .total-c{color:var(--danger)!important;font-weight:700}
 /* ── Login-Autocomplete-Dropdown ── */
 #login-user-dropdown{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:200;max-height:220px;overflow-y:auto}
 .login-ac-item{padding:10px 14px;font-size:14px;cursor:pointer;transition:background .12s}

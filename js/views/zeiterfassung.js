@@ -1,5 +1,5 @@
 import { MONTHS } from '../config.js';
-import { getEntry, getUser, setDay, setEntryField, mutate, entryKey } from '../data.js';
+import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
@@ -15,6 +15,14 @@ export function renderZeiterfassung(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const entry=getEntry(uid,year,mon);
   const isLeiter=isManagerRole(cu);
+
+  // Werkstudenten: 20h/Woche-Grenze prüfen
+  const _wsLimit=20*60; // 1200 Minuten
+  const isWerkstudent=(()=>{
+    const crs=getData().customRoles||[];
+    const ids=Array.isArray(user.customRoles)?user.customRoles:(user.customRole?[user.customRole]:[]);
+    return ids.some(cid=>{const cr=crs.find(r=>r.id===cid);return cr&&cr.label.toLowerCase().includes('werkstudent');});
+  })();
 
   // "An GF senden"-Button nur für Leitung sichtbar halten
   const _btnTeam=document.getElementById('btn-teamberichte');
@@ -54,6 +62,21 @@ export function renderZeiterfassung(){
   const hols=getHolidays(year,user.bundesland||'');
   let monthTotal=0, monthPause=0;
 
+  // Werkstudenten: Wochensummen vorberechnen
+  const weekMins={};
+  if(isWerkstudent){
+    for(let d=1;d<=dim;d++){
+      const kw=isoWeek(new Date(year,mon-1,d));
+      const dd=(entry.days||{})[dateStr(year,mon,d)]||{};
+      const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+      const hasB2=!!(dd.b2von&&dd.b2bis);
+      const abs=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich';
+      const pause=(abs||hasB2)?0:(gross>=540?45:gross>=360?30:0);
+      weekMins[kw]=(weekMins[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
+    }
+  }
+  const overWeeks=new Set(Object.entries(weekMins).filter(([,v])=>v>_wsLimit).map(([k])=>Number(k)));
+
   for(let d=1;d<=dim;d++){
     const ds=dateStr(year,mon,d);
     const dd=(entry.days||{})[ds]||{};
@@ -78,11 +101,13 @@ export function renderZeiterfassung(){
     const effDayMin=Math.min(roundedDayMin,600);
     monthTotal+=effDayMin;
 
+    const kw=isoWeek(new Date(year,mon-1,d));
     const tr=document.createElement('tr');
     if(we) tr.classList.add('weekend');
     if(hol) tr.classList.add('holiday');
     if(tod) tr.classList.add('today-row');
     if(readonly) tr.classList.add('readonly');
+    if(isWerkstudent&&overWeeks.has(kw)) tr.classList.add('wstd-over');
     const dis=readonly;
     const dateFmt=`${String(d).padStart(2,'0')}.${String(mon).padStart(2,'0')}.${String(year).slice(2)}`;
     tr.innerHTML=`
@@ -113,14 +138,14 @@ export function renderZeiterfassung(){
   const _tp=document.getElementById('tfoot-pause');
   if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
-  renderSummary(uid,user,entry,monthTotal);
+  renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeks.size:0);
   renderZuordBreakdown(entry);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
   renderSignature(user,entry);
 }
 
-function renderSummary(uid,user,entry,istMin){
+function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
   const year=window.year, mon=window.mon;
   const isFree=isFreelancer(user);
   const carryH=getEffectiveCarryH(uid,user,year,mon);
@@ -169,12 +194,20 @@ function renderSummary(uid,user,entry,istMin){
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
     ];
   }
-  document.getElementById('summary-cards').innerHTML=cards.map(c=>`
+  let cardsHtml=cards.map(c=>`
     <div class="s-card">
       <div class="lbl">${c.lbl}</div>
       <div class="big${c.cls?' '+c.cls:''}">${c.big}</div>
       <div class="sub">${c.sub||''}</div>
     </div>`).join('');
+  if(wsOverWeeks>0){
+    cardsHtml+=`<div class="s-card" style="border:2px solid var(--danger)">
+      <div class="lbl">⚠ Werkstudent 20h-Grenze</div>
+      <div class="big neg">${wsOverWeeks} Woche${wsOverWeeks!==1?'n':''}</div>
+      <div class="sub">über 20h gearbeitet</div>
+    </div>`;
+  }
+  document.getElementById('summary-cards').innerHTML=cardsHtml;
   document.getElementById('carryover-input').value=carryH;
   const _dw=document.getElementById('info-diff-wrap');
   const _de=document.getElementById('info-diff');
