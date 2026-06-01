@@ -4,8 +4,10 @@ import { isFreelancer } from './roles.js';
 
 export function dayMinutes(dd){
   if(!dd) return 0;
-  // ktmin = Pause → wird abgezogen (nicht addiert)
-  return diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')-Number(dd.ktmin||0);
+  // Brutto: b1+b2+Kleinteilig; Pause wird automatisch abgezogen (§ dt. ArbZG)
+  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  const autoPause=gross>=540?45:gross>=360?30:0;
+  return Math.max(0,gross-autoPause);
 }
 export function monthIST(entry){
   if(!entry||!entry.days) return 0;

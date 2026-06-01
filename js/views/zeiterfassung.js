@@ -64,9 +64,11 @@ export function renderZeiterfassung(){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const dayMin=b1min+b2min-ktm; // ktmin = Pause → abgezogen
+    const dayMinGross=b1min+b2min+ktm;                          // Brutto inkl. Kleinteilig
+    const pauseMinAuto=dayMinGross>=540?45:dayMinGross>=360?30:0; // § ArbZG auto-Pause
+    const dayMin=Math.max(0,dayMinGross-pauseMinAuto);           // Netto
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
-    monthPause+=pauseMin;
+    monthPause+=pauseMinAuto;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
@@ -86,7 +88,7 @@ export function renderZeiterfassung(){
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${ktm>0&&dd.b1bis?(addMin(dd.b1bis,-ktm)||dd.b1bis):dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${pauseMinAuto>0&&dd.b1bis&&!dd.b2von?(addMin(dd.b1bis,-pauseMinAuto)||dd.b1bis):dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
       <td><select class="zuord" ${dis?'disabled':''} onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
       <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
@@ -98,7 +100,7 @@ export function renderZeiterfassung(){
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
-      <td class="pause-c pause-col">${pauseMin>0?minFmt(pauseMin):''}</td>
+      <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
       <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
     `;
     tbody.appendChild(tr);
@@ -288,16 +290,25 @@ export function renderSignature(user,entry){
 export function td_change(ds,field,val){
   const uid=window.viewEmpId||window.cu.id;
   if(field==='ktmin'){
-    // Wenn Pause geändert wird, b1bis (Abfahrtszeit) neu berechnen
-    // sodass die Netto-Arbeitszeit konstant bleibt
+    // Wenn Kleinteilig geändert wird, b1bis-Abfahrtszeit neu berechnen
+    // (Kleinteilig ändert Brutto → ändert auto-Pause → ändert Abfahrtszeit)
     const entry=getEntry(uid,window.year,window.mon);
     const day=(entry.days||{})[ds]||{};
-    const oldKtm=Number(day.ktmin||0);
-    const newKtm=Number(val||0);
-    const b1bis=day.b1bis||'';
-    if(b1bis){
-      const netEnd=oldKtm>0?addMin(b1bis,-oldKtm):b1bis; // Netto-Ende = Abfahrt − alte Pause
-      const newDep=newKtm>0?addMin(netEnd,newKtm):netEnd;  // neue Abfahrt = Netto + neue Pause
+    const b1von=day.b1von||''; const b1bis=day.b1bis||'';
+    const hasB2=!!(day.b2von&&day.b2bis);
+    if(b1von&&b1bis&&!hasB2){
+      const oldKtm=Number(day.ktmin||0);
+      const newKtm=Number(val||0);
+      const b2min=diffMin(day.b2von||'',day.b2bis||'');
+      // Altes Netto = b1bis_departure − old_autoPause
+      const oldGross=diffMin(b1von,b1bis)+b2min+oldKtm;
+      const oldPause=oldGross>=540?45:oldGross>=360?30:0;
+      const netB1=addMin(b1bis,-oldPause);
+      // Neue Abfahrt basierend auf neuem Kleinteilig
+      const netMin=diffMin(b1von,netB1);
+      const tryGross=netMin+b2min+newKtm+30;
+      const newPause=tryGross>=540?45:tryGross>=360?30:0;
+      const newDep=addMin(netB1,newPause);
       setDay(uid,window.year,window.mon,ds,'b1bis',newDep);
     }
   }
@@ -347,21 +358,31 @@ export function td_b1bis_change(ds,val){
   const uid=window.viewEmpId||window.cu.id;
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
-  const ktm=Number(day.ktmin||0);
   const normVal=_normTime(val);
   if(!normVal){
     setDay(uid,window.year,window.mon,ds,'b1bis','');
   } else {
-    // Eingabe = Netto-Arbeitsende → auf 15-Min. runden, dann Pause aufaddieren
     const von=day.b1von||'';
     const zuord=day.b1zuord||'';
     const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
+    const hasB2=!!(day.b2von&&day.b2bis);
+    // Eingabe = Netto-Ende → auf 15-Min. runden
     let roundedNet=normVal;
     if(von&&!isAbsence){
       const rawMin=diffMin(von,normVal);
       if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
     }
-    const departure=ktm>0?addMin(roundedNet,ktm):roundedNet;
+    // Auto-Pause nur addieren wenn kein B2-Block (Pause ist dann im Blockwechsel-Gap)
+    let departure=roundedNet;
+    if(!hasB2&&von&&!isAbsence){
+      const netMin=diffMin(von,roundedNet);
+      const b2min=diffMin(day.b2von||'',day.b2bis||'');
+      const ktm=Number(day.ktmin||0);
+      const totalNet=netMin+b2min+ktm;
+      const tryGross=totalNet+30;
+      const autoPause=tryGross>=540?45:tryGross>=360?30:0;
+      if(autoPause>0) departure=addMin(roundedNet,autoPause);
+    }
     setDay(uid,window.year,window.mon,ds,'b1bis',departure);
   }
   check10hCarryover(uid,window.year,window.mon,ds);
@@ -424,7 +445,9 @@ export function check10hCarryover(uid,y,m,ds,depth){
   if((depth||0)>31) return;
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
-  const raw=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')-Number(day.ktmin||0);
+  const rawGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  const rawPause=rawGross>=540?45:rawGross>=360?30:0;
+  const raw=Math.max(0,rawGross-rawPause);
   const rounded=raw>0?Math.round(raw/15)*15:0;
   const overflow=Math.max(0,rounded-600);
   const date=new Date(ds+'T12:00:00');

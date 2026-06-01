@@ -14,7 +14,7 @@ export function renderSettings(){
     const zeToggle=isGFUser?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" title="${zeAktiv?'Zeiterfassung deaktivieren':'Zeiterfassung aktivieren'}" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`:'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${u.role==='leitung'?getLeitungTeams(u).map(t=>`<span class="team-badge">${t}</span>`).join(''):(u.team?`<span class="team-badge">${u.team}</span>`:'')}${isGFUser&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${t}</span>`).join('')}${isGFUser&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -196,24 +196,26 @@ function userForm(u={}){
     <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
     <div class="form-group"><label>E-Mail <span style="font-size:11px;color:var(--muted)">(für Passwort-Reset-Anfragen)</span></label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
     <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
-    <div class="form-group"><label>Rolle</label>
+    <div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label>
       ${u.id==='admin'
         ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
-        : (()=>{
-            const crs=getCustomRoles();
-            const selVal=u.customRole?`custom:${u.customRole}`:(u.role||'mitarbeiter');
-            const customGroup=crs.length
-              ? `<optgroup label="── Eigene Rollen ──">${crs.map(cr=>`<option value="custom:${esc(cr.id)}"${selVal===`custom:${cr.id}`?' selected':''}>${esc(cr.label)} (${_baseRoleLabel(cr.base)})</option>`).join('')}</optgroup>`
-              : '';
-            return `<select id="uf-role" onchange="toggleFreelancerFields()">
-              <option value="mitarbeiter"${selVal==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
-              <option value="freiberuflich"${selVal==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
-              <option value="berater"${selVal==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
-              <option value="leitung"${selVal==='leitung'?' selected':''}>Leitungspersonal</option>
-              <option value="geschaeftsfuehrer"${selVal==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
-              ${customGroup}
-            </select>`;
-          })()}
+        : `<select id="uf-role" onchange="toggleFreelancerFields()">
+              <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
+              <option value="freiberuflich"${u.role==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
+              <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
+              <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
+              <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+           </select>`}
+    </div>
+    <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
+      ${(()=>{
+          const crs=getCustomRoles();
+          const userCRs=Array.isArray(u.customRoles)?u.customRoles:(u.customRole?[u.customRole]:[]);
+          if(!crs.length) return '<span style="font-size:12px;color:var(--muted)">Noch keine eigenen Rollen angelegt (Einstellungen → Rollen)</span>';
+          return '<div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:110px;overflow-y:auto">'
+            +crs.map((cr,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-cr-${i}" value="${esc(cr.id)}"${userCRs.includes(cr.id)?' checked':''}> ${esc(cr.label)}</label>`).join('')
+            +'</div>';
+        })()}
     </div>
     <div class="form-group"><label>Team(s)</label><div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
     <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
@@ -242,15 +244,7 @@ function userForm(u={}){
 }
 
 export function _resolveUfRole(){
-  const sel=document.getElementById('uf-role');
-  if(!sel) return 'mitarbeiter';
-  const v=sel.value;
-  if(v.startsWith('custom:')){
-    const cid=v.slice(7);
-    const cr=getCustomRoles().find(r=>r.id===cid);
-    return cr?cr.base:'mitarbeiter';
-  }
-  return v;
+  return document.getElementById('uf-role')?.value||'mitarbeiter';
 }
 
 export function toggleFreelancerFields(){
@@ -264,14 +258,11 @@ export function toggleFreelancerFields(){
 }
 
 function collectUserForm(){
-  const rawRole=document.getElementById('uf-role').value;
-  let role=rawRole, customRole='';
-  if(rawRole.startsWith('custom:')){
-    const cid=rawRole.slice(7);
-    const cr=getCustomRoles().find(r=>r.id===cid);
-    role=cr?cr.base:'mitarbeiter';
-    customRole=cid;
-  }
+  const role=document.getElementById('uf-role')?.value||'mitarbeiter';
+  // Mehrere Funktionsbezeichnungen (custom roles, nur Anzeige)
+  const crs=getCustomRoles();
+  const customRoles=crs.filter((_,i)=>{ const cb=document.getElementById(`uf-cr-${i}`); return cb&&cb.checked; }).map(cr=>cr.id);
+  const customRole=customRoles[0]||''; // Rückwärtskompatibilität
   const isFree=role==='freiberuflich';
   const at=getTeams();
   // Alle Rollen können mehrere Teams haben
@@ -284,7 +275,8 @@ function collectUserForm(){
     email:document.getElementById('uf-email')?.value.trim()||'',
     pw:document.getElementById('uf-pw').value,
     role,
-    customRole,
+    customRole,  // erstes für Rückwärtskompatibilität
+    customRoles, // alle ausgewählten Bezeichnungen
     team:teams[0]||'',   // primäres Team (Rückwärtskompatibilität)
     teams,
     city:document.getElementById('uf-city').value.trim(),
