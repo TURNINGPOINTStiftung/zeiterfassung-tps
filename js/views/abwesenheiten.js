@@ -132,13 +132,14 @@ export function calcVrDays(){
     const weeks=Math.ceil(weekdays/5);
     effective=Math.min(effective,weeks*maxPerWeek);
   } else if(type==='Urlaub'){
-    // Automatisch: proportional nach Arbeitstagen/Woche
-    const dpw=vrUser?.dpw||5;
-    const raw=dpw>=5?weekdays:weekdays*(dpw/5);
+    // Automatisch nach Wochenarbeitszeit: wh/8h = Urlaubstage pro Kalenderwoche
+    // Bsp Mateo 16h/Woche → 16/8 = 2 Urlaubstage pro Woche
+    const wh=vrUser?.wh||40;
+    const daysPerWeek=wh/8;                 // Vollzeit-Äquivalent-Tage pro Woche
+    const raw=(weekdays/5)*daysPerWeek;     // anteilig über den Zeitraum
     effective=halfDay&&singleDay?0.5:Math.round(raw*2)/2; // auf 0.5 gerundet
-    // Hint für Nutzer zeigen
     const autoHint=document.getElementById('vr-mode-auto-hint');
-    if(autoHint&&dpw<5) autoHint.textContent=`(${dpw} Tage/Woche → ${effective} von ${weekdays} Werktagen)`;
+    if(autoHint&&wh<40) autoHint.textContent=`(${wh}h/Woche → ${effective} Tage à 8h)`;
     else if(autoHint) autoHint.textContent='';
     if(mode!=='manual'){
       const manualEl=document.getElementById('vr-manual-days');
@@ -174,8 +175,8 @@ export async function saveVacRequest(){
   else if(type==='Urlaub'&&mode==='manual'){
     wd=parseFloat(document.getElementById('vr-manual-days')?.value)||weekdays;
   } else if(type==='Urlaub'){
-    const dpw=targetUser?.dpw||5;
-    wd=dpw>=5?weekdays:Math.round(weekdays*(dpw/5)*2)/2;
+    const wh=targetUser?.wh||40;
+    wd=Math.round((weekdays/5)*(wh/8)*2)/2; // nach Wochenarbeitszeit
   } else {
     wd=weekdays;
   }
