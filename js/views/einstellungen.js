@@ -9,12 +9,19 @@ export function renderSettings(){
   const cu=window.cu;
   const d=getData();
   document.getElementById('user-list').innerHTML=d.users.map(u=>{
-    const isGFUser=u.role==='geschaeftsfuehrer'||u.role==='leitung';
+    // GF: noTimesheet = ZE komplett aus | Leitung: noReport = ZE privat, nicht einreichpflichtig
+    const isGFUser=u.role==='geschaeftsfuehrer';
+    const isLeitungUser=u.role==='leitung';
     const zeAktiv=!u.noTimesheet;
-    const zeToggle=isGFUser?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" title="${zeAktiv?'Zeiterfassung deaktivieren':'Zeiterfassung aktivieren'}" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`:'';
+    const reportAktiv=!u.noReport;
+    const zeToggle=isGFUser
+      ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
+      :isLeitungUser
+        ?`<button class="btn btn-sm btn-${reportAktiv?'warn':'ok'}" onclick="toggleLeitungReport('${u.id}')" style="font-size:11px;padding:4px 9px">${reportAktiv?'Privat (kein GF-Zugriff)':'GF-Zugriff aktivieren'}</button>`
+        :'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${t}</span>`).join('')}${(u.role==='geschaeftsfuehrer'||u.role==='leitung')&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${t}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
         <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -407,10 +414,23 @@ export function toggleGFTimesheet(uid){
   if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
   mutate(d=>{
     const u=d.users.find(x=>x.id===uid);
-    if(u&&(u.role==='geschaeftsfuehrer'||u.role==='leitung')) u.noTimesheet=!u.noTimesheet;
+    if(u&&u.role==='geschaeftsfuehrer') u.noTimesheet=!u.noTimesheet;
   });
   renderSettings();
-  toast('Zeiterfassung aktualisiert ✓','ok');
+  toast('ZE-Status aktualisiert ✓','ok');
+}
+
+export function toggleLeitungReport(uid){
+  const cu=window.cu;
+  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  mutate(d=>{
+    const u=d.users.find(x=>x.id===uid);
+    if(u&&u.role==='leitung') u.noReport=!u.noReport;
+  });
+  renderSettings();
+  toast(getData().users.find(u=>u.id===uid)?.noReport
+    ?'ZE auf privat gesetzt – GF hat keinen Zugriff ✓'
+    :'GF-Zugriff aktiviert ✓','ok');
 }
 
 export function deleteUser(id){
