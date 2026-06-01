@@ -1,7 +1,7 @@
-// TPS Zeiterfassung – Service Worker v19
-// Strategie: NUR Firebase-SDK cachen; alle App-Dateien immer vom Netz holen.
-// Beim Aktivieren werden alle Clients automatisch neu geladen.
-const CACHE = 'tps-ze-v15';
+// TPS Zeiterfassung – Service Worker v20
+// Strategie: NUR Firebase-SDK cachen; alle App-Dateien IMMER frisch (no-store).
+// no-store umgeht Browser-HTTP-Cache UND zwingt frische Versionen nach Deploy.
+const CACHE = 'tps-ze-v20';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -9,7 +9,7 @@ const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
 ];
 
-// Install: Nur Firebase-SDK cachen (App-JS wird NICHT gecacht)
+// Install: Nur Firebase-SDK cachen, sofort aktivieren
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c =>
@@ -20,7 +20,7 @@ self.addEventListener('install', e => {
   );
 });
 
-// Activate: Alte Caches löschen + alle Clients neu laden
+// Activate: Alte Caches löschen + alle offenen Tabs neu laden
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -59,7 +59,10 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Alle App-Dateien (JS, CSS, HTML): immer frisch vom Netz – kein Caching
-  // Damit sind Deployments sofort aktiv ohne manuelles Cache-Leeren
-  e.respondWith(fetch(e.request));
+  // Alle App-Dateien (HTML/JS/CSS): IMMER frisch, Browser-Cache umgehen.
+  // cache:'no-store' zwingt einen echten Netzwerk-Request – keine veralteten Module mehr.
+  e.respondWith(
+    fetch(e.request, { cache: 'no-store' })
+      .catch(() => caches.match(e.request)) // Offline-Fallback
+  );
 });

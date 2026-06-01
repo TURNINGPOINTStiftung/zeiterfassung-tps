@@ -330,6 +330,30 @@
 <!-- ─── Toasts ─── -->
 <div id="toasts"></div>
 
-<script type="module" src="js/main.js?v=19"></script>
+<!-- Service-Worker UNABHÄNGIG vom Modul-Graph registrieren.
+     So kann der SW auch dann frische Dateien liefern + Tabs neu laden,
+     wenn ein App-Modul einen Fehler hat (verhindert dauerhaftes Hängen). -->
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('service-worker.js?v=20').catch(function(){});
+  });
+}
+// Globaler Fehler-Auffang: zeigt bei Modul-/Syntaxfehlern eine klare Meldung
+// statt eines weißen Bildschirms, mit Button zum harten Neuladen.
+window.addEventListener('error',function(ev){
+  if(ev.message && /import|module|already been declared|Unexpected token|is not defined/i.test(ev.message)){
+    var el=document.getElementById('fb-loading');
+    if(el){
+      el.innerHTML='<div style="font-size:17px;color:#ffd27a;font-weight:700">&#9888; Update wird geladen…</div>'
+        +'<div style="font-size:13px;margin-top:10px;opacity:.85">Bitte einen Moment.<br><small>'+(ev.message||'')+'</small></div>';
+    }
+    // Caches leeren + neu laden, damit eine evtl. veraltete Datei verschwindet
+    if('caches' in window){ caches.keys().then(function(ks){ks.forEach(function(k){caches.delete(k);});}); }
+    if(!window._reloadedOnce){ window._reloadedOnce=true; setTimeout(function(){ location.reload(); }, 2500); }
+  }
+});
+</script>
+<script type="module" src="js/main.js?v=20"></script>
 </body>
 </html>

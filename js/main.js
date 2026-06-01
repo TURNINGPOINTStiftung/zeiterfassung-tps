@@ -272,9 +272,5 @@ initFirebase().then(function(){
     +'<div style="font-size:13px;margin-top:10px;opacity:.8">Bitte Seite neu laden.<br><small>'+e.message+'</small></div>';
 });
 
-// Service Worker
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
-  });
-}
+// Service Worker wird jetzt inline in index.html registriert
+// (unabhängig vom Modul-Graph – siehe Kommentar dort)
