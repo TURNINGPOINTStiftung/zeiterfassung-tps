@@ -23,26 +23,29 @@ export function _migrate(d){
   // ── Pause-Migration (einmalig) ─────────────────────────────────
   // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
   // Nach Einführung der Pause-Abziehung in der Formel würden sie zu wenig zeigen.
-  if(!d._fixes.pauseMigrationV2){
-    // V1 evtl. schon gelaufen aber nicht gespeichert → alle _pauseMigrated-Flags
-    // zurücksetzen und komplett neu mit V2 durchlaufen
+  // Pause-Migration: einmalig pro Tag (Idempotenz-Flag auf Tages-Ebene)
+  {
     const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     Object.values(d.entries||{}).forEach(entry=>{
       Object.values(entry.days||{}).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
-        if(day.b2von) return;
-        // V1 könnte bereits addiert haben → zuerst rückgängig machen
+        if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
+        if(day._pauseMigratedV2) return; // Bereits korrekt migriert
+        // Falls V1 bereits addiert hatte → zuerst zurückrollen
         if(day._pauseMigrated){
-          const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
-          const autoPause=gross>=540?45:gross>=360?30:0;
-          if(autoPause>0) day.b1bis=addMin(day.b1bis,-autoPause);
+          const g0=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
+          const p0=g0>=540?45:g0>=360?30:0;
+          if(p0>0) day.b1bis=addMin(day.b1bis,-p0);
           delete day._pauseMigrated;
         }
-        // Jetzt sauber einmal addieren
+        // Pause genau einmal addieren
         const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
         const autoPause=gross>=540?45:gross>=360?30:0;
-        if(autoPause>0){ day.b1bis=addMin(day.b1bis,autoPause); day._pauseMigratedV2=true; }
+        if(autoPause>0){
+          day.b1bis=addMin(day.b1bis,autoPause);
+          day._pauseMigratedV2=true;
+        }
       });
     });
     d._fixes.pauseMigrationV1=true;
