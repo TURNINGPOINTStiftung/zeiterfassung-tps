@@ -21,12 +21,13 @@ export function monthSOLL(user,y,m){
   if(!isVollzeit(user)||!y||!m) return wh*4*60;
   const dailyMin=dailyMinutes(user);
   const dim=daysInMonth(y,m);
+  const holFree=user.holidaysLikeSunday!==false; // Standard: Feiertage = kein SOLL
   const hols=getHolidays(y,user.bundesland||'');
   let workdays=0;
   for(let d=1;d<=dim;d++){
     const ds=dateStr(y,m,d);
     const dw=new Date(y,m-1,d).getDay();
-    if(dw!==0&&dw!==6&&!hols.has(ds)) workdays++;
+    if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) workdays++;
   }
   return workdays*dailyMin;
 }
@@ -34,12 +35,13 @@ export function monthSOLL(user,y,m){
 export function monthSOLLdays(user,y,m){
   if(!isVollzeit(user)||!y||!m) return 0;
   const dim=daysInMonth(y,m);
+  const holFree=user.holidaysLikeSunday!==false;
   const hols=getHolidays(y,user.bundesland||'');
   let workdays=0;
   for(let d=1;d<=dim;d++){
     const ds=dateStr(y,m,d);
     const dw=new Date(y,m-1,d).getDay();
-    if(dw!==0&&dw!==6&&!hols.has(ds)) workdays++;
+    if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) workdays++;
   }
   return workdays;
 }

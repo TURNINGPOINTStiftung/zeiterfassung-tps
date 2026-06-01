@@ -228,6 +228,12 @@ function userForm(u={}){
                value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
       </div>
       <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
+      <div class="form-group" style="background:#f8f9fb;border-radius:6px;padding:10px 12px;border:1.5px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
+          Feiertage gelten wie Sonntage <span style="font-size:11px;color:var(--muted)">(kein SOLL, kein Urlaubsabzug bei Feiertagen)</span>
+        </label>
+      </div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
@@ -287,6 +293,7 @@ function collectUserForm(){
     dpw,
     al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(wh/dpw)||8),
+    holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
   };

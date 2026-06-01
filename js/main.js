@@ -26,7 +26,7 @@ import { populateUeberYear, populateUeberMon, populateUeberTeam,
 import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest,
          showRejectModal, approveVacRequest, deleteVacRequest, confirmRejectVac,
          updateAbBadge, setAbView, changeAbMonth, renderAbCalendar,
-         renderAbwesenheiten } from './views/abwesenheiten.js';
+         renderAbwesenheiten, renderAbCalendarYear } from './views/abwesenheiten.js';
 
 import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
          updateZeitstempelBtn, openZeitstempel, startZeitstempel,
@@ -130,8 +130,9 @@ window.confirmRejectVac   = confirmRejectVac;
 window.updateAbBadge      = updateAbBadge;
 window.setAbView          = setAbView;
 window.changeAbMonth      = changeAbMonth;
-window.renderAbCalendar   = renderAbCalendar;
-window.renderAbwesenheiten= renderAbwesenheiten;
+window.renderAbCalendar      = renderAbCalendar;
+window.renderAbCalendarYear  = renderAbCalendarYear;
+window.renderAbwesenheiten   = renderAbwesenheiten;
 
 // Stempeln view
 window.getStamp            = getStamp;

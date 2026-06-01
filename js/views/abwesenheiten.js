@@ -3,10 +3,24 @@ import { getData, getUser, mutate } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
 
-export function countWorkDays(start,end){
+export function countWorkDays(start,end,user){
+  // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
+  const holFree=!user||user.holidaysLikeSunday!==false;
+  const startY=parseInt(start.slice(0,4)), endY=parseInt(end.slice(0,4));
+  const holCache={};
+  if(holFree){
+    for(let y=startY;y<=endY;y++) holCache[y]=getHolidays(y,user?.bundesland||'');
+  }
   let count=0, cur=new Date(start+'T12:00:00');
   const endD=new Date(end+'T12:00:00');
-  while(cur<=endD){ const wd=cur.getDay(); if(wd!==0&&wd!==6) count++; cur.setDate(cur.getDate()+1); }
+  while(cur<=endD){
+    const wd=cur.getDay();
+    if(wd!==0&&wd!==6){
+      const ds=cur.toISOString().slice(0,10);
+      if(!holFree||!holCache[cur.getFullYear()]?.has(ds)) count++;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
   return count;
 }
 
@@ -84,7 +98,10 @@ export function calcVrDays(){
   const cb=document.getElementById('vr-halfday');
   if(cb&&!singleDay) cb.checked=false;
   if(!f||!t||f>t){ if(info) info.textContent=''; return; }
-  const wd=countWorkDays(f,t);
+  const d2=getData();
+  const empId=document.getElementById('vr-emp')?.value||'';
+  const vrUser=empId?d2.users.find(u=>u.id===empId)||window.cu:window.cu;
+  const wd=countWorkDays(f,t,vrUser);
   const effective=halfDay&&singleDay?0.5:wd;
   if(info) info.textContent=`→ ${effective} Arbeitstag${effective!==1?'e':''}`;
   if(hint) hint.style.display=wd>5?'block':'none';
@@ -106,7 +123,7 @@ export async function saveVacRequest(){
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
   const autoApprove=isSick||forOther||isLeiter;
-  const wd=halfDay?0.5:countWorkDays(from,to);
+  const wd=halfDay?0.5:countWorkDays(from,to,targetUser);
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
   const req={
@@ -200,9 +217,12 @@ function _syncAbViewButtons(){
   const abViewMode=window.abViewMode||'list';
   const btnL=document.getElementById('btn-ab-list');
   const btnC=document.getElementById('btn-ab-cal');
+  const btnY=document.getElementById('btn-ab-year');
   const nav=document.getElementById('ab-cal-nav');
-  if(btnL){ btnL.style.background=abViewMode==='list'?'var(--primary)':''; btnL.style.color=abViewMode==='list'?'#fff':''; btnL.style.borderColor=abViewMode==='list'?'var(--primary)':''; }
-  if(btnC){ btnC.style.background=abViewMode==='calendar'?'var(--primary)':''; btnC.style.color=abViewMode==='calendar'?'#fff':''; btnC.style.borderColor=abViewMode==='calendar'?'var(--primary)':''; }
+  const _setBtn=(btn,active)=>{ if(!btn) return; btn.style.background=active?'var(--primary)':''; btn.style.color=active?'#fff':''; btn.style.borderColor=active?'var(--primary)':''; };
+  _setBtn(btnL,abViewMode==='list');
+  _setBtn(btnC,abViewMode==='calendar');
+  _setBtn(btnY,abViewMode==='year');
   if(nav) nav.style.display=abViewMode==='calendar'?'flex':'none';
 }
 
@@ -285,6 +305,11 @@ export function renderAbwesenheiten(){
   const cu=window.cu;
   const abViewMode=window.abViewMode||'list';
   _syncAbViewButtons();
+  if(abViewMode==='year'){
+    document.getElementById('ab-content').innerHTML=renderAbCalendarYear();
+    updateAbBadge();
+    return;
+  }
   if(abViewMode==='calendar'){
     let calHtml=renderAbCalendar();
     const d2=getData();
@@ -437,4 +462,80 @@ export function renderAbwesenheiten(){
   </section>`;
   document.getElementById('ab-content').innerHTML=html;
   updateAbBadge();
+}
+
+// ── Jahresübersicht ────────────────────────────────────────────────
+export function renderAbCalendarYear(){
+  const cu=window.cu;
+  const y=window.abCalYear||new Date().getFullYear();
+  const d=getData();
+  const reqs=Object.values(d.vacRequests||{}).filter(r=>{
+    if(r.status!=='approved') return false;
+    const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
+  });
+  // Alle Abwesenheiten des Jahres in dayMap sammeln
+  const dayMap={};
+  reqs.forEach(r=>{
+    let cur=new Date(r.startDate+'T12:00:00');
+    const end=new Date(r.endDate+'T12:00:00');
+    while(cur<=end){
+      if(cur.getFullYear()===y){
+        const ds=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
+        if(!dayMap[ds]) dayMap[ds]=[];
+        dayMap[ds].push({name:r.userName,type:r.type,userId:r.userId});
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+  });
+  const COLORS=['#dbeafe','#fee2e2','#d1fae5','#fef3c7','#ede9fe','#fce7f3','#ffedd5','#e0f2fe','#fef9c3','#f0fdf4'];
+  const personMap=new Map();
+  Object.values(dayMap).flat().forEach(a=>{ if(!personMap.has(a.userId)) personMap.set(a.userId,a.name); });
+  const personList=[...personMap.entries()];
+  const colorFor=uid=>COLORS[personList.findIndex(([id])=>id===uid)%COLORS.length]||'#e8f0fe';
+  const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
+
+  // Jahres-Selektor + Legende
+  let html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-outline btn-sm" onclick="window.abCalYear=(window.abCalYear||new Date().getFullYear())-1;renderAbwesenheiten()">◀</button>
+    <span style="font-size:16px;font-weight:700;color:var(--primary)">${y}</span>
+    <button class="btn btn-outline btn-sm" onclick="window.abCalYear=(window.abCalYear||new Date().getFullYear())+1;renderAbwesenheiten()">▶</button>
+  </div>`;
+  if(personList.length){
+    html+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;font-size:12px">';
+    personList.forEach(([uid,name])=>{
+      html+=`<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colorFor(uid)};border:1px solid rgba(0,0,0,.1)"></span>${esc(name)}</span>`;
+    });
+    html+='</div>';
+  }
+  // 12 Mini-Monate
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">';
+  for(let m=1;m<=12;m++){
+    const hols=getHolidays(y,cu.bundesland||'');
+    const dim=daysInMonth(y,m);
+    const firstGer=(new Date(y,m-1,1).getDay()+6)%7;
+    html+=`<div style="background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="background:var(--primary);color:#fff;font-size:12px;font-weight:700;padding:5px 8px">${MONTHS[m-1]}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);font-size:10px;padding:4px">
+        ${['Mo','Di','Mi','Do','Fr','Sa','So'].map((dn,i)=>`<div style="text-align:center;font-weight:600;color:${i>=5?'var(--warn)':'var(--muted)';padding:1px 0">${dn}</div>`).join('')}
+        ${Array(firstGer).fill('<div></div>').join('')}
+        ${Array.from({length:dim},(_,i)=>{
+          const dd=i+1;
+          const ds=dateStr(y,m,dd);
+          const dw=new Date(y,m-1,dd).getDay();
+          const isWE=dw===0||dw===6;
+          const isHol=hols.has(ds);
+          const abs=dayMap[ds]||[];
+          const isToday=ds===todayStr;
+          const bg=abs.length?colorFor(abs[0].userId):(isWE||isHol?'#f3f4f6':'');
+          const border=isToday?'2px solid var(--primary)':'1px solid transparent';
+          const title=abs.map(a=>a.name+': '+a.type).join(', ')+(isHol?' (Feiertag)':'');
+          const dot=abs.length>1?`<span style="position:absolute;top:0;right:0;width:5px;height:5px;border-radius:50%;background:var(--danger)"></span>`:'';
+          return `<div style="position:relative;text-align:center;padding:1px 0;border-radius:3px;background:${bg};border:${border};cursor:${abs.length?'pointer':'default'}"
+            title="${esc(title)}">${dd}${dot}</div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  html+='</div>';
+  return html;
 }
