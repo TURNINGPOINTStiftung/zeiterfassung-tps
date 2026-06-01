@@ -224,6 +224,32 @@ export function cancelZeitstempel(){
   closeModal(); updateZeitstempelBtn(); toast('Stempel verworfen.'); _refreshStempelView();
 }
 
+// Berechnet b1/b2/Pause aus allen Stempel-Sessions des Tages
+function _recomputeFromSessions(day){
+  const sessions=day.stampSessions||[];
+  if(!sessions.length) return;
+  // Die 2 längsten Sessions → Block 1 + Block 2 (chronologisch sortiert)
+  const sorted=[...sessions].sort((a,b)=>b.min-a.min);
+  const top2=sorted.slice(0,2).sort((a,b)=>a.von<b.von?-1:1);
+  const rest=sorted.slice(2);
+  // Blöcke leeren
+  day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
+  day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
+  day.ktmin=0;
+  if(top2[0]){
+    day.b1von=top2[0].von; day.b1bis=top2[0].bis;
+    if(top2[0].zuord) day.b1zuord=top2[0].zuord;
+    if(top2[0].note)  day.b1bem=top2[0].note;
+  }
+  if(top2[1]){
+    day.b2von=top2[1].von; day.b2bis=top2[1].bis;
+    if(top2[1].zuord) day.b2zuord=top2[1].zuord;
+    if(top2[1].note)  day.b2bem=top2[1].note;
+  }
+  // Restliche Sessions → Pause (Summe der Minuten)
+  day.ktmin=rest.reduce((s,r)=>s+r.min,0);
+}
+
 export function stopZeitstempel(){
   const cu=window.cu;
   const stamp=getStamp();
@@ -231,36 +257,22 @@ export function stopZeitstempel(){
   const zuord=document.getElementById('zs-zuord')?.value||'';
   const note=document.getElementById('zs-note')?.value.trim()||'';
   const von=stamp.von||'';
-  const block=stamp.block||'b1';
   const end=new Date();
   const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
   const ds=stamp.startDate;
   const [sy,sm]=ds.split('-').map(Number);
   const durationMin=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
-  const isShort=durationMin<30;
   mutate(d=>{
     const k=entryKey(cu.id,sy,sm);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
-    if(isShort||block==='kt'){
-      if(block==='b1'&&day.b1von===von&&!day.b1bis) day.b1von='';
-      else if(block==='b2'&&day.b2von===von&&!day.b2bis) day.b2von='';
-      day.ktmin=(Number(day.ktmin||0)+durationMin);
-      if(zuord&&!day.ktzuord) day.ktzuord=zuord;
-    } else if(block==='b1'){
-      day.b1von=von; day.b1bis=bis;
-      if(zuord) day.b1zuord=zuord;
-      if(note)  day.b1bem=note;
-    } else if(block==='b2'){
-      day.b2von=von; day.b2bis=bis;
-      if(zuord) day.b2zuord=zuord;
-      if(note)  day.b2bem=note;
-    } else {
-      day.ktmin=(Number(day.ktmin||0)+durationMin);
-      if(zuord) day.ktzuord=zuord;
-    }
+    // Session aufzeichnen
+    if(!Array.isArray(day.stampSessions)) day.stampSessions=[];
+    day.stampSessions.push({von,bis,min:durationMin,zuord:zuord||'',note:note||''});
+    // Aus allen Sessions die 2 größten Blöcke berechnen, Rest → Pause
+    _recomputeFromSessions(day);
     const dd=d.entries[k].days[ds];
     if(dd&&!dd.b1von&&!dd.b1bis&&!dd.b2von&&!dd.b2bis&&!Number(dd.ktmin)&&!dd.b1bem&&!dd.b2bem){
       delete d.entries[k].days[ds];
@@ -269,10 +281,8 @@ export function stopZeitstempel(){
   window.check10hCarryover?.(cu.id,sy,sm,ds);
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
-  const toastMsg=isShort
-    ? `Ausgestempelt – ${durationMin} Min. zu Kleinteiligem addiert ✓`
-    : 'Ausgestempelt – Zeiten übertragen ✓';
-  closeModal(); updateZeitstempelBtn(); toast(toastMsg,'ok');
+  toast(`Ausgestempelt – ${durationMin} Min. übertragen ✓`,'ok');
+  closeModal(); updateZeitstempelBtn();
   _refreshStempelView();
   const vze=document.getElementById('view-zeiterfassung');
   if(vze&&vze.classList.contains('active')){ window.year=sy; window.mon=sm; window.renderZeiterfassung?.(); }
