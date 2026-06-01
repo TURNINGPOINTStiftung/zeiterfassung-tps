@@ -239,9 +239,11 @@ export function openEmpMonth(uid){
 
 export function openJahresübersicht(uid,y){
   const d=getData();
+  const cu=window.cu;
   const user=getUser(uid);
   if(!user) return;
   const isFree=isFreelancer(user);
+  const canSendGF=cu&&(cu.role==='leitung'||cu.role==='admin');
 
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
@@ -354,7 +356,7 @@ export function openJahresübersicht(uid,y){
     ${zuordSection}
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
-      <button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>
+      ${canSendGF?`<button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
       <button class="btn btn-primary" onclick="printJahresübersicht('${uid}',${y})" style="width:auto">⬇ PDF herunterladen</button>
     </div>
   `,true);
