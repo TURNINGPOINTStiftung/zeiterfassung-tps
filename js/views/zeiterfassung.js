@@ -355,7 +355,8 @@ export function td_zuord(ds,field,val,wh,dpw){
 }
 
 export function td_b1bis_change(ds,val){
-  const _fid=document.activeElement?.id||null;
+  const _fid=window._ztNextFocusId||document.activeElement?.id||null;
+  window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
@@ -412,11 +413,16 @@ export function fmtTimeIn(el){
 export function focusNextTInp(el){
   const all=Array.from(document.querySelectorAll('.t-inp:not([disabled])'));
   const idx=all.indexOf(el);
-  if(idx>=0&&idx<all.length-1) all[idx+1].focus();
+  if(idx>=0&&idx<all.length-1){
+    window._ztNextFocusId=all[idx+1].id; // merken für td_tchange nach Re-Render
+    all[idx+1].focus();
+  }
 }
 
 export function td_tchange(ds,field,val){
-  const _fid=document.activeElement?.id||null;
+  // Wenn Enter/Tab gedrückt wurde, ist _nextFocusId gesetzt → bevorzugen (race-condition-safe)
+  const _fid=window._ztNextFocusId||document.activeElement?.id||null;
+  window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
   const normVal=_normTime(val);
   setDay(uid,window.year,window.mon,ds,field,normVal);
