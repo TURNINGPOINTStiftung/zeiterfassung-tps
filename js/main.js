@@ -250,7 +250,7 @@ initFirebase().then(function(){
       window.cu=getUser(savedUid);
       document.getElementById('login-screen').style.display='none';
       document.getElementById('app').classList.add('visible');
-      try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); doLogout(); return; }
+      try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
       try{ updateAbBadge(); }catch(e){}
       return;
     }
