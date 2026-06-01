@@ -23,20 +23,30 @@ export function _migrate(d){
   // ── Pause-Migration (einmalig) ─────────────────────────────────
   // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
   // Nach Einführung der Pause-Abziehung in der Formel würden sie zu wenig zeigen.
-  if(!d._fixes.pauseMigrationV1){
+  if(!d._fixes.pauseMigrationV2){
+    // V1 evtl. schon gelaufen aber nicht gespeichert → alle _pauseMigrated-Flags
+    // zurücksetzen und komplett neu mit V2 durchlaufen
     const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     Object.values(d.entries||{}).forEach(entry=>{
       Object.values(entry.days||{}).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
-        if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
-        if(day._pauseMigrated) return;
+        if(day.b2von) return;
+        // V1 könnte bereits addiert haben → zuerst rückgängig machen
+        if(day._pauseMigrated){
+          const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
+          const autoPause=gross>=540?45:gross>=360?30:0;
+          if(autoPause>0) day.b1bis=addMin(day.b1bis,-autoPause);
+          delete day._pauseMigrated;
+        }
+        // Jetzt sauber einmal addieren
         const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
         const autoPause=gross>=540?45:gross>=360?30:0;
-        if(autoPause>0){ day.b1bis=addMin(day.b1bis,autoPause); day._pauseMigrated=true; }
+        if(autoPause>0){ day.b1bis=addMin(day.b1bis,autoPause); day._pauseMigratedV2=true; }
       });
     });
     d._fixes.pauseMigrationV1=true;
+    d._fixes.pauseMigrationV2=true;
   }
   // ──────────────────────────────────────────────────────────────
   if(!d._fixes.badCarryoverV2){
