@@ -56,7 +56,8 @@ export function filterLoginUsers(val){
 
 export function loginKeyNav(e){
   const dd=document.getElementById('login-user-dropdown');
-  const open=dd&&dd.style.display!=='none';
+  // Explizit auf 'block' prüfen – CSS setzt display:none als Standard
+  const open=dd&&dd.style.display==='block';
 
   if(e.key==='ArrowDown'){
     e.preventDefault();
@@ -335,6 +336,9 @@ export async function resetPasswordsOnly(){
 }
 
 export function initAuthEvents(){
-  // Enter auf Passwort-Feld → Anmelden (Fallback; Form-Submit macht dasselbe)
+  // Enter auf Passwort-Feld → Anmelden
   document.getElementById('login-pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  // Pfeiltasten + Enter im Namen-Feld
+  const inp=document.getElementById('login-user-input');
+  if(inp) inp.addEventListener('keydown', loginKeyNav);
 }
