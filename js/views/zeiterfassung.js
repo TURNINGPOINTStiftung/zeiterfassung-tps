@@ -63,19 +63,36 @@ export function renderZeiterfassung(){
   let monthTotal=0, monthPause=0;
 
   // Werkstudenten: Wochensummen vorberechnen
+  // weekMins = aktueller Monat (für Zeilenmarkierung)
+  // weekMinsYTD = Januar bis aktueller Monat (für Jahres-Counter)
   const weekMins={};
+  const weekMinsYTD={};
   if(isWerkstudent){
-    for(let d=1;d<=dim;d++){
-      const kw=isoWeek(new Date(year,mon-1,d));
-      const dd=(entry.days||{})[dateStr(year,mon,d)]||{};
+    const _ABS_WS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+    const _addDay=(target,kw,dd)=>{
       const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
       const hasB2=!!(dd.b2von&&dd.b2bis);
-      const abs=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich';
+      const abs=_ABS_WS.has(dd.b1zuord)||_ABS_WS.has(dd.b1bem);
       const pause=(abs||hasB2)?0:(gross>=540?45:gross>=360?30:0);
-      weekMins[kw]=(weekMins[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
+      target[kw]=(target[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
+    };
+    // Aktueller Monat
+    for(let d=1;d<=dim;d++){
+      const kw=isoWeek(new Date(year,mon-1,d));
+      _addDay(weekMins,kw,(entry.days||{})[dateStr(year,mon,d)]||{});
+    }
+    // Jahr bis aktuellem Monat (für Counter)
+    for(let m=1;m<=mon;m++){
+      const e=m===mon?entry:getEntry(uid,year,m);
+      const dim2=daysInMonth(year,m);
+      for(let d=1;d<=dim2;d++){
+        const kw=isoWeek(new Date(year,m-1,d));
+        _addDay(weekMinsYTD,kw,(e.days||{})[dateStr(year,m,d)]||{});
+      }
     }
   }
   const overWeeks=new Set(Object.entries(weekMins).filter(([,v])=>v>_wsLimit).map(([k])=>Number(k)));
+  const overWeeksYTD=Object.values(weekMinsYTD).filter(v=>v>_wsLimit).length;
 
   for(let d=1;d<=dim;d++){
     const ds=dateStr(year,mon,d);
@@ -138,7 +155,7 @@ export function renderZeiterfassung(){
   const _tp=document.getElementById('tfoot-pause');
   if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
-  renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeks.size:0);
+  renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeksYTD:0);
   renderZuordBreakdown(entry);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
@@ -204,7 +221,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     cardsHtml+=`<div class="s-card" style="border:2px solid var(--danger)">
       <div class="lbl">⚠ Werkstudent 20h-Grenze</div>
       <div class="big neg">${wsOverWeeks} Woche${wsOverWeeks!==1?'n':''}</div>
-      <div class="sub">über 20h gearbeitet</div>
+      <div class="sub">Jan–${MONTHS[mon-1].slice(0,3)} über 20h/Woche</div>
     </div>`;
   }
   document.getElementById('summary-cards').innerHTML=cardsHtml;
