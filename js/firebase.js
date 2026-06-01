@@ -1,6 +1,7 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
-import { freshData, _migrate, getData, setDataCache } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
 import { hashPw, isHashed } from './auth.js';
+import { addMin, getHolidays } from './utils.js';
 
 export async function initFirebase(){
   firebase.initializeApp({
@@ -69,6 +70,7 @@ export async function initFirebase(){
       if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
     }
     setDataCache(migrated);
+    _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
@@ -131,4 +133,89 @@ export function initFirebaseEvents(){
     window._offlineMode=true;
     window.toast?.('📵 Offline – Änderungen werden lokal gespeichert.','');
   });
+}
+
+// Abwesenheits-Migrationen (benötigen getHolidays → hier statt data.js)
+function _runAbsMigrations(d){
+  try{
+    const _mk=(uid,y,m)=>`${uid}_${y}_${String(m).padStart(2,'0')}`;
+    const _ds=(y,m,dd)=>`${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    // Freelancer-Cleanup: durch sync entstandene Zeiteinträge löschen
+    if(!d._fixes.freelancerAbsCleanup){
+      const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+      Object.keys(d.entries||{}).forEach(k=>{
+        const uid2=k.split('_').slice(0,-2).join('_');
+        if(!freeIds.has(uid2)) return;
+        Object.keys(d.entries[k]?.days||{}).forEach(ds=>{
+          const day=d.entries[k].days[ds];
+          if(day&&day.b1von==='08:00'&&day.b1bis&&!day.b1zuord&&!day.b2von){
+            day.b1von=''; day.b1bis=''; day.b1bem=''; day.ktmin='';
+          }
+        });
+      });
+      d._fixes.freelancerAbsCleanup=true;
+    }
+    // Abwesenheiten mit Feiertags-Check eintragen
+    if(!d._fixes.allAbsBemerkungV2){
+      const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
+      if(d._fixes.allAbsBemerkung){
+        Object.values(d.vacRequests||{}).forEach(req=>{
+          if(req.status!=='approved') return;
+          const u=userMap[req.userId]; if(!u||u.role==='freiberuflich') return;
+          if(u.holidaysLikeSunday===false) return;
+          let cur=new Date(req.startDate+'T12:00:00');
+          while(cur<=new Date(req.endDate+'T12:00:00')){
+            const wd=cur.getDay();
+            if(wd!==0&&wd!==6){
+              const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
+              const ds=_ds(y,m,dd2);
+              const hols=getHolidays(y,u.bundesland||'');
+              if(hols.has(ds)){
+                const k=_mk(u.id,y,m);
+                const day=d.entries?.[k]?.days?.[ds];
+                if(day&&day.b1zuord===req.type&&!day.b2von){
+                  day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
+                }
+              }
+            }
+            cur.setDate(cur.getDate()+1);
+          }
+        });
+      }
+      Object.values(d.vacRequests||{}).forEach(req=>{
+        if(req.status!=='approved') return;
+        const u=userMap[req.userId]; if(!u) return;
+        const isFree=u.role==='freiberuflich';
+        const holFree=u.holidaysLikeSunday!==false;
+        const wh=u.wh||0; const dpw=u.dpw||5;
+        const vhpd=u.vacHoursPerDay||Math.round(wh/(dpw||5))||8;
+        const fullMins=isFree?0:(req.type==='AU/Krank'?(Math.round(wh*60/(dpw||5))||480):(vhpd*60)||480);
+        let cur=new Date(req.startDate+'T12:00:00');
+        while(cur<=new Date(req.endDate+'T12:00:00')){
+          const wd=cur.getDay();
+          if(wd!==0&&wd!==6){
+            const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
+            const ds=_ds(y,m,dd2);
+            const hols=getHolidays(y,u.bundesland||'');
+            if(!holFree||!hols.has(ds)){
+              const k=_mk(u.id,y,m);
+              if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+              if(!d.entries[k].days) d.entries[k].days={};
+              if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+              const day=d.entries[k].days[ds];
+              if(isFree){ if(!day.b1bem) day.b1bem=req.type||'Abwesenheit'; }
+              else if(!day.b1von&&fullMins>0&&req.type!=='Arbeitszeitausgleich'){
+                day.b1von='08:00'; day.b1bis=addMin('08:00',fullMins);
+                day.b1zuord=req.type; day.b2von=''; day.b2bis='';
+              }
+            }
+          }
+          cur.setDate(cur.getDate()+1);
+        }
+      });
+      d._fixes.freelancerAbsBemerkung=true;
+      d._fixes.allAbsBemerkung=true;
+      d._fixes.allAbsBemerkungV2=true;
+    }
+  }catch(e){ console.error('AbsMigration Fehler:',e); }
 }
