@@ -41,6 +41,7 @@ export function filterLoginUsers(val){
   const dd=document.getElementById('login-user-dropdown');
   if(!dd) return;
   const q=(val||'').trim().toLowerCase();
+  window._loginDropIdx=-1; // Highlight zurücksetzen bei neuem Filter
   if(!q){ dd.style.display='none'; return; }
   const filtered=_loginUsers
     .filter(u=>u.name.toLowerCase().startsWith(q))
@@ -51,6 +52,52 @@ export function filterLoginUsers(val){
           onclick="selectLoginUser(this.dataset.name)">${esc(u.name)}</div>`
   ).join('');
   dd.style.display='block';
+}
+
+export function loginKeyNav(e){
+  const dd=document.getElementById('login-user-dropdown');
+  const open=dd&&dd.style.display!=='none';
+
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(!open){ filterLoginUsers(document.getElementById('login-user-input')?.value||''); return; }
+    const items=Array.from(dd.querySelectorAll('.login-ac-item'));
+    if(!items.length) return;
+    window._loginDropIdx=Math.min((window._loginDropIdx??-1)+1, items.length-1);
+    _loginHighlight(items);
+
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(!open) return;
+    const items=Array.from(dd.querySelectorAll('.login-ac-item'));
+    window._loginDropIdx=Math.max((window._loginDropIdx??0)-1, -1);
+    _loginHighlight(items);
+
+  } else if(e.key==='Enter'){
+    if(!open) return; // Form-Submit übernimmt
+    e.preventDefault();
+    const items=Array.from(dd.querySelectorAll('.login-ac-item'));
+    const idx=window._loginDropIdx??-1;
+    if(idx>=0&&items[idx]){
+      selectLoginUser(items[idx].dataset.name);
+    } else if(items.length===1){
+      selectLoginUser(items[0].dataset.name);
+    } else {
+      hideLoginDropdown();
+      document.getElementById('login-pw')?.focus();
+    }
+
+  } else if(e.key==='Escape'){
+    hideLoginDropdown();
+  }
+}
+
+function _loginHighlight(items){
+  const idx=window._loginDropIdx??-1;
+  items.forEach((el,i)=>{
+    el.classList.toggle('login-ac-active',i===idx);
+    if(i===idx) el.scrollIntoView({block:'nearest'});
+  });
 }
 
 export function hideLoginDropdown(){
