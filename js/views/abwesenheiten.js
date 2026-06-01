@@ -123,7 +123,7 @@ export async function saveVacRequest(){
   const forOther=targetUser.id!==cu.id;
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
-  const autoApprove=isSick||forOther||isLeiter;
+  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich';
   const wd=halfDay?0.5:countWorkDays(from,to,targetUser);
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
