@@ -6,7 +6,8 @@ import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
          showForgotPassword, sendPasswordReset,
          checkPasswordResetToken, saveResetPassword,
-         filterLoginUsers, hideLoginDropdown, selectLoginUser } from './auth.js';
+         filterLoginUsers, hideLoginDropdown, selectLoginUser,
+         loginKeyNav } from './auth.js';
 import { initApp, switchView, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
 import { openModal, closeModal } from './utils.js';
@@ -71,6 +72,7 @@ window.saveResetPassword       = saveResetPassword;
 window.filterLoginUsers        = filterLoginUsers;
 window.hideLoginDropdown       = hideLoginDropdown;
 window.selectLoginUser         = selectLoginUser;
+window.loginKeyNav             = loginKeyNav;
 
 // App navigation
 window.initApp          = initApp;

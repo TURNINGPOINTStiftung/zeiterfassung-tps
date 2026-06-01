@@ -50,6 +50,7 @@
         <input type="text" id="login-user-input"
                autocomplete="username" placeholder="Name eingeben …"
                oninput="filterLoginUsers(this.value)"
+               onkeydown="loginKeyNav(event)"
                onblur="hideLoginDropdown()"
                style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:#fff;color:var(--text);box-sizing:border-box">
         <div id="login-user-dropdown" onmousedown="event.preventDefault()"></div>

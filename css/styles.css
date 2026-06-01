@@ -23,7 +23,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 /* ── Login-Autocomplete-Dropdown ── */
 #login-user-dropdown{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:200;max-height:220px;overflow-y:auto}
 .login-ac-item{padding:10px 14px;font-size:14px;cursor:pointer;transition:background .12s}
-.login-ac-item:hover{background:#eef2fa;color:var(--primary);font-weight:600}
+.login-ac-item:hover,.login-ac-item.login-ac-active{background:#eef2fa;color:var(--primary);font-weight:600}
 
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
