@@ -1,6 +1,6 @@
 import { STORAGE_KEY } from './config.js';
 import { getData, getUser, mutate, saveRaw } from './data.js';
-import { openModal, closeModal, toast } from './utils.js';
+import { openModal, closeModal, toast, diffMin, addMin } from './utils.js';
 
 export function exportData(){
   const blob=new Blob([JSON.stringify(getData(),null,2)],{type:'application/json'});
@@ -87,4 +87,82 @@ export function runCarryoverCleanup(){
     const detail=Object.entries(byUser).map(([uid,n])=>{ const u=getUser(uid); return `${u?u.name:uid}: ${n}`; }).join(', ');
     toast(`✓ ${removed} Einträge bereinigt (${detail})`,'ok');
   }
+}
+
+// ── Pause-Migration ────────────────────────────────────────────────
+// Historische Einträge: Pause wurde in der Formel abgezogen, aber b1bis
+// (Abfahrtszeit) wurde damals noch nicht angepasst → zu wenige Stunden.
+// Diese Migration addiert die auto-Pause zur gespeicherten b1bis.
+export function showPauseMigration(){
+  const d=getData();
+  const ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+  let count=0;
+  const preview=[];
+  Object.entries(d.entries||{}).forEach(([ek,entry])=>{
+    Object.entries(entry.days||{}).forEach(([ds,day])=>{
+      if(!day.b1von||!day.b1bis) return;
+      if(ABS.has(day.b1zuord)||ABS.has(day.b1bem)) return;
+      if(day.b2von) return; // Zwei-Block-Tag: Pause liegt im Gap
+      const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
+      const autoPause=gross>=540?45:gross>=360?30:0;
+      if(autoPause===0) return;
+      // Bereits migriert? Prüfen ob b1bis schon die Pause enthält
+      if(day._pauseMigrated) return;
+      count++;
+      if(preview.length<5){
+        const uid=ek.split('_')[0];
+        const u=getUser(uid);
+        preview.push(`${u?.name||uid} · ${ds}: ${day.b1von}–${day.b1bis} → ${addMin(day.b1bis,autoPause)} (+${autoPause} Min.)`);
+      }
+    });
+  });
+
+  if(count===0){
+    openModal(`<h3>✅ Pause-Migration</h3>
+      <p style="font-size:13px;color:var(--muted);margin:12px 0">Keine Einträge gefunden die migriert werden müssen – alles aktuell.</p>
+      <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>`);
+    return;
+  }
+
+  const previewHtml=preview.map(p=>`<div style="font-family:monospace;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">${p}</div>`).join('');
+  openModal(`<h3>🔧 Pause-Migration</h3>
+    <p style="font-size:13px;color:var(--muted);margin:10px 0 8px">
+      <strong>${count} Einträge</strong> haben die auto-Pause noch nicht in der Abfahrtszeit.
+      Die Migration addiert die Pause zur b1bis, damit die Gesamtstunden korrekt sind.
+    </p>
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px;font-size:12px;color:#856404;margin-bottom:12px">
+      ⚠ Bitte vorher ein Backup exportieren (Einstellungen → Daten exportieren)!
+    </div>
+    <div style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;margin-bottom:12px">
+      ${previewHtml}
+      ${count>5?`<div style="font-size:12px;color:var(--muted);padding:4px 0">… und ${count-5} weitere</div>`:''}
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-ok" onclick="runPauseMigration()">✓ Migration ausführen (${count} Einträge)</button>
+    </div>`);
+}
+
+export function runPauseMigration(){
+  const ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+  let fixed=0;
+  mutate(d=>{
+    Object.values(d.entries||{}).forEach(entry=>{
+      Object.values(entry.days||{}).forEach(day=>{
+        if(!day.b1von||!day.b1bis) return;
+        if(ABS.has(day.b1zuord)||ABS.has(day.b1bem)) return;
+        if(day.b2von) return;
+        if(day._pauseMigrated) return;
+        const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
+        const autoPause=gross>=540?45:gross>=360?30:0;
+        if(autoPause===0) return;
+        day.b1bis=addMin(day.b1bis,autoPause);
+        day._pauseMigrated=true;
+        fixed++;
+      });
+    });
+  });
+  closeModal();
+  toast(`✓ Pause-Migration abgeschlossen: ${fixed} Einträge korrigiert`,'ok');
+  window.renderZeiterfassung?.();
 }
