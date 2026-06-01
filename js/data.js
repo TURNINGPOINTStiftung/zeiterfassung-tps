@@ -24,10 +24,11 @@ export function _migrate(d){
   // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
   // Nach Einführung der Pause-Abziehung in der Formel würden sie zu wenig zeigen.
   // Pause-Migration: einmalig pro Tag (Idempotenz-Flag auf Tages-Ebene)
-  {
+  try{
     const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     Object.values(d.entries||{}).forEach(entry=>{
-      Object.values(entry.days||{}).forEach(day=>{
+      if(!entry||!entry.days) return; // null-Guard
+      Object.values(entry.days).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
         if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
@@ -50,7 +51,7 @@ export function _migrate(d){
     });
     d._fixes.pauseMigrationV1=true;
     d._fixes.pauseMigrationV2=true;
-  }
+  }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
   // ──────────────────────────────────────────────────────────────
   if(!d._fixes.badCarryoverV2){
     Object.keys(d.entries||{}).forEach(k=>{
