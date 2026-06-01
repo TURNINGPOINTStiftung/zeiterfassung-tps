@@ -65,6 +65,7 @@ export function renderZeiterfassung(){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const dayMinGross=b1min+b2min+ktm;
+    const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
     // Keine auto-Pause bei: Abwesenheit, Zwei-Block-Einträgen (Pause liegt im Gap)
@@ -72,7 +73,6 @@ export function renderZeiterfassung(){
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMinAuto;
-    const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
     const effDayMin=Math.min(roundedDayMin,600);
     monthTotal+=effDayMin;
