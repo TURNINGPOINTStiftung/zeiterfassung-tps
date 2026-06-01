@@ -131,22 +131,23 @@ export function _migrate(d){
   }
   }catch(e){ console.error('AbsBemerkung-Migration Fehler (ignoriert):',e); }
   // ── Freiberufler-Cleanup: durch Abwesenheitssync entstandene Zeiteinträge löschen
-  if(!d._fixes.freelancerAbsCleanup){
-    const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
-    Object.keys(d.entries||{}).forEach(k=>{
-      const uid2=k.split('_').slice(0,-2).join('_'); // entryKey = uid_year_month
-      if(!freeIds.has(uid2)) return;
-      const days=d.entries[k]?.days||{};
-      Object.keys(days).forEach(ds=>{
-        const day=days[ds];
-        // Durch Abwesenheitssync erstellte Einträge: b1von=08:00, kein b1zuord, nur b1bem
-        if(day&&day.b1von==='08:00'&&day.b1bis&&!day.b1zuord&&!day.b2von){
-          day.b1von=''; day.b1bis=''; day.b1bem=''; day.ktmin='';
-        }
+  try{
+    if(!d._fixes.freelancerAbsCleanup){
+      const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+      Object.keys(d.entries||{}).forEach(k=>{
+        const uid2=k.split('_').slice(0,-2).join('_');
+        if(!freeIds.has(uid2)) return;
+        const days=d.entries[k]?.days||{};
+        Object.keys(days).forEach(ds=>{
+          const day=days[ds];
+          if(day&&day.b1von==='08:00'&&day.b1bis&&!day.b1zuord&&!day.b2von){
+            day.b1von=''; day.b1bis=''; day.b1bem=''; day.ktmin='';
+          }
+        });
       });
-    });
-    d._fixes.freelancerAbsCleanup=true;
-  } }catch(e){ console.error('FreelancerCleanup Fehler (ignoriert):',e); }
+      d._fixes.freelancerAbsCleanup=true;
+    }
+  }catch(e){ console.error('FreelancerCleanup Fehler (ignoriert):',e); }
   // ──────────────────────────────────────────────────────────────
   if(!d._fixes.badCarryoverV2){
     Object.keys(d.entries||{}).forEach(k=>{
