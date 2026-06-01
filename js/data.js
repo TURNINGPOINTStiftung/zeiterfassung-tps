@@ -52,6 +52,31 @@ export function _migrate(d){
     d._fixes.pauseMigrationV1=true;
     d._fixes.pauseMigrationV2=true;
   }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
+  // ── Freiberufler-Abwesenheiten: fehlende Bemerkungen nachträglich eintragen
+  if(!d._fixes.freelancerAbsBemerkung){
+    const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+    Object.values(d.vacRequests||{}).forEach(req=>{
+      if(req.status!=='approved'||!freeIds.has(req.userId)) return;
+      let cur=new Date(req.startDate+'T12:00:00');
+      const endD=new Date(req.endDate+'T12:00:00');
+      while(cur<=endD){
+        const wd=cur.getDay();
+        if(wd!==0&&wd!==6){
+          const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
+          const ds=`${y}-${String(m).padStart(2,'0')}-${String(dd2).padStart(2,'0')}`;
+          const k=`${req.userId}_${y}_${String(m).padStart(2,'0')}`;
+          if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+          if(!d.entries[k].days) d.entries[k].days={};
+          if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+          const day=d.entries[k].days[ds];
+          // Nur Bemerkung setzen, keine Zeitfelder überschreiben
+          if(!day.b1bem) day.b1bem=req.type||'Abwesenheit';
+        }
+        cur.setDate(cur.getDate()+1);
+      }
+    });
+    d._fixes.freelancerAbsBemerkung=true;
+  }
   // ── Freiberufler-Cleanup: durch Abwesenheitssync entstandene Zeiteinträge löschen
   if(!d._fixes.freelancerAbsCleanup){
     const freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
