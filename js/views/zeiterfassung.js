@@ -383,22 +383,15 @@ export function td_zuord(ds,field,val,wh,dpw){
     // Keine Zeitfelder setzen
   }
 
-  // Urlaub / AU/Krank → Zeiteinträge setzen
-  // Freiberufler: wh=0, daher eigene Fallunterscheidung
-  if(val==='Urlaub'||val==='AU/Krank'){
+  // Urlaub / AU/Krank → Zeiteinträge nur für Festangestellte (nicht Freiberufler)
+  if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
     const u=getUser(uid)||cu;
-    const isFree=isFreelancer(u);
-    if(wh>0||isFree){
-      // Freiberufler: vacHoursPerDay oder 8h Default
-      const dailyMin=isFree
-        ?((u.vacHoursPerDay||8)*60)
-        :Math.round(wh*60/(dpw||5))||480;
-      const dMin=val==='Urlaub'?((u?.vacHoursPerDay||Math.round((wh||40)/(dpw||5))||8)*60):dailyMin;
-      setDay(uid,window.year,window.mon,ds,'b1von','08:00');
-      setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
-      setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
-      setDay(uid,window.year,window.mon,ds,'ktmin','');
-    }
+    const dailyMin=Math.round(wh*60/(dpw||5))||480;
+    const dMin=val==='Urlaub'?((u?.vacHoursPerDay||Math.round(wh/(dpw||5))||8)*60):dailyMin;
+    setDay(uid,window.year,window.mon,ds,'b1von','08:00');
+    setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
+    setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
+    setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
   if(field==='b1zuord'){
     const u=getUser(uid)||cu;
