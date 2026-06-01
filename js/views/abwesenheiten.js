@@ -24,6 +24,40 @@ export function countWorkDays(start,end,user){
   return count;
 }
 
+// Urlaubstage nach Profil: Werktage (Mo-Fr) pro Kalenderwoche auf dpw deckeln.
+// Bsp Mateo dpw=2: 1 Werktag → 1 Tag, ganze Woche (5 Werktage) → 2 Tage.
+export function countVacationDays(start,end,user){
+  const holFree=!user||user.holidaysLikeSunday!==false;
+  const dpw=Math.max(1,Math.min(7,user?.dpw||5));
+  const bl=user?.bundesland||'';
+  const holCache={};
+  const _iso=d=>{ // ISO-Wochen-Schlüssel (Jahr+KW)
+    const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+    const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
+    const firstThu=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+    const week=1+Math.round(((t-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
+    return t.getUTCFullYear()+'-'+week;
+  };
+  const perWeek={};
+  let cur=new Date(start+'T12:00:00');
+  const endD=new Date(end+'T12:00:00');
+  while(cur<=endD){
+    const wd=cur.getDay();
+    if(wd!==0&&wd!==6){
+      const y=cur.getFullYear();
+      if(holFree&&!holCache[y]) holCache[y]=getHolidays(y,bl);
+      const ds=cur.toISOString().slice(0,10);
+      if(!holFree||!holCache[y].has(ds)){
+        const wk=_iso(cur);
+        perWeek[wk]=(perWeek[wk]||0)+1;
+      }
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  // Pro Woche auf dpw deckeln
+  return Object.values(perWeek).reduce((s,n)=>s+Math.min(n,dpw),0);
+}
+
 export function showVacRequestForm(){
   const cu=window.cu;
   const today=new Date().toISOString().slice(0,10);
@@ -67,7 +101,7 @@ export function showVacRequestForm(){
       <div style="display:flex;flex-direction:column;gap:6px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" checked onchange="calcVrDays()">
-          Nach Wochenarbeitszeit <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
+          Automatisch nach Profil <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" onchange="calcVrDays()">
@@ -123,32 +157,28 @@ export function calcVrDays(){
   const empId=document.getElementById('vr-emp')?.value||'';
   const vrUser=empId?d2.users.find(u=>u.id===empId)||window.cu:window.cu;
   const weekdays=countWorkDays(f,t,vrUser); // Mo-Fr (mit Feiertagscheck)
+  const dpw=Math.max(1,Math.min(7,vrUser?.dpw||5));
+  const wh=vrUser?.wh||40;
+  const hoursPerDay=Math.round((wh/dpw)*10)/10; // Stunden pro Urlaubstag
   const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
+  // Auto-Wert nach Profil (Werktage pro Woche auf dpw gedeckelt)
+  const autoDays=countVacationDays(f,t,vrUser);
+  const autoHint=document.getElementById('vr-mode-auto-hint');
+  if(autoHint) autoHint.textContent=`(${wh}h / ${dpw} Tage → ${hoursPerDay}h pro Urlaubstag)`;
   let effective;
   if(type==='Urlaub'&&mode==='manual'){
     effective=parseFloat(document.getElementById('vr-manual-days')?.value)||1;
-    // Max 5 Urlaubstage pro Woche
-    const maxPerWeek=5;
-    const weeks=Math.ceil(weekdays/5);
-    effective=Math.min(effective,weeks*maxPerWeek);
+    // Deckel: dpw Urlaubstage pro Kalenderwoche
+    const weeks=Math.max(1,Math.ceil(weekdays/5));
+    effective=Math.min(effective,weeks*dpw);
   } else if(type==='Urlaub'){
-    // Automatisch nach Wochenarbeitszeit: wh/8h = Urlaubstage pro Kalenderwoche
-    // Bsp Mateo 16h/Woche → 16/8 = 2 Urlaubstage pro Woche
-    const wh=vrUser?.wh||40;
-    const daysPerWeek=wh/8;                 // Vollzeit-Äquivalent-Tage pro Woche
-    const raw=(weekdays/5)*daysPerWeek;     // anteilig über den Zeitraum
-    effective=halfDay&&singleDay?0.5:Math.round(raw*2)/2; // auf 0.5 gerundet
-    const autoHint=document.getElementById('vr-mode-auto-hint');
-    if(autoHint&&wh<40) autoHint.textContent=`(${wh}h/Woche → ${effective} Tage à 8h)`;
-    else if(autoHint) autoHint.textContent='';
-    if(mode!=='manual'){
-      const manualEl=document.getElementById('vr-manual-days');
-      if(manualEl) manualEl.value=effective;
-    }
+    effective=halfDay&&singleDay?0.5:autoDays;
+    const manualEl=document.getElementById('vr-manual-days');
+    if(manualEl) manualEl.value=effective;
   } else {
     effective=halfDay&&singleDay?0.5:weekdays;
   }
-  if(info) info.textContent=`→ ${effective} Urlaubstag${effective!==1?'e':''}`;
+  if(info) info.textContent=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
   if(hint) hint.style.display=weekdays>5?'block':'none';
 }
 
@@ -169,14 +199,15 @@ export async function saveVacRequest(){
   const isLeiter=cu.role==='leitung';
   const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich';
   const weekdays=countWorkDays(from,to,targetUser);
+  const dpw=Math.max(1,Math.min(7,targetUser?.dpw||5));
   const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
   let wd;
   if(halfDay){ wd=0.5; }
   else if(type==='Urlaub'&&mode==='manual'){
-    wd=parseFloat(document.getElementById('vr-manual-days')?.value)||weekdays;
+    const weeks=Math.max(1,Math.ceil(weekdays/5));
+    wd=Math.min(parseFloat(document.getElementById('vr-manual-days')?.value)||1,weeks*dpw);
   } else if(type==='Urlaub'){
-    const wh=targetUser?.wh||40;
-    wd=Math.round((weekdays/5)*(wh/8)*2)/2; // nach Wochenarbeitszeit
+    wd=countVacationDays(from,to,targetUser); // nach Profil (Werktage/Woche gedeckelt auf dpw)
   } else {
     wd=weekdays;
   }
