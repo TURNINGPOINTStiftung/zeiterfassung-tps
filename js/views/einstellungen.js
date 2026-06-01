@@ -266,10 +266,16 @@ function userForm(u={}){
     ['SH','Schleswig-Holstein'],['TH','Thüringen']];
   const blOpts=BL.map(([v,l])=>`<option value="${v}"${(u.bundesland||'')=== v?' selected':''}>${l}</option>`).join('');
   return `
-    <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
-    <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
-    <div class="form-group"><label>E-Mail <span style="font-size:11px;color:var(--muted)">(für Passwort-Reset-Anfragen)</span></label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
-    <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer lassen = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Nicht ändern: leer lassen':'Passwort eingeben'}" autocomplete="new-password"></div>
+    <div class="uf-section-head">👤 Zugangsdaten</div>
+    <div class="uf-grid2">
+      <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
+      <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
+    </div>
+    <div class="uf-grid2">
+      <div class="form-group"><label>E-Mail</label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
+      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben'}" autocomplete="new-password"></div>
+    </div>
+    <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
     <div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label>
       ${u.id==='admin'
         ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
@@ -291,24 +297,34 @@ function userForm(u={}){
             +'</div>';
         })()}
     </div>
+    <div class="uf-section-head">📍 Standort</div>
+    <div class="uf-grid2">
     <div class="form-group"><label>Team(s)</label><div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div></div>
-    <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
-    <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
+    </div>
+    <div class="uf-grid2">
+      <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
+      <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
+    </div>
     <div id="uf-employed-fields">
-      <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
-      <div class="form-group"><label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaub- &amp; Krankheitsstunden)</span></label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
-      <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
-      <div class="form-group">
-        <label>Stunden pro Urlaubstag <span style="font-size:11px;color:var(--muted)">(Standard: Tagesarbeitszeit)</span></label>
-        <input id="uf-vhpd" type="number" min="1" max="24" step="0.5"
-               value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
+      <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
+      <div class="uf-grid2">
+        <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
+        <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
       </div>
-      <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
-      <div class="form-group" style="background:#f8f9fb;border-radius:6px;padding:10px 12px;border:1.5px solid var(--border)">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
-          Feiertage gelten wie Sonntage <span style="font-size:11px;color:var(--muted)">(kein SOLL, kein Urlaubsabzug bei Feiertagen)</span>
-        </label>
+      <div class="uf-grid2">
+        <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
+        <div class="form-group"><label>Stunden / Urlaubstag</label>
+          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
+        </div>
+      </div>
+      <div class="uf-grid2">
+        <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
+        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
+            Feiertage = kein SOLL / kein Urlaubsabzug
+          </label>
+        </div>
       </div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">

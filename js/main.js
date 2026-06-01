@@ -32,7 +32,8 @@ import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest,
 
 import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
          updateZeitstempelBtn, openZeitstempel, startZeitstempel,
-         cancelZeitstempel, stopZeitstempel } from './views/stempeln.js';
+         cancelZeitstempel, stopZeitstempel,
+         syncStempelVon, startZeitstempelAt } from './views/stempeln.js';
 
 import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport,
          markYearReportSeen, sendTeamReport, sendTeamReportForTeam } from './views/gfberichte.js';
@@ -150,6 +151,8 @@ window.openZeitstempel     = openZeitstempel;
 window.startZeitstempel    = startZeitstempel;
 window.cancelZeitstempel   = cancelZeitstempel;
 window.stopZeitstempel     = stopZeitstempel;
+window.syncStempelVon      = syncStempelVon;
+window.startZeitstempelAt  = startZeitstempelAt;
 
 // GF-Berichte view
 window.renderGFBerichte    = renderGFBerichte;
