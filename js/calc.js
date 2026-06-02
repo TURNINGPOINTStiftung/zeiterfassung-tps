@@ -9,8 +9,9 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 // Pflicht-Pause nach Gesamtarbeitszeit (6h→30, 9h→45) MINUS bereits
 // genommene Lücke zwischen Block 1 und Block 2. Bei lückenlosen Blöcken
 // (z.B. 10-14 + 14-18) ist die Lücke 0 → volle Pflicht-Pause wird abgezogen.
-export function autoPauseMin(dd){
+export function autoPauseMin(dd,user){
   if(!dd||_isAbsDay(dd)) return 0;
+  if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   const required=gross>=540?45:gross>=360?30:0;
   if(required===0) return 0;
@@ -20,15 +21,15 @@ export function autoPauseMin(dd){
   return Math.max(0,required-gap);
 }
 
-export function dayMinutes(dd){
+export function dayMinutes(dd,user){
   if(!dd) return 0;
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   if(_isAbsDay(dd)) return gross;
-  return Math.max(0,gross-autoPauseMin(dd));
+  return Math.max(0,gross-autoPauseMin(dd,user));
 }
-export function monthIST(entry){
+export function monthIST(entry,user){
   if(!entry||!entry.days) return 0;
-  return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd),0);
+  return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd,user),0);
 }
 export function dailyMinutes(user){ return Math.round((user.wh||0)/((user.dpw||5))*60); }
 export function isVollzeit(user){ return !isFreelancer(user)&&(user.wh||0)>=39; }
@@ -69,7 +70,7 @@ export function computeAutoCarry(uid,user,y,m,_d){
   _d=_d||0; if(_d>24) return 0;
   let py=y,pm=m-1; if(pm<1){pm=12;py--;}
   const pe=getEntry(uid,py,pm);
-  const pIST=monthIST(pe);
+  const pIST=monthIST(pe,user);
   if(pIST===0&&!pe.carryoverManual) return 0;
   const pCarryH=pe.carryoverManual?(pe.carryover||0):computeAutoCarry(uid,user,py,pm,_d+1);
   if(isFreelancer(user)){

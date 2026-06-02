@@ -20,14 +20,19 @@ export function _migrate(d){
   if(!d.yearReports) d.yearReports={};
   if(!d._fixes) d._fixes={};
 
+  // Freiberufler-IDs (keine Pausen-Logik für sie)
+  const _freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+  const _uidOf=k=>k.split('_').slice(0,-2).join('_');
+
   // ── Pause-Migration (einmalig) ─────────────────────────────────
   // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
   // Nach Einführung der Pause-Abziehung in der Formel würden sie zu wenig zeigen.
   // Pause-Migration: einmalig pro Tag (Idempotenz-Flag auf Tages-Ebene)
   try{
     const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
-    Object.values(d.entries||{}).forEach(entry=>{
+    Object.entries(d.entries||{}).forEach(([k,entry])=>{
       if(!entry||!entry.days) return; // null-Guard
+      if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
@@ -58,8 +63,9 @@ export function _migrate(d){
   // damit Netto = eingetragene Arbeitszeit (konsistent mit Einzelblock).
   try{
     const _ABS2=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
-    Object.values(d.entries||{}).forEach(entry=>{
+    Object.entries(d.entries||{}).forEach(([k,entry])=>{
       if(!entry||!entry.days) return;
+      if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||day._b2PauseMig) return;
         if(!day.b1von||!day.b1bis||!day.b2von||!day.b2bis) return; // nur echte Zwei-Block-Tage
@@ -74,6 +80,26 @@ export function _migrate(d){
     });
     d._fixes.b2PauseMigrationV1=true;
   }catch(e){ console.error('B2-Pause-Migration Fehler (ignoriert):',e); }
+
+  // ── Freiberufler-Pause-Rücknahme (einmalig) ─────────────────────
+  // Frühere Migrationen haben bei Freiberuflern Pause auf b1bis addiert.
+  // Da Freiberufler keine Pause haben, wird das hier rückgängig gemacht.
+  try{
+    Object.entries(d.entries||{}).forEach(([k,entry])=>{
+      if(!entry||!entry.days) return;
+      if(!_freeIds.has(_uidOf(k))) return; // nur Freiberufler
+      Object.values(entry.days).forEach(day=>{
+        if(!day) return;
+        if((day._pauseMigratedV2||day._pauseMigrated||day._b2PauseMig)&&day.b1bis&&!day.b2von){
+          const g=diffMin(day.b1von||'',day.b1bis||'')+Number(day.ktmin||0);
+          const p=g>=585?45:g>=390?30:0; // inverse Pausenschwelle
+          if(p>0) day.b1bis=addMin(day.b1bis,-p);
+        }
+        delete day._pauseMigrated; delete day._pauseMigratedV2; delete day._b2PauseMig;
+      });
+    });
+    d._fixes.freelancerPauseRollbackV1=true;
+  }catch(e){ console.error('Freelancer-Pause-Rollback Fehler (ignoriert):',e); }
 
   // Abwesenheits-Migrationen werden in firebase.js nach dem Laden ausgeführt
   // (benötigen getHolidays aus utils.js – hier nicht verfügbar ohne Zirkularität)
