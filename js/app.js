@@ -68,11 +68,6 @@ export function switchModule(name){
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(name===m)?'flex':'none';
   });
-  // Website-iframe erst beim ersten Öffnen laden
-  if(name==='website'){
-    const f=document.getElementById('iframe-website');
-    if(f&&f.dataset.src&&f.getAttribute('src')==='about:blank') f.src=f.dataset.src;
-  }
 }
 
 export function rebuildEmpSelect(){
