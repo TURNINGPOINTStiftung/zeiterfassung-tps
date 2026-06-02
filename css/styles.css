@@ -8,6 +8,24 @@
 }
 body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
+/* ── Modul-Navigation (CI im Website-Stil) ── */
+.module-bar{display:flex;align-items:center;gap:28px;background:#fff;border-bottom:3px solid var(--primary);padding:6px 26px;box-shadow:0 2px 10px rgba(0,0,0,.07);position:sticky;top:0;z-index:50}
+.module-bar .mb-logo{height:42px;width:auto;flex-shrink:0}
+.mb-tabs{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.mb-tab{background:none;border:none;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;color:var(--primary);padding:12px 16px 14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-9px;transition:all .15s;letter-spacing:.3px}
+.mb-tab:hover{color:var(--primary-l)}
+.mb-tab.active{border-bottom-color:var(--accent)}
+@media(max-width:760px){
+  .module-bar{gap:12px;padding:6px 12px}
+  .module-bar .mb-logo{height:32px}
+  .mb-tab{font-size:15px;padding:10px 10px 12px}
+}
+/* Modul-Frames (Website/Forum/CRM) */
+.mod-frame{display:flex;flex-direction:column;min-height:calc(100vh - 64px)}
+.mod-frame-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 22px;background:var(--bg);border-bottom:1px solid var(--border);font-size:14px;font-weight:600;color:var(--primary);flex-wrap:wrap}
+.mod-iframe{flex:1;width:100%;min-height:calc(100vh - 120px);border:none;background:#fff}
+.mod-placeholder{padding:70px 22px;text-align:center}
+
 /* ── Login ── */
 #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-l) 100%)}
 .login-card{background:var(--white);border-radius:12px;padding:40px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}

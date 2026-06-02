@@ -46,6 +46,33 @@ export function initApp(){
   else if(hasPermission('tab_gfberichte',role)&&!hasPermission('tab_uebersicht',role)) switchView('gfberichte');
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
+
+  // Modul-Navigation nur für Admin
+  const moduleBar=document.getElementById('module-bar');
+  if(moduleBar) moduleBar.style.display=isAdmin?'flex':'none';
+  switchModule('zeiterfassung');
+}
+
+// Wechsel zwischen Modulen (Zeiterfassung / Website / Forum / CRM) – Admin
+export function switchModule(name){
+  window._activeModule=name;
+  document.querySelectorAll('.mb-tab').forEach(t=>t.classList.toggle('active',t.dataset.mod===name));
+  const isZE=name==='zeiterfassung';
+  const hdr=document.querySelector('.app-header');
+  const nav=document.getElementById('app-nav');
+  const main=document.querySelector('.app-content');
+  if(hdr) hdr.style.display=isZE?'':'none';
+  if(nav) nav.style.display=isZE?'':'none';
+  if(main) main.style.display=isZE?'':'none';
+  ['website','forum','crm'].forEach(m=>{
+    const el=document.getElementById('mod-'+m);
+    if(el) el.style.display=(name===m)?'flex':'none';
+  });
+  // Website-iframe erst beim ersten Öffnen laden
+  if(name==='website'){
+    const f=document.getElementById('iframe-website');
+    if(f&&f.dataset.src&&f.getAttribute('src')==='about:blank') f.src=f.dataset.src;
+  }
 }
 
 export function rebuildEmpSelect(){
