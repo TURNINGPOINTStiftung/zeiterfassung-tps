@@ -303,18 +303,27 @@ function _recomputeFromSessions(day){
   day.ktmin=rest.reduce((s,r)=>s+r.min,0);
 }
 
-export function stopZeitstempel(){
+export function stopZeitstempel(bisOverride){
   const cu=window.cu;
   const stamp=getStamp();
   if(!stamp||stamp.uid!==cu.id){ toast('Kein aktiver Stempel.','err'); return; }
   const zuord=document.getElementById('zs-zuord')?.value||'';
   const note=document.getElementById('zs-note')?.value.trim()||'';
   const von=stamp.von||'';
-  const end=new Date();
-  const bis=String(end.getHours()).padStart(2,'0')+':'+String(end.getMinutes()).padStart(2,'0');
   const ds=stamp.startDate;
   const [sy,sm]=ds.split('-').map(Number);
-  const durationMin=Math.max(0,Math.round((end-new Date(stamp.startTime))/60000));
+  // bisOverride = manuell eingegebene Endzeit (HH:MM) aus der Zeiterfassung.
+  // Sonst die aktuelle Uhrzeit (regulärer Ausstempel-Button).
+  let bis, endDate;
+  if(bisOverride&&/^\d{1,2}:\d{2}$/.test(bisOverride)){
+    bis=bisOverride;
+    const[bh,bm]=bisOverride.split(':').map(Number);
+    endDate=new Date(ds+'T00:00:00'); endDate.setHours(bh,bm,0,0);
+  } else {
+    endDate=new Date();
+    bis=String(endDate.getHours()).padStart(2,'0')+':'+String(endDate.getMinutes()).padStart(2,'0');
+  }
+  const durationMin=Math.max(0,Math.round((endDate-new Date(stamp.startTime))/60000));
   mutate(d=>{
     const k=entryKey(cu.id,sy,sm);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
