@@ -5,14 +5,26 @@ import { isFreelancer } from './roles.js';
 const _ABS_CATS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
 function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(dd.b1bem))); }
 
+// Tatsächlich abzuziehende Auto-Pause (§ ArbZG):
+// Pflicht-Pause nach Gesamtarbeitszeit (6h→30, 9h→45) MINUS bereits
+// genommene Lücke zwischen Block 1 und Block 2. Bei lückenlosen Blöcken
+// (z.B. 10-14 + 14-18) ist die Lücke 0 → volle Pflicht-Pause wird abgezogen.
+export function autoPauseMin(dd){
+  if(!dd||_isAbsDay(dd)) return 0;
+  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  const required=gross>=540?45:gross>=360?30:0;
+  if(required===0) return 0;
+  // Bereits genommene Pause = Lücke zwischen b1bis und b2von
+  let gap=0;
+  if(dd.b1bis&&dd.b2von){ const g=diffMin(dd.b1bis,dd.b2von); if(g>0) gap=g; }
+  return Math.max(0,required-gap);
+}
+
 export function dayMinutes(dd){
   if(!dd) return 0;
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  // Keine Auto-Pause bei: Abwesenheit, Zwei-Block-Einträgen (Pause liegt im Gap)
   if(_isAbsDay(dd)) return gross;
-  if(dd.b2von&&dd.b2bis) return gross; // Zwei-Block: Pause = Gap zwischen Blöcken
-  const autoPause=gross>=540?45:gross>=360?30:0;
-  return Math.max(0,gross-autoPause);
+  return Math.max(0,gross-autoPauseMin(dd));
 }
 export function monthIST(entry){
   if(!entry||!entry.days) return 0;
