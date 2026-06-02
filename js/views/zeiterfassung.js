@@ -423,14 +423,15 @@ export function td_b1bis_change(ds,val){
   window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
 
-  // Wenn Endzeit heute manuell eingetragen → laufenden Stempel stoppen
+  // Wenn Endzeit heute manuell eingetragen → laufenden Stempel mit DIESER Zeit stoppen
   if(uid===window.cu?.id){
     const today=new Date().toISOString().slice(0,10);
     if(ds===today){
       const stamp=window.getStamp?.();
       if(stamp&&stamp.uid===uid&&stamp.startDate===today){
         clearTimeout(window._ztAutoStampTimer);
-        window.stopZeitstempel?.();
+        const _normBis=_normTime(val); // eingegebene Endzeit als bis übergeben
+        window.stopZeitstempel?.(_normBis);
         return; // stopZeitstempel übernimmt das Re-Render
       }
     }
