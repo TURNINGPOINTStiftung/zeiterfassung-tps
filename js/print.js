@@ -2,7 +2,7 @@ import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee } from './roles.js';
 import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
-import { monthSOLL, getEffectiveCarryH, normZuord } from './calc.js';
+import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin } from './calc.js';
 
 export function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
 
@@ -167,10 +167,10 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const dayMin=b1min+b2min+ktm;
-    const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
-    const _bh_hasB2=!!(dd.b2von&&dd.b2bis);
-    const b1bisDisp=(!_bh_hasB2&&dd.b1von&&dd.b1bis&&pauseMin>0)?addMin(dd.b1bis,pauseMin):(dd.b1bis||'');
+    const grossMin=b1min+b2min+ktm;
+    const pauseMin=autoPauseMin(dd);
+    const dayMin=Math.max(0,grossMin-pauseMin); // Netto (konsistent mit Bildschirm)
+    const b1bisDisp=dd.b1bis||'';
     monthTotal+=dayMin;
     const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
     const cls=hol?'hol':(we?'we':'');

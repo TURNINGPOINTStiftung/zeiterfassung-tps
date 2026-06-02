@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST } from '../calc.js';
+import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // v2026-06-fix
@@ -68,12 +68,9 @@ export function renderZeiterfassung(){
   const weekMins={};
   const weekMinsYTD={};
   if(isWerkstudent){
-    const _ABS_WS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     const _addDay=(target,kw,dd)=>{
       const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-      const hasB2=!!(dd.b2von&&dd.b2bis);
-      const abs=_ABS_WS.has(dd.b1zuord)||_ABS_WS.has(dd.b1bem);
-      const pause=(abs||hasB2)?0:(gross>=540?45:gross>=360?30:0);
+      const pause=autoPauseMin(dd);
       target[kw]=(target[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
     };
     // Aktueller Monat
@@ -109,10 +106,9 @@ export function renderZeiterfassung(){
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
-    // Keine auto-Pause bei: Abwesenheit, Zwei-Block-Einträgen (Pause liegt im Gap)
-    const pauseMinAuto=(isAbsDay||hasB2Work)?0:(dayMinGross>=540?45:dayMinGross>=360?30:0);
+    // Pflicht-Pause minus bereits genommene Lücke zwischen Block 1 und 2
+    const pauseMinAuto=isAbsDay?0:autoPauseMin(dd);
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
-    const pauseMin=dayMin>=540?45:dayMin>=360?30:0;
     monthPause+=pauseMinAuto;
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
     const effDayMin=Math.min(roundedDayMin,600);
@@ -587,9 +583,7 @@ export function check10hCarryover(uid,y,m,ds,depth){
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
   const rawGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const _hasB2day=!!(day.b2von&&day.b2bis);
-  const rawPause=_hasB2day?0:(rawGross>=540?45:rawGross>=360?30:0);
-  const raw=Math.max(0,rawGross-rawPause);
+  const raw=Math.max(0,rawGross-autoPauseMin(day));
   const rounded=raw>0?Math.round(raw/15)*15:0;
   const overflow=Math.max(0,rounded-600);
   const date=new Date(ds+'T12:00:00');
