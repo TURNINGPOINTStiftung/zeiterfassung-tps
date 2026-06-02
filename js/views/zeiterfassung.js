@@ -572,6 +572,23 @@ export function td_tchange(ds,field,val){
         if(rounded!==rawMin&&rounded>0) setDay(uid,window.year,window.mon,ds,bisF,addMin(von,rounded));
       }
     }
+    // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
+    // damit Netto = eingetragene Arbeitszeit (analog Einzelblock-Logik).
+    if(field==='b2bis'){
+      const e2=getEntry(uid,window.year,window.mon);
+      const dd2=(e2.days||{})[ds]||{};
+      const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
+      const b2net=diffMin(dd2.b2von||'',dd2.b2bis||'');
+      const kt=Number(dd2.ktmin||0);
+      const grossNet=b1+b2net+kt;
+      const required=grossNet>=540?45:grossNet>=360?30:0;
+      let gap=0;
+      if(dd2.b1bis&&dd2.b2von){ const g=diffMin(dd2.b1bis,dd2.b2von); if(g>0) gap=g; }
+      const missing=Math.max(0,required-gap);
+      if(missing>0&&dd2.b2von&&dd2.b2bis){
+        setDay(uid,window.year,window.mon,ds,'b2bis',addMin(dd2.b2bis,missing));
+      }
+    }
   }
   check10hCarryover(uid,window.year,window.mon,ds);
   renderZeiterfassung();
