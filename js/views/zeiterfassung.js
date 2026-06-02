@@ -523,24 +523,35 @@ export function td_tchange(ds,field,val){
   const uid=window.viewEmpId||window.cu.id;
 
   // ── Stempel-Synchronisation ────────────────────────────────────
-  // Nur für den eingeloggten User, nur heute
+  // Nur für den eingeloggten User, nur heute, nur beim Block-1-Start
   if(field==='b1von'&&uid===window.cu?.id){
     const today=new Date().toISOString().slice(0,10);
     if(ds===today){
       const normV=_normTime(val);
-      if(normV){
-        const stamp=window.getStamp?.();
-        if(stamp&&stamp.uid===window.cu.id&&stamp.startDate===today){
-          // Laufender Stempel → Startzeit synchronisieren
-          window.syncStempelVon?.(normV);
-        } else if(!stamp){
-          // Kein Stempel → in 30 Sek. automatisch starten
+      const stamp=window.getStamp?.();
+      // Laufender Stempel → Startzeit synchronisieren (immer sinnvoll)
+      if(normV&&stamp&&stamp.uid===window.cu.id&&stamp.startDate===today){
+        window.syncStempelVon?.(normV);
+      } else if(normV&&!stamp){
+        // Auto-Stempel NUR wenn: gerade jetzt angefangen (Zeit ≈ jetzt, ±15 Min)
+        // UND der Tag noch keine Endzeit / 2. Block / Abwesenheit hat
+        const entry0=getEntry(uid,window.year,window.mon);
+        const day0=(entry0.days||{})[ds]||{};
+        const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+        const istLeer=!day0.b1bis&&!day0.b2von&&!_ABS.has(day0.b1zuord)&&!_ABS.has(day0.b1bem);
+        const now=new Date();
+        const [h,mi]=normV.split(':').map(Number);
+        const diffMinNow=Math.abs((now.getHours()*60+now.getMinutes())-(h*60+mi));
+        if(istLeer&&diffMinNow<=15){
           clearTimeout(window._ztAutoStampTimer);
           window._ztAutoStampTimer=setTimeout(()=>{
-            if(!window.getStamp?.()) window.startZeitstempelAt?.(normV);
+            // Beim Auslösen erneut prüfen dass kein Stempel läuft und Tag noch leer ist
+            const e=getEntry(uid,window.year,window.mon);
+            const dd0=(e.days||{})[ds]||{};
+            if(!window.getStamp?.()&&!dd0.b1bis) window.startZeitstempelAt?.(normV);
           },30000);
         }
-      } else {
+      } else if(!normV){
         clearTimeout(window._ztAutoStampTimer);
       }
     }
