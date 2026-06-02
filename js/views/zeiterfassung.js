@@ -126,18 +126,18 @@ export function renderZeiterfassung(){
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
-      <td><input type="text" id="ti_${ds}_b1von" class="t-inp" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_b1bis_change('${ds}',this.value)"></td>
-      <td><select id="sel_${ds}_b1zuord" class="zuord" ${dis?'disabled':''} onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
-      <td class="bem-col"><input class="bem" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
+      <td><input type="text" id="ti_${ds}_b1von" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><select id="sel_${ds}_b1zuord" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
+      <td class="bem-col"><input id="bem_${ds}_b1" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td class="b2-col"><select id="sel_${ds}_b2zuord" class="zuord" ${dis?'disabled':''} onkeydown="if(event.key==='Enter'){event.preventDefault();focusNextTInp(this)}" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
-      <td class="bem-col b2-col"><input class="bem" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp zt-nav" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp zt-nav" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><select id="sel_${ds}_b2zuord" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
+      <td class="bem-col b2-col"><input id="bem_${ds}_b2" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
-      <td class="kt-col"><input class="kt-min" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td class="kt-col"><input id="kt_${ds}" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
       <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
@@ -338,6 +338,8 @@ export function renderSignature(user,entry){
 }
 
 export function td_change(ds,field,val){
+  const _fid=window._ztNextFocusId||document.activeElement?.id||null;
+  window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
   if(field==='ktmin'){
     // Wenn Kleinteilig geändert wird, b1bis-Abfahrtszeit neu berechnen
@@ -364,6 +366,7 @@ export function td_change(ds,field,val){
   }
   setDay(uid,window.year,window.mon,ds,field,val);
   renderZeiterfassung();
+  if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
 
 export function td_zuord(ds,field,val,wh,dpw){
@@ -501,18 +504,26 @@ export function fmtTimeIn(el){
   }
 }
 
-export function focusNextTInp(el){
-  // Zeitfelder + Zuordnungs-Dropdowns in Dokumentreihenfolge
-  const all=Array.from(document.querySelectorAll(
-    '#zt .t-inp:not([disabled]), #zt select.zuord:not([disabled])'
-  ));
+// Einheitliche Tastatur-Navigation in der Zeiterfassung.
+// Enter/Tab → nächstes Feld, Shift+Tab → vorheriges. Pfeiltasten in
+// Selects laufen nativ (Wert ändern); der Fokus wird nach dem Re-Render
+// über _ztNextFocusId bzw. die Feld-ID wiederhergestellt.
+export function ztNav(e,el){
+  const k=e.key;
+  if(k!=='Enter'&&k!=='Tab') return; // Pfeiltasten etc. nativ lassen
+  const all=Array.from(document.querySelectorAll('#zt .zt-nav:not([disabled])'));
   const idx=all.indexOf(el);
-  if(idx>=0&&idx<all.length-1){
-    const next=all[idx+1];
-    window._ztNextFocusId=next.id||null;
-    next.focus();
-  }
+  if(idx<0) return;
+  const nextIdx=e.shiftKey?idx-1:idx+1;
+  if(nextIdx<0||nextIdx>=all.length) return; // am Rand: Standardverhalten
+  e.preventDefault();
+  const next=all[nextIdx];
+  window._ztNextFocusId=next.id||null; // vor evtl. Re-Render merken
+  next.focus();
+  try{ if(next.select) next.select(); }catch(_){}
 }
+// Rückwärtskompatibilität (alte Aufrufe)
+export function focusNextTInp(el){ ztNav({key:'Tab',shiftKey:false,preventDefault(){}}, el); }
 
 export function td_tchange(ds,field,val){
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
