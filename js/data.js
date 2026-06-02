@@ -52,6 +52,29 @@ export function _migrate(d){
     d._fixes.pauseMigrationV1=true;
     d._fixes.pauseMigrationV2=true;
   }catch(e){ console.error('Pause-Migration Fehler (ignoriert):',e); }
+
+  // ── Zwei-Block-Pausen-Migration (einmalig pro Tag) ──────────────
+  // Historische Zwei-Block-Tage: b2bis um fehlende Pflichtpause anheben,
+  // damit Netto = eingetragene Arbeitszeit (konsistent mit Einzelblock).
+  try{
+    const _ABS2=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+    Object.values(d.entries||{}).forEach(entry=>{
+      if(!entry||!entry.days) return;
+      Object.values(entry.days).forEach(day=>{
+        if(!day||day._b2PauseMig) return;
+        if(!day.b1von||!day.b1bis||!day.b2von||!day.b2bis) return; // nur echte Zwei-Block-Tage
+        if(_ABS2.has(day.b1zuord)||_ABS2.has(day.b1bem)) return;
+        const grossNet=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von,day.b2bis)+Number(day.ktmin||0);
+        const required=grossNet>=540?45:grossNet>=360?30:0;
+        let gap=0; const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g;
+        const missing=Math.max(0,required-gap);
+        if(missing>0) day.b2bis=addMin(day.b2bis,missing);
+        day._b2PauseMig=true; // markieren (auch wenn 0, damit idempotent)
+      });
+    });
+    d._fixes.b2PauseMigrationV1=true;
+  }catch(e){ console.error('B2-Pause-Migration Fehler (ignoriert):',e); }
+
   // Abwesenheits-Migrationen werden in firebase.js nach dem Laden ausgeführt
   // (benötigen getHolidays aus utils.js – hier nicht verfügbar ohne Zirkularität)
   // ──────────────────────────────────────────────────────────────
