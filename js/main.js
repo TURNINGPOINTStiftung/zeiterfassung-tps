@@ -8,7 +8,7 @@ import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          checkPasswordResetToken, saveResetPassword,
          filterLoginUsers, hideLoginDropdown, selectLoginUser,
          loginKeyNav } from './auth.js';
-import { initApp, switchView, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
+import { initApp, switchView, switchModule, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
 import { openModal, closeModal } from './utils.js';
 
@@ -80,6 +80,7 @@ window.loginKeyNav             = loginKeyNav;
 // App navigation
 window.initApp          = initApp;
 window.switchView       = switchView;
+window.switchModule     = switchModule;
 window.changeMonth      = changeMonth;
 window.rebuildEmpSelect = rebuildEmpSelect;
 window.onEmpSelect      = onEmpSelect;
@@ -236,7 +237,7 @@ document.getElementById('modal-bg').addEventListener('click',e=>{
 // ══════════════════════════════════════════════════════════════════
 
 // Logo initialization
-['load-logo','login-logo-img','hdr-logo'].forEach(id=>{
+['load-logo','login-logo-img','hdr-logo','mb-logo'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.src=_TPS_LOGO;
 });
 
