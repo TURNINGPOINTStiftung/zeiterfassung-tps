@@ -70,7 +70,7 @@ export function renderZeiterfassung(){
   if(isWerkstudent){
     const _addDay=(target,kw,dd)=>{
       const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-      const pause=autoPauseMin(dd);
+      const pause=autoPauseMin(dd,user);
       target[kw]=(target[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
     };
     // Aktueller Monat
@@ -106,8 +106,8 @@ export function renderZeiterfassung(){
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
       ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
-    // Pflicht-Pause minus bereits genommene Lücke zwischen Block 1 und 2
-    const pauseMinAuto=isAbsDay?0:autoPauseMin(dd);
+    // Pflicht-Pause minus bereits genommene Lücke (Freiberufler: keine Pause)
+    const pauseMinAuto=(isAbsDay||isFree)?0:autoPauseMin(dd,user);
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     monthPause+=pauseMinAuto;
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
@@ -185,7 +185,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
         {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
         {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
       ];
-      const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1))).reduce((a,b)=>a+b,0);
+      const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1),user)).reduce((a,b)=>a+b,0);
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
     }
   } else {
@@ -348,7 +348,7 @@ export function td_change(ds,field,val){
     const day=(entry.days||{})[ds]||{};
     const b1von=day.b1von||''; const b1bis=day.b1bis||'';
     const hasB2=!!(day.b2von&&day.b2bis);
-    if(b1von&&b1bis&&!hasB2){
+    if(b1von&&b1bis&&!hasB2&&!isFreelancer(getUser(uid))){
       const oldKtm=Number(day.ktmin||0);
       const newKtm=Number(val||0);
       const b2min=diffMin(day.b2von||'',day.b2bis||'');
@@ -452,9 +452,9 @@ export function td_b1bis_change(ds,val){
       const rawMin=diffMin(von,normVal);
       if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
     }
-    // Auto-Pause nur addieren wenn kein B2-Block (Pause ist dann im Blockwechsel-Gap)
+    // Auto-Pause nur addieren wenn kein B2-Block (Freiberufler: nie)
     let departure=roundedNet;
-    if(!hasB2&&von&&!isAbsence){
+    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))){
       const netMin=diffMin(von,roundedNet);
       const b2min=diffMin(day.b2von||'',day.b2bis||'');
       const ktm=Number(day.ktmin||0);
@@ -584,8 +584,8 @@ export function td_tchange(ds,field,val){
       }
     }
     // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
-    // damit Netto = eingetragene Arbeitszeit (analog Einzelblock-Logik).
-    if(field==='b2bis'){
+    // damit Netto = eingetragene Arbeitszeit (Freiberufler: keine Pause).
+    if(field==='b2bis'&&!isFreelancer(getUser(uid))){
       const e2=getEntry(uid,window.year,window.mon);
       const dd2=(e2.days||{})[ds]||{};
       const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
@@ -611,7 +611,7 @@ export function check10hCarryover(uid,y,m,ds,depth){
   const entry=getEntry(uid,y,m);
   const day=(entry.days||{})[ds]||{};
   const rawGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const raw=Math.max(0,rawGross-autoPauseMin(day));
+  const raw=Math.max(0,rawGross-autoPauseMin(day,getUser(uid)));
   const rounded=raw>0?Math.round(raw/15)*15:0;
   const overflow=Math.max(0,rounded-600);
   const date=new Date(ds+'T12:00:00');

@@ -74,7 +74,7 @@ export function renderOverview(){
     const isFree=isFreelancer(u);
     const maxH=isFree?(u.maxHours||0):0;
     const curEntry=d.entries[entryKey(u.id,oy,om)]||{};
-    const curIST=monthIST(curEntry);
+    const curIST=monthIST(curEntry,u);
     const curCarry=getEffectiveCarryH(u.id,u,oy,om);
     const canEditDpw=cu.role==='admin'||(cu.role==='leitung'&&canSeeEmployee(cu,u));
     const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw('${u.id}')">✏ ${u.dpw||5} Tage/Wo</button>`:'';
@@ -251,7 +251,7 @@ export function openJahresübersicht(uid,y){
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
     const entry=d.entries[entryKey(uid,y,m)]||{};
-    const ist=monthIST(entry);
+    const ist=monthIST(entry,user);
     const soll=isFree?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
     const diff=isFree?0:(ist-(soll-carry*60));
@@ -273,7 +273,7 @@ export function openJahresübersicht(uid,y){
     </tr>`;
   }).join('');
 
-  const totalIST=Array.from({length:12},(_,i)=>monthIST(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
+  const totalIST=Array.from({length:12},(_,i)=>monthIST(d.entries[entryKey(uid,y,i+1)]||{},user)).reduce((a,b)=>a+b,0);
   const totalSOLL=isFree?0:Array.from({length:12},(_,i)=>monthSOLL(user,y,i+1)).reduce((a,b)=>a+b,0);
   const totalVac=Array.from({length:12},(_,i)=>vacDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
@@ -374,7 +374,7 @@ export function printJahresübersicht(uid,y){
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
     const entry=d.entries[entryKey(uid,y,m)]||{};
-    const ist=monthIST(entry);
+    const ist=monthIST(entry,user);
     const soll=isFree?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
     const diff=isFree?0:(ist-(soll-carry*60));
@@ -393,7 +393,7 @@ export function printJahresübersicht(uid,y){
     </tr>`;
   }).join('');
 
-  const totalIST=Array.from({length:12},(_,i)=>monthIST(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
+  const totalIST=Array.from({length:12},(_,i)=>monthIST(d.entries[entryKey(uid,y,i+1)]||{},user)).reduce((a,b)=>a+b,0);
   const totalSOLL=isFree?0:Array.from({length:12},(_,i)=>monthSOLL(user,y,i+1)).reduce((a,b)=>a+b,0);
   const totalVac=Array.from({length:12},(_,i)=>vacDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);

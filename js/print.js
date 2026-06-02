@@ -168,7 +168,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
     const grossMin=b1min+b2min+ktm;
-    const pauseMin=autoPauseMin(dd);
+    const pauseMin=autoPauseMin(dd,u);
     const dayMin=Math.max(0,grossMin-pauseMin); // Netto (konsistent mit Bildschirm)
     const b1bisDisp=dd.b1bis||'';
     monthTotal+=dayMin;
