@@ -85,8 +85,6 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .app-header{background:var(--primary);color:#fff;height:var(--hdr);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);position:sticky;overflow:hidden}
 /* CI: diagonale Aufhellung rechts (Echo der Website-Banner-Form) */
 .app-header::before{content:'';position:absolute;top:0;right:0;width:42%;height:100%;background:rgba(255,255,255,.05);clip-path:polygon(34% 0,100% 0,100% 100%,8% 100%);pointer-events:none;z-index:0}
-/* CI: feine Tricolor-Linie unten */
-.app-header::after{content:'';position:absolute;left:0;bottom:0;width:100%;height:3px;background:linear-gradient(90deg,var(--ci-red) 0 33%,var(--ci-green) 33% 66%,var(--primary-l) 66% 100%);z-index:1}
 .app-header>*{position:relative;z-index:2}
 .app-header .brand{font-size:15px;font-weight:700}
 .app-header .brand span{font-weight:400;font-size:12px;opacity:.7;margin-left:8px}
