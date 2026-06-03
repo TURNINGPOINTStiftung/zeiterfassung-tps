@@ -379,6 +379,64 @@ export function td_change(ds,field,val){
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
 
+// Baut die automatischen Abwesenheiten eines Users aus der Zeiterfassung neu auf.
+// Zusammenhängende Urlaub-/AU-Tage (Lücke nur Wochenende) werden zu EINEM Zeitraum.
+// Echte (manuell beantragte) Anträge bleiben unangetastet und werden nicht doppelt erzeugt.
+export function rebuildAutoAbsences(uid,reviewerId){
+  const AUTO='Automatisch aus Zeiterfassung';
+  const ABS={Urlaub:1,'AU/Krank':1};
+  mutate(d=>{
+    const u=(d.users||[]).find(x=>x.id===uid); if(!u) return;
+    if(!d.vacRequests) d.vacRequests={};
+    // 1. alle Auto-Einträge dieses Users entfernen
+    Object.keys(d.vacRequests).forEach(k=>{
+      const r=d.vacRequests[k];
+      if(r&&r.userId===uid&&r.reviewNote===AUTO) delete d.vacRequests[k];
+    });
+    // 2. Tage, die bereits durch echte (manuelle) Anträge abgedeckt sind, ausklammern
+    const realCovered=new Set();
+    Object.values(d.vacRequests).forEach(r=>{
+      if(r&&r.userId===uid&&r.status==='approved'&&r.reviewNote!==AUTO){
+        let c=new Date(r.startDate+'T12:00:00'); const e=new Date(r.endDate+'T12:00:00');
+        while(c<=e){ realCovered.add(c.toISOString().slice(0,10)); c.setDate(c.getDate()+1); }
+      }
+    });
+    // 3. alle Absence-Tage des Users aus der Zeiterfassung sammeln
+    const list=[];
+    Object.keys(d.entries||{}).forEach(k=>{
+      const parts=k.split('_'); const mm=parts.pop(); const yy=parts.pop(); const ku=parts.join('_');
+      if(ku!==uid) return;
+      const days=d.entries[k].days||{};
+      Object.keys(days).forEach(ds2=>{
+        const day=days[ds2]; const t=day&&day.b1zuord;
+        if(ABS[t]&&!realCovered.has(ds2)) list.push({ds:ds2,type:t,half:!!day.halfDay});
+      });
+    });
+    if(!list.length) return;
+    list.sort((a,b)=>a.ds<b.ds?-1:1);
+    // 4. zusammenhängende Läufe gleichen Typs bilden (Lücke nur Wochenende)
+    const onlyWeekendBetween=(d1,d2)=>{
+      const a=new Date(d1+'T12:00:00'); a.setDate(a.getDate()+1);
+      const b=new Date(d2+'T12:00:00');
+      while(a<b){ const wd=a.getDay(); if(wd!==0&&wd!==6) return false; a.setDate(a.getDate()+1); }
+      return true;
+    };
+    let i=0;
+    while(i<list.length){
+      let j=i;
+      while(j+1<list.length && list[j+1].type===list[i].type && onlyWeekendBetween(list[j].ds,list[j+1].ds)) j++;
+      const start=list[i].ds, end=list[j].ds, type=list[i].type;
+      let wd=0; for(let q=i;q<=j;q++) wd+=list[q].half?0.5:1;
+      const rk=`${uid}_${start}_${end}`;
+      d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
+        type,startDate:start,endDate:end,workDays:wd,halfDay:(start===end&&list[i].half),note:'',
+        status:'approved',submittedAt:new Date().toISOString(),
+        reviewedBy:reviewerId||uid,reviewedAt:new Date().toISOString(),reviewNote:AUTO};
+      i=j+1;
+    }
+  });
+}
+
 export function td_zuord(ds,field,val,wh,dpw){
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
   window._ztNextFocusId=null;
@@ -403,31 +461,9 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
   if(field==='b1zuord'){
-    const u=getUser(uid)||cu;
-    const rk=`${uid}_${ds}_${ds}`;
-    const dObj=(getEntry(uid,window.year,window.mon).days||{})[ds]||{};
-    const isHalf=!!dObj.halfDay;
-    // Urlaub & AU/Krank aus der Zeiterfassung → automatisch in Abwesenheiten anlegen
-    if(val==='AU/Krank'||val==='Urlaub'){
-      mutate(d=>{
-        if(!d.vacRequests) d.vacRequests={};
-        const ex=d.vacRequests[rk];
-        // nur neu anlegen oder einen vorhandenen Auto-Eintrag aktualisieren
-        if(!ex||ex.reviewNote==='Automatisch aus Zeiterfassung'){
-          d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
-            type:val,startDate:ds,endDate:ds,workDays:isHalf?0.5:1,halfDay:isHalf,note:'',
-            status:'approved',submittedAt:new Date().toISOString(),
-            reviewedBy:cu.id,reviewedAt:new Date().toISOString(),
-            reviewNote:'Automatisch aus Zeiterfassung'};
-        }
-      });
-    } else {
-      // Von Urlaub/AU weggewechselt → Auto-Eintrag entfernen
-      mutate(d=>{
-        if(d.vacRequests&&d.vacRequests[rk]&&d.vacRequests[rk].reviewNote==='Automatisch aus Zeiterfassung')
-          delete d.vacRequests[rk];
-      });
-    }
+    // Auto-Abwesenheiten komplett aus der Zeiterfassung neu aufbauen
+    // (erkennt zusammenhängende Urlaub-/AU-Zeiträume, auch über Wochenenden)
+    rebuildAutoAbsences(uid,cu.id);
   }
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
