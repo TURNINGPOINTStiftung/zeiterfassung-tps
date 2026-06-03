@@ -341,6 +341,14 @@ export function td_change(ds,field,val){
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
   window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
+
+  // Bemerkungsfelder beeinflussen keine Berechnung → nur speichern, KEIN Re-Render.
+  // (Verhindert iOS-Cursor-Sprung/Datenverlust beim Tippen längerer Texte.)
+  if(field==='b1bem'||field==='b2bem'){
+    setDay(uid,window.year,window.mon,ds,field,val);
+    return;
+  }
+
   if(field==='ktmin'){
     // Wenn Kleinteilig geändert wird, b1bis-Abfahrtszeit neu berechnen
     // (Kleinteilig ändert Brutto → ändert auto-Pause → ändert Abfahrtszeit)

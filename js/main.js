@@ -232,6 +232,23 @@ document.getElementById('modal-bg').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal-bg')) closeModal();
 });
 
+// Aufgeschobenes Neu-Rendern nachholen, sobald der Nutzer die Zeiterfassungs-
+// Felder verlässt (Sync-Render wird während des Tippens unterdrückt).
+document.addEventListener('focusout',e=>{
+  if(!window._ztRenderPending) return;
+  if(e.target&&e.target.closest&&e.target.closest('#zt')){
+    setTimeout(()=>{
+      const ae=document.activeElement;
+      const stillTyping=ae&&ae.closest&&ae.closest('#zt')&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
+      if(!stillTyping&&window._ztRenderPending){
+        window._ztRenderPending=false;
+        const vze=document.getElementById('view-zeiterfassung');
+        if(vze&&vze.classList.contains('active')) window.renderZeiterfassung?.();
+      }
+    },150);
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════
 // Boot sequence
 // ══════════════════════════════════════════════════════════════════
