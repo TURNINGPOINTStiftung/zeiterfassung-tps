@@ -232,7 +232,7 @@ export async function sendPasswordReset(){
   const expiry=Date.now()+3600000; // 1 Stunde
 
   try{
-    await firebase.database().ref('pwResetTokens/'+token).set({uid:user.id, expiry});
+    await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).set({uid:user.id, expiry});
   }catch(e){
     btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">Fehler. Bitte versuche es erneut.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
     return;
@@ -248,7 +248,7 @@ export async function sendPasswordReset(){
     }, {publicKey:EMAILJS_PUBLIC_KEY});
     showSuccess();
   }catch(e){
-    firebase.database().ref('pwResetTokens/'+token).remove().catch(()=>{});
+    firebase.database().ref('zeiterfassung/pwResetTokens/'+token).remove().catch(()=>{});
     btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">E-Mail konnte nicht gesendet werden. Bitte versuche es erneut.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
   }
 }
@@ -259,7 +259,7 @@ export async function checkPasswordResetToken(){
   if(!token) return;
   window.history.replaceState({},'',window.location.pathname);
   try{
-    const snap=await firebase.database().ref('pwResetTokens/'+token).once('value');
+    const snap=await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).once('value');
     const data=snap.val();
     if(!data||data.expiry<Date.now()){
       openModal(`<h3>Link abgelaufen</h3>
@@ -298,7 +298,7 @@ export async function saveResetPassword(token,uid){
   if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
   const hash=await hashPw(pw1);
   await mutate(d=>{ const u=d.users.find(x=>x.id===uid); if(u) u.pw=hash; });
-  await firebase.database().ref('pwResetTokens/'+token).remove().catch(()=>{});
+  await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).remove().catch(()=>{});
   closeModal();
   toast('✅ Passwort gespeichert. Du kannst dich jetzt einloggen.','ok');
   populateLoginDropdown();

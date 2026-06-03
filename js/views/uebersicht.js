@@ -594,18 +594,22 @@ export function sendTimesheetReminders(){
         ✅ Alle Mitarbeiter haben für ${MONTHS[m-1]} ${y} bereits eingereicht.
       </div>`;
     const rows=withMail.map(u=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;font-weight:600">${esc(u.name)}</span>
+      <label style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" class="rem-pick" value="${esc(u.id)}" checked style="width:16px;height:16px;flex:0 0 auto">
+        <span style="flex:1;font-size:13px;font-weight:600">${esc(u.name)}</span>
         <span style="font-size:12px;color:var(--muted)">${esc(u.email)}</span>
-      </div>`).join('');
+      </label>`).join('');
     const noMailNote=noMail.length
       ?`<div style="margin-top:8px;padding:8px 10px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
           ⚠ Keine E-Mail hinterlegt (werden übersprungen): ${noMail.map(u=>esc(u.name)).join(', ')}
         </div>`:'';
-    return `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px">
-        ${withMail.length} Erinnerung${withMail.length!==1?'en':''} werden gesendet:
-      </div>
-      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0 10px">
+    const head=withMail.length
+      ?`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700;color:var(--primary)">Empfänger auswählen (${withMail.length})</span>
+          <label style="font-size:12px;color:var(--muted);cursor:pointer"><input type="checkbox" id="rem-all" checked onchange="_remToggleAll(this.checked)" style="vertical-align:middle;margin-right:4px">Alle</label>
+        </div>`:'';
+    return `${head}
+      <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:0 10px">
         ${rows||'<div style="padding:8px;font-size:13px;color:var(--muted)">Keine Empfänger mit hinterlegter E-Mail.</div>'}
       </div>${noMailNote}`;
   };
@@ -617,16 +621,19 @@ export function sendTimesheetReminders(){
     const mo=months[idx];
     document.getElementById('rem-preview').innerHTML=buildPreview(mo.y,mo.m);
   };
+  window._remToggleAll=(on)=>{ document.querySelectorAll('.rem-pick').forEach(cb=>{ cb.checked=on; }); };
   window._remSend=async()=>{
     const idx=parseInt(document.getElementById('rem-mon-sel').value);
     const mo=months[idx];
     const {withMail}=getPending(mo.y,mo.m);
-    if(!withMail.length){closeModal();toast('Keine ausstehenden Einreichungen gefunden.','ok');return;}
+    const picked=new Set(Array.from(document.querySelectorAll('.rem-pick:checked')).map(cb=>cb.value));
+    const recipients=withMail.filter(u=>picked.has(u.id));
+    if(!recipients.length){ toast('Bitte mindestens einen Mitarbeiter auswählen.','err'); return; }
     document.getElementById('rem-btns').innerHTML=
       '<div style="font-size:13px;color:var(--muted)">⏳ Wird gesendet…</div>';
     const moLabel=MONTHS[mo.m-1]+' '+mo.y;
     let sent=0,failed=0;
-    for(const u of withMail){
+    for(const u of recipients){
       try{
         await emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_REMINDER_TEMPLATE_ID,
           {to_email:u.email,to_name:u.name,email:u.email,monat:moLabel,app_url:APP_URL},
@@ -650,7 +657,7 @@ export function sendTimesheetReminders(){
   openModal(`
     <h3>🔔 Erinnerungen senden</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
-      Mitarbeiter die noch nicht eingereicht haben erhalten eine Erinnerungsmail.
+      Mitarbeiter ohne Einreichung sind unten gelistet. Wähle aus, wer eine Erinnerungsmail erhalten soll.
     </p>
     <div class="form-group">
       <label>Monat</label>
