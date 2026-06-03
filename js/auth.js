@@ -243,8 +243,9 @@ export async function sendPasswordReset(){
     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
       to_email: user.email,
       to_name:  user.name,
+      email:    user.email,
       reset_link: resetLink
-    }, EMAILJS_PUBLIC_KEY);
+    }, {publicKey:EMAILJS_PUBLIC_KEY});
     showSuccess();
   }catch(e){
     firebase.database().ref('pwResetTokens/'+token).remove().catch(()=>{});

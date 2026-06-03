@@ -629,8 +629,8 @@ export function sendTimesheetReminders(){
     for(const u of withMail){
       try{
         await emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_REMINDER_TEMPLATE_ID,
-          {to_email:u.email,to_name:u.name,monat:moLabel,app_url:APP_URL},
-          EMAILJS_PUBLIC_KEY);
+          {to_email:u.email,to_name:u.name,email:u.email,monat:moLabel,app_url:APP_URL},
+          {publicKey:EMAILJS_PUBLIC_KEY});
         sent++;
       }catch(e){ console.error('Reminder failed:',u.name,e); failed++; }
     }
