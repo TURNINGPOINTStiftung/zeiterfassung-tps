@@ -404,21 +404,27 @@ export function td_zuord(ds,field,val,wh,dpw){
   }
   if(field==='b1zuord'){
     const u=getUser(uid)||cu;
-    if(val==='AU/Krank'){
+    const rk=`${uid}_${ds}_${ds}`;
+    const dObj=(getEntry(uid,window.year,window.mon).days||{})[ds]||{};
+    const isHalf=!!dObj.halfDay;
+    // Urlaub & AU/Krank aus der Zeiterfassung → automatisch in Abwesenheiten anlegen
+    if(val==='AU/Krank'||val==='Urlaub'){
       mutate(d=>{
         if(!d.vacRequests) d.vacRequests={};
-        const rk=`${uid}_${ds}_${ds}`;
-        if(!d.vacRequests[rk])
+        const ex=d.vacRequests[rk];
+        // nur neu anlegen oder einen vorhandenen Auto-Eintrag aktualisieren
+        if(!ex||ex.reviewNote==='Automatisch aus Zeiterfassung'){
           d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
-            type:'AU/Krank',startDate:ds,endDate:ds,workDays:1,note:'',
+            type:val,startDate:ds,endDate:ds,workDays:isHalf?0.5:1,halfDay:isHalf,note:'',
             status:'approved',submittedAt:new Date().toISOString(),
             reviewedBy:cu.id,reviewedAt:new Date().toISOString(),
             reviewNote:'Automatisch aus Zeiterfassung'};
+        }
       });
     } else {
+      // Von Urlaub/AU weggewechselt → Auto-Eintrag entfernen
       mutate(d=>{
-        const rk=`${uid}_${ds}_${ds}`;
-        if(d.vacRequests&&d.vacRequests[rk]&&d.vacRequests[rk].type==='AU/Krank')
+        if(d.vacRequests&&d.vacRequests[rk]&&d.vacRequests[rk].reviewNote==='Automatisch aus Zeiterfassung')
           delete d.vacRequests[rk];
       });
     }
