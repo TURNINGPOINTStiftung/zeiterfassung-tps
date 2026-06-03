@@ -278,13 +278,12 @@ function _round15(t){
 }
 
 // Berechnet b1/b2/Pause aus allen Stempel-Sessions des Tages.
-// Die Stempelzeiten sind tatsächliche Anwesenheitszeiten (= Ein/Aus).
-// Sie werden NICHT mit Pause aufgebläht – der Pausenabzug passiert
-// zentral in der Gesamtberechnung (dayMinutes). bis = echte Stempel-Zeit, gerundet.
+// Stempelzeiten werden auf 15 Min gerundet. Anschließend wird – wie bei der
+// manuellen Eingabe – die fehlende Pflichtpause auf die letzte Abfahrtszeit
+// aufgeschlagen (Abfahrt = Netto-Ende + Pause). Der Abzug erfolgt im Gesamt.
 function _recomputeFromSessions(day){
   const sessions=day.stampSessions||[];
   if(!sessions.length) return;
-  // Die 2 längsten Sessions → Block 1 + Block 2 (chronologisch sortiert)
   const sorted=[...sessions].sort((a,b)=>b.min-a.min);
   const top2=sorted.slice(0,2).sort((a,b)=>a.von<b.von?-1:1);
   const rest=sorted.slice(2);
@@ -293,7 +292,7 @@ function _recomputeFromSessions(day){
   day.ktmin=0;
   if(top2[0]){
     day.b1von=_round15(top2[0].von);
-    day.b1bis=_round15(top2[0].bis); // echte Stempel-Endzeit, gerundet – keine Pausen-Aufblähung
+    day.b1bis=_round15(top2[0].bis); // gerundetes Netto-Ende
     if(top2[0].zuord) day.b1zuord=top2[0].zuord;
     if(top2[0].note)  day.b1bem=top2[0].note;
   }
@@ -302,9 +301,17 @@ function _recomputeFromSessions(day){
     if(top2[1].zuord) day.b2zuord=top2[1].zuord;
     if(top2[1].note)  day.b2bem=top2[1].note;
   }
-  // Restliche Sessions → Kleinteilig (auf 15 Min gerundete Summe)
   const restMin=rest.reduce((s,r)=>s+r.min,0);
   day.ktmin=Math.round(restMin/15)*15;
+  // Fehlende Pflichtpause auf die LETZTE Abfahrtszeit aufschlagen (wie manuell)
+  const netGross=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  const required=netGross>=540?45:netGross>=360?30:0;
+  let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
+  const missing=Math.max(0,required-gap);
+  if(missing>0){
+    if(day.b2von&&day.b2bis) day.b2bis=addMin(day.b2bis,missing);
+    else if(day.b1bis) day.b1bis=addMin(day.b1bis,missing);
+  }
 }
 
 export function stopZeitstempel(bisOverride){

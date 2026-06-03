@@ -6,14 +6,17 @@ const _ABS_CATS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
 function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(dd.b1bem))); }
 
 // Tatsächlich abzuziehende Auto-Pause (§ ArbZG):
-// Pflicht-Pause nach Gesamtarbeitszeit (6h→30, 9h→45) MINUS bereits
-// genommene Lücke zwischen Block 1 und Block 2. Bei lückenlosen Blöcken
-// (z.B. 10-14 + 14-18) ist die Lücke 0 → volle Pflicht-Pause wird abgezogen.
+// bis = Abfahrtszeit (= Nettoarbeitsende + Pause). Die Pflichtpause richtet
+// sich nach der NETTO-Arbeitszeit (6h→30, 9h→45). Da die gespeicherte Brutto
+// bereits die Pause enthält, werden die Schwellen um die Pause verschoben:
+//   Netto≥6h  ⇔ Brutto≥6h30 (390)  → 30 Min
+//   Netto≥9h  ⇔ Brutto≥9h45 (585)  → 45 Min
+// Davon wird eine bereits genommene Lücke zwischen Block 1 und 2 abgezogen.
 export function autoPauseMin(dd,user){
   if(!dd||_isAbsDay(dd)) return 0;
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  const required=gross>=540?45:gross>=360?30:0;
+  const required=gross>=585?45:gross>=390?30:0;
   if(required===0) return 0;
   // Bereits genommene Pause = Lücke zwischen b1bis und b2von
   let gap=0;
