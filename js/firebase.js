@@ -64,6 +64,7 @@ export async function initFirebase(){
     const hadPauseMig=!!(data._fixes&&data._fixes.pauseMigrationV2);
     const hadB2Mig=!!(data._fixes&&data._fixes.b2PauseMigrationV1);
     const hadFreeRb=!!(data._fixes&&data._fixes.freelancerPauseRollbackV1);
+    const hadAbsV3=!!(data._fixes&&data._fixes.absSpecV3);
     let needsSave=needsCleanup;
     let migrated=_migrate(data);
     // Wenn eine Pausen-Migration gerade gelaufen ist → unbedingt nach Firebase speichern
@@ -75,6 +76,7 @@ export async function initFirebase(){
     }
     setDataCache(migrated);
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
+    if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
@@ -229,6 +231,55 @@ function _runAbsMigrations(d){
       d._fixes.freelancerAbsBemerkung=true;
       d._fixes.allAbsBemerkung=true;
       d._fixes.allAbsBemerkungV2=true;
+    }
+
+    // V3: Alle genehmigten Abwesenheiten exakt nach Spec korrigieren
+    //  - Urlaub/AU (Festangestellte): Stunden + Zuordnung=Typ
+    //  - Freiberufler/Sonstiges/Arbeitszeitausgleich: nur Bemerkung
+    // Es werden nur leere Tage oder alte Sync-Artefakte angefasst (keine echte Arbeit).
+    if(!d._fixes.absSpecV3){
+      const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
+      const _wk=dt=>{const t=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate()));const dy=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-dy+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return t.getUTCFullYear()+'-'+(1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7));};
+      const _isArtifact=day=>day&&day.b1von==='08:00'&&!day.b2von&&(day.b1zuord===''||day.b1zuord==='Sonstiges'||day.b1zuord==='Urlaub'||day.b1zuord==='AU/Krank');
+      Object.values(d.vacRequests||{}).forEach(req=>{
+        if(req.status!=='approved') return;
+        const u=userMap[req.userId]; if(!u) return;
+        const isFree=u.role==='freiberuflich';
+        const holFree=u.holidaysLikeSunday!==false;
+        const dpw=Math.max(1,Math.min(7,u.dpw||5));
+        const hoursType=!isFree&&(req.type==='Urlaub'||req.type==='AU/Krank');
+        const dailyMin=Math.round((u.wh||0)*60/dpw)||480;
+        const perWeek={};
+        let cur=new Date(req.startDate+'T12:00:00');
+        while(cur<=new Date(req.endDate+'T12:00:00')){
+          const wd=cur.getDay();
+          if(wd!==0&&wd!==6){
+            const y=cur.getFullYear(),m=cur.getMonth()+1,dd2=cur.getDate();
+            const ds=_ds(y,m,dd2);
+            const hols=getHolidays(y,u.bundesland||'');
+            if(!holFree||!hols.has(ds)){
+              const k=_mk(u.id,y,m);
+              if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+              if(!d.entries[k].days) d.entries[k].days={};
+              if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+              const day=d.entries[k].days[ds];
+              const empty=!day.b1von&&!day.b1bis&&!day.b2von&&!day.ktmin&&!day.b1bem;
+              if(hoursType&&(perWeek[_wk(cur)]||0)<dpw&&(empty||_isArtifact(day))){
+                const mins=req.halfDay&&req.type==='Urlaub'?Math.round(dailyMin/2):dailyMin;
+                day.b1von='08:00'; day.b1bis=addMin('08:00',mins); day.b1zuord=req.type;
+                day.b1bem=''; day.b2von=''; day.b2bis='';
+                perWeek[_wk(cur)]=(perWeek[_wk(cur)]||0)+1;
+              } else if(!hoursType){
+                // nur Bemerkung: evtl. falsche Sync-Stunden entfernen
+                if(_isArtifact(day)){ day.b1von=''; day.b1bis=''; day.b1zuord=''; }
+                if(!day.b1bem) day.b1bem=req.type;
+              }
+            }
+          }
+          cur.setDate(cur.getDate()+1);
+        }
+      });
+      d._fixes.absSpecV3=true;
     }
   }catch(e){ console.error('AbsMigration Fehler:',e); }
 }
