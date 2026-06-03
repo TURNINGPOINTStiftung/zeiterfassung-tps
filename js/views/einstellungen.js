@@ -290,7 +290,7 @@ function userForm(u={}){
               <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
               <option value="freiberuflich"${u.role==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
               <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
-              <option value="leitung"${u.role==='leitung'?' selected':''}>Leitungspersonal</option>
+              <option value="leitung"${u.role==='leitung'?' selected':''}>Leitung</option>
               <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
            </select>`}
     </div>

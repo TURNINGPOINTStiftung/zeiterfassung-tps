@@ -64,7 +64,7 @@ export function canSeeAbsence(viewer,target){
 }
 
 export function _baseRoleLabel(r){
-  return r==='leitung'?'Leitungspersonal':
+  return r==='leitung'?'Leitung':
          r==='geschaeftsfuehrer'?'Geschäftsführung':
          r==='admin'?'Administrator':
          r==='freiberuflich'?'Freiberuflich':
