@@ -29,12 +29,35 @@ export function getCatsForTeam(teamName){
 export function catOptionsForUser(user,selected=''){
   if(isFreelancer(user)) return catOptionsFree(selected);
   const norm=normZuord(selected);
-  // Alle Teams des Nutzers berücksichtigen (mehrere Teams möglich)
+  // Team-Kategorien des Nutzers (mehrere Teams möglich)
   const userTeams=Array.isArray(user?.teams)&&user.teams.length
     ? user.teams : (user?.team ? [user.team] : []);
-  const cats=[...new Set(
+  const teamCats=new Set(
     (userTeams.length?userTeams:[''])
     .flatMap(t=>getCatsForTeam(t).map(normZuord))
-  )];
-  return `<option value=""></option>`+cats.map(c=>`<option value="${c}"${c===norm?' selected':''}>${c}</option>`).join('');
+  );
+
+  let cats;
+  const isLeitung=user&&user.role==='leitung';
+  if(isLeitung){
+    // Leitung: ALLE Kategorien (alle Teams + Standard), Team-Kategorien markiert
+    const all=new Set();
+    getTeams().forEach(t=>getCatsForTeam(t).forEach(c=>all.add(normZuord(c))));
+    (getData().cats||DEFAULT_CATS).forEach(c=>all.add(normZuord(c)));
+    teamCats.forEach(c=>all.add(c));
+    cats=[...all].sort((a,b)=>{ // eigene Team-Kategorien zuerst
+      const ta=teamCats.has(a),tb=teamCats.has(b);
+      if(ta!==tb) return ta?-1:1;
+      return a.localeCompare(b,'de');
+    });
+  } else {
+    cats=[...teamCats];
+  }
+
+  return `<option value=""></option>`+cats.map(c=>{
+    const sel=c===norm?' selected':'';
+    const mark=isLeitung&&teamCats.has(c);
+    const style=mark?' style="background:#eaf7ea;color:#2e7d32;font-weight:600"':'';
+    return `<option value="${c}"${sel}${style}>${mark?'★ ':''}${c}</option>`;
+  }).join('');
 }
