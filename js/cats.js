@@ -58,6 +58,6 @@ export function catOptionsForUser(user,selected=''){
     const sel=c===norm?' selected':'';
     const mark=isLeitung&&teamCats.has(c);
     const style=mark?' style="background:#eaf7ea;color:#2e7d32;font-weight:600"':'';
-    return `<option value="${c}"${sel}${style}>${mark?'★ ':''}${c}</option>`;
+    return `<option value="${c}"${sel}${style}>${c}</option>`;
   }).join('');
 }
