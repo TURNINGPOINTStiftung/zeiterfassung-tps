@@ -261,21 +261,25 @@ export function deleteVacRequest(id){
   const cu=window.cu;
   const r=getData().vacRequests?.[id];
   if(!r) return;
-  if(r.userId!==cu.id) return;
-  const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung';
-  const isAutoApproved=r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf);
-  if(r.status!=='pending'&&!isAutoApproved) return;
+  const mayManage=r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role);
+  if(!mayManage) return;
+  const isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
+  const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung'&&r.userId===cu.id;
+  // Stornierbar: offene Anträge, oder genehmigte die auto-erzeugt / AU / Leitung-eigen sind
+  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf||isAuto));
+  if(!cancellable) return;
+  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf||isAuto);
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
-  const label=r.status==='pending'?'Antrag zurückziehen':'Krankmeldung stornieren';
-  const extra=isAutoApproved?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
+  const label=r.status==='pending'?'Antrag zurückziehen':'Abwesenheit stornieren';
+  const extra=clearsTimesheet?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
   if(!confirm(`${label}?\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}${extra}`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]) delete d.vacRequests[id]; });
-  if(isAutoApproved){
+  if(clearsTimesheet){
     const absUser=getUser(r.userId);
     if(absUser) window.clearAbsenceFromTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate);
   }
   renderAbwesenheiten();
-  toast(r.status==='pending'?'Antrag zurückgezogen.':'Krankmeldung storniert – Zeiteinträge entfernt.','');
+  toast(r.status==='pending'?'Antrag zurückgezogen.':'Abwesenheit storniert – Zeiteinträge entfernt.','');
 }
 
 export function confirmRejectVac(id){
@@ -466,7 +470,8 @@ export function renderAbwesenheiten(){
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
-    const canDelete=r.userId===cu.id&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||cu.role==='leitung')));
+    const _isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
+    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||cu.role==='leitung'||_isAuto)));
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
       ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
