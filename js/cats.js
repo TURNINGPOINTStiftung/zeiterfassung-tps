@@ -37,6 +37,10 @@ export function catOptionsForUser(user,selected=''){
     .flatMap(t=>getCatsForTeam(t).map(normZuord))
   );
 
+  // Abwesenheits-Kategorien immer verfügbar machen (sonst zeigt eine
+  // automatisch gesetzte Zuordnung wie "Urlaub"/"AU/Krank" nichts an)
+  teamCats.add('Urlaub'); teamCats.add('AU/Krank');
+
   let cats;
   const isLeitung=user&&user.role==='leitung';
   if(isLeitung){
