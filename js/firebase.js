@@ -109,7 +109,14 @@ function _applyFirebaseSnap(val){
   try{ window.updateAbBadge?.(); }catch(e){}
   try{
     const vze=document.getElementById('view-zeiterfassung');
-    if(vze&&vze.classList.contains('active')) window.renderZeiterfassung?.();
+    if(vze&&vze.classList.contains('active')){
+      // NICHT neu rendern während der Nutzer gerade in einem Feld tippt
+      // (sonst geht auf iOS/überall die laufende Eingabe + Cursor verloren).
+      const ae=document.activeElement;
+      const tippt=ae&&ae.closest&&ae.closest('#zt')&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
+      if(tippt){ window._ztRenderPending=true; }
+      else window.renderZeiterfassung?.();
+    }
   }catch(e){}
 }
 
