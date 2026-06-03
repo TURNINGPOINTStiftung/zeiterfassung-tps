@@ -203,8 +203,8 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
-      {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUpTo} von ${user.al} bis ${MONTHS[mon-1]}`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?`davon ${vacFuture} T schon beantragt/genehmigt`:`Jahresurlaub ${user.al} Tage`},
+      {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al} bis ${MONTHS[mon-1]}`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
     ];
   }
