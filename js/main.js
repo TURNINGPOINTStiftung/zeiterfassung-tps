@@ -17,7 +17,7 @@ import { renderZeiterfassung, renderSignature, td_change, td_zuord,
          td_b1bis_change, td_tchange, fmtTimeIn, focusNextTInp, ztNav, check10hCarryover, saveCarryover,
          resetCarryover, syncAbsenceToTimesheets, clearAbsenceFromTimesheets,
          syncSickToTimesheets, doSubmit, doRecall, doApprove, doReject,
-         doResetToDraft } from './views/zeiterfassung.js';
+         doResetToDraft, rebuildAutoAbsences, rebuildNightShifts } from './views/zeiterfassung.js';
 
 import { populateUeberYear, populateUeberMon, populateUeberTeam,
          renderOverview, openEmpMonth, openJahresübersicht,
@@ -108,6 +108,8 @@ window.saveCarryover             = saveCarryover;
 window.resetCarryover            = resetCarryover;
 window.syncAbsenceToTimesheets   = syncAbsenceToTimesheets;
 window.clearAbsenceFromTimesheets= clearAbsenceFromTimesheets;
+window.rebuildAutoAbsences       = rebuildAutoAbsences;
+window.rebuildNightShifts        = rebuildNightShifts;
 window.syncSickToTimesheets      = syncSickToTimesheets;
 window.doSubmit                  = doSubmit;
 window.doRecall                  = doRecall;
