@@ -2,7 +2,7 @@ import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLA
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
-import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
+import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam } from '../cats.js';
 
 export function populateUeberYear(){
@@ -98,8 +98,10 @@ export function renderOverview(){
         ${dpwBtn}
       </div>`;
     }
-    const vacUsed=totalVacUsed(u.id,oy);
-    const vacLeft=(u.al||0)-vacUsed;
+    const vacUpTo=vacUsedUpToMonth(u.id,oy,om);   // bis einschl. angezeigtem Monat
+    const vacApproved=totalVacUsed(u.id,oy);       // ganzes Jahr (inkl. Zukunft)
+    const vacLeft=(u.al||0)-vacUpTo;
+    const vacFuture=Math.max(0,vacApproved-vacUpTo);
     const curSOLL=monthSOLL(u,oy,om);
     const curDiff=curIST-(curSOLL-curCarry*60);
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
@@ -108,7 +110,7 @@ export function renderOverview(){
       <h3>${u.name} ${roleChip}</h3>
       <div class="meta">${u.city||'–'} · ${u.wh}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
-        <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUsed}/${u.al||0} genutzt)</span></span>
+        <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${u.al||0} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>
       </div>
       ${pending>0?`<div class="meta" style="margin-top:4px"><span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span></div>`:''}

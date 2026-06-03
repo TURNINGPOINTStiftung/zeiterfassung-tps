@@ -114,6 +114,14 @@ export function totalVacUsed(uid,y){
   return used;
 }
 
+// Urlaub bis einschließlich Monat upToM (für monatsweisen Resturlaub).
+// Zukünftig genehmigter Urlaub zählt erst im jeweiligen Monat.
+export function vacUsedUpToMonth(uid,y,upToM){
+  let used=0;
+  for(let m=1;m<=upToM;m++){ used+=vacDays(getEntry(uid,y,m)); }
+  return used;
+}
+
 export function normZuord(z){
   if(!z) return z;
   if(/^(Ö-Arbeit|Öffentlichkeitsarbeit|Marketing\s*[\/&]\s*Öffentlichkeitsarbeit|Marketing\s*%2F\s*Öffentlichkeitsarbeit)$/i.test(z))

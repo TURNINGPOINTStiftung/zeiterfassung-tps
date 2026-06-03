@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
+import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // v2026-06-fix
@@ -193,16 +193,18 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const diff=istMin-(soll-(carryH)*60);
     const vd=vacDays(entry);
     const sk=sickDays(entry);
-    const vacUsed=totalVacUsed(uid,year);
-    const vacLeft=user.al-vacUsed;
+    const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
+    const vacApproved=totalVacUsed(uid,year);       // ganzes Jahr (inkl. Zukunft)
+    const vacLeft=user.al-vacUpTo;                  // Resturlaub bis hierher
+    const vacFuture=Math.max(0,vacApproved-vacUpTo);// schon beantragt/genehmigt (später)
     const sollDays=monthSOLLdays(user,year,mon);
     const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(Math.round((user.wh||0)/5*60))}`:'4 × Wochenarbeitszeit';
     cards=[
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
-      {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUsed} von ${user.al} im Jahr`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:`Jahresurlaub ${user.al} Tage`},
+      {lbl:'Urlaub genutzt',big:vd+' T',sub:`${vacUpTo} von ${user.al} bis ${MONTHS[mon-1]}`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?`davon ${vacFuture} T schon beantragt/genehmigt`:`Jahresurlaub ${user.al} Tage`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
     ];
   }
