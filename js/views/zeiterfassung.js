@@ -379,6 +379,71 @@ export function td_change(ds,field,val){
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
 
+// ── Nachtschicht-Erkennung (über Mitternacht) ─────────────────────
+// Erkennt Paare: Tag endet 23:59 + Folgetag beginnt 00:00 → ein Zeitraum.
+// Pflichtpause (Summe beider Teile) wird dem schwereren Tag zugeschlagen
+// (Gleichstand → Folgetag), vom Mitternachts-Rand weg verlängert.
+// Idempotent: _npOrig speichert den Originalrand für sauberes Zurücksetzen.
+export function rebuildNightShifts(uid){
+  const r15=t=>{ if(!t||!t.includes(':'))return t; const[h,m]=t.split(':').map(Number); let tot=Math.round((h*60+m)/15)*15; if(tot<0)tot=0; if(tot>1439)tot=1439; return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0'); };
+  const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+  try{
+    mutate(d=>{
+      const byDate={};
+      Object.keys(d.entries||{}).forEach(k=>{
+        const parts=k.split('_'); parts.pop(); parts.pop(); const ku=parts.join('_');
+        if(ku!==uid) return;
+        const days=d.entries[k].days||{};
+        Object.keys(days).forEach(ds=>{ byDate[ds]=days[ds]; });
+      });
+      // 1) bestehende Anpassungen zurücksetzen (nur wenn unverändert → Original)
+      Object.values(byDate).forEach(day=>{
+        if(day&&day._nightShift){
+          if(day._npMin>0&&day._npOrig){
+            if(day._npDir==='start'){ if(day.b1von===day._npApplied) day.b1von=day._npOrig; }
+            else if(day._npDir==='end'){
+              if(day.b2von&&day.b2bis){ if(day.b2bis===day._npApplied) day.b2bis=day._npOrig; }
+              else { if(day.b1bis===day._npApplied) day.b1bis=day._npOrig; }
+            }
+          }
+          delete day._nightShift; delete day._npMin; delete day._npDir; delete day._npOrig; delete day._npApplied;
+        }
+      });
+      // 2) Paare erkennen
+      Object.keys(byDate).sort().forEach(ds=>{
+        const day=byDate[ds]; if(!day) return;
+        if(_ABS.has(day.b1zuord)) return;
+        const endsMidnight=(day.b2von&&day.b2bis==='23:59')||(!day.b2von&&day.b1bis==='23:59');
+        if(!endsMidnight||!day.b1von) return;
+        const nd=new Date(ds+'T12:00:00'); nd.setDate(nd.getDate()+1);
+        const nds=nd.toISOString().slice(0,10);
+        const nday=byDate[nds];
+        if(!nday||_ABS.has(nday.b1zuord)) return;
+        if(nday.b1von!=='00:00'||!nday.b1bis) return;
+        const workD=diffMin(day.b1von,'23:59')+1;   // Start bis Mitternacht
+        const workN=diffMin('00:00',nday.b1bis);     // Mitternacht bis Ende
+        const total=workD+workN;
+        const pause=total>=540?45:total>=360?30:0;
+        if(pause<=0) return;
+        if(workD>workN){
+          // Tag D schwerer → Start vorziehen
+          day._npOrig=day.b1von;
+          day.b1von=r15(addMin(day.b1von,-pause));
+          day._npApplied=day.b1von;
+          day._nightShift=true; day._npMin=pause; day._npDir='start';
+          nday._nightShift=true; nday._npMin=0; nday._npDir='';
+        } else {
+          // Folgetag schwerer oder Gleichstand → Ende verlängern
+          if(nday.b2von&&nday.b2bis){ nday._npOrig=nday.b2bis; nday.b2bis=r15(addMin(nday.b2bis,pause)); nday._npApplied=nday.b2bis; }
+          else { nday._npOrig=nday.b1bis; nday.b1bis=r15(addMin(nday.b1bis,pause)); nday._npApplied=nday.b1bis; }
+          nday._nightShift=true; nday._npMin=pause; nday._npDir='end';
+          day._nightShift=true; day._npMin=0; day._npDir='';
+        }
+      });
+    });
+  }catch(e){ console.error('Nachtschicht-Erkennung Fehler (ignoriert):',e); }
+}
+
 // Baut die automatischen Abwesenheiten eines Users aus der Zeiterfassung neu auf.
 // Zusammenhängende Urlaub-/AU-Tage (Lücke nur Wochenende) werden zu EINEM Zeitraum.
 // Echte (manuell beantragte) Anträge bleiben unangetastet und werden nicht doppelt erzeugt.
@@ -518,6 +583,7 @@ export function td_b1bis_change(ds,val){
     setDay(uid,window.year,window.mon,ds,'b1bis',departure);
   }
   check10hCarryover(uid,window.year,window.mon,ds);
+  rebuildNightShifts(uid);
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
@@ -654,6 +720,7 @@ export function td_tchange(ds,field,val){
     }
   }
   check10hCarryover(uid,window.year,window.mon,ds);
+  rebuildNightShifts(uid);
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }

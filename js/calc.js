@@ -14,6 +14,7 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 // Davon wird eine bereits genommene Lücke zwischen Block 1 und 2 abgezogen.
 export function autoPauseMin(dd,user){
   if(!dd||_isAbsDay(dd)) return 0;
+  if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   const required=gross>=585?45:gross>=390?30:0;
