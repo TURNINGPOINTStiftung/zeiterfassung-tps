@@ -2,7 +2,7 @@ import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee } from './roles.js';
 import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
-import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin } from './calc.js';
+import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, vacUsedUpToMonth, totalVacUsed } from './calc.js';
 
 export function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
 
@@ -218,11 +218,16 @@ export function renderBuchhaltungHTML(u,entry,y,m){
       +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>';
   } else {
     const diffCls=diff>=0?'pos':'neg';
+    const vacUpTo=vacUsedUpToMonth(u.id,y,m);
+    const vacApproved=totalVacUsed(u.id,y);
+    const vacLeft=(u.al||0)-vacUpTo;
+    const vacFuture=Math.max(0,vacApproved-vacUpTo);
     sumCards+=
       '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+u.wh+' h/Woche</div></div>'
       +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
       +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
-      +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+carryH+' h</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'');
+      +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+carryH+' h</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
+      +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+'/'+(u.al||0)+' bis '+MONTHS[m-1]+(vacFuture>0?', '+vacFuture+' gebucht':'')+'</div></div>';
   }
   sumCards+='</div>';
 
