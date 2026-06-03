@@ -409,6 +409,9 @@ export function rebuildNightShifts(uid){
           delete day._nightShift; delete day._npMin; delete day._npDir; delete day._npOrig; delete day._npApplied;
         }
       });
+      // Freiberufler: keine Pausen-Logik → nach dem Zurücksetzen nichts anwenden
+      const _u=(d.users||[]).find(x=>x.id===uid);
+      if(_u&&_u.role==='freiberuflich') return;
       // 2) Paare erkennen
       Object.keys(byDate).sort().forEach(ds=>{
         const day=byDate[ds]; if(!day) return;
@@ -571,7 +574,7 @@ export function td_b1bis_change(ds,val){
     }
     // Auto-Pause nur addieren wenn kein B2-Block (Freiberufler: nie)
     let departure=roundedNet;
-    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))){
+    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'){
       const netMin=diffMin(von,roundedNet);
       const b2min=diffMin(day.b2von||'',day.b2bis||'');
       const ktm=Number(day.ktmin||0);
@@ -703,7 +706,7 @@ export function td_tchange(ds,field,val){
     }
     // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
     // damit Netto = eingetragene Arbeitszeit (Freiberufler: keine Pause).
-    if(field==='b2bis'&&!isFreelancer(getUser(uid))){
+    if(field==='b2bis'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'){
       const e2=getEntry(uid,window.year,window.mon);
       const dd2=(e2.days||{})[ds]||{};
       const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
