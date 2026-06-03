@@ -36,7 +36,8 @@ export function renderOverview(){
   const filterTeam=document.getElementById('ueber-team').value;
   const d=getData();
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
-  const canSend=hasPermission('btn_teamberichte',cu.role);
+  // Senden an GF aus der Mitarbeiterübersicht: Leitung & Admin (unabhängig vom ZE-Header-Button)
+  const canSend=cu.role==='leitung'||cu.role==='admin';
 
   const mDateFilter=monthStartDate(oy,om);
   let employees;
