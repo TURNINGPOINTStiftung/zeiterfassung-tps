@@ -1,6 +1,6 @@
 // ── Core modules ──────────────────────────────────────────────────
 import { getUser } from './data.js';
-import { _TPS_LOGO } from './config.js';
+import { _TPS_LOGO, EMAILJS_PUBLIC_KEY } from './config.js';
 import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
@@ -254,6 +254,9 @@ document.addEventListener('focusout',e=>{
 // ══════════════════════════════════════════════════════════════════
 // Boot sequence
 // ══════════════════════════════════════════════════════════════════
+
+// EmailJS v4 initialisieren (Public Key) – nötig für Passwort-Reset & Erinnerungen
+try{ if(window.emailjs&&EMAILJS_PUBLIC_KEY) window.emailjs.init({publicKey:EMAILJS_PUBLIC_KEY}); }catch(e){ console.warn('EmailJS init:',e); }
 
 // Logo initialization
 ['load-logo','login-logo-img','hdr-logo','mb-logo'].forEach(id=>{
