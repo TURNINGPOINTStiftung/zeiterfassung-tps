@@ -227,7 +227,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
       +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
       +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
       +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+carryH+' h</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
-      +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+' von '+(u.al||0)+' bis '+MONTHS[m-1]+'</div></div>';
+      +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+' von '+(u.al||0)+'</div></div>';
   }
   sumCards+='</div>';
 
