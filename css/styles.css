@@ -50,8 +50,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .form-group input:focus{border-color:var(--primary-l)}
 .error-msg{color:var(--danger);font-size:13px;margin-top:8px;display:none}
 #login-user-list{max-height:220px;overflow-y:auto;padding-right:2px}
-/* ── Abwesenheiten-Kalender: Standard 140% Zoom ── */
-.ab-cal-wrap{zoom:1.4}
+/* ── Abwesenheiten-Kalender: 140% Zoom NUR auf Desktop (auf Mobil würde er überlaufen) ── */
+@media(min-width:1025px){ .ab-cal-wrap{zoom:1.4} }
 /* ── Werkstudent: Wochen über 20h rot markieren ── */
 .wstd-over .total-c{color:var(--danger)!important;font-weight:700}
 /* ── Login-Autocomplete-Dropdown ── */
@@ -549,11 +549,24 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   /* ─ Zoom: ausblenden ─ */
   .zoom-ctrl{display:none!important}
 
+  /* ─ Modul-Leiste + Header: nicht beide sticky (sonst Überlappung auf iOS) ─ */
+  .module-bar{position:static;gap:10px;padding:6px 12px;flex-wrap:wrap}
+  .module-bar .mb-logo{height:30px}
+  .mb-tabs{order:3;width:100%;justify-content:flex-start;gap:2px}
+  .mb-tab{font-size:15px;padding:9px 10px 11px}
+  .app-header{position:static}
+
   /* ─ iOS Safe Areas ─ */
-  .app-header{padding-top:env(safe-area-inset-top)}
+  #app{padding-top:env(safe-area-inset-top)}
   #toasts{padding-bottom:env(safe-area-inset-bottom)}
   .app-content{padding-bottom:max(32px,env(safe-area-inset-bottom))}
   .app-nav{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+
+  /* ─ Modal: Buttons nicht unter iOS-Leiste; scrollbar + Safe-Area ─ */
+  .modal-bg{align-items:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 0 calc(40px + env(safe-area-inset-bottom))}
+  .modal{margin:auto;max-height:none}
+  .modal-btns{margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
+  .modal-btns .btn{flex:1;min-height:48px;justify-content:center}
 }
 
 /* ════ Sehr kleine Phones ≤ 390px ════ */
