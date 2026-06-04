@@ -8,6 +8,7 @@ export function renderGFBerichte(){
   const content=document.getElementById('gf-berichte-content');
   if(!content) return;
   const d=getData();
+  const cu=window.cu;
 
   const yearReports=Object.values(d.yearReports||{}).sort((a,b)=>b.year-a.year||a.userName.localeCompare(b.userName,'de'));
   let html='';
@@ -31,6 +32,7 @@ export function renderGFBerichte(){
         +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
         +'<button class="btn btn-ok btn-sm" onclick="viewYearReport(\''+r.userId+'\','+r.year+',\''+r.id+'\')">📄 PDF / Drucken</button>'
         +(isNew?'<button class="btn btn-outline btn-sm" onclick="markYearReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+        +((cu&&(cu.role==='admin'||r.sentBy===cu.id))?'<button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'year\',\''+r.id+'\')">🗑 Entfernen</button>':'')
         +'</div>'
         +'</div>';
     });
@@ -77,12 +79,31 @@ export function renderGFBerichte(){
         +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
         +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
         +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+        +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\',\''+r.id+'\')">🗑 Entfernen</button>':'')
         +'</div>'
         +'</div>';
     });
     html+='</div></div>';
   });
   content.innerHTML=html;
+}
+
+// Einen beim GF eingegangenen Bericht entfernen (Admin oder absendende Leitung).
+export function deleteGfReport(kind,id){
+  const cu=window.cu; const d=getData();
+  const store=kind==='year'?(d.yearReports||{}):(d.teamReports||{});
+  const r=store[id];
+  if(!r){ toast('Bericht nicht gefunden.','err'); return; }
+  const isAdmin=cu&&cu.role==='admin';
+  const isSender=cu&&(r.leitungId===cu.id||r.sentBy===cu.id);
+  if(!isAdmin&&!isSender){ toast('Keine Berechtigung zum Entfernen.','err'); return; }
+  const label=kind==='year'
+    ? ('Jahresbericht '+r.year+' – '+(r.userName||''))
+    : ('Teambericht '+(r.teamName||(r.managedTeams&&r.managedTeams[0])||'')+' · '+(r.month?MONTHS[r.month-1]+' ':'')+r.year);
+  if(!confirm('Diesen Bericht beim GF entfernen?\n'+label)) return;
+  mutate(function(dd){ const s=kind==='year'?dd.yearReports:dd.teamReports; if(s&&s[id]) delete s[id]; });
+  toast('Bericht entfernt.','');
+  renderGFBerichte();
 }
 
 export function viewTeamReport(key){
