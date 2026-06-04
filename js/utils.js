@@ -2,8 +2,8 @@ import { DAYS } from './config.js';
 
 // ── Time helpers ─────────────────────────────────────────────────
 export function tMin(s){ if(!s||!s.includes(':')) return 0; const[h,m]=s.split(':').map(Number); return h*60+m; }
-export function minFmt(n){ if(n<=0) return ''; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
-export function hFmt(n){ if(n<=0) return '0:00'; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+export function minFmt(n){ n=Math.round(n); if(n<=0) return ''; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+export function hFmt(n){ n=Math.round(n); if(n<=0) return '0:00'; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
 export function dayFmt(min){
   if(min<=0) return '';
   const d=Math.round(min/480*4)/4;
