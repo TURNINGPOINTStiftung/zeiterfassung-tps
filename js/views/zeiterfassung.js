@@ -386,9 +386,19 @@ export function td_change(ds,field,val){
 // Idempotent: _npOrig speichert den Originalrand für sauberes Zurücksetzen.
 export function rebuildNightShifts(uid){
   const r15=t=>{ if(!t||!t.includes(':'))return t; const[h,m]=t.split(':').map(Number); let tot=Math.round((h*60+m)/15)*15; if(tot<0)tot=0; if(tot>1439)tot=1439; return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0'); };
+  const _tm=s=>{ if(!s||!s.includes(':'))return 0; const[h,m]=s.split(':').map(Number); return h*60+m; };
+  const _m2t=x=>String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');
   const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
   try{
     mutate(d=>{
+      const _mk=(y,m)=>`${uid}_${y}_${String(m).padStart(2,'0')}`;
+      const ensureDay=dsx=>{
+        const y=+dsx.slice(0,4), m=+dsx.slice(5,7); const k=_mk(y,m);
+        if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+        if(!d.entries[k].days) d.entries[k].days={};
+        if(!d.entries[k].days[dsx]) d.entries[k].days[dsx]={};
+        return d.entries[k].days[dsx];
+      };
       const byDate={};
       Object.keys(d.entries||{}).forEach(k=>{
         const parts=k.split('_'); parts.pop(); parts.pop(); const ku=parts.join('_');
@@ -398,9 +408,16 @@ export function rebuildNightShifts(uid){
       });
       // 1) bestehende Anpassungen zurücksetzen (nur wenn unverändert → Original)
       Object.values(byDate).forEach(day=>{
-        if(day&&day._nightShift){
+        if(!day) return;
+        // Auto-Fortsetzung aus Pausen-Überlauf zuerst entfernen (sofern unverändert)
+        if(day._npAuto){
+          if(day.b1von==='00:00'&&day.b1bis===day._npApplied){ day.b1von=''; day.b1bis=''; day.b1zuord=''; }
+          delete day._npAuto;
+        }
+        if(day._nightShift){
           if(day._npMin>0&&day._npOrig){
             if(day._npDir==='start'){ if(day.b1von===day._npApplied) day.b1von=day._npOrig; }
+            else if(day._npDir==='overflow'){ if(day.b1bis===day._npApplied) day.b1bis=day._npOrig; }
             else if(day._npDir==='end'){
               if(day.b2von&&day.b2bis){ if(day.b2bis===day._npApplied) day.b2bis=day._npOrig; }
               else { if(day.b1bis===day._npApplied) day.b1bis=day._npOrig; }
@@ -443,6 +460,36 @@ export function rebuildNightShifts(uid){
           nday._nightShift=true; nday._npMin=pause; nday._npDir='end';
           day._nightShift=true; day._npMin=0; day._npDir='';
         }
+      });
+      // 3) Pausen-Überlauf über Mitternacht: Einzelblock, dessen Abfahrt inkl.
+      //    automatischer Pause über 24:00 reicht → Rest in den Folgetag (Nachtschicht).
+      Object.keys(byDate).sort().forEach(ds=>{
+        const day=byDate[ds]; if(!day) return;
+        if(day._nightShift) return;                 // schon durch Paar-Erkennung behandelt
+        if(_ABS.has(day.b1zuord)) return;
+        if(day.b2von||!day.b1von||!day.b1bis) return; // nur Einzelblock
+        const vonMin=_tm(day.b1von), bisMin=_tm(day.b1bis);
+        if(bisMin<=1440) return;                    // passt in den Tag
+        const overflow=bisMin-1440;
+        if(overflow<=0||overflow>=1440) return;
+        const gross=bisMin-vonMin;
+        const pause=gross>=585?45:gross>=390?30:0;
+        if(pause<=0) return;
+        const nd=new Date(ds+'T12:00:00'); nd.setDate(nd.getDate()+1);
+        const nds=nd.toISOString().slice(0,10);
+        const nentry=d.entries[_mk(+nds.slice(0,4),+nds.slice(5,7))];
+        if(nentry&&(nentry.status==='submitted'||nentry.status==='approved')) return;
+        const ex=byDate[nds];
+        const ndayEmpty=!ex||(!ex.b1von&&!ex.b1bis&&!ex.b2von&&!ex.ktmin&&!_ABS.has(ex.b1zuord)&&!ex.b1bem);
+        if(!ndayEmpty) return;                      // Folgetag belegt → unverändert lassen
+        // Quelltag auf Mitternacht kappen, Pause als Nachtschicht-Pause merken
+        day._npOrig=day.b1bis; day.b1bis='24:00'; day._npApplied='24:00';
+        day._nightShift=true; day._npMin=pause; day._npDir='overflow';
+        // Fortsetzung am Folgetag anlegen (00:00 → Überlauf)
+        const nday=ensureDay(nds);
+        nday.b1von='00:00'; nday.b1bis=_m2t(overflow); nday.b1zuord=day.b1zuord||'';
+        nday._nightShift=true; nday._npMin=0; nday._npDir=''; nday._npAuto=true; nday._npApplied=nday.b1bis;
+        byDate[nds]=nday;
       });
     });
   }catch(e){ console.error('Nachtschicht-Erkennung Fehler (ignoriert):',e); }
