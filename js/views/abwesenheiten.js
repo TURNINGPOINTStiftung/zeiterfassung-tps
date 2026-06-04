@@ -81,6 +81,7 @@ export function showVacRequestForm(){
         <option value="Urlaub">Urlaub</option>
         <option value="AU/Krank">AU / Krank</option>
         <option value="Arbeitszeitausgleich">Arbeitszeitausgleich</option>
+        <option value="Veranstaltung">Veranstaltung (mit Uhrzeiten)</option>
         <option value="Sonstiges">Sonstiges</option>
       </select></div>
     <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
@@ -89,6 +90,20 @@ export function showVacRequestForm(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${today}" oninput="calcVrDays()"></div>
       <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${today}" oninput="calcVrDays()"></div>
+    </div>
+    <div id="vr-va-wrap" style="display:none">
+      <div style="background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Uhrzeiten pro Tag</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;margin-bottom:8px">
+          <span style="color:var(--muted)">Für alle Tage:</span>
+          <input type="time" id="va-all-von" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px">
+          <span>–</span>
+          <input type="time" id="va-all-bis" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px">
+          <button type="button" class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 10px" onclick="fillVADays()">Übernehmen</button>
+        </div>
+        <div id="vr-va-days" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Tage ohne Uhrzeit werden nicht eingetragen · keine automatische Pause.</div>
+      </div>
     </div>
     <div id="vr-halfday-wrap" style="display:none;margin:-4px 0 10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -121,13 +136,14 @@ export function showVacRequestForm(){
       <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-      <button class="btn btn-ok" onclick="saveVacRequest()">📨 Antrag einreichen</button>
+      <button class="btn btn-ok" id="vr-submit-btn" onclick="saveVacRequest()">📨 Antrag einreichen</button>
     </div>
     <script>calcVrDays()<\/script>`);
 }
 
 export function onVrTypeChange(){
   const t=document.getElementById('vr-type')?.value;
+  const isVA=t==='Veranstaltung';
   const hint=document.getElementById('vr-krank-hint');
   if(hint) hint.style.display=t==='AU/Krank'?'block':'none';
   const modeWrap=document.getElementById('vr-count-mode-wrap');
@@ -135,13 +151,52 @@ export function onVrTypeChange(){
   const hdWrap=document.getElementById('vr-halfday-wrap');
   if(hdWrap) hdWrap.style.display=t==='Urlaub'?'':'none';
   if(t!=='Urlaub'){ const cb=document.getElementById('vr-halfday'); if(cb) cb.checked=false; }
+  const vaWrap=document.getElementById('vr-va-wrap');
+  if(vaWrap) vaWrap.style.display=isVA?'block':'none';
+  const info=document.getElementById('vr-days-info'); if(info) info.style.display=isVA?'none':'';
+  const btn=document.getElementById('vr-submit-btn'); if(btn) btn.textContent=isVA?'📅 Veranstaltung eintragen':'📨 Antrag einreichen';
+  if(isVA) renderVADays();
   calcVrDays();
+}
+
+// Pro Tag im Zeitraum eine Zeile mit Von/Bis-Uhrzeit (Veranstaltung).
+export function renderVADays(){
+  const wrap=document.getElementById('vr-va-days'); if(!wrap) return;
+  const f=document.getElementById('vr-from')?.value, t=document.getElementById('vr-to')?.value;
+  if(!f||!t||f>t){ wrap.innerHTML='<div style="font-size:12px;color:var(--muted)">Bitte Zeitraum wählen.</div>'; return; }
+  const prev={};
+  wrap.querySelectorAll('.va-day').forEach(r=>{ prev[r.dataset.ds]={von:r.querySelector('.va-von')?.value||'',bis:r.querySelector('.va-bis')?.value||''}; });
+  const DAYS=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  let html='', cur=new Date(f+'T12:00:00'); const end=new Date(t+'T12:00:00'); let n=0;
+  while(cur<=end&&n<92){
+    const y=cur.getFullYear(),m=cur.getMonth()+1,dd=cur.getDate();
+    const ds=`${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    const we=cur.getDay()===0||cur.getDay()===6;
+    const p=prev[ds]||{von:'',bis:''};
+    html+=`<div class="va-day" data-ds="${ds}" style="display:flex;align-items:center;gap:8px">
+      <span style="width:120px;font-size:12px;${we?'color:var(--warn)':''}">${DAYS[cur.getDay()]}, ${String(dd).padStart(2,'0')}.${String(m).padStart(2,'0')}.</span>
+      <input type="time" class="va-von" value="${p.von}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <span>–</span>
+      <input type="time" class="va-bis" value="${p.bis}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+    </div>`;
+    cur.setDate(cur.getDate()+1); n++;
+  }
+  wrap.innerHTML=html;
+}
+export function fillVADays(){
+  const von=document.getElementById('va-all-von')?.value||'';
+  const bis=document.getElementById('va-all-bis')?.value||'';
+  document.querySelectorAll('#vr-va-days .va-day').forEach(r=>{
+    const v=r.querySelector('.va-von'), b=r.querySelector('.va-bis');
+    if(v) v.value=von; if(b) b.value=bis;
+  });
 }
 
 export function calcVrDays(){
   const f=document.getElementById('vr-from')?.value;
   const t=document.getElementById('vr-to')?.value;
   const type=document.getElementById('vr-type')?.value||'Urlaub';
+  if(type==='Veranstaltung'){ renderVADays(); const _i=document.getElementById('vr-days-info'); if(_i) _i.textContent=''; const _h=document.getElementById('vr-week-hint'); if(_h) _h.style.display='none'; return; }
   const halfDay=!!(document.getElementById('vr-halfday')?.checked);
   const info=document.getElementById('vr-days-info');
   const hint=document.getElementById('vr-week-hint');
@@ -195,6 +250,30 @@ export async function saveVacRequest(){
   const d=getData();
   const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:cu;
   const forOther=targetUser.id!==cu.id;
+  // ── Veranstaltung: pro Tag eigene Uhrzeiten → direkt in die Zeiterfassung (keine Pause) ──
+  if(type==='Veranstaltung'){
+    const dayTimes={};
+    document.querySelectorAll('#vr-va-days .va-day').forEach(r=>{
+      const ds=r.dataset.ds;
+      const von=r.querySelector('.va-von')?.value||'';
+      const bis=r.querySelector('.va-bis')?.value||'';
+      if(von&&bis&&von<bis) dayTimes[ds]={von,bis};
+    });
+    const dsKeys=Object.keys(dayTimes);
+    if(!dsKeys.length){ toast('Bitte für mindestens einen Tag Von- und Bis-Uhrzeit angeben.','err'); return; }
+    const key=`${targetUser.id}_VA_${from}_${to}`;
+    const now=new Date().toISOString();
+    const req={ id:key, userId:targetUser.id, userName:targetUser.name,
+      team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
+      type:'Veranstaltung', startDate:from, endDate:to, workDays:dsKeys.length, halfDay:false, note,
+      dayTimes, status:'approved', submittedAt:now, reviewedBy:cu.id, reviewedAt:now,
+      reviewNote:forOther?`Eingetragen durch ${cu.name}`:'' };
+    await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
+    window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes);
+    closeModal(); renderAbwesenheiten();
+    toast(`Veranstaltung für ${targetUser.name} eingetragen (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
+    return;
+  }
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
   const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich';
@@ -266,9 +345,9 @@ export function deleteVacRequest(id){
   const isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
   const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung'&&r.userId===cu.id;
   // Stornierbar: offene Anträge, oder genehmigte die auto-erzeugt / AU / Leitung-eigen sind
-  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf||isAuto));
+  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto));
   if(!cancellable) return;
-  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||isLeiterSelf||isAuto);
+  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto);
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
   const label=r.status==='pending'?'Antrag zurückziehen':'Abwesenheit stornieren';
   const extra=clearsTimesheet?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
@@ -471,7 +550,7 @@ export function renderAbwesenheiten(){
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
     const _isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
-    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||cu.role==='leitung'||_isAuto)));
+    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||cu.role==='leitung'||_isAuto)));
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
       ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
