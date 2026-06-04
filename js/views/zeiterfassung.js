@@ -416,7 +416,8 @@ export function rebuildNightShifts(uid){
       Object.keys(byDate).sort().forEach(ds=>{
         const day=byDate[ds]; if(!day) return;
         if(_ABS.has(day.b1zuord)) return;
-        const endsMidnight=(day.b2von&&day.b2bis==='23:59')||(!day.b2von&&day.b1bis==='23:59');
+        const _mid=v=>v==='24:00'||v==='23:59';
+        const endsMidnight=(day.b2von&&_mid(day.b2bis))||(!day.b2von&&_mid(day.b1bis));
         if(!endsMidnight||!day.b1von) return;
         const nd=new Date(ds+'T12:00:00'); nd.setDate(nd.getDate()+1);
         const nds=nd.toISOString().slice(0,10);
@@ -574,7 +575,7 @@ export function td_b1bis_change(ds,val){
     }
     // Auto-Pause nur addieren wenn kein B2-Block (Freiberufler: nie)
     let departure=roundedNet;
-    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'){
+    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'&&roundedNet!=='24:00'){
       const netMin=diffMin(von,roundedNet);
       const b2min=diffMin(day.b2von||'',day.b2bis||'');
       const ktm=Number(day.ktmin||0);
@@ -706,7 +707,7 @@ export function td_tchange(ds,field,val){
     }
     // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
     // damit Netto = eingetragene Arbeitszeit (Freiberufler: keine Pause).
-    if(field==='b2bis'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'){
+    if(field==='b2bis'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'&&normVal!=='24:00'){
       const e2=getEntry(uid,window.year,window.mon);
       const dd2=(e2.days||{})[ds]||{};
       const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
