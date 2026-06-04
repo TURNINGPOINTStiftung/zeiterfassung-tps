@@ -575,10 +575,15 @@ export function sendTimesheetReminders(){
     months.push({y,m,label:MONTHS[m-1]+' '+y});
   }
 
+  // Nur Mitarbeitende, für die der/die Eingeloggte verantwortlich ist:
+  // Leitung → ausschließlich eigenes Team; Admin → alle (außer Admin/GF).
+  const _isReminderTarget = (cu.role==='admin')
+    ? (u=>u.role!=='admin'&&u.role!=='geschaeftsfuehrer')
+    : (u=>!isManagerRole(u)&&canSeeEmployee(cu,u));
   const getPending=(y,m)=>{
     const withMail=[], noMail=[];
     d.users.forEach(u=>{
-      if(u.role==='admin'||u.role==='geschaeftsfuehrer') return;
+      if(!_isReminderTarget(u)) return;
       const st=(d.entries[entryKey(u.id,y,m)]||{}).status||'draft';
       if(st==='submitted'||st==='approved') return;
       if(u.email) withMail.push(u);
