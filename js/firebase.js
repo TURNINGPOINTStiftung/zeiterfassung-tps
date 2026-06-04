@@ -1,7 +1,7 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
 import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
 import { hashPw, isHashed } from './auth.js';
-import { addMin, getHolidays } from './utils.js';
+import { addMin, diffMin, getHolidays } from './utils.js';
 
 export async function initFirebase(){
   firebase.initializeApp({
@@ -65,6 +65,7 @@ export async function initFirebase(){
     const hadB2Mig=!!(data._fixes&&data._fixes.b2PauseMigrationV1);
     const hadFreeRb=!!(data._fixes&&data._fixes.freelancerPauseRollbackV1);
     const hadAbsV3=!!(data._fixes&&data._fixes.absSpecV3);
+    const hadVANoPause=!!(data._fixes&&data._fixes.veranstaltungNoPauseV1);
     let needsSave=needsCleanup;
     let migrated=_migrate(data);
     // Wenn eine Pausen-Migration gerade gelaufen ist → unbedingt nach Firebase speichern
@@ -77,6 +78,7 @@ export async function initFirebase(){
     setDataCache(migrated);
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
+    if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
     if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
@@ -280,6 +282,31 @@ function _runAbsMigrations(d){
         }
       });
       d._fixes.absSpecV3=true;
+    }
+
+    // Veranstaltung = keine Pflichtpause: die früher aufgeschlagene Pause aus der
+    // Abfahrt bereits erfasster Veranstaltungstage wieder herausrechnen (einmalig).
+    if(!d._fixes.veranstaltungNoPauseV1){
+      const uMap={}; (d.users||[]).forEach(u=>{ uMap[u.id]=u; });
+      Object.keys(d.entries||{}).forEach(k=>{
+        const pr=k.split('_'); pr.pop(); pr.pop(); const uid=pr.join('_');
+        const u=uMap[uid]; if(!u||u.role==='freiberuflich') return;
+        const days=d.entries[k].days||{};
+        Object.keys(days).forEach(ds=>{
+          const day=days[ds];
+          if(!day||day.b1zuord!=='Veranstaltung'||day._nightShift) return;
+          const hasB2=!!(day.b2von&&day.b2bis);
+          const lastF=hasB2?'b2bis':'b1bis';
+          const lastVon=hasB2?day.b2von:day.b1von;
+          if(!day[lastF]||!lastVon) return;
+          const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+          let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
+          const req=gross>=585?45:gross>=390?30:0;
+          const pause=Math.max(0,req-gap);
+          if(pause>0) day[lastF]=addMin(day[lastF],-pause);
+        });
+      });
+      d._fixes.veranstaltungNoPauseV1=true;
     }
   }catch(e){ console.error('AbsMigration Fehler:',e); }
 }
