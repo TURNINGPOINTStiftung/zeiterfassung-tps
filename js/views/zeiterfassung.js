@@ -560,8 +560,9 @@ function _applyDayPause(uid,ds,editedField){
     if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00') return;
     const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
     const required=gross>=540?45:gross>=360?30:0; // NETTO-Schwellen (gross ist hier entInflationiert)
-    let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
-    const pause=Math.max(0,required-gap);
+    // Erfasste Pause zwischen Block 1 und 2 = genommene Pause → nichts aufschlagen.
+    const _gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
+    const pause=_gap>0?0:required;
     if(pause>0){ day[lastF]=addMin(day[lastF],pause); day._paused=pause; day._pausedF=lastF; }
   });
 }
