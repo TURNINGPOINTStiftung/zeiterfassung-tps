@@ -81,7 +81,7 @@ export function showVacRequestForm(){
         <option value="Urlaub">Urlaub</option>
         <option value="AU/Krank">AU / Krank</option>
         <option value="Arbeitszeitausgleich">Arbeitszeitausgleich</option>
-        <option value="Veranstaltung">Veranstaltung (mit Uhrzeiten)</option>
+        <option value="Veranstaltung">Veranstaltung Krank /AU (mit Uhrzeiten)</option>
         <option value="Sonstiges">Sonstiges</option>
       </select></div>
     <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
@@ -345,9 +345,9 @@ export function deleteVacRequest(id){
   const isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
   const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung'&&r.userId===cu.id;
   // Stornierbar: offene Anträge, oder genehmigte die auto-erzeugt / AU / Leitung-eigen sind
-  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto));
+  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto||cu.role==='admin'));
   if(!cancellable) return;
-  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto);
+  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto||cu.role==='admin');
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
   const label=r.status==='pending'?'Antrag zurückziehen':'Abwesenheit stornieren';
   const extra=clearsTimesheet?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
@@ -536,6 +536,7 @@ export function renderAbwesenheiten(){
     approved:'<span class="ab-status approved">✓ Genehmigt</span>',
     rejected:'<span class="ab-status rejected">✗ Abgelehnt</span>'
   }[s]||'');
+  const _typeLabel=t=>t==='Veranstaltung'?'Veranstaltung Krank /AU':t;
   const canReview=r=>{
     if(r.status!=='pending') return false;
     if(!hasPermission('genehmigung_abwesenheit',cu.role)) return false;
@@ -550,7 +551,7 @@ export function renderAbwesenheiten(){
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
     const _isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
-    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||cu.role==='leitung'||_isAuto)));
+    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||cu.role==='leitung'||cu.role==='admin'||_isAuto)));
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
       ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
@@ -562,7 +563,7 @@ export function renderAbwesenheiten(){
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             ${showName?`<strong style="font-size:14px">${esc(r.userName)}</strong>`:''}
-            <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(r.type)}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(_typeLabel(r.type))}</span>
             ${statusBadge(r.status)}
           </div>
           <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:#e8f4fd;color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
@@ -604,7 +605,7 @@ export function renderAbwesenheiten(){
       const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Arbeitszeitausgleich'?'📋 ':'📌 ';
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
         ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
-        <span class="upc-type">${typeIcon}${esc(r.type)}</span>
+        <span class="upc-type">${typeIcon}${esc(_typeLabel(r.type))}</span>
         <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.halfDay?' ½':''}${r.team?` · ${esc(r.team)}`:''}</span>
         <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
       </div>`;
@@ -630,6 +631,12 @@ export function renderAbwesenheiten(){
     if(teamDone.length) html+=`<section style="margin-bottom:28px">
       <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
       ${teamDone.map(card).join('')}</section>`;
+    if(isAdmin){
+      const allPast=reqs.filter(r=>r.status==='approved'&&r.endDate<todayStr&&r.userId!==cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+      if(allPast.length) html+=`<section style="margin-bottom:28px">
+        <details><summary style="cursor:pointer;font-size:15px;font-weight:700;color:var(--primary);user-select:none">🕓 Vergangene Abwesenheiten – alle Mitarbeitenden (${allPast.length})</summary>
+        <div style="margin-top:10px;opacity:.85">${allPast.map(card).join('')}</div></details></section>`;
+    }
   } else {
     const teamAbs=reqs.filter(r=>{
       if(r.userId===cu.id) return false;

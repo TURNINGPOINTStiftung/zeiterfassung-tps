@@ -10,7 +10,7 @@ export function initApp(){
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
-  document.getElementById('hdr-version').textContent=_showVer?'Zeiterfassung · v34':'Zeiterfassung';
+  document.getElementById('hdr-version').textContent=_showVer?'Zeiterfassung · v35':'Zeiterfassung';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date();
   window.year=now.getFullYear(); window.mon=now.getMonth()+1;
