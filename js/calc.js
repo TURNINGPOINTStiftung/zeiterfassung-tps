@@ -17,13 +17,11 @@ export function autoPauseMin(dd,user){
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
   if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
+  // Erfasste Pause zwischen Block 1 und 2 (Lücke) = bereits genommene Pause
+  // → keine zusätzliche Pflichtpause. Nur durchgehende Blöcke werden bepaust.
+  if(dd.b1bis&&dd.b2von&&diffMin(dd.b1bis,dd.b2von)>0) return 0;
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  const required=gross>=585?45:gross>=390?30:0;
-  if(required===0) return 0;
-  // Bereits genommene Pause = Lücke zwischen b1bis und b2von
-  let gap=0;
-  if(dd.b1bis&&dd.b2von){ const g=diffMin(dd.b1bis,dd.b2von); if(g>0) gap=g; }
-  return Math.max(0,required-gap);
+  return gross>=585?45:gross>=390?30:0;
 }
 
 export function dayMinutes(dd,user){

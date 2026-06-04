@@ -306,8 +306,9 @@ function _recomputeFromSessions(day){
   // Fehlende Pflichtpause auf die LETZTE Abfahrtszeit aufschlagen (wie manuell)
   const netGross=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
   const required=netGross>=540?45:netGross>=360?30:0;
-  let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
-  const missing=Math.max(0,required-gap);
+  // Erfasste Pause zwischen den Blöcken (Lücke) = genommene Pause → nichts aufschlagen.
+  const gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
+  const missing=gap>0?0:required;
   if(missing>0){
     if(day.b2von&&day.b2bis) day.b2bis=addMin(day.b2bis,missing);
     else if(day.b1bis) day.b1bis=addMin(day.b1bis,missing);
