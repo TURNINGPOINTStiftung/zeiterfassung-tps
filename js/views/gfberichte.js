@@ -150,3 +150,16 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   window.renderOverview?.();
   _openPerEmpPrint(emps,y,m);
 }
+
+// Einen an die GF gesendeten Teambericht (Buchhaltungsversion) wieder zurückziehen.
+export function recallTeamReport(teamName,y,m){
+  const rKey='team_'+teamName.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0');
+  const d=getData();
+  const rep=d.teamReports&&d.teamReports[rKey];
+  if(!rep){ toast('Kein gesendeter Bericht gefunden.','err'); return; }
+  const seen=rep.seenAt?'\n\nHinweis: Die Geschäftsführung hat den Bericht bereits geöffnet.':'';
+  if(!confirm('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an die GF zurückziehen?'+seen)) return;
+  mutate(function(d){ if(d.teamReports&&d.teamReports[rKey]) delete d.teamReports[rKey]; });
+  toast('Teambericht zurückgezogen – nicht mehr bei der GF sichtbar.','');
+  window.renderOverview?.();
+}

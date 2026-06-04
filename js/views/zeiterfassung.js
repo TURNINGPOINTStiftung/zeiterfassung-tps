@@ -403,6 +403,7 @@ export function rebuildNightShifts(uid){
       Object.keys(d.entries||{}).forEach(k=>{
         const parts=k.split('_'); parts.pop(); parts.pop(); const ku=parts.join('_');
         if(ku!==uid) return;
+        const _st=d.entries[k].status; if(_st==='submitted'||_st==='approved') return; // genehmigte/eingereichte Monate nicht verändern
         const days=d.entries[k].days||{};
         Object.keys(days).forEach(ds=>{ byDate[ds]=days[ds]; });
       });
@@ -815,6 +816,7 @@ export function check10hCarryover(uid,y,m,ds,depth){
   let hadCarryover=false;
   mutate(d=>{
     const nK=entryKey(uid,nY,nM);
+    const _nst=d.entries?.[nK]?.status; if(_nst==='submitted'||_nst==='approved') return; // genehmigten/eingereichten Folgemonat nicht anfassen
     const nd=d.entries?.[nK]?.days?.[nDs];
     if(nd){
       if(nd.b1bem==='Übertrag 10h Korrektur'){ nd.b1von=''; nd.b1bis=''; nd.b1zuord=''; nd.b1bem=''; hadCarryover=true; }
@@ -926,6 +928,18 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
 }
 
 export function clearAbsenceFromTimesheets(uid,user,type,from,to){
+  if(type==='Veranstaltung'){
+    mutate(d=>{
+      let cur=new Date(from+'T12:00:00'); const endD=new Date(to+'T12:00:00');
+      while(cur<=endD){
+        const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
+        const dd=d.entries?.[entryKey(uid,y,m)]?.days?.[dateStr(y,m,day)];
+        if(dd&&dd.b1zuord==='Veranstaltung') Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
+        cur.setDate(cur.getDate()+1);
+      }
+    });
+    return;
+  }
   const isAZA=type==='Arbeitszeitausgleich';
   const cats=getCatsForTeam(user.team||'');
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
@@ -955,6 +969,22 @@ export function clearAbsenceFromTimesheets(uid,user,type,from,to){
 }
 
 export function syncSickToTimesheets(uid,user,from,to){ syncAbsenceToTimesheets(uid,user,'AU/Krank',from,to); }
+
+// Veranstaltung mit eigenen Uhrzeiten pro Tag in die Zeiterfassung schreiben (keine Pause).
+export function syncVeranstaltungToTimesheets(uid,dayTimes){
+  mutate(d=>{
+    Object.keys(dayTimes||{}).forEach(ds=>{
+      const t=dayTimes[ds]; if(!t||!t.von||!t.bis) return;
+      const y=+ds.slice(0,4), m=+ds.slice(5,7);
+      const k=entryKey(uid,y,m);
+      if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')) return; // genehmigte/eingereichte Monate nicht verändern
+      if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+      if(!d.entries[k].days) d.entries[k].days={};
+      if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+      Object.assign(d.entries[k].days[ds],{b1von:t.von,b1bis:t.bis,b1zuord:'Veranstaltung',b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',ktmin:''});
+    });
+  });
+}
 
 export function doSubmit(){
   const year=window.year, mon=window.mon, cu=window.cu;

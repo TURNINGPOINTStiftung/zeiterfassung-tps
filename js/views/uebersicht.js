@@ -80,7 +80,7 @@ export function renderOverview(){
     const canEditDpw=cu.role==='admin'||(cu.role==='leitung'&&canSeeEmployee(cu,u));
     const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw('${u.id}')">✏ ${u.dpw||5} Tage/Wo</button>`:'';
     const curStatus=curEntry.status||'draft';
-    const isClickable=curStatus==='submitted'||curStatus==='approved'||curStatus==='rejected';
+    const isClickable=curStatus==='submitted'||curStatus==='approved'||curStatus==='rejected'||cu.role==='admin';
     const cardClick=isClickable?`onclick="openEmpMonth('${u.id}')" title="Zeiterfassung öffnen"`:`style="cursor:default" title="Noch nicht eingereicht"`;
     const notSubmitted=!isClickable?`<div class="meta" style="margin-top:4px;font-size:11px;color:var(--muted)">📝 ${MONTHS[om-1]}: noch nicht eingereicht</div>`:'';
     if(isFree){
@@ -133,7 +133,7 @@ export function renderOverview(){
     const monthLabel=MONTHS[om-1]+' '+oy;
     const rKey='team_'+team.replace(/\W/g,'_')+'_'+oy+'_'+String(om).padStart(2,'0');
     const sent=d.teamReports&&d.teamReports[rKey];
-    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')}</span>`:'';
+    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')}${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
     const empIds=JSON.stringify(users.map(u=>u.id));
     if(allApproved){
       return `<div class="team-send-bar">

@@ -16,7 +16,7 @@ import { openModal, closeModal } from './utils.js';
 import { renderZeiterfassung, renderSignature, td_change, td_zuord,
          td_b1bis_change, td_tchange, fmtTimeIn, focusNextTInp, ztNav, check10hCarryover, saveCarryover,
          resetCarryover, syncAbsenceToTimesheets, clearAbsenceFromTimesheets,
-         syncSickToTimesheets, doSubmit, doRecall, doApprove, doReject,
+         syncSickToTimesheets, syncVeranstaltungToTimesheets, doSubmit, doRecall, doApprove, doReject,
          doResetToDraft, rebuildAutoAbsences, rebuildNightShifts } from './views/zeiterfassung.js';
 
 import { populateUeberYear, populateUeberMon, populateUeberTeam,
@@ -24,7 +24,7 @@ import { populateUeberYear, populateUeberMon, populateUeberTeam,
          printJahresübersicht, sendJahresbericht,
          sendTimesheetReminders } from './views/uebersicht.js';
 
-import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest,
+import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest, renderVADays, fillVADays,
          showRejectModal, approveVacRequest, deleteVacRequest, confirmRejectVac,
          updateAbBadge, setAbView, setAbSubView, changeAbNav, changeAbMonth,
          renderAbCalendar, renderAbCalendarWeek, renderAbCalendarYear,
@@ -36,7 +36,7 @@ import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
          syncStempelVon, startZeitstempelAt } from './views/stempeln.js';
 
 import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport,
-         markYearReportSeen, sendTeamReport, sendTeamReportForTeam } from './views/gfberichte.js';
+         markYearReportSeen, sendTeamReport, sendTeamReportForTeam, recallTeamReport } from './views/gfberichte.js';
 
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
          addTeamHistEntry, updateTeamHistEntry, deleteTeamHistEntry,
@@ -111,6 +111,7 @@ window.clearAbsenceFromTimesheets= clearAbsenceFromTimesheets;
 window.rebuildAutoAbsences       = rebuildAutoAbsences;
 window.rebuildNightShifts        = rebuildNightShifts;
 window.syncSickToTimesheets      = syncSickToTimesheets;
+window.syncVeranstaltungToTimesheets = syncVeranstaltungToTimesheets;
 window.doSubmit                  = doSubmit;
 window.doRecall                  = doRecall;
 window.doApprove                 = doApprove;
@@ -133,6 +134,8 @@ window.showVacRequestForm = showVacRequestForm;
 window.onVrTypeChange     = onVrTypeChange;
 window.calcVrDays         = calcVrDays;
 window.saveVacRequest     = saveVacRequest;
+window.renderVADays       = renderVADays;
+window.fillVADays         = fillVADays;
 window.showRejectModal    = showRejectModal;
 window.approveVacRequest  = approveVacRequest;
 window.deleteVacRequest   = deleteVacRequest;
@@ -168,6 +171,7 @@ window.viewYearReport      = viewYearReport;
 window.markYearReportSeen  = markYearReportSeen;
 window.sendTeamReport      = sendTeamReport;
 window.sendTeamReportForTeam= sendTeamReportForTeam;
+window.recallTeamReport    = recallTeamReport;
 
 // Einstellungen view
 window.renderSettings        = renderSettings;
