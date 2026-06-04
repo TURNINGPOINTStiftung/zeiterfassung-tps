@@ -1,7 +1,7 @@
-// TPS Zeiterfassung – Service Worker v27
+// TPS Zeiterfassung – Service Worker v28
 // Strategie: NUR Firebase-SDK cachen; alle App-Dateien IMMER frisch (no-store).
 // no-store umgeht Browser-HTTP-Cache UND zwingt frische Versionen nach Deploy.
-const CACHE = 'tps-ze-v27';
+const CACHE = 'tps-ze-v28';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
