@@ -10,7 +10,22 @@ export function initApp(){
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
-  document.getElementById('hdr-version').textContent=_showVer?'Zeiterfassung · v38':'Zeiterfassung';
+  var _hv=document.getElementById('hdr-version');
+  if(_hv){
+    _hv.textContent=_showVer?'Zeiterfassung · v39 · ↻':'Zeiterfassung';
+    if(_showVer){
+      _hv.style.cursor='pointer';
+      _hv.title='Tippen: App auf die neueste Version aktualisieren (Cache leeren & neu laden)';
+      _hv.onclick=function(){
+        if(!confirm('App auf die neueste Version aktualisieren? (Cache wird geleert und neu geladen)')) return;
+        Promise.resolve()
+          .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
+          .then(function(){ return (navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)?navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.update();}));}):null; })
+          .catch(function(){})
+          .then(function(){ location.reload(); });
+      };
+    }
+  }
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date();
   window.year=now.getFullYear(); window.mon=now.getMonth()+1;
