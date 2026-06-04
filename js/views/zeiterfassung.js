@@ -938,7 +938,8 @@ export function clearAbsenceFromTimesheets(uid,user,type,from,to){
 export function syncSickToTimesheets(uid,user,from,to){ syncAbsenceToTimesheets(uid,user,'AU/Krank',from,to); }
 
 // Veranstaltung mit eigenen Uhrzeiten pro Tag in die Zeiterfassung schreiben (keine Pause).
-export function syncVeranstaltungToTimesheets(uid,dayTimes){
+export function syncVeranstaltungToTimesheets(uid,dayTimes,note){
+  const bem=(note&&note.trim())?note.trim():'Veranstaltung Krank /AU';
   mutate(d=>{
     Object.keys(dayTimes||{}).forEach(ds=>{
       const t=dayTimes[ds]; if(!t||!t.von||!t.bis) return;
@@ -948,7 +949,7 @@ export function syncVeranstaltungToTimesheets(uid,dayTimes){
       if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
       if(!d.entries[k].days) d.entries[k].days={};
       if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-      Object.assign(d.entries[k].days[ds],{b1von:t.von,b1bis:t.bis,b1zuord:'Veranstaltung',b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',ktmin:''});
+      Object.assign(d.entries[k].days[ds],{b1von:t.von,b1bis:t.bis,b1zuord:'Veranstaltung',b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',ktmin:''});
     });
   });
 }
