@@ -351,30 +351,9 @@ export function td_change(ds,field,val){
     return;
   }
 
-  if(field==='ktmin'){
-    // Wenn Kleinteilig geändert wird, b1bis-Abfahrtszeit neu berechnen
-    // (Kleinteilig ändert Brutto → ändert auto-Pause → ändert Abfahrtszeit)
-    const entry=getEntry(uid,window.year,window.mon);
-    const day=(entry.days||{})[ds]||{};
-    const b1von=day.b1von||''; const b1bis=day.b1bis||'';
-    const hasB2=!!(day.b2von&&day.b2bis);
-    if(b1von&&b1bis&&!hasB2&&!isFreelancer(getUser(uid))){
-      const oldKtm=Number(day.ktmin||0);
-      const newKtm=Number(val||0);
-      const b2min=diffMin(day.b2von||'',day.b2bis||'');
-      // Altes Netto = b1bis_departure − old_autoPause
-      const oldGross=diffMin(b1von,b1bis)+b2min+oldKtm;
-      const oldPause=oldGross>=540?45:oldGross>=360?30:0;
-      const netB1=addMin(b1bis,-oldPause);
-      // Neue Abfahrt basierend auf neuem Kleinteilig
-      const netMin=diffMin(b1von,netB1);
-      const tryGross=netMin+b2min+newKtm+30;
-      const newPause=tryGross>=540?45:tryGross>=360?30:0;
-      const newDep=addMin(netB1,newPause);
-      setDay(uid,window.year,window.mon,ds,'b1bis',newDep);
-    }
-  }
   setDay(uid,window.year,window.mon,ds,field,val);
+  // Kleinteilig ändert die Brutto-Zeit → Pflichtpause zentral neu aufschlagen.
+  if(field==='ktmin') _applyDayPause(uid,ds,null);
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
 }
@@ -554,22 +533,37 @@ export function rebuildAutoAbsences(uid,reviewerId){
   });
 }
 
-// Pflichtpause beim Wechsel Veranstaltung ⇄ normale Tätigkeit neu berechnen.
-// toVA=true: eingebettete Pause aus der Abfahrt entfernen; sonst wieder aufschlagen.
-function _recalcVAPause(uid,ds,toVA){
-  const user=getUser(uid); if(!user||isFreelancer(user)) return;
-  const entry=getEntry(uid,window.year,window.mon);
-  const day=(entry.days||{})[ds]; if(!day||day._nightShift) return;
-  const hasB2=!!(day.b2von&&day.b2bis);
-  const lastF=hasB2?'b2bis':'b1bis';
-  const lastVon=hasB2?day.b2von:day.b1von;
-  if(!day[lastF]||!lastVon) return;
-  const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
-  let delta=0;
-  if(toVA){ const req=gross>=585?45:gross>=390?30:0; delta=-Math.max(0,req-gap); }
-  else    { const req=gross>=540?45:gross>=360?30:0; delta= Math.max(0,req-gap); }
-  if(delta!==0) setDay(uid,window.year,window.mon,ds,lastF,addMin(day[lastF],delta));
+// Zentrale, IDEMPOTENTE Pausen-Aufschlagung.
+// Entfernt die zuvor aufgeschlagene Pflichtpause und schlägt die aktuelle Pause
+// GENAU EINMAL auf die letzte Abfahrtszeit des Tages auf. Dadurch verschieben sich
+// Zeiten beim Nachbearbeiten nicht mehr (keine Mehrfach-Aufschläge, kein Aufaddieren).
+// editedField = gerade vom Nutzer eingegebenes Feld (enthält bereits den Netto-Wert,
+// wird daher beim Entfernen der Alt-Pause ausgelassen).
+function _applyDayPause(uid,ds,editedField){
+  const user=getUser(uid); if(!user) return;
+  mutate(d=>{
+    const k=entryKey(uid,window.year,window.mon);
+    const e=d.entries[k]; if(!e||e.status==='submitted'||e.status==='approved') return;
+    const day=e.days?.[ds]; if(!day||day._nightShift) return;
+    const hasB2=!!(day.b2von&&day.b2bis);
+    // 1) bisher aufgeschlagene Pause entfernen (Tracking, sonst Schätzung aus Altdaten)
+    const prevF=day._pausedF||(hasB2?'b2bis':'b1bis');
+    const prevP=day._pInit?Number(day._paused||0):autoPauseMin(day,user);
+    if(prevP>0&&prevF!==editedField&&day[prevF]) day[prevF]=addMin(day[prevF],-prevP);
+    day._paused=0; day._pausedF=''; day._pInit=true;
+    // 2) Pause neu berechnen – keine bei Freiberufler / Veranstaltung / Abwesenheit
+    const z=day.b1zuord||'', bem=day.b1bem||'';
+    if(isFreelancer(user)||z==='Veranstaltung'||bem==='Veranstaltung'
+       ||z==='Urlaub'||z==='AU/Krank'||z==='Arbeitszeitausgleich'
+       ||bem==='Urlaub'||bem==='AU/Krank'||bem==='Arbeitszeitausgleich') return;
+    const lastF=hasB2?'b2bis':(day.b1von&&day.b1bis?'b1bis':'');
+    if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00') return;
+    const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+    const required=gross>=540?45:gross>=360?30:0; // NETTO-Schwellen (gross ist hier entInflationiert)
+    let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
+    const pause=Math.max(0,required-gap);
+    if(pause>0){ day[lastF]=addMin(day[lastF],pause); day._paused=pause; day._pausedF=lastF; }
+  });
 }
 
 export function td_zuord(ds,field,val,wh,dpw){
@@ -597,11 +591,8 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
   if(field==='b1zuord'){
-    // Veranstaltung ⇄ normale Tätigkeit: Pflichtpause aus der Abfahrtszeit
-    // entfernen bzw. wieder aufschlagen (Veranstaltung = keine Pause).
-    const _absSet=new Set(['Urlaub','AU/Krank','Sonstiges','Arbeitszeitausgleich']);
-    const _wasVA=_oldZuord==='Veranstaltung', _isVA=val==='Veranstaltung';
-    if(_wasVA!==_isVA&&!_absSet.has(val)&&!_absSet.has(_oldZuord)) _recalcVAPause(uid,ds,_isVA);
+    // Pflichtpause an die (ggf. neue) Kategorie anpassen (Veranstaltung = keine Pause).
+    _applyDayPause(uid,ds,null);
     // Auto-Abwesenheiten komplett aus der Zeiterfassung neu aufbauen
     // (erkennt zusammenhängende Urlaub-/AU-Zeiträume, auch über Wochenenden)
     rebuildAutoAbsences(uid,cu.id);
@@ -645,19 +636,11 @@ export function td_b1bis_change(ds,val){
       const rawMin=diffMin(von,normVal);
       if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
     }
-    // Auto-Pause nur addieren wenn kein B2-Block (Freiberufler: nie)
-    let departure=roundedNet;
-    if(!hasB2&&von&&!isAbsence&&zuord!=='Veranstaltung'&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'&&roundedNet!=='24:00'){
-      const netMin=diffMin(von,roundedNet);
-      const b2min=diffMin(day.b2von||'',day.b2bis||'');
-      const ktm=Number(day.ktmin||0);
-      const totalNet=netMin+b2min+ktm;
-      const tryGross=totalNet+30;
-      const autoPause=tryGross>=540?45:tryGross>=360?30:0;
-      if(autoPause>0) departure=addMin(roundedNet,autoPause);
-    }
-    setDay(uid,window.year,window.mon,ds,'b1bis',departure);
+    // Eingegebene (Netto-)Endzeit speichern; die Pflichtpause wird zentral
+    // & idempotent aufgeschlagen (keine Mehrfach-Aufschläge beim Nachbearbeiten).
+    setDay(uid,window.year,window.mon,ds,'b1bis',roundedNet);
   }
+  _applyDayPause(uid,ds,'b1bis');
   check10hCarryover(uid,window.year,window.mon,ds);
   rebuildNightShifts(uid);
   renderZeiterfassung();
@@ -777,24 +760,8 @@ export function td_tchange(ds,field,val){
         if(rounded!==rawMin&&rounded>0) setDay(uid,window.year,window.mon,ds,bisF,addMin(von,rounded));
       }
     }
-    // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
-    // damit Netto = eingetragene Arbeitszeit (Freiberufler: keine Pause).
-    if(field==='b2bis'&&day.b1zuord!=='Veranstaltung'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'&&normVal!=='24:00'){
-      const e2=getEntry(uid,window.year,window.mon);
-      const dd2=(e2.days||{})[ds]||{};
-      const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
-      const b2net=diffMin(dd2.b2von||'',dd2.b2bis||'');
-      const kt=Number(dd2.ktmin||0);
-      const grossNet=b1+b2net+kt;
-      const required=grossNet>=540?45:grossNet>=360?30:0;
-      let gap=0;
-      if(dd2.b1bis&&dd2.b2von){ const g=diffMin(dd2.b1bis,dd2.b2von); if(g>0) gap=g; }
-      const missing=Math.max(0,required-gap);
-      if(missing>0&&dd2.b2von&&dd2.b2bis){
-        setDay(uid,window.year,window.mon,ds,'b2bis',addMin(dd2.b2bis,missing));
-      }
-    }
   }
+  _applyDayPause(uid,ds,field);
   check10hCarryover(uid,window.year,window.mon,ds);
   rebuildNightShifts(uid);
   renderZeiterfassung();
