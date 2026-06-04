@@ -17,6 +17,10 @@ export function initApp(){
   window.abCalYear=window.year; window.abCalMon=window.mon;
   window.viewEmpId=cu.id;
 
+  // Bereits gespeicherte Nachtschichten des eingeloggten Users einmalig erkennen.
+  // (Die Erkennung läuft sonst nur bei Zeit-Eingaben – nicht beim Laden.)
+  try{ window.rebuildNightShifts?.(cu.id); }catch(e){ console.error('Nachtschicht-Init Fehler:',e); }
+
   // noTimesheet: ZE komplett weg (GF-Konzept)
   // noReport: ZE bleibt, aber privat — kein Einreichen, GF hat keinen Zugriff (Leitungs-Konzept)
   const gfNoZE=isGF&&!!cu.noTimesheet;
