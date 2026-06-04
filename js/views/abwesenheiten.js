@@ -81,7 +81,7 @@ export function showVacRequestForm(){
         <option value="Urlaub">Urlaub</option>
         <option value="AU/Krank">AU / Krank</option>
         <option value="Arbeitszeitausgleich">Arbeitszeitausgleich</option>
-        <option value="Veranstaltung">Veranstaltung Krank /AU (mit Uhrzeiten)</option>
+        <option value="Veranstaltung">Veranstaltung Krank / AU (mit Uhrzeiten)</option>
         <option value="Sonstiges">Sonstiges</option>
       </select></div>
     <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
@@ -536,7 +536,7 @@ export function renderAbwesenheiten(){
     approved:'<span class="ab-status approved">✓ Genehmigt</span>',
     rejected:'<span class="ab-status rejected">✗ Abgelehnt</span>'
   }[s]||'');
-  const _typeLabel=t=>t==='Veranstaltung'?'Veranstaltung Krank /AU':t;
+  const _typeLabel=t=>t==='Veranstaltung'?'Veranstaltung Krank / AU':t;
   const canReview=r=>{
     if(r.status!=='pending') return false;
     if(!hasPermission('genehmigung_abwesenheit',cu.role)) return false;

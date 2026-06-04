@@ -21,7 +21,7 @@ import { renderZeiterfassung, renderSignature, td_change, td_zuord,
 
 import { populateUeberYear, populateUeberMon, populateUeberTeam,
          renderOverview, openEmpMonth, openJahresübersicht,
-         printJahresübersicht, sendJahresbericht,
+         printJahresübersicht, sendJahresbericht, recallYearReport,
          sendTimesheetReminders } from './views/uebersicht.js';
 
 import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest, renderVADays, fillVADays,
@@ -127,6 +127,7 @@ window.openEmpMonth       = openEmpMonth;
 window.openJahresübersicht= openJahresübersicht;
 window.printJahresübersicht= printJahresübersicht;
 window.sendJahresbericht      = sendJahresbericht;
+window.recallYearReport       = recallYearReport;
 window.sendTimesheetReminders = sendTimesheetReminders;
 
 // Abwesenheiten view
