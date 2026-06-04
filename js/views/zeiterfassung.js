@@ -388,7 +388,7 @@ export function rebuildNightShifts(uid){
   const r15=t=>{ if(!t||!t.includes(':'))return t; const[h,m]=t.split(':').map(Number); let tot=Math.round((h*60+m)/15)*15; if(tot<0)tot=0; if(tot>1439)tot=1439; return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0'); };
   const _tm=s=>{ if(!s||!s.includes(':'))return 0; const[h,m]=s.split(':').map(Number); return h*60+m; };
   const _m2t=x=>String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');
-  const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
+  const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich','Veranstaltung']);
   try{
     mutate(d=>{
       const _mk=(y,m)=>`${uid}_${y}_${String(m).padStart(2,'0')}`;
@@ -553,11 +553,30 @@ export function rebuildAutoAbsences(uid,reviewerId){
   });
 }
 
+// Pflichtpause beim Wechsel Veranstaltung ⇄ normale Tätigkeit neu berechnen.
+// toVA=true: eingebettete Pause aus der Abfahrt entfernen; sonst wieder aufschlagen.
+function _recalcVAPause(uid,ds,toVA){
+  const user=getUser(uid); if(!user||isFreelancer(user)) return;
+  const entry=getEntry(uid,window.year,window.mon);
+  const day=(entry.days||{})[ds]; if(!day||day._nightShift) return;
+  const hasB2=!!(day.b2von&&day.b2bis);
+  const lastF=hasB2?'b2bis':'b1bis';
+  const lastVon=hasB2?day.b2von:day.b1von;
+  if(!day[lastF]||!lastVon) return;
+  const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
+  let gap=0; if(day.b1bis&&day.b2von){ const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g; }
+  let delta=0;
+  if(toVA){ const req=gross>=585?45:gross>=390?30:0; delta=-Math.max(0,req-gap); }
+  else    { const req=gross>=540?45:gross>=360?30:0; delta= Math.max(0,req-gap); }
+  if(delta!==0) setDay(uid,window.year,window.mon,ds,lastF,addMin(day[lastF],delta));
+}
+
 export function td_zuord(ds,field,val,wh,dpw){
   const _fid=window._ztNextFocusId||document.activeElement?.id||null;
   window._ztNextFocusId=null;
   const uid=window.viewEmpId||window.cu.id;
   const cu=window.cu;
+  const _oldZuord=((getEntry(uid,window.year,window.mon).days||{})[ds]||{}).b1zuord||'';
   setDay(uid,window.year,window.mon,ds,field,val);
 
   // „Sonstiges" → nur Bemerkung eintragen, keine Zeiteinträge
@@ -577,6 +596,11 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
   if(field==='b1zuord'){
+    // Veranstaltung ⇄ normale Tätigkeit: Pflichtpause aus der Abfahrtszeit
+    // entfernen bzw. wieder aufschlagen (Veranstaltung = keine Pause).
+    const _absSet=new Set(['Urlaub','AU/Krank','Sonstiges','Arbeitszeitausgleich']);
+    const _wasVA=_oldZuord==='Veranstaltung', _isVA=val==='Veranstaltung';
+    if(_wasVA!==_isVA&&!_absSet.has(val)&&!_absSet.has(_oldZuord)) _recalcVAPause(uid,ds,_isVA);
     // Auto-Abwesenheiten komplett aus der Zeiterfassung neu aufbauen
     // (erkennt zusammenhängende Urlaub-/AU-Zeiträume, auch über Wochenenden)
     rebuildAutoAbsences(uid,cu.id);
@@ -622,7 +646,7 @@ export function td_b1bis_change(ds,val){
     }
     // Auto-Pause nur addieren wenn kein B2-Block (Freiberufler: nie)
     let departure=roundedNet;
-    if(!hasB2&&von&&!isAbsence&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'&&roundedNet!=='24:00'){
+    if(!hasB2&&von&&!isAbsence&&zuord!=='Veranstaltung'&&!isFreelancer(getUser(uid))&&roundedNet!=='23:59'&&roundedNet!=='24:00'){
       const netMin=diffMin(von,roundedNet);
       const b2min=diffMin(day.b2von||'',day.b2bis||'');
       const ktm=Number(day.ktmin||0);
@@ -754,7 +778,7 @@ export function td_tchange(ds,field,val){
     }
     // Letzte Abfahrtszeit (b2bis) um fehlende Pflichtpause aufblähen,
     // damit Netto = eingetragene Arbeitszeit (Freiberufler: keine Pause).
-    if(field==='b2bis'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'&&normVal!=='24:00'){
+    if(field==='b2bis'&&day.b1zuord!=='Veranstaltung'&&!isFreelancer(getUser(uid))&&normVal!=='23:59'&&normVal!=='24:00'){
       const e2=getEntry(uid,window.year,window.mon);
       const dd2=(e2.days||{})[ds]||{};
       const b1=diffMin(dd2.b1von||'',dd2.b1bis||'');
