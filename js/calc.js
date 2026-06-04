@@ -14,8 +14,8 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 // Davon wird eine bereits genommene Lücke zwischen Block 1 und 2 abgezogen.
 export function autoPauseMin(dd,user){
   if(!dd||_isAbsDay(dd)) return 0;
+  if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
-  if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   const required=gross>=585?45:gross>=390?30:0;
   if(required===0) return 0;
@@ -28,8 +28,12 @@ export function autoPauseMin(dd,user){
 export function dayMinutes(dd,user){
   if(!dd) return 0;
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  if(_isAbsDay(dd)) return gross;
-  return Math.max(0,gross-autoPauseMin(dd,user));
+  const isAbs=_isAbsDay(dd);
+  const net=isAbs?gross:Math.max(0,gross-autoPauseMin(dd,user));
+  if(net<=0) return 0;
+  // Identisch zur Zeiterfassungs-Ansicht: Arbeitstage auf 15-Min-Raster, max 10h/Tag.
+  // (Sonst weicht der Monats-/Übertragswert von der angezeigten Monatssumme ab.)
+  return Math.min(isAbs?net:Math.round(net/15)*15,600);
 }
 export function monthIST(entry,user){
   if(!entry||!entry.days) return 0;
