@@ -165,7 +165,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
   if(isFree){
     const maxH=user.maxHours||0;
     if(maxH>0){
-      const totalMin=istMin+carryH*60;
+      const totalMin=istMin+Math.round(carryH*60);
       const billedMin=Math.min(totalMin,maxH*60);
       const overflowMin=Math.max(0,totalMin-maxH*60);
       const underMin=Math.max(0,maxH*60-totalMin);
@@ -175,7 +175,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       const overDayStr=overflowMin>0?dayFmt(overflowMin):'';
       cards=[
         {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:istDayStr?('= '+istDayStr+' (8h=1T)'):'tatsächlich geleistet'},
-        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
+        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(Math.round(carryH*60)),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
         {lbl:'Verfügbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag = '+dayFmt(totalMin)},
         {lbl:'Abgerechnet (Limit '+maxH+' h / '+maxDays+' T)',big:hFmt(billedMin),sub:billedDayStr?('= '+billedDayStr+' – max. Limit'):'max. Monatslimit',cls:billedMin>=maxH*60?'neg':'pos'},
         {lbl:'Übertrag → nächster Monat',big:overflowMin>0?('+'+hFmt(overflowMin)):'–',sub:overDayStr?('= +'+overDayStr+' werden vorgetragen'):overflowMin>0?'wird vorgetragen':underMin>0?'unter Limit – kein Minus':'exakt auf Limit',cls:overflowMin>0?'pos':''},
@@ -183,14 +183,14 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     } else {
       cards=[
         {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
+        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(Math.round(carryH*60)),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
       ];
       const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1),user)).reduce((a,b)=>a+b,0);
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
     }
   } else {
     const soll=monthSOLL(user,year,mon);
-    const diff=istMin-(soll-(carryH)*60);
+    const diff=istMin-(soll-Math.round(carryH*60));
     const vd=vacDays(entry);
     const sk=sickDays(entry);
     const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
@@ -202,7 +202,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     cards=[
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-      {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'')+carryH+' h',cls:diff>=0?'pos':'neg'},
+      {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'-')+hFmt(Math.abs(carryH*60)),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
       {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al}`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
@@ -222,13 +222,13 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     </div>`;
   }
   document.getElementById('summary-cards').innerHTML=cardsHtml;
-  document.getElementById('carryover-input').value=carryH;
+  document.getElementById('carryover-input').value=Math.round(carryH*100)/100;
   const _dw=document.getElementById('info-diff-wrap');
   const _de=document.getElementById('info-diff');
   if(_de&&!isFree){
     const _s=monthSOLL(user,year,mon);
     const _c=getEffectiveCarryH(uid,user,year,mon);
-    const _d=istMin-(_s-_c*60);
+    const _d=istMin-(_s-Math.round(_c*60));
     _de.textContent=(_d>=0?'+':'')+hFmt(Math.abs(_d));
     _de.className='val '+(_d>=0?'pos':'neg');
     if(_dw) _dw.style.display='';
@@ -266,7 +266,7 @@ function renderActionBar(uid,user,entry,isLeiter){
     const lblText=isFree?'Stundenübertrag Vormonat (h):':'Übertrag Vormonat (h):';
     if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
     const inp=document.getElementById('carryover-input');
-    if(inp){ inp.value=effCarry; inp.min=isFree?0:-99; }
+    if(inp){ inp.value=Math.round(effCarry*100)/100; inp.min=isFree?0:-99; }
     const rst=document.getElementById('carryover-reset');
     if(rst) rst.style.display=isManual?'inline-flex':'none';
   }

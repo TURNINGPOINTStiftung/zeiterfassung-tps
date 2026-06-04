@@ -84,7 +84,7 @@ export function renderOverview(){
     const cardClick=isClickable?`onclick="openEmpMonth('${u.id}')" title="Zeiterfassung öffnen"`:`style="cursor:default" title="Noch nicht eingereicht"`;
     const notSubmitted=!isClickable?`<div class="meta" style="margin-top:4px;font-size:11px;color:var(--muted)">📝 ${MONTHS[om-1]}: noch nicht eingereicht</div>`:'';
     if(isFree){
-      const curTotal=curIST+curCarry*60;
+      const curTotal=curIST+Math.round(curCarry*60);
       const curOverflow=maxH>0?Math.max(0,curTotal-maxH*60):0;
       const freeMeta=maxH>0
         ?`Limit: <strong>${maxH} h/Monat</strong> · ${MONTHS[om-1]}: ${hFmt(curIST)} geleistet`
@@ -104,7 +104,7 @@ export function renderOverview(){
     const vacLeft=(u.al||0)-vacUpTo;
     const vacFuture=Math.max(0,vacApproved-vacUpTo);
     const curSOLL=monthSOLL(u,oy,om);
-    const curDiff=curIST-(curSOLL-curCarry*60);
+    const curDiff=curIST-(curSOLL-Math.round(curCarry*60));
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
     const diffStr=(curDiff>=0?'+':'')+hFmt(Math.abs(curDiff));
     return `<div class="emp-card${isClickable?'':' emp-card-locked'}" ${cardClick}>
@@ -257,7 +257,7 @@ export function openJahresübersicht(uid,y){
     const ist=monthIST(entry,user);
     const soll=isFree?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
-    const diff=isFree?0:(ist-(soll-carry*60));
+    const diff=isFree?0:(ist-(soll-Math.round(carry*60)));
     const vac=vacDays(entry);
     const sick=sickDays(entry);
     const st=entry.status||'draft';
@@ -380,7 +380,7 @@ export function printJahresübersicht(uid,y){
     const ist=monthIST(entry,user);
     const soll=isFree?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
-    const diff=isFree?0:(ist-(soll-carry*60));
+    const diff=isFree?0:(ist-(soll-Math.round(carry*60)));
     const vac=vacDays(entry);
     const sick=sickDays(entry);
     const st=entry.status||'draft';

@@ -81,15 +81,16 @@ export function computeAutoCarry(uid,user,y,m,_d){
   const pIST=monthIST(pe,user);
   if(pIST===0&&!pe.carryoverManual) return 0;
   const pCarryH=pe.carryoverManual?(pe.carryover||0):computeAutoCarry(uid,user,py,pm,_d+1);
+  const pCarryMin=Math.round(pCarryH*60); // Vormonats-Übertrag minutengenau (kein Float-Drift)
   if(isFreelancer(user)){
     const maxH=user.maxHours||0;
     if(maxH<=0) return 0;
-    const total=pIST+pCarryH*60;
-    return Math.round(Math.max(0,total-maxH*60)/60*4)/4;
+    const total=pIST+pCarryMin;
+    return Math.max(0,total-maxH*60)/60; // minutengenau – KEINE Viertelstunden-Rundung
   } else {
     const pSOLL=monthSOLL(user,py,pm);
-    const pDiff=pIST-pSOLL+pCarryH*60;
-    return Math.round(pDiff/60*4)/4;
+    const pDiff=pIST-pSOLL+pCarryMin;
+    return pDiff/60; // minutengenau – KEINE Viertelstunden-Rundung
   }
 }
 

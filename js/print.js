@@ -200,22 +200,22 @@ export function renderBuchhaltungHTML(u,entry,y,m){
   const maxH=isFree?(u.maxHours||0):0;
   const soll=monthSOLL(u,y,m);
   const carryH=isFree?getEffectiveCarryH(u.id,u,y,m):(entry.carryover||0);
-  const diff=monthTotal-(soll-carryH*60);
+  const diff=monthTotal-(soll-Math.round(carryH*60));
 
   let sumCards='<div class="bh-sum">';
   if(isFree&&maxH>0){
-    const totalMin=monthTotal+carryH*60;
+    const totalMin=monthTotal+Math.round(carryH*60);
     const billedMin=Math.min(totalMin,maxH*60);
     const overflowMin=Math.max(0,totalMin-maxH*60);
     sumCards+=
       '<div class="bh-sc"><div class="lbl">Geleistete Stunden</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'IST gesamt')+'</div></div>'
-      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>'
+      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(Math.round(carryH*60))+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>'
       +'<div class="bh-sc"><div class="lbl">Abgerechnet (max. '+maxH+' h)</div><div class="val">'+hFmt(billedMin)+'</div><div class="sub">'+(dayFmt(billedMin)||'Monatslimit')+'</div></div>'
       +'<div class="bh-sc '+(overflowMin>0?'pos':'')+'"><div class="lbl">Übertrag → nächster Monat</div><div class="val">'+(overflowMin>0?'+'+hFmt(overflowMin):'&ndash;')+'</div><div class="sub">'+(overflowMin>0?(dayFmt(overflowMin)||'wird vorgetragen'):'kein Übertrag')+'</div></div>';
   } else if(isFree){
     sumCards+=
       '<div class="bh-sc"><div class="lbl">Geleistete Stunden</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'IST gesamt')+'</div></div>'
-      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>';
+      +'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(Math.round(carryH*60))+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>';
   } else {
     const diffCls=diff>=0?'pos':'neg';
     const vacUpTo=vacUsedUpToMonth(u.id,y,m);
@@ -226,7 +226,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
       '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+u.wh+' h/Woche</div></div>'
       +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
       +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+(diff>=0?'+':'')+hFmt(Math.abs(diff))+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
-      +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+carryH+' h</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
+      +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+(carryH>0?'+':'')+hFmt(Math.round(carryH*60))+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
       +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+' von '+(u.al||0)+'</div></div>';
   }
   sumCards+='</div>';
