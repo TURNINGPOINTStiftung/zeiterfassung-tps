@@ -269,7 +269,7 @@ export async function saveVacRequest(){
       dayTimes, status:'approved', submittedAt:now, reviewedBy:cu.id, reviewedAt:now,
       reviewNote:forOther?`Eingetragen durch ${cu.name}`:'' };
     await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-    window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes);
+    window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes,note);
     closeModal(); renderAbwesenheiten();
     toast(`Veranstaltung für ${targetUser.name} eingetragen (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
     return;

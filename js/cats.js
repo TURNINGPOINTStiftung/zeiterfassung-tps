@@ -57,6 +57,9 @@ export function catOptionsForUser(user,selected=''){
   } else {
     cats=[...teamCats];
   }
+  // Gespeicherte Zuordnung (z.B. „Veranstaltung") immer anzeigbar machen,
+  // auch wenn sie nicht in den Team-Kategorien steht – sonst bleibt das Feld leer.
+  if(norm&&!cats.includes(norm)) cats.unshift(norm);
 
   return `<option value=""></option>`+cats.map(c=>{
     const sel=c===norm?' selected':'';
