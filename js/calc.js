@@ -15,7 +15,7 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 export function autoPauseMin(dd,user){
   if(!dd||_isAbsDay(dd)) return 0;
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
-  if(dd.b1zuord==='Veranstaltung'||dd.b1bem==='Veranstaltung') return 0; // Veranstaltung: keine Pflichtpause (durchgehende Präsenz)
+  if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   const required=gross>=585?45:gross>=390?30:0;

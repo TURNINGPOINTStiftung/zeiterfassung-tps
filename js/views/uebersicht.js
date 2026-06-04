@@ -250,6 +250,7 @@ export function openJahresübersicht(uid,y){
   if(!user) return;
   const isFree=isFreelancer(user);
   const canSendGF=cu&&hasPermission('btn_jahresbericht',cu.role);
+  const yrSent=!!(getData().yearReports&&getData().yearReports[uid+'_'+y]);
 
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
@@ -363,6 +364,7 @@ export function openJahresübersicht(uid,y){
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
       ${canSendGF?`<button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
+      ${canSendGF&&yrSent?`<button class="btn btn-outline" onclick="recallYearReport('${uid}',${y})" style="width:auto;border-color:var(--danger);color:var(--danger)" title="Jahresbericht von der GF zurückziehen">↩ Zurückziehen</button>`:''}
       <button class="btn btn-primary" onclick="printJahresübersicht('${uid}',${y})" style="width:auto">⬇ PDF herunterladen</button>
     </div>
   `,true);
@@ -546,6 +548,21 @@ export function sendJahresbericht(uid,y){
   mutate(d=>{ if(!d.yearReports) d.yearReports={}; d.yearReports[rKey]=report; });
   closeModal();
   toast(`Jahresbericht ${y} für ${user.name} an GF gesendet ✓`,'ok');
+}
+
+// Einen an die GF gesendeten Jahresbericht wieder zurückziehen (Leitung/Admin).
+export function recallYearReport(uid,y){
+  const rKey=uid+'_'+y;
+  const d=getData();
+  const rep=d.yearReports&&d.yearReports[rKey];
+  if(!rep){ toast('Kein gesendeter Jahresbericht gefunden.','err'); return; }
+  const u=getUser(uid);
+  const seen=rep.seenAt?'\n\nHinweis: Die GF hat den Bericht bereits geöffnet.':'';
+  if(!confirm('Jahresbericht '+y+' für '+(u?u.name:uid)+' an die GF zurückziehen?'+seen)) return;
+  mutate(d=>{ if(d.yearReports&&d.yearReports[rKey]) delete d.yearReports[rKey]; });
+  toast('Jahresbericht zurückgezogen – nicht mehr bei der GF sichtbar.','');
+  closeModal();
+  window.renderOverview?.();
 }
 
 // ── Zeiterfassungs-Erinnerungen ────────────────────────────────────
