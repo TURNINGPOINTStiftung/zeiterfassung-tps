@@ -222,7 +222,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     </div>`;
   }
   document.getElementById('summary-cards').innerHTML=cardsHtml;
-  document.getElementById('carryover-input').value=Math.round(carryH*100)/100;
+  document.getElementById('carryover-input').value=_fmtCarryInput(carryH);
   const _dw=document.getElementById('info-diff-wrap');
   const _de=document.getElementById('info-diff');
   if(_de&&!isFree){
@@ -263,10 +263,10 @@ function renderActionBar(uid,user,entry,isLeiter){
     const effCarry=getEffectiveCarryH(uid,user,year,mon);
     const isManual=!!entry.carryoverManual;
     const lbl=document.getElementById('carryover-label');
-    const lblText=isFree?'Stundenübertrag Vormonat (h):':'Übertrag Vormonat (h):';
+    const lblText=isFree?'Stundenübertrag Vormonat (Std:Min):':'Übertrag Vormonat (Std:Min):';
     if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
     const inp=document.getElementById('carryover-input');
-    if(inp){ inp.value=Math.round(effCarry*100)/100; inp.min=isFree?0:-99; }
+    if(inp){ inp.value=_fmtCarryInput(effCarry); }
     const rst=document.getElementById('carryover-reset');
     if(rst) rst.style.display=isManual?'inline-flex':'none';
   }
@@ -827,9 +827,29 @@ export function check10hCarryover(uid,y,m,ds,depth){
   if(!depth&&overflow>0) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
 }
 
+// Übertrag-Eingabe robust lesen: 'H:MM' / '-H:MM' ODER Dezimalstunden ('14,25').
+// Verhindert den Fehler, dass die H:MM-Anzeige (z. B. 22:21) als Dezimal (22,21=22:13) getippt wird.
+function _parseCarryInput(raw){
+  const s=String(raw==null?'':raw).trim();
+  if(!s) return 0;
+  if(s.includes(':')){
+    const neg=s.startsWith('-');
+    const p=s.replace('-','').split(':');
+    const h=parseInt(p[0],10)||0, m=parseInt(p[1],10)||0;
+    const v=h+m/60;
+    return neg?-v:v;
+  }
+  return parseFloat(s.replace(',','.'))||0;
+}
+// Stunden (Dezimal) als 'H:MM' / '-H:MM' fürs Eingabefeld.
+function _fmtCarryInput(h){
+  const min=Math.round((h||0)*60), neg=min<0, a=Math.abs(min);
+  return (neg?'-':'')+Math.floor(a/60)+':'+String(a%60).padStart(2,'0');
+}
+
 export function saveCarryover(){
   const uid=window.viewEmpId||window.cu.id;
-  const v=parseFloat(document.getElementById('carryover-input').value)||0;
+  const v=_parseCarryInput(document.getElementById('carryover-input').value);
   mutate(d=>{
     const k=entryKey(uid,window.year,window.mon);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
