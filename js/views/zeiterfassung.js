@@ -265,10 +265,18 @@ function renderActionBar(uid,user,entry,isLeiter){
     const lbl=document.getElementById('carryover-label');
     const lblText=isFree?'Stundenübertrag Vormonat (Std:Min):':'Übertrag Vormonat (Std:Min):';
     if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
+    // Eingereichte/genehmigte Monate: Übertrag sperren (ausgegraut, nicht editierbar).
+    const _locked=entry.status==='submitted'||entry.status==='approved';
     const inp=document.getElementById('carryover-input');
-    if(inp){ inp.value=_fmtCarryInput(effCarry); }
+    if(inp){
+      inp.value=_fmtCarryInput(effCarry);
+      inp.disabled=_locked;
+      inp.style.opacity=_locked?'.45':'';
+      inp.style.cursor=_locked?'not-allowed':'';
+      inp.title=_locked?'Monat eingereicht – Übertrag gesperrt':'';
+    }
     const rst=document.getElementById('carryover-reset');
-    if(rst) rst.style.display=isManual?'inline-flex':'none';
+    if(rst) rst.style.display=(isManual&&!_locked)?'inline-flex':'none';
   }
   let extraBtns='';
   if(cu.role==='admin'&&cu.id!==uid){
