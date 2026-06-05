@@ -11,8 +11,8 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v49':'Zeiterfassung';
-  // Manuelles Aktualisieren per 🔄-Button: Cache leeren, SW prüfen, neu laden.
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v50':'Zeiterfassung';
+  // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
       .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
@@ -20,8 +20,6 @@ export function initApp(){
       .catch(function(){})
       .then(function(){ location.reload(); });
   };
-  var _standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
-  var _rb=document.getElementById('hdr-refresh'); if(_rb) _rb.style.display=_standalone?'':'none';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date();
   window.year=now.getFullYear(); window.mon=now.getMonth()+1;
