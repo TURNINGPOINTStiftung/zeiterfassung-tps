@@ -61,6 +61,10 @@ export function catOptionsForUser(user,selected=''){
   // auch wenn sie nicht in den Team-Kategorien steht – sonst bleibt das Feld leer.
   if(norm&&!cats.includes(norm)) cats.unshift(norm);
 
+  // Abwesenheits-/Sonderkategorien ans Ende sortieren (Urlaub & AU/Krank ganz unten).
+  const _tail=['Arbeitszeitausgleich','Sonstiges','Veranstaltung Krank / AU','Urlaub','AU/Krank'];
+  cats=[...cats.filter(c=>!_tail.includes(c)), ..._tail.filter(c=>cats.includes(c))];
+
   return `<option value=""></option>`+cats.map(c=>{
     const sel=c===norm?' selected':'';
     const mark=isLeitung&&teamCats.has(c);
