@@ -17,6 +17,9 @@ export function autoPauseMin(dd,user){
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
   if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
+  // Reine Kleinteiligkeit (nur ktmin, kein abgeschlossener Block) → keine Pflichtpause.
+  // (_applyDayPause schlägt mangels Abfahrtszeit ebenfalls nichts auf – sonst Differenz in der Summe.)
+  if(!dd.b1bis&&!dd.b2bis) return 0;
   // Erfasste Pause zwischen Block 1 und 2 (Lücke) = bereits genommene Pause
   // → keine zusätzliche Pflichtpause. Nur durchgehende Blöcke werden bepaust.
   if(dd.b1bis&&dd.b2von&&diffMin(dd.b1bis,dd.b2von)>0) return 0;

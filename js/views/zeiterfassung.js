@@ -592,8 +592,16 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
   if(field==='b1zuord'){
-    // Pflichtpause an die (ggf. neue) Kategorie anpassen (Veranstaltung = keine Pause).
-    _applyDayPause(uid,ds,null);
+    if(val==='Urlaub'||val==='AU/Krank'){
+      // Die Soll-Stunden wurden oben frisch gesetzt (08:00–dMin). Das alte Pausen-Tracking
+      // (_paused/_pausedF) stammt vom vorherigen Arbeitstag – würde _applyDayPause es jetzt
+      // "entinflationieren", würden die frischen Abwesenheits-Stunden fälschlich verkürzt.
+      // Daher Tracking zurücksetzen und keine Pausen-Logik auf Abwesenheitstage anwenden.
+      mutate(d=>{ const dd=d.entries?.[entryKey(uid,window.year,window.mon)]?.days?.[ds]; if(dd){ dd._paused=0; dd._pausedF=''; dd._pInit=false; } });
+    } else {
+      // Pflichtpause an die (ggf. neue) Kategorie anpassen (Veranstaltung = keine Pause).
+      _applyDayPause(uid,ds,null);
+    }
     // Auto-Abwesenheiten komplett aus der Zeiterfassung neu aufbauen
     // (erkennt zusammenhängende Urlaub-/AU-Zeiträume, auch über Wochenenden)
     rebuildAutoAbsences(uid,cu.id);

@@ -3,13 +3,26 @@ import { DEFAULT_PERMISSIONS } from './config.js';
 
 // Liefert das korrekte Team eines Users für ein bestimmtes Datum.
 // Berücksichtigt die Team-Geschichte (teamHistory).
+// Datum robust vergleichbar machen – egal ob ISO 'YYYY-MM-DD' oder deutsch 'DD.MM.YYYY'.
+// Liefert 'YYYYMMDD' für einen rein chronologischen String-Vergleich.
+function _cmpDate(s){
+  if(!s&&s!==0) return '';
+  s=String(s).trim();
+  let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0');
+  m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if(m) return m[3]+m[2].padStart(2,'0')+m[1].padStart(2,'0');
+  return s;
+}
+
 export function getTeamForDate(user, dateStr){
   if(!user) return '';
   const hist=user.teamHistory;
   if(Array.isArray(hist)&&hist.length){
-    // Neuester Eintrag, dessen fromDate <= dateStr
-    const sorted=[...hist].sort((a,b)=>b.fromDate.localeCompare(a.fromDate));
-    const e=sorted.find(h=>h.fromDate<=dateStr);
+    const ds=_cmpDate(dateStr);
+    // Neuester Eintrag, dessen fromDate <= dateStr (datumsformat-robust)
+    const sorted=[...hist].sort((a,b)=>_cmpDate(b.fromDate).localeCompare(_cmpDate(a.fromDate)));
+    const e=sorted.find(h=>_cmpDate(h.fromDate)<=ds);
     if(e) return e.team||'';
     // Datum vor erstem Eintrag → ältesten nehmen
     return sorted[sorted.length-1]?.team||user.team||'';
