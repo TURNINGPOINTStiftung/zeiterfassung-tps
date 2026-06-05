@@ -18,13 +18,16 @@ export function autoPauseMin(dd,user){
   if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
   // Reine Kleinteiligkeit (nur ktmin, kein abgeschlossener Block) → keine Pflichtpause.
-  // (_applyDayPause schlägt mangels Abfahrtszeit ebenfalls nichts auf – sonst Differenz in der Summe.)
   if(!dd.b1bis&&!dd.b2bis) return 0;
-  // Erfasste Pause zwischen Block 1 und 2 (Lücke) = bereits genommene Pause
-  // → keine zusätzliche Pflichtpause. Nur durchgehende Blöcke werden bepaust.
-  if(dd.b1bis&&dd.b2von&&diffMin(dd.b1bis,dd.b2von)>0) return 0;
+  // Wurde die Pause bereits beim Eintragen/Stempeln aufgeschlagen, gilt EXAKT dieser
+  // Wert – sonst weicht der Abzug vom Aufschlag ab und die Summe stimmt nicht.
+  if(dd._pInit) return Number(dd._paused||0);
+  // Legacy/auto erzeugte Tage: schätzen. Fehlende Pflichtpause = Soll minus selbst
+  // genommene Lücke. DE: >6h=30, >9h=45 (strikt >, exakt 6h/9h zählen nicht hoch).
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  return gross>=585?45:gross>=390?30:0;
+  const required=gross>540?45:gross>360?30:0;
+  const gap=(dd.b1bis&&dd.b2von)?diffMin(dd.b1bis,dd.b2von):0;
+  return Math.max(0,required-gap);
 }
 
 export function dayMinutes(dd,user){

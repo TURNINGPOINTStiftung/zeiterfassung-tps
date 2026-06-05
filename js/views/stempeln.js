@@ -305,13 +305,15 @@ function _recomputeFromSessions(day){
   day.ktmin=Math.round(restMin/15)*15;
   // Fehlende Pflichtpause auf die LETZTE Abfahrtszeit aufschlagen (wie manuell)
   const netGross=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const required=netGross>=540?45:netGross>=360?30:0;
-  // Erfasste Pause zwischen den Blöcken (Lücke) = genommene Pause → nichts aufschlagen.
+  const required=netGross>540?45:netGross>360?30:0; // strikt > (DE: >6h=30, >9h=45)
+  // Selbst genommene Pause = Lücke zwischen den Blöcken. Fehlende Pflichtpause aufschlagen.
   const gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
-  const missing=gap>0?0:required;
+  const missing=Math.max(0,required-gap);
+  // Tracking setzen, damit autoPauseMin GENAU diesen Wert abzieht (Summe = Nettoarbeit).
+  day._pInit=true; day._paused=0; day._pausedF='';
   if(missing>0){
-    if(day.b2von&&day.b2bis) day.b2bis=addMin(day.b2bis,missing);
-    else if(day.b1bis) day.b1bis=addMin(day.b1bis,missing);
+    if(day.b2von&&day.b2bis){ day.b2bis=addMin(day.b2bis,missing); day._paused=missing; day._pausedF='b2bis'; }
+    else if(day.b1bis){ day.b1bis=addMin(day.b1bis,missing); day._paused=missing; day._pausedF='b1bis'; }
   }
 }
 
