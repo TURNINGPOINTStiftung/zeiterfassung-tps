@@ -141,6 +141,22 @@ export function _migrate(d){
     if(u.id==='christian_bittner'||u.name==='Christian Bittner'){ u.role='freiberuflich'; if(!u.maxHours) u.maxHours=64; }
     if(!u.dpw||u.dpw<1) u.dpw=5;
   });
+
+  // Einmalige Korrektur von Simons Team-Verlauf: bis 31.05.2026 Akademie,
+  // ab 01.06.2026 Marketing & Öffentlichkeitsarbeit. Läuft genau einmal (Flag),
+  // danach frei über die Einstellungen editierbar.
+  if(!d._fixes.simonTeamV2){
+    const _si=(d.users||[]).find(u=>u.id==='simon'||/^simon\s+scheidt/i.test(u.name||''));
+    if(_si){
+      _si.teamHistory=[
+        {team:'Akademie',fromDate:'2025-01-01'},
+        {team:'Marketing & Öffentlichkeitsarbeit',fromDate:'2026-06-01'}
+      ];
+      _si.team='Marketing & Öffentlichkeitsarbeit';
+      _si.teams=['Marketing & Öffentlichkeitsarbeit'];
+      d._fixes.simonTeamV2=true;
+    }
+  }
   if(!d.teams.includes('Vereinsentwicklung')) d.teams.push('Vereinsentwicklung');
   const _renameÖ=(arr,old,nw)=>{ const i=arr.indexOf(old); if(i>=0) arr[i]=nw; };
   _renameÖ(d.cats,'Öffentlichkeitsarbeit','Marketing & Öffentlichkeitsarbeit');

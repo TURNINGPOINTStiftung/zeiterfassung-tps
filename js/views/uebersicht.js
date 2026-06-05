@@ -51,8 +51,8 @@ export function renderOverview(){
     employees=d.users.filter(u=>u.role!=='admin');
     if(filterTeam) employees=employees.filter(u=>getTeamForDate(u,mDateFilter)===filterTeam);
   } else {
-    employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
-    if(filterTeam) employees=employees.filter(u=>u.team===filterTeam);
+    employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u,mDateFilter));
+    if(filterTeam) employees=employees.filter(u=>getTeamForDate(u,mDateFilter)===filterTeam);
   }
 
   // Team für den gewählten Monat ermitteln (History-aware)
