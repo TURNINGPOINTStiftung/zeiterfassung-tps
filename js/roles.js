@@ -55,7 +55,7 @@ export function teamHasLeitung(teamName){
   return getData().users.some(u=>u.role==='leitung'&&Array.isArray(u.teams)&&u.teams.includes(teamName));
 }
 
-export function canSeeEmployee(mgr,emp){
+export function canSeeEmployee(mgr,emp,dateStr){
   if(!emp) return false;
   if(mgr.role==='admin') return true;
   if(mgr.role==='geschaeftsfuehrer'){
@@ -67,7 +67,13 @@ export function canSeeEmployee(mgr,emp){
   }
   if(mgr.role==='leitung'){
     if(isBerater(emp)) return false;
-    const t=getLeitungTeams(mgr); return t.length===0||t.includes(emp.team);
+    const t=getLeitungTeams(mgr);
+    if(t.length===0) return true;
+    // History-aware: für ein bestimmtes Datum das damals gültige Team prüfen
+    // (sonst das aktuelle). So sieht z.B. die Akademie-Leitung Simon bis Mai,
+    // die Marketing-Leitung ab Juni.
+    const empTeam=dateStr?getTeamForDate(emp,dateStr):emp.team;
+    return t.includes(empTeam);
   }
   return false;
 }
