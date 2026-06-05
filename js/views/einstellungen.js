@@ -360,6 +360,13 @@ function userForm(u={}){
           </label>
         </div>
       </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="uf-sollwd"${u.sollWorkdays?' checked':''} style="width:auto;cursor:pointer">
+          SOLL arbeitstaggenau berechnen <span style="font-size:11px;color:var(--muted)">(statt pauschal 4× Wochenstunden)</span>
+        </label>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.</div>
+      </div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
@@ -410,6 +417,7 @@ function collectUserForm(){
     al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(wh/dpw)||8),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
+    sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0
   };

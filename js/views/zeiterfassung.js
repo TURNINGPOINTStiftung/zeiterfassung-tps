@@ -198,7 +198,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const vacLeft=user.al-vacUpTo;                  // Resturlaub bis hierher
     const vacFuture=Math.max(0,vacApproved-vacUpTo);// schon beantragt/genehmigt (später)
     const sollDays=monthSOLLdays(user,year,mon);
-    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(Math.round((user.wh||0)/5*60))}`:'4 × Wochenarbeitszeit';
+    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(user))}`:'4 × Wochenarbeitszeit';
     cards=[
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},

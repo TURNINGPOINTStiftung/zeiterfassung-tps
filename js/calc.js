@@ -48,7 +48,10 @@ export function _isAZADay(dd){ return !!(dd&&(dd.b1zuord==='Arbeitszeitausgleich
 export function monthSOLL(user,y,m){
   if(isFreelancer(user)) return 0;
   const wh=user.wh||0;
-  if(!isVollzeit(user)||!y||!m) return wh*4*60;
+  // Vollzeit ODER per Schalter "arbeitstaggenau": echte Arbeitstage × Tagessoll.
+  // Sonst (Teilzeit-Standard): pauschal 4 × Wochenarbeitszeit.
+  const workdayBased=isVollzeit(user)||!!user.sollWorkdays;
+  if(!workdayBased||!y||!m) return wh*4*60;
   const dailyMin=dailyMinutes(user);
   const dim=daysInMonth(y,m);
   const holFree=user.holidaysLikeSunday!==false; // Standard: Feiertage = kein SOLL
@@ -63,7 +66,7 @@ export function monthSOLL(user,y,m){
 }
 
 export function monthSOLLdays(user,y,m){
-  if(!isVollzeit(user)||!y||!m) return 0;
+  if((!isVollzeit(user)&&!user.sollWorkdays)||!y||!m) return 0;
   const dim=daysInMonth(y,m);
   const holFree=user.holidaysLikeSunday!==false;
   const hols=getHolidays(y,user.bundesland||'');
