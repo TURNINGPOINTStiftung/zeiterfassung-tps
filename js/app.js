@@ -11,19 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v46':'Zeiterfassung';
-  // App auf die neueste Version zwingen: Cache leeren, SW prüfen, neu laden.
-  window.forceAppUpdate=function(){
-    Promise.resolve()
-      .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
-      .then(function(){ return (navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)?navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.update();}));}):null; })
-      .catch(function(){})
-      .then(function(){ location.reload(); });
-  };
-  // Aktualisieren-Button (🔄) NUR in der installierten App (Standalone) zeigen –
-  // im Browser hat man dafür die normale Neu-laden-Funktion.
-  var _standalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
-  var _rb=document.getElementById('hdr-refresh'); if(_rb) _rb.style.display=_standalone?'':'none';
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v47':'Zeiterfassung';
   const isGF=cu.role==='geschaeftsfuehrer';
   const now=new Date();
   window.year=now.getFullYear(); window.mon=now.getMonth()+1;
