@@ -1,7 +1,7 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
-import { esc, hFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
+import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
 import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam } from '../cats.js';
 
@@ -106,7 +106,7 @@ export function renderOverview(){
     const curSOLL=monthSOLL(u,oy,om);
     const curDiff=curIST-(curSOLL-Math.round(curCarry*60));
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
-    const diffStr=(curDiff>=0?'+':'')+hFmt(Math.abs(curDiff));
+    const diffStr=sFmt(curDiff);
     return `<div class="emp-card${isClickable?'':' emp-card-locked'}" ${cardClick}>
       <h3>${u.name} ${roleChip}</h3>
       <div class="meta">${u.city||'–'} · ${u.wh}h/Woche</div>
@@ -265,7 +265,7 @@ export function openJahresübersicht(uid,y){
     const stLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st;
     const stColor={draft:'var(--muted)',submitted:'var(--warn)',approved:'var(--ok)',rejected:'var(--danger)'}[st]||'var(--muted)';
     const diffColor=diff>=0?'var(--ok)':'var(--danger)';
-    const diffStr=isFree?'–':((diff>=0?'+':'')+hFmt(Math.abs(diff)));
+    const diffStr=isFree?'–':sFmt(diff);
     return `<tr>
       <td style="font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border)">${mn}</td>
       ${isFree?'':`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right">${soll>0?hFmt(soll):'–'}</td>`}
@@ -283,7 +283,7 @@ export function openJahresübersicht(uid,y){
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalDiff=isFree?0:totalIST-totalSOLL;
   const totalDiffColor=totalDiff>=0?'var(--ok)':'var(--danger)';
-  const totalDiffStr=isFree?'–':((totalDiff>=0?'+':'')+hFmt(Math.abs(totalDiff)));
+  const totalDiffStr=isFree?'–':sFmt(totalDiff);
 
   const headerCols=isFree
     ?`<th style="padding:8px 10px;text-align:right;border-bottom:2px solid var(--primary)">IST</th>`
@@ -387,7 +387,7 @@ export function printJahresübersicht(uid,y){
     const sick=sickDays(entry);
     const st=entry.status||'draft';
     const stLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st;
-    const diffStr=isFree?'–':((diff>=0?'+':'')+hFmt(Math.abs(diff)));
+    const diffStr=isFree?'–':sFmt(diff);
     const diffColor=diff>=0?'#27ae60':'#c0392b';
     return `<tr>
       <td>${mn}</td>
@@ -403,7 +403,7 @@ export function printJahresübersicht(uid,y){
   const totalVac=Array.from({length:12},(_,i)=>vacDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalDiff=isFree?0:totalIST-totalSOLL;
-  const totalDiffStr=isFree?'–':((totalDiff>=0?'+':'')+hFmt(Math.abs(totalDiff)));
+  const totalDiffStr=isFree?'–':sFmt(totalDiff);
 
   const hdr=isFree
     ?'<th class="r">IST</th>'

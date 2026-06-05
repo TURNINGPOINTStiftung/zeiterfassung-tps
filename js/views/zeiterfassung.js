@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
-import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
+import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
@@ -175,7 +175,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       const overDayStr=overflowMin>0?dayFmt(overflowMin):'';
       cards=[
         {lbl:'Geleistete Stunden',big:hFmt(istMin),sub:istDayStr?('= '+istDayStr+' (8h=1T)'):'tatsächlich geleistet'},
-        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(Math.round(carryH*60)),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
+        {lbl:'Stundenübertrag Vormonat',big:sFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch berechnet'},
         {lbl:'Verfügbar gesamt',big:hFmt(totalMin),sub:'Leistung + Übertrag = '+dayFmt(totalMin)},
         {lbl:'Abgerechnet (Limit '+maxH+' h / '+maxDays+' T)',big:hFmt(billedMin),sub:billedDayStr?('= '+billedDayStr+' – max. Limit'):'max. Monatslimit',cls:billedMin>=maxH*60?'neg':'pos'},
         {lbl:'Übertrag → nächster Monat',big:overflowMin>0?('+'+hFmt(overflowMin)):'–',sub:overDayStr?('= +'+overDayStr+' werden vorgetragen'):overflowMin>0?'wird vorgetragen':underMin>0?'unter Limit – kein Minus':'exakt auf Limit',cls:overflowMin>0?'pos':''},
@@ -183,7 +183,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     } else {
       cards=[
         {lbl:'IST-Stunden Monat',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-        {lbl:'Stundenübertrag Vormonat',big:(carryH>0?'+':'')+hFmt(Math.round(carryH*60)),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
+        {lbl:'Stundenübertrag Vormonat',big:sFmt(carryH*60),sub:entry.carryoverManual?'manuell gesetzt':'automatisch'},
       ];
       const yearTotal=Array.from({length:12},(_,i)=>monthIST(getEntry(uid,year,i+1),user)).reduce((a,b)=>a+b,0);
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
@@ -202,7 +202,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     cards=[
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-      {lbl:'Mehr / Minderstunden',big:(diff>=0?'+':'')+hFmt(Math.abs(diff)),sub:'Übertrag: '+(carryH>=0?'+':'-')+hFmt(Math.abs(carryH*60)),cls:diff>=0?'pos':'neg'},
+      {lbl:'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
       {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al}`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
@@ -229,7 +229,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const _s=monthSOLL(user,year,mon);
     const _c=getEffectiveCarryH(uid,user,year,mon);
     const _d=istMin-(_s-Math.round(_c*60));
-    _de.textContent=(_d>=0?'+':'')+hFmt(Math.abs(_d));
+    _de.textContent=sFmt(_d);
     _de.className='val '+(_d>=0?'pos':'neg');
     if(_dw) _dw.style.display='';
   } else {
