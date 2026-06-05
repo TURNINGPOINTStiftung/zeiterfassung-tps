@@ -4,6 +4,9 @@ import { DAYS } from './config.js';
 export function tMin(s){ if(!s||!s.includes(':')) return 0; const[h,m]=s.split(':').map(Number); return h*60+m; }
 export function minFmt(n){ n=Math.round(n); if(n<=0) return ''; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
 export function hFmt(n){ n=Math.round(n); if(n<=0) return '0:00'; const h=Math.floor(n/60),m=n%60; return `${h}:${String(m).padStart(2,'0')}`; }
+// Vorzeichen-behaftete Stunden (Übertrag/Differenz): '+H:MM' / '-H:MM' / '0:00'.
+// WICHTIG: hFmt liefert für negative Werte faelschlich '0:00' – fuer Salden IMMER sFmt nutzen.
+export function sFmt(n){ n=Math.round(n); const a=Math.abs(n),h=Math.floor(a/60),m=a%60,t=`${h}:${String(m).padStart(2,'0')}`; return n<0?('-'+t):n>0?('+'+t):t; }
 export function dayFmt(min){
   if(min<=0) return '';
   const d=Math.round(min/480*4)/4;

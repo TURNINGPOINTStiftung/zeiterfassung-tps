@@ -81,7 +81,10 @@ export function computeAutoCarry(uid,user,y,m,_d){
   let py=y,pm=m-1; if(pm<1){pm=12;py--;}
   const pe=getEntry(uid,py,pm);
   const pIST=monthIST(pe,user);
-  if(pIST===0&&!pe.carryoverManual) return 0;
+  // Leerer Monat (noch nicht erfasst, kein manueller Übertrag): aufgelaufenen Saldo
+  // UNVERÄNDERT durchreichen statt auf 0 zu setzen – sonst geht der Übertrag bei einer
+  // Lücke zwischen erfassten Monaten verloren. (Leere Monate sind in monthIST sehr günstig.)
+  if(pIST===0&&!pe.carryoverManual) return computeAutoCarry(uid,user,py,pm,_d+1);
   const pCarryH=pe.carryoverManual?(pe.carryover||0):computeAutoCarry(uid,user,py,pm,_d+1);
   const pCarryMin=Math.round(pCarryH*60); // Vormonats-Übertrag minutengenau (kein Float-Drift)
   if(isFreelancer(user)){
