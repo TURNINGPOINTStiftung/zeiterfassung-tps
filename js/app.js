@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v48':'Zeiterfassung';
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v49':'Zeiterfassung';
   // Manuelles Aktualisieren per 🔄-Button: Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
