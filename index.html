@@ -103,7 +103,6 @@
         <span id="stempel-live-dur"></span>
       </div>
       <button class="btn btn-outline btn-sm no-print" id="btn-zeitstempel" onclick="openZeitstempel()" style="display:none">⏱ Stempeln</button>
-      <button class="btn btn-outline btn-sm no-print" id="hdr-refresh" onclick="forceAppUpdate()" title="App aktualisieren" aria-label="Aktualisieren" style="display:none;font-size:15px">🔄</button>
       <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
     </div>
   </header>
@@ -379,16 +378,12 @@
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('service-worker.js').then(function(reg){
-      try{ reg.update(); }catch(e){}                                  // sofort auf neue Version pruefen
-      setInterval(function(){ try{ reg.update(); }catch(e){} }, 60000); // jede Minute pruefen
+      try{ reg.update(); }catch(e){} // beim Laden einmal auf neue Version pruefen
     }).catch(function(){});
   });
-  // Sobald eine neue Service-Worker-Version aktiv wird → einmalig neu laden,
-  // damit IMMER der aktuelle Code laeuft (löst das "alte Version"-Problem).
-  var _swReloaded=false;
-  navigator.serviceWorker.addEventListener('controllerchange',function(){
-    if(_swReloaded) return; _swReloaded=true; location.reload();
-  });
+  // KEIN automatisches Neuladen mehr – das verursachte das stoerende Aufblitzen
+  // ("rohes HTML" oben). Frische Dateien kommen beim naechsten normalen Laden,
+  // da der Service-Worker netzwerk-first liefert.
 }
 // Globaler Fehler-Auffang: zeigt bei Modul-/Syntaxfehlern eine klare Meldung
 // statt eines weißen Bildschirms, mit Button zum harten Neuladen.

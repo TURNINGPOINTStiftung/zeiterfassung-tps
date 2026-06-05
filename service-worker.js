@@ -1,7 +1,8 @@
-// TPS Zeiterfassung – Service Worker v46
-// Strategie: NUR Firebase-SDK cachen; alle App-Dateien IMMER frisch (no-store).
-// no-store umgeht Browser-HTTP-Cache UND zwingt frische Versionen nach Deploy.
-const CACHE = 'tps-ze-v46';
+// TPS Zeiterfassung – Service Worker v47
+// Strategie: netzwerk-first für frische Versionen, Antworten werden aber gecacht,
+// damit bei Netzwerk-Aussetzern die letzte gute Version statt "rohem HTML" kommt.
+// KEIN automatisches Neuladen offener Tabs mehr (verursachte stoerendes Aufblitzen).
+const CACHE = 'tps-ze-v47';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -20,16 +21,13 @@ self.addEventListener('install', e => {
   );
 });
 
-// Activate: Alte Caches löschen + alle offenen Tabs neu laden
+// Activate: Alte Caches löschen + Kontrolle übernehmen.
+// (KEIN c.navigate() mehr – offene Tabs werden NICHT zwangsweise neu geladen.)
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() =>
-        self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
-          .then(clients => clients.forEach(c => c.navigate(c.url)))
-      )
   );
 });
 
@@ -59,10 +57,18 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Alle App-Dateien (HTML/JS/CSS): IMMER frisch, Browser-Cache umgehen.
-  // cache:'no-store' zwingt einen echten Netzwerk-Request – keine veralteten Module mehr.
+  // Alle App-Dateien (HTML/JS/CSS): netzwerk-first für frische Versionen, ABER
+  // erfolgreiche Antworten cachen. Bei Netzwerk-Aussetzern wird die letzte gute
+  // Version geliefert statt ungestyltem "rohem HTML" (fehlgeschlagenes CSS).
   e.respondWith(
     fetch(e.request, { cache: 'no-store' })
-      .catch(() => caches.match(e.request)) // Offline-Fallback
+      .then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request)) // Offline-/Aussetzer-Fallback
   );
 });
