@@ -56,6 +56,18 @@ export function renderZeiterfassung(){
   badgeEl.textContent=badges[entry.status]||'Entwurf';
   badgeEl.className='status-badge '+(bCls[entry.status]||'s-draft');
 
+  // Leitung/GF dürfen fremde Monate erst NACH Abgabe einsehen. Entwürfe und
+  // (leere) Zukunftsmonate bleiben verborgen – auch wenn man über die Pfeile
+  // dorthin navigiert. Admin sieht weiterhin alles.
+  if(viewingOther&&cu.role!=='admin'&&entry.status==='draft'){
+    document.getElementById('zt-body').innerHTML='<tr><td colspan="18" style="padding:28px;text-align:center;color:var(--muted)">🔒 '+MONTHS[mon-1]+' '+year+' ist noch nicht eingereicht – als Leitung erst nach Abgabe einsehbar.</td></tr>';
+    const _sc=document.getElementById('summary-cards'); if(_sc) _sc.innerHTML='';
+    const _ab=document.getElementById('action-bar'); if(_ab) _ab.style.display='none';
+    const _rp=document.getElementById('review-panel'); if(_rp) _rp.style.display='none';
+    const _idw=document.getElementById('info-diff-wrap'); if(_idw) _idw.style.display='none';
+    return;
+  }
+
   const tbody=document.getElementById('zt-body');
   tbody.innerHTML='';
   const dim=daysInMonth(year,mon);
