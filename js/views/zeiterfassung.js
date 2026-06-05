@@ -589,8 +589,11 @@ export function td_zuord(ds,field,val,wh,dpw){
     // Keine Zeitfelder setzen
   }
 
-  // Urlaub / AU/Krank → Zeiteinträge nur für Festangestellte (nicht Freiberufler)
-  if((val==='Urlaub'||val==='AU/Krank')&&wh>0){
+  // Urlaub / AU/Krank → Soll-Zeiten nur setzen, wenn der Tag NOCH KEINE Zeiten hat.
+  // Verhindert, dass beim Durchblättern der Zuordnung mit der Tastatur bereits
+  // eingetragene Start-/Endzeiten durch die festen Urlaubs-/AU-Zeiten überschrieben werden.
+  const _dNow=(getEntry(uid,window.year,window.mon).days||{})[ds]||{};
+  if((val==='Urlaub'||val==='AU/Krank')&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
     const u=getUser(uid)||cu;
     const dailyMin=Math.round(wh*60/(dpw||5))||480;
     const dMin=val==='Urlaub'?((u?.vacHoursPerDay||Math.round(wh/(dpw||5))||8)*60):dailyMin;
@@ -691,9 +694,10 @@ export function fmtTimeIn(el){
   if(digits.length===4){
     el.value=digits.slice(0,2)+':'+digits.slice(2,4);        // 1430 → 14:30
   } else if(digits.length===3){
-    // Nur formatieren wenn die ersten 2 Ziffern > 23 (also keine gültige Stunde mehr)
-    // → 800: "80" > 23 → 08:00 ✓  |  143 (als Prefix von 1430): "14" ≤ 23 → warten
-    if(parseInt(digits.slice(0,2),10)>23)
+    // Nur formatieren wenn die ersten 2 Ziffern > 24 (also keine gültige Stunde mehr).
+    // 24 bleibt gültig (24:00 = Mitternacht/Nachtschicht) → ">24" statt ">23", damit
+    // man "2400" zu Ende tippen kann. 800: "80">24 → 08:00 ✓ | 240: "24"≤24 → warten.
+    if(parseInt(digits.slice(0,2),10)>24)
       el.value='0'+digits[0]+':'+digits.slice(1,3);
   }
 }
