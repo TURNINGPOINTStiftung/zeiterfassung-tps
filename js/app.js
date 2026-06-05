@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v44':'Zeiterfassung';
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v45':'Zeiterfassung';
   // App auf die neueste Version zwingen: Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
