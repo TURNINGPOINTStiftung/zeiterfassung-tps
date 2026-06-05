@@ -292,12 +292,18 @@ function _recomputeFromSessions(day){
   day.ktmin=0;
   if(top2[0]){
     day.b1von=_round15(top2[0].von);
-    day.b1bis=_round15(top2[0].bis); // gerundetes Netto-Ende
+    // Dauer EINMAL auf 15 runden und ans gerundete Start anhängen. Sonst rundet man
+    // Start UND Ende getrennt -> bis zu ~15 Min Aufschlag (09:07–16:08 -> 09:00–16:15).
+    // Bei Tageswechsel (bis<von, Nachtschicht) klassisch das Ende runden.
+    const _d1=diffMin(top2[0].von,top2[0].bis);
+    day.b1bis=_d1>0?addMin(day.b1von,Math.round(_d1/15)*15):_round15(top2[0].bis);
     if(top2[0].zuord) day.b1zuord=top2[0].zuord;
     if(top2[0].note)  day.b1bem=top2[0].note;
   }
   if(top2[1]){
-    day.b2von=_round15(top2[1].von); day.b2bis=_round15(top2[1].bis);
+    day.b2von=_round15(top2[1].von);
+    const _d2=diffMin(top2[1].von,top2[1].bis);
+    day.b2bis=_d2>0?addMin(day.b2von,Math.round(_d2/15)*15):_round15(top2[1].bis);
     if(top2[1].zuord) day.b2zuord=top2[1].zuord;
     if(top2[1].note)  day.b2bem=top2[1].note;
   }
