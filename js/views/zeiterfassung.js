@@ -579,10 +579,11 @@ function _applyDayPause(uid,ds,editedField){
     const lastF=hasB2?'b2bis':(day.b1von&&day.b1bis?'b1bis':'');
     if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00') return;
     const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-    const required=gross>=540?45:gross>=360?30:0; // NETTO-Schwellen (gross ist hier entInflationiert)
-    // Erfasste Pause zwischen Block 1 und 2 = genommene Pause → nichts aufschlagen.
+    const required=gross>540?45:gross>360?30:0; // NETTO, strikt > (DE: >6h=30, >9h=45)
+    // Selbst genommene Pause = Lücke zwischen Block 1 und 2. Die FEHLENDE Pflichtpause
+    // (Soll minus Lücke) wird hinten aufgeschlagen; die Tagessumme bleibt = Nettoarbeit.
     const _gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
-    const pause=_gap>0?0:required;
+    const pause=Math.max(0,required-_gap);
     if(pause>0){ day[lastF]=addMin(day[lastF],pause); day._paused=pause; day._pausedF=lastF; }
   });
 }
