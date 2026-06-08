@@ -112,14 +112,22 @@ function _applyFirebaseSnap(val){
   try{ window._refreshStempelView?.(); }catch(e){}
   try{ window.updateAbBadge?.(); }catch(e){}
   try{
-    const vze=document.getElementById('view-zeiterfassung');
-    if(vze&&vze.classList.contains('active')){
+    const active=document.querySelector('.view.active');
+    const vid=active?active.id:'';
+    const ae=document.activeElement;
+    const editing=ae&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
+    if(vid==='view-zeiterfassung'){
       // NICHT neu rendern während der Nutzer gerade in einem Feld tippt
-      // (sonst geht auf iOS/überall die laufende Eingabe + Cursor verloren).
-      const ae=document.activeElement;
-      const tippt=ae&&ae.closest&&ae.closest('#zt')&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
-      if(tippt){ window._ztRenderPending=true; }
+      // (sonst geht die laufende Eingabe + Cursor verloren) → stattdessen vormerken.
+      if(editing&&ae.closest&&ae.closest('#zt')) window._ztRenderPending=true;
       else window.renderZeiterfassung?.();
+    } else if(!editing){
+      // Andere Ansichten (v.a. Statistiken/Mitarbeiterübersicht) ebenfalls LIVE
+      // aktualisieren – aber nicht, während ein Feld/Dropdown aktiv ist.
+      if(vid==='view-uebersicht') window.renderOverview?.();
+      else if(vid==='view-gfberichte') window.renderGFBerichte?.();
+      else if(vid==='view-abwesenheiten') window.renderAbwesenheiten?.();
+      else if(vid==='view-einstellungen') window.renderSettings?.();
     }
   }catch(e){}
 }
