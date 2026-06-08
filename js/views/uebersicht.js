@@ -3,7 +3,48 @@ import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
 import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
-import { getCatsForTeam } from '../cats.js';
+import { getCatsForTeam, currentCatsForUser } from '../cats.js';
+
+// Baut eine Zuordnung "kleingeschriebene Kategorie" -> Anzeige-Label aus den
+// AKTUELL gültigen Kategorien der übergebenen Mitarbeiter. Bevorzugt gemischte
+// Schreibweise (Team-Kategorie) gegenüber GROSSBUCHSTABEN (Freiberufler-Label),
+// damit z.B. "Akademie" und "AKADEMIE" zu EINER Spalte verschmelzen.
+function _canonCatMap(users){
+  const canon=new Map();
+  (users||[]).forEach(u=>currentCatsForUser(u).forEach(c=>{
+    const n=normZuord(c); if(!n) return;
+    const lc=n.toLowerCase(); const ex=canon.get(lc);
+    if(!ex||(ex===ex.toUpperCase()&&n!==n.toUpperCase())) canon.set(lc,n);
+  }));
+  return canon;
+}
+// Bildet eine {Kategorie:Minuten}-Map auf aktuelle Kategorien ab: alte/umbenannte
+// Zuordnungen werden verworfen, Schreibweisen-Dubletten zusammengeführt.
+function _currentizeMap(map,canon,exclSet){
+  const out={};
+  Object.entries(map||{}).forEach(([cat,min])=>{
+    const disp=canon.get(normZuord(cat).toLowerCase());
+    if(disp&&(!exclSet||!exclSet.has(disp))) out[disp]=(out[disp]||0)+min;
+  });
+  return out;
+}
+// Wie _currentizeMap, aber für die Jahres-Pivot-Struktur {Kategorie:{Monat:Minuten}}.
+function _currentizePivot(yearMap,user){
+  const canon=_canonCatMap([user]);
+  const out={};
+  Object.entries(yearMap||{}).forEach(([cat,months])=>{
+    const disp=canon.get(normZuord(cat).toLowerCase());
+    if(!disp) return;
+    if(!out[disp]) out[disp]={};
+    Object.entries(months).forEach(([m,min])=>{ out[disp][m]=(out[disp][m]||0)+min; });
+  });
+  const allCats=Object.keys(out).sort((a,b)=>{
+    const ta=Object.values(out[a]).reduce((x,v)=>x+v,0);
+    const tb=Object.values(out[b]).reduce((x,v)=>x+v,0);
+    return tb-ta;
+  });
+  return {yearMap:out,allCats};
+}
 
 export function populateUeberYear(){
   const sel=document.getElementById('ueber-year');
@@ -181,14 +222,16 @@ export function buildZuordSummary(employees,oy,om,d){
     return {name:u.name,map:ymap};
   });
   const EXCL_CATS=new Set(['Urlaub','AU/Krank','Veranstaltung AU','Arbeitszeitausgleich']);
-  const _teamCats=[...new Set(employees.flatMap(u=>getCatsForTeam(u.team||'').map(normZuord)))]
-    .filter(c=>!EXCL_CATS.has(c));
-  const _dataCats=[...new Set([...mMaps,...yMaps].flatMap(({map})=>Object.keys(map)))]
-    .filter(c=>!EXCL_CATS.has(c));
-  const allCats=[...new Set([..._teamCats,..._dataCats])]
+  // Nur AKTUELLE Zuordnungskategorien anzeigen: jede Daten-Kategorie wird (case-
+  // insensitiv) auf eine aktuell gültige Kategorie abgebildet; nicht mehr gültige
+  // (z.B. alte/umbenannte) werden verworfen, Schreibweisen-Dubletten zusammengeführt.
+  const canon=_canonCatMap(employees);
+  const mMapsC=mMaps.map(({name,map})=>({name,map:_currentizeMap(map,canon,EXCL_CATS)}));
+  const yMapsC=yMaps.map(({name,map})=>({name,map:_currentizeMap(map,canon,EXCL_CATS)}));
+  const allCats=[...new Set([...mMapsC,...yMapsC].flatMap(({map})=>Object.keys(map)))]
     .sort((a,b)=>{
-      const ta=yMaps.reduce((s,{map})=>s+(map[a]||0),0);
-      const tb=yMaps.reduce((s,{map})=>s+(map[b]||0),0);
+      const ta=yMapsC.reduce((s,{map})=>s+(map[a]||0),0);
+      const tb=yMapsC.reduce((s,{map})=>s+(map[b]||0),0);
       return tb-ta;
     });
   const buildTable=(maps,cats,label)=>{
@@ -227,8 +270,8 @@ export function buildZuordSummary(employees,oy,om,d){
       </div>
     </div>`;
   };
-  const mTable=buildTable(mMaps,allCats,`${MONTHS[om-1]} ${oy}`);
-  const yTable=buildTable(yMaps,allCats,`Gesamtjahr ${oy}`);
+  const mTable=buildTable(mMapsC,allCats,`${MONTHS[om-1]} ${oy}`);
+  const yTable=buildTable(yMapsC,allCats,`Gesamtjahr ${oy}`);
   if(!mTable&&!yTable) return '';
   return `<div style="margin-top:28px;background:var(--white);border-radius:8px;border:1px solid var(--border);padding:20px 24px">
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:2px">Stunden nach Zuordnung</h3>
@@ -301,7 +344,7 @@ export function openJahresübersicht(uid,y){
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalVac>0?totalVac+'&thinsp;T':'–'}</td>
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalSick>0?totalSick+'&thinsp;T':'–'}</td>`;
 
-  const {yearMap,allCats}=buildZuordPivot(uid,y);
+  const {yearMap,allCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user);
   const MO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let zuordSection='';
   if(allCats.length>0){
@@ -412,7 +455,7 @@ export function printJahresübersicht(uid,y){
     ?`<td class="r">${hFmt(totalIST)}</td>`
     :`<td class="r">${hFmt(totalSOLL)}</td><td class="r">${hFmt(totalIST)}</td><td class="r">${totalDiffStr}</td><td class="r">${totalVac>0?totalVac+' T':'–'}</td><td class="r">${totalSick>0?totalSick+' T':'–'}</td>`;
 
-  const {yearMap:pYearMap,allCats:pAllCats}=buildZuordPivot(uid,y);
+  const {yearMap:pYearMap,allCats:pAllCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user);
   const pMO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let pZuordTable='';
   if(pAllCats.length>0){
