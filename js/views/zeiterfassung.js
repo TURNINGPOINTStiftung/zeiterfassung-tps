@@ -335,6 +335,10 @@ function renderReviewPanel(uid,entry,isLeiter){
   if(entry.status==='draft'){ panel.style.display='none'; return; }
   panel.style.display='block';
   document.getElementById('review-note').value=entry.managerNote||'';
+  // "Zurück zu Entwurf" ist nur für den Admin. Die Leitung soll genehmigen
+  // oder mit Begründung ablehnen – nicht still in den Entwurf zurücksetzen.
+  const _rd=document.getElementById('btn-reset-draft');
+  if(_rd) _rd.style.display=(cu.role==='admin')?'':'none';
 }
 
 export function renderSignature(user,entry){
@@ -1066,6 +1070,9 @@ export function doReject(){
 }
 
 export function doResetToDraft(){
+  // Nur der Admin darf eine eingereichte ZE direkt zurück in den Entwurf setzen.
+  // Die Leitung genehmigt oder lehnt (mit Begründung) ab.
+  if(!window.cu||window.cu.role!=='admin'){ toast('Nur der Admin kann zurück auf Entwurf setzen. Bitte ablehnen mit Begründung.'); return; }
   const year=window.year, mon=window.mon;
   setEntryField(window.viewEmpId,year,mon,'status','draft');
   setEntryField(window.viewEmpId,year,mon,'managerNote','');
