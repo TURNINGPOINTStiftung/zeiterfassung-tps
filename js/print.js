@@ -1,6 +1,6 @@
 import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
-import { isFreelancer, isManagerRole, canSeeEmployee } from './roles.js';
+import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate } from './roles.js';
 import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
 import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, vacUsedUpToMonth, totalVacUsed } from './calc.js';
 
@@ -249,7 +249,9 @@ export function renderBuchhaltungHTML(u,entry,y,m){
   let mgSigHtml='';
   if(entry.status==='approved'||entry.status==='rejected'){
     const _rev=entry.reviewedBy?getUser(entry.reviewedBy):null;
-    const _rName=_rev?_rev.name:'Leitung';
+    // Immer einen echten Namen zeigen – nie nur die Rolle „Leitung".
+    let _rName=_rev?_rev.name:'';
+    if(!_rName){ const _rl=getResponsibleLeitung(u,monthStartDate(y,m)); _rName=_rl?_rl.name:'Leitung'; }
     const _action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
     mgSigHtml='<div class="bh-dig-sig">'+_action+'<br>'+esc(_rName)+'<span class="bh-sig-ts">'+fmtTs(entry.reviewedAt)+'</span>'+(entry.managerNote?'<span class="bh-sig-ts" style="color:#c0392b">'+esc(entry.managerNote)+'</span>':'')+'</div>';
   } else {
