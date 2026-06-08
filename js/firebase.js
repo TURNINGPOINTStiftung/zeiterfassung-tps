@@ -116,19 +116,16 @@ function _applyFirebaseSnap(val){
     const vid=active?active.id:'';
     const ae=document.activeElement;
     const editing=ae&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
-    if(vid==='view-zeiterfassung'){
-      // NICHT neu rendern während der Nutzer gerade in einem Feld tippt
-      // (sonst geht die laufende Eingabe + Cursor verloren) → stattdessen vormerken.
-      if(editing&&ae.closest&&ae.closest('#zt')) window._ztRenderPending=true;
-      else window.renderZeiterfassung?.();
-    } else if(!editing){
-      // Andere Ansichten (v.a. Statistiken/Mitarbeiterübersicht) ebenfalls LIVE
-      // aktualisieren – aber nicht, während ein Feld/Dropdown aktiv ist.
-      if(vid==='view-uebersicht') window.renderOverview?.();
-      else if(vid==='view-gfberichte') window.renderGFBerichte?.();
-      else if(vid==='view-abwesenheiten') window.renderAbwesenheiten?.();
-      else if(vid==='view-einstellungen') window.renderSettings?.();
-    }
+    if(editing){
+      // Nutzer tippt/wählt gerade IRGENDWO (Tabelle, Prüfvermerk, Filter, Modal) →
+      // NICHT neu rendern, sonst geht die laufende Eingabe + Cursor verloren.
+      // Für die Zeiterfassung das Rendern vormerken (läuft nach dem Tippen).
+      if(vid==='view-zeiterfassung') window._ztRenderPending=true;
+    } else if(vid==='view-zeiterfassung') window.renderZeiterfassung?.();
+    else if(vid==='view-uebersicht') window.renderOverview?.();
+    else if(vid==='view-gfberichte') window.renderGFBerichte?.();
+    else if(vid==='view-abwesenheiten') window.renderAbwesenheiten?.();
+    else if(vid==='view-einstellungen') window.renderSettings?.();
   }catch(e){}
 }
 
