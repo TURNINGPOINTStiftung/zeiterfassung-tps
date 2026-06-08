@@ -26,6 +26,19 @@ export function getCatsForTeam(teamName){
   return d.cats||[...DEFAULT_CATS];
 }
 
+// Liefert die AKTUELL gültigen Zuordnungskategorien eines Nutzers als Array
+// (Freiberufler: feste Liste, sonst die Team-Kategorien + Standard-Sonderkategorien).
+// Wird von der Statistik genutzt, um nur aktuelle Kategorien anzuzeigen – nicht
+// jede jemals in den Daten vorkommende (alte/umbenannte) Zuordnung.
+export function currentCatsForUser(user){
+  if(isFreelancer(user)) return ['AKADEMIE','WENDESTART','WENDEKURS','WENDETRAINING'];
+  const teams=Array.isArray(user?.teams)&&user.teams.length?user.teams:(user?.team?[user.team]:[]);
+  const out=new Set();
+  (teams.length?teams:['']).forEach(t=>getCatsForTeam(t).forEach(c=>out.add(c)));
+  ['Urlaub','AU/Krank','Arbeitszeitausgleich','Sonstiges','Veranstaltung Krank / AU'].forEach(c=>out.add(c));
+  return [...out];
+}
+
 export function catOptionsForUser(user,selected=''){
   if(isFreelancer(user)) return catOptionsFree(selected);
   const norm=normZuord(selected);
