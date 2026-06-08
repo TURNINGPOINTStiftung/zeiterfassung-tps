@@ -1008,7 +1008,8 @@ export function syncVeranstaltungToTimesheets(uid,dayTimes,note){
       const t=dayTimes[ds]; if(!t||!t.von||!t.bis) return;
       const y=+ds.slice(0,4), m=+ds.slice(5,7);
       const k=entryKey(uid,y,m);
-      if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')){ skipped++; return; } // genehmigte/eingereichte Monate nicht verändern
+      // genehmigte/eingereichte Monate nicht verändern – außer der Admin trägt ein (darf das).
+      if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')&&!(window.cu&&window.cu.role==='admin')){ skipped++; return; }
       if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
       if(!d.entries[k].days) d.entries[k].days={};
       if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
