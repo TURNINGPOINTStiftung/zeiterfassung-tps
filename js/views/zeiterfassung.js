@@ -930,6 +930,8 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
         const hols=getHolidays(y,user.bundesland||'');
         if(!holFree||!hols.has(ds)){
           const k=entryKey(uid,y,m);
+          // Gesperrte (eingereichte/genehmigte) Monate nicht überschreiben – außer Admin.
+          if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')&&!(window.cu&&window.cu.role==='admin')){ cur.setDate(cur.getDate()+1); continue; }
           if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};

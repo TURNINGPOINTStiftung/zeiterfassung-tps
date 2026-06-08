@@ -1,5 +1,5 @@
 import { MONTHS } from '../config.js';
-import { getData, getUser, mutate } from '../data.js';
+import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
 
@@ -250,6 +250,23 @@ export async function saveVacRequest(){
   const d=getData();
   const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:cu;
   const forOther=targetUser.id!==cu.id;
+  // Abwesenheiten in bereits eingereichte/genehmigte Monate sind gesperrt (außer Admin) –
+  // sonst landet der Eintrag nicht in der Zeiterfassung bzw. würde abgegebene Daten
+  // überschreiben. Klare Fehlermeldung statt stillem Durchlaufen.
+  if(cu.role!=='admin'){
+    const _locked=[];
+    let _c=new Date(from+'T12:00:00'); const _e=new Date(to+'T12:00:00');
+    while(_c<=_e){
+      const _st=d.entries?.[entryKey(targetUser.id,_c.getFullYear(),_c.getMonth()+1)]?.status;
+      const _lbl=MONTHS[_c.getMonth()]+' '+_c.getFullYear();
+      if((_st==='submitted'||_st==='approved')&&!_locked.includes(_lbl)) _locked.push(_lbl);
+      _c.setDate(_c.getDate()+1);
+    }
+    if(_locked.length){
+      toast(`Nicht möglich: ${_locked.join(', ')} wurde bereits eingereicht/genehmigt. Bitte den Monat erst zurückziehen lassen.`,'err');
+      return;
+    }
+  }
   // ── Veranstaltung: pro Tag eigene Uhrzeiten → direkt in die Zeiterfassung (keine Pause) ──
   if(type==='Veranstaltung'){
     const dayTimes={};
