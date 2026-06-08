@@ -1,6 +1,6 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
 import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
-import { hashPw, isHashed } from './auth.js';
+import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
 export async function initFirebase(){
@@ -73,7 +73,7 @@ export async function initFirebase(){
     if(!hadB2Mig&&migrated._fixes&&migrated._fixes.b2PauseMigrationV1) needsSave=true;
     if(!hadFreeRb&&migrated._fixes&&migrated._fixes.freelancerPauseRollbackV1) needsSave=true;
     for(const u of migrated.users){
-      if(!isHashed(u.pw)){ u.pw=await hashPw(u.pw); needsSave=true; }
+      if(!isPwHashed(u.pw)){ u.pw=await makePwRecord(u.pw); needsSave=true; }
     }
     setDataCache(migrated);
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
@@ -82,7 +82,7 @@ export async function initFirebase(){
     if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
-    for(const u of d.users){ u.pw=await hashPw(u.pw); }
+    for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
     setDataCache(d);
     await _fbRef.set(d).catch(()=>{});
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch(e){}
