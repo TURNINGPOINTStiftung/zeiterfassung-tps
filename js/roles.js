@@ -82,6 +82,19 @@ export function canSeeAbsence(viewer,target){
   return !!(target&&target.id);
 }
 
+// Findet die für einen Mitarbeiter zuständige Leitung (optional zu einem Datum,
+// damit Team-Wechsel via teamHistory berücksichtigt werden). Wird in der
+// Unterschriftenzeile genutzt, um einen echten Namen statt nur „Leitung" zu
+// zeigen, falls an einem genehmigten Eintrag kein Prüfer (reviewedBy) hinterlegt ist.
+export function getResponsibleLeitung(emp, dateStr){
+  if(!emp) return null;
+  const leiters=(getData().users||[]).filter(u=>u.role==='leitung');
+  if(!leiters.length) return null;
+  return leiters.find(l=>getLeitungTeams(l).length>0 && canSeeEmployee(l,emp,dateStr))
+      || leiters.find(l=>canSeeEmployee(l,emp,dateStr))
+      || leiters[0];
+}
+
 export function _baseRoleLabel(r){
   return r==='leitung'?'Leitung':
          r==='geschaeftsfuehrer'?'Geschäftsführung':

@@ -1,6 +1,6 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
-import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission } from '../roles.js';
+import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
@@ -355,7 +355,11 @@ export function renderSignature(user,entry){
   let mgSig='';
   if(entry.status==='approved'||entry.status==='rejected'){
     const reviewer=entry.reviewedBy?getUser(entry.reviewedBy):null;
-    const rName=reviewer?reviewer.name:'Leitung';
+    // In der Unterschriftenzeile immer einen echten Namen zeigen – nie nur die
+    // Rolle „Leitung" (die steht bereits in der Spaltenüberschrift). Fehlt ein
+    // hinterlegter Prüfer, wird die zuständige Leitung des Mitarbeiters genutzt.
+    let rName=reviewer?reviewer.name:'';
+    if(!rName){ const _rl=getResponsibleLeitung(user,monthStartDate(window.year,window.mon)); rName=_rl?_rl.name:'Leitung'; }
     const action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
     mgSig=`<div class="dig-sig">${action}<br>${rName}<span class="ts">${fmtTs(entry.reviewedAt)}</span>${entry.managerNote?`<span class="ts" style="color:var(--danger)">${entry.managerNote}</span>`:''}</div>`;
   } else {
