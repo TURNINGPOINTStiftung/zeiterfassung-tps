@@ -83,6 +83,62 @@ export function renderSettings(){
   if(permEl) renderPermissionsMatrix(permEl);
 }
 
+// ── Einmalige Datenkorrektur (Admin) ─────────────────────────────────
+// Genehmigte Zeiterfassungen und an die GF gesendete Berichte, die
+// versehentlich über das Admin-Konto liefen, der Leitung „Moritz Kriese"
+// zuordnen. Zeigt vor dem Schreiben eine Vorschau. Idempotent – mehrfaches
+// Ausführen ist gefahrlos (bereits korrigierte Einträge werden übersprungen).
+// Es werden NUR Genehmiger-/Absender-Felder gesetzt – Zeiten/Inhalte bleiben unangetastet.
+export function fixApproverToLeitung(){
+  const cu=window.cu;
+  if(!cu||cu.role!=='admin'){ toast('Nur als Admin möglich.','err'); return; }
+  const d=getData();
+  const users=d.users||[];
+  const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+
+  // Ziel: das Leitungs-Konto „Moritz Kriese" (nicht das Admin-Konto).
+  const target=users.find(u=>u.role==='leitung'&&norm(u.name)==='moritz kriese')
+            || users.find(u=>u.role!=='admin'&&norm(u.name)==='moritz kriese')
+            || users.find(u=>u.role==='leitung'&&norm(u.name).indexOf('moritz')>=0);
+  if(!target){
+    alert('Kein Leitungs-Konto „Moritz Kriese" gefunden.\n\nBitte zuerst ein Konto mit Rolle „Leitung" und Namen „Moritz Kriese" anlegen (oder die Rolle des bestehenden Kontos prüfen) und dann erneut ausführen.');
+    return;
+  }
+  const isAdminId=id=>{ const u=id?getUser(id):null; return !!u&&u.role==='admin'; };
+
+  // 1) Zeiterfassungen: genehmigt, aktuell vom Admin-Konto genehmigt.
+  const tsHits=[];
+  Object.entries(d.entries||{}).forEach(([k,e])=>{
+    if(e&&e.status==='approved'&&isAdminId(e.reviewedBy)) tsHits.push(k);
+  });
+  // 2) Jahresberichte an die GF: aktuell vom Admin-Konto gesendet.
+  const yrHits=[];
+  Object.entries(d.yearReports||{}).forEach(([id,r])=>{ if(r&&isAdminId(r.sentBy)) yrHits.push(id); });
+  // 3) Teamberichte an die GF: aktuell vom Admin-Konto gesendet.
+  const tmHits=[];
+  Object.entries(d.teamReports||{}).forEach(([id,r])=>{ if(r&&isAdminId(r.leitungId)) tmHits.push(id); });
+
+  const total=tsHits.length+yrHits.length+tmHits.length;
+  if(!total){
+    alert('Nichts zu korrigieren ✓\n\nEs laufen keine genehmigten Zeiterfassungen oder GF-Berichte mehr über das Admin-Konto.');
+    return;
+  }
+  const msg='Folgende Einträge werden der Leitung „'+target.name+'" zugeordnet:\n\n'
+    +'• '+tsHits.length+' genehmigte Zeiterfassung(en)\n'
+    +'• '+yrHits.length+' Jahresbericht(e) an die GF\n'
+    +'• '+tmHits.length+' Teambericht(e) an die GF\n\n'
+    +'Zeiten und Inhalte bleiben unverändert – es wird nur der/die Genehmiger/Absender gesetzt.\n\nFortfahren?';
+  if(!confirm(msg)) return;
+
+  mutate(dd=>{
+    tsHits.forEach(k=>{ if(dd.entries&&dd.entries[k]) dd.entries[k].reviewedBy=target.id; });
+    yrHits.forEach(id=>{ if(dd.yearReports&&dd.yearReports[id]){ dd.yearReports[id].sentBy=target.id; dd.yearReports[id].sentByName=target.name; } });
+    tmHits.forEach(id=>{ if(dd.teamReports&&dd.teamReports[id]){ dd.teamReports[id].leitungId=target.id; dd.teamReports[id].leitungName=target.name; } });
+  });
+  toast(total+' Eintrag/Einträge auf „'+target.name+'" gesetzt ✓','ok');
+  renderSettings();
+}
+
 // Berechtigungs-Matrix rendern + speichern
 const PERM_DEFS=[
   {key:'tab_uebersicht',       label:'Tab: Mitarbeiterübersicht anzeigen'},
