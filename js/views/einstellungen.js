@@ -47,7 +47,12 @@ export function renderSettings(){
     const tms=getTeams();
     const dd2=getData();
     const mkChips=(arr,teamArg)=>arr.length
-      ? arr.map((c,i)=>`<span class="cat-chip">${esc(c)} <button onclick='removeTeamCat(${JSON.stringify(teamArg)},${i})' title="Entfernen">×</button></span>`).join('')
+      ? arr.map((c,i)=>{
+          const ta=JSON.stringify(teamArg);
+          const lt=i>0?`<button onclick='moveTeamCat(${ta},${i},-1)' title="nach vorne (höher in der Liste)">‹</button> `:'';
+          const rt=i<arr.length-1?` <button onclick='moveTeamCat(${ta},${i},1)' title="nach hinten (tiefer in der Liste)">›</button>`:'';
+          return `<span class="cat-chip">${lt}${esc(c)} <button onclick='removeTeamCat(${ta},${i})' title="Entfernen">×</button>${rt}</span>`;
+        }).join('')
       : '<span style="color:var(--muted);font-size:12px">Keine Kategorien.</span>';
     const mkSection=(label,labelColor,arr,teamArg,idx,note='')=>{
       const ta=JSON.stringify(teamArg);
@@ -61,7 +66,8 @@ export function renderSettings(){
         </div>
       </div>`;
     };
-    let csHtml=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
+    let csHtml='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:#f5f7fa;border-radius:6px">Mit ‹ › die Reihenfolge ändern. Urlaub &amp; AU/Krank erscheinen in der Zeiterfassung immer ganz unten.</div>';
+    csHtml+=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
     tms.forEach((t,i)=>{
       const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[_fk(t)]);
       const arr=isCustom?dd2.teamCats[_fk(t)]:getCatsForTeam(t);
@@ -220,6 +226,19 @@ export function removeTeamCat(teamName,i){
       if(!d.cats) d.cats=[...DEFAULT_CATS];
       d.cats.splice(i,1);
     }
+  });
+  renderSettings();
+}
+
+// Kategorie um eine Position verschieben (dir = -1 nach vorne, +1 nach hinten).
+export function moveTeamCat(teamName,i,dir){
+  mutate(d=>{
+    let arr;
+    if(teamName){ _initTeamCats(d,teamName); arr=d.teamCats[_fk(teamName)]; }
+    else { if(!d.cats) d.cats=[...DEFAULT_CATS]; arr=d.cats; }
+    const j=i+dir;
+    if(j<0||j>=arr.length||arr[i]===undefined) return;
+    const tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
   });
   renderSettings();
 }

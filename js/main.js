@@ -40,7 +40,7 @@ import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport, delet
 
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
          addTeamHistEntry, updateTeamHistEntry, deleteTeamHistEntry,
-         addCategory, removeCat, addTeamCat, removeTeamCat,
+         addCategory, removeCat, addTeamCat, removeTeamCat, moveTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
          saveNewUser, saveEditUser } from './views/einstellungen.js';
@@ -189,6 +189,7 @@ window.addCategory           = addCategory;
 window.removeCat             = removeCat;
 window.addTeamCat            = addTeamCat;
 window.removeTeamCat         = removeTeamCat;
+window.moveTeamCat           = moveTeamCat;
 window.showAddUser           = showAddUser;
 window.showEditUser          = showEditUser;
 window.showEditDpw           = showEditDpw;
