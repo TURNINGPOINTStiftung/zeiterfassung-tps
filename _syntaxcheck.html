@@ -3,8 +3,11 @@
 <body>
 <script>
 // Lädt alle App-Module dynamisch und meldet Syntax-/Import-Fehler.
-// Wird headless von Edge geladen; das Ergebnis steht in document.title + #out.
-window.firebase = { initializeApp(){}, database(){ return { ref(){ return { once(){return Promise.resolve({val:()=>null})}, on(){}, child(){return this}, set(){return Promise.resolve()} } }; }, auth(){ return { signInAnonymously(){return Promise.resolve()} }; } };
+// WICHTIG: über HTTP laden (z. B. _serve.ps1 → http://localhost:8765/_syntaxcheck.html),
+// NICHT über file:// – ES-Module werden dort von Chrome per CORS blockiert.
+// Ergebnis steht in document.title (RESULT_OK / RESULT_FAIL|...) – per CDP /json auslesen,
+// da der Titel erst nach den asynchronen Imports gesetzt wird (--dump-dom ist zu früh).
+window.firebase = { initializeApp(){}, database(){ return { ref(){ return { once(){return Promise.resolve({val:()=>null})}, on(){}, child(){return this}, set(){return Promise.resolve()} }; } }; }, auth(){ return { signInAnonymously(){return Promise.resolve()} }; } };
 const mods = [
   'config','utils','data','roles','calc','cats','auth','firebase','app','zoom','print','import-data','data-mgmt','profile',
   'views/zeiterfassung','views/uebersicht','views/abwesenheiten','views/stempeln','views/gfberichte','views/einstellungen'
@@ -17,8 +20,8 @@ const mods = [
   }
   const out = document.createElement('pre');
   out.id = 'out';
-  if (errs.length === 0) { document.title = 'SYNTAX_OK'; out.textContent = 'SYNTAX_OK'; }
-  else { document.title = 'SYNTAX_FAIL'; out.textContent = 'SYNTAX_FAIL\n' + errs.join('\n'); }
+  if (errs.length === 0) { document.title = 'RESULT_OK'; out.textContent = 'RESULT_OK'; }
+  else { document.title = 'RESULT_FAIL|' + errs.join(' || ').slice(0,400); out.textContent = 'RESULT_FAIL\n' + errs.join('\n'); }
   document.body.appendChild(out);
 })();
 </script>

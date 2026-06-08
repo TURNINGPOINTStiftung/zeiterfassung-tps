@@ -188,8 +188,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
         +'<td>'+(dd.b2bis||'')+'</td>'
         +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.b2zuord||'')+'</td>'
         +'<td class="sm">'+(b2min>0?minFmt(b2min):'')+'</td>'
-        +'<td>'+(ktm>0?ktm:'')+'</td>'
-        +'<td style="text-align:left;max-width:70px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
+        +'<td style="text-align:left;max-width:90px;overflow:hidden;font-size:8px">'+_bzuord(dd.ktzuord||'')+'</td>'
         +'<td class="sm">'+(ktm>0?minFmt(ktm):'')+'</td>';
     }
     row+='<td class="ps">'+(pauseMin>0?minFmt(pauseMin):'')+'</td>'
@@ -284,21 +283,21 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     +(isFree?''
       :'<th class="sp" rowspan="2"></th>'
        +'<th colspan="4" class="bh">Block 2</th>'
-       +'<th colspan="3">Kleinteilig</th>')
+       +'<th colspan="2">Kleinteilig</th>')
     +'<th rowspan="2" style="font-size:7px;min-width:28px">Pause</th>'
     +'<th rowspan="2">Gesamt</th>'
     +'</tr><tr>'
     +'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
     +(isFree?''
       :'<th>von</th><th>bis</th><th>Zuordnung</th><th>&sum;</th>'
-       +'<th>Min</th><th>Zuordnung</th><th>&sum;</th>')
+       +'<th>Zuordnung</th><th>&sum;</th>')
     +'</tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'<tfoot><tr>'
     +'<td class="l" colspan="3">Monatssumme IST</td>'
     +(isFree
       ?'<td colspan="4"></td>'
-      :'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="3"></td>')
+      :'<td colspan="4"></td><td></td><td colspan="4"></td><td colspan="2"></td>')
     +'<td></td>'
     +'<td>'+hFmt(monthTotal)+'</td>'
     +'</tr></tfoot>'
