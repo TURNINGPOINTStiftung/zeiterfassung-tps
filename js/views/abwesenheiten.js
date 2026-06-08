@@ -269,9 +269,10 @@ export async function saveVacRequest(){
       dayTimes, status:'approved', submittedAt:now, reviewedBy:cu.id, reviewedAt:now,
       reviewNote:forOther?`Eingetragen durch ${cu.name}`:'' };
     await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-    window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes,note);
+    const _vr=window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes,note)||{};
     closeModal(); renderAbwesenheiten();
-    toast(`Veranstaltung für ${targetUser.name} eingetragen (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
+    if(_vr.skipped>0) toast(`Veranstaltung gespeichert – aber ${_vr.skipped} Tag(e) liegen in bereits eingereichten/genehmigten Monaten und wurden NICHT in die Zeiterfassung geschrieben.`,'err');
+    else toast(`Veranstaltung für ${targetUser.name} eingetragen (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
     return;
   }
   const isSick=type==='AU/Krank';
@@ -342,12 +343,13 @@ export function deleteVacRequest(id){
   if(!r) return;
   const mayManage=r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role);
   if(!mayManage) return;
-  const isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
-  const isLeiterSelf=r.status==='approved'&&getUser(r.userId)?.role==='leitung'&&r.userId===cu.id;
-  // Stornierbar: offene Anträge, oder genehmigte die auto-erzeugt / AU / Leitung-eigen sind
-  const cancellable=r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto||cu.role==='admin'));
+  // Offene Anträge: zurückziehen darf der/die Antragsteller:in oder ein Genehmiger.
+  // GENEHMIGTE Abwesenheiten: nur noch der/die Mitarbeiter:in selbst oder der Admin
+  // dürfen stornieren – NICHT mehr die Leitung.
+  const cancellable=(r.status==='pending'&&mayManage)
+                  ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
   if(!cancellable) return;
-  const clearsTimesheet=r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||isLeiterSelf||isAuto||cu.role==='admin');
+  const clearsTimesheet=r.status==='approved';
   const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
   const label=r.status==='pending'?'Antrag zurückziehen':'Abwesenheit stornieren';
   const extra=clearsTimesheet?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
@@ -550,8 +552,9 @@ export function renderAbwesenheiten(){
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
-    const _isAuto=r.reviewNote==='Automatisch aus Zeiterfassung';
-    const canDelete=(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role))&&(r.status==='pending'||(r.status==='approved'&&(r.type==='AU/Krank'||r.type==='Veranstaltung'||cu.role==='leitung'||cu.role==='admin'||_isAuto)));
+    // Offen: Antragsteller:in oder Genehmiger. Genehmigt: NUR Antragsteller:in oder Admin.
+    const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role)))
+                  ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
       ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`

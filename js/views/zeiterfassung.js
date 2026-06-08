@@ -28,8 +28,12 @@ export function renderZeiterfassung(){
   const _btnTeam=document.getElementById('btn-teamberichte');
   if(_btnTeam) _btnTeam.style.display=hasPermission('btn_teamberichte',cu.role)?'':'none';
   const isFree=isFreelancer(user);
+  // Bearbeitbar: eigener Entwurf; Admin immer; Leitung/GF nur Entwürfe (NICHT
+  // eingereichte/genehmigte Monate – die sind nach dem Einreichen gesperrt und
+  // werden nur per Zurückweisen wieder zum Entwurf).
   const canEdit=(cu.id===uid&&entry.status==='draft')||
-                (isLeiter&&(entry.status==='submitted'||entry.status==='draft'));
+                (cu.role==='admin')||
+                (isLeiter&&cu.role!=='admin'&&entry.status==='draft');
   const readonly=!canEdit;
 
   const viewingOther=cu&&uid!==cu.id&&isManagerRole(cu);
@@ -994,18 +998,21 @@ export function syncSickToTimesheets(uid,user,from,to){ syncAbsenceToTimesheets(
 // Veranstaltung mit eigenen Uhrzeiten pro Tag in die Zeiterfassung schreiben (keine Pause).
 export function syncVeranstaltungToTimesheets(uid,dayTimes,note){
   const bem=(note&&note.trim())?note.trim():'Veranstaltung Krank / AU';
+  let written=0, skipped=0;
   mutate(d=>{
     Object.keys(dayTimes||{}).forEach(ds=>{
       const t=dayTimes[ds]; if(!t||!t.von||!t.bis) return;
       const y=+ds.slice(0,4), m=+ds.slice(5,7);
       const k=entryKey(uid,y,m);
-      if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')) return; // genehmigte/eingereichte Monate nicht verändern
+      if(d.entries[k]&&(d.entries[k].status==='submitted'||d.entries[k].status==='approved')){ skipped++; return; } // genehmigte/eingereichte Monate nicht verändern
       if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
       if(!d.entries[k].days) d.entries[k].days={};
       if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
       Object.assign(d.entries[k].days[ds],{b1von:t.von,b1bis:t.bis,b1zuord:'Veranstaltung Krank / AU',b1bem:bem,b2von:'',b2bis:'',b2zuord:'',b2bem:'',ktmin:''});
+      written++;
     });
   });
+  return {written,skipped};
 }
 
 export function doSubmit(){
