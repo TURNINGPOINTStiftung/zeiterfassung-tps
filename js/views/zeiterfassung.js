@@ -567,7 +567,11 @@ function _applyDayPause(uid,ds,editedField){
   const user=getUser(uid); if(!user) return;
   mutate(d=>{
     const k=entryKey(uid,window.year,window.mon);
-    const e=d.entries[k]; if(!e||e.status==='submitted'||e.status==='approved') return;
+    const e=d.entries[k]; if(!e) return;
+    // Eingereichte/genehmigte Monate darf NUR der Admin verändern (der darf sie auch
+    // bearbeiten) – dann muss auch die Pausen-Logik laufen, sonst bleibt die Stunde
+    // hängen. Für alle anderen bleiben gesperrte Monate unangetastet.
+    if((e.status==='submitted'||e.status==='approved')&&!(window.cu&&window.cu.role==='admin')) return;
     const day=e.days?.[ds]; if(!day||day._nightShift) return;
     const hasB2=!!(day.b2von&&day.b2bis);
     // 1) bisher aufgeschlagene Pause entfernen (Tracking, sonst Schätzung aus Altdaten)
