@@ -2,7 +2,7 @@ import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate } from '../roles.js';
 import { esc, toast, openModal, closeModal } from '../utils.js';
-import { hashPw } from '../auth.js';
+import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
 
 export function renderSettings(){
@@ -447,7 +447,7 @@ export async function saveNewUser(){
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
-  u.pw=await hashPw(u.pw);
+  u.pw=await makePwRecord(u.pw);
   await mutate(d=>d.users.push(u));
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
@@ -456,7 +456,7 @@ export async function saveEditUser(id){
   const cu=window.cu;
   const u=collectUserForm(); u.id=id;
   if(id==='admin') u.role='admin';
-  if(u.pw){ u.pw=await hashPw(u.pw); }
+  if(u.pw){ u.pw=await makePwRecord(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; }
   // Team-Verlauf: wenn primäres Team gewechselt hat → History-Eintrag hinzufügen
   const existing=getUser(id);

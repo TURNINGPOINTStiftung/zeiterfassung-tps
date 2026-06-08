@@ -1,5 +1,5 @@
 import { getUser, mutate } from './data.js';
-import { hashPw, isHashed } from './auth.js';
+import { verifyPw, makePwRecord } from './auth.js';
 import { esc, openModal, closeModal, toast } from './utils.js';
 
 export function openProfileModal(){
@@ -50,12 +50,12 @@ export async function saveProfile(){
   if(pwCur||pwNew||pwConfirm){
     if(!pwCur){ toast('Bitte aktuelles Passwort eingeben.','err'); return; }
     const user=getUser(cu.id);
-    const match=isHashed(user.pw)?(await hashPw(pwCur))===user.pw:pwCur===user.pw;
+    const match=(await verifyPw(pwCur,user.pw)).ok;
     if(!match){ toast('Aktuelles Passwort falsch.','err'); return; }
     if(!pwNew){ toast('Bitte neues Passwort eingeben.','err'); return; }
     if(pwNew!==pwConfirm){ toast('Neue Passwörter stimmen nicht überein.','err'); return; }
-    if(pwNew.length<4){ toast('Neues Passwort zu kurz (min. 4 Zeichen).','err'); return; }
-    newPwHash=await hashPw(pwNew);
+    if(pwNew.length<8){ toast('Neues Passwort zu kurz (min. 8 Zeichen).','err'); return; }
+    newPwHash=await makePwRecord(pwNew);
   }
   await mutate(d=>{
     const u=d.users.find(x=>x.id===cu.id);

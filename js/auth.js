@@ -15,6 +15,39 @@ export async function hashPw(pw){
 }
 export function isHashed(pw){ return pw&&pw.length===64&&/^[0-9a-f]+$/.test(pw); }
 
+// ── Sichere Passwörter: PBKDF2-SHA256 mit pro-User-Salt + vielen Iterationen ──
+// Format: 'pbkdf2$<iter>$<saltHex>$<hashHex>'. Alte Formate (SHA-256-Hex aus hashPw
+// oder Klartext) bleiben über verifyPw prüfbar und werden beim nächsten Login
+// automatisch auf PBKDF2 hochgestuft. So bricht kein bestehender Login.
+const _PBKDF2_ITER=150000;
+function _rndHex(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function _pbkdf2(pw,saltHex,iter){
+  const enc=new TextEncoder();
+  const salt=Uint8Array.from((String(saltHex).match(/.{2}/g)||[]).map(h=>parseInt(h,16)));
+  const key=await crypto.subtle.importKey('raw',enc.encode(pw),{name:'PBKDF2'},false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},key,256);
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+// Erzeugt den zu speichernden Passwort-Wert (immer PBKDF2 mit frischem Salt).
+export async function makePwRecord(pw){
+  if(!pw) return '';
+  const salt=_rndHex(16);
+  return 'pbkdf2$'+_PBKDF2_ITER+'$'+salt+'$'+(await _pbkdf2(pw,salt,_PBKDF2_ITER));
+}
+export function isPwHashed(pw){ return typeof pw==='string'&&(pw.startsWith('pbkdf2$')||isHashed(pw)); }
+// Prüft ein Passwort gegen den gespeicherten Wert (alle Formate). Liefert
+// { ok, upgrade } – upgrade=true heißt: Alt-Format, sollte neu gehasht werden.
+export async function verifyPw(pw,stored){
+  if(typeof stored!=='string'||!stored) return {ok:false,upgrade:false};
+  if(stored.startsWith('pbkdf2$')){
+    const p=stored.split('$'); const iter=parseInt(p[1],10)||_PBKDF2_ITER;
+    const h=await _pbkdf2(pw,p[2]||'',iter);
+    return {ok:h===(p[3]||''),upgrade:false};
+  }
+  if(isHashed(stored)){ const ok=(await hashPw(pw))===stored; return {ok,upgrade:ok}; }
+  const ok=pw===stored; return {ok,upgrade:ok};
+}
+
 // ── Login UI ──────────────────────────────────────────────────────
 export function populateLoginDropdown(){
   // Benutzerliste für Autocomplete cachen
@@ -125,13 +158,10 @@ export async function doLogin(){
     errEl.style.display='block'; return;
   }
   const pw=document.getElementById('login-pw').value;
-  let match=false;
-  if(isHashed(u.pw)){
-    match=(await hashPw(pw))===u.pw;
-  } else {
-    match=pw===u.pw;
-    if(match){ const h=await hashPw(pw); mutate(d=>{const x=d.users.find(y=>y.id===u.id);if(x)x.pw=h;}); }
-  }
+  const _v=await verifyPw(pw,u.pw);
+  const match=_v.ok;
+  // Erfolgreicher Login mit Alt-Format (SHA-256/Klartext) → still auf PBKDF2 hochstufen.
+  if(match&&_v.upgrade){ const h=await makePwRecord(pw); mutate(d=>{const x=d.users.find(y=>y.id===u.id);if(x)x.pw=h;}); }
   if(!match){
     errEl.textContent='Falsches Passwort.';
     errEl.style.display='block'; return;
@@ -274,7 +304,7 @@ export async function checkPasswordResetToken(){
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Hallo <strong>${esc(user?.name||'')}</strong>! Bitte wähle ein neues Passwort.</p>
       <div class="form-group">
         <label>Neues Passwort</label>
-        <input type="password" id="new-pw-1" placeholder="Mindestens 4 Zeichen" autocomplete="new-password"
+        <input type="password" id="new-pw-1" placeholder="Mindestens 8 Zeichen" autocomplete="new-password"
                onkeydown="if(event.key==='Enter') saveResetPassword('${token}','${data.uid}')">
       </div>
       <div class="form-group">
@@ -294,9 +324,9 @@ export async function saveResetPassword(token,uid){
   const pw1=document.getElementById('new-pw-1')?.value||'';
   const pw2=document.getElementById('new-pw-2')?.value||'';
   const msgEl=document.getElementById('new-pw-msg');
-  if(pw1.length<4){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 4 Zeichen.</div>'; return; }
+  if(pw1.length<8){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 8 Zeichen.</div>'; return; }
   if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
-  const hash=await hashPw(pw1);
+  const hash=await makePwRecord(pw1);
   await mutate(d=>{ const u=d.users.find(x=>x.id===uid); if(u) u.pw=hash; });
   await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).remove().catch(()=>{});
   closeModal();
@@ -327,7 +357,7 @@ export function doEmergencyReset(){
 export async function resetPasswordsOnly(){
   if(!confirm('Passwörter aller Benutzer auf Standard zurücksetzen?\nZeitdaten bleiben erhalten.')) return;
   const hashMap={};
-  for(const def of DEFAULT_USERS){ hashMap[def.id]=await hashPw(def.pw); }
+  for(const def of DEFAULT_USERS){ hashMap[def.id]=await makePwRecord(def.pw); }
   mutate(d=>{
     d.users.forEach(u=>{ if(hashMap[u.id]) u.pw=hashMap[u.id]; });
   });
