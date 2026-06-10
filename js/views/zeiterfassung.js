@@ -153,6 +153,7 @@ export function renderZeiterfassung(){
       <td class="b2-col"><select id="sel_${ds}_b2zuord" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
       <td class="bem-col b2-col"><input id="bem_${ds}_b2" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
+      <td class="sep-c sep-col2"></td>
       <td class="kt-col"><input id="kt_${ds}" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>

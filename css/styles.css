@@ -170,8 +170,11 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt thead th.l{text-align:left;padding-left:8px}
 .zt thead th.block-head{background:#2d4f70}
 .zt thead th.sep-head{background:#0e2235;width:8px;padding:0}
+/* Trennspalte nach Block 2: im Tabellenkopf bewusst NICHT dunkel absetzen
+   (bleibt im blauen Header-Balken), nur im Tabellenkörper als grauer Streifen. */
+.zt thead th.sep-col2{width:10px;padding:0}
 /* Freiberufler: Block 2 + Kleinteilig + Pause ausblenden */
-.no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col,.no-b2-kt .pause-col{display:none!important}
+.no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col,.no-b2-kt .sep-col2,.no-b2-kt .pause-col{display:none!important}
 .zt tbody tr{border-bottom:1px solid var(--border)}
 .zt tbody tr:nth-child(even){background:var(--row-alt)}
 .zt tbody tr.weekend{background:var(--weekend)}
