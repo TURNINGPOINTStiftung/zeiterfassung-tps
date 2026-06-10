@@ -1,8 +1,35 @@
-import { MONTHS } from '../config.js';
+import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, mutate } from '../data.js';
 import { esc, toast } from '../utils.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams } from '../roles.js';
 import { _openPerEmpPrint } from '../print.js';
+
+// Benachrichtigt alle GF-Nutzer mit hinterlegter E-Mail über einen neuen Bericht.
+// Sendet still (kein Toast bei Fehler – E-Mail ist Best-Effort, nicht kritisch).
+// params: { art, von, details } – art = z.B. "Teambericht", "Jahresbericht"
+// TEMPORÄR DEAKTIVIERT: EmailJS-Freikontingent aufgebraucht. Sobald ein
+// (kostenloser) E-Mail-Dienst wieder verfügbar ist, diese Zeile entfernen.
+const GF_NOTIFY_DISABLED = true;
+
+export async function notifyGF(params){
+  if(GF_NOTIFY_DISABLED) return;
+  if(!EMAILJS_GF_REPORT_TEMPLATE_ID||!EMAILJS_PUBLIC_KEY||!EMAILJS_SERVICE_ID) return;
+  const d=getData();
+  const gfUsers=(d.users||[]).filter(u=>u.role==='geschaeftsfuehrer'&&u.email);
+  if(!gfUsers.length) return;
+  for(const gf of gfUsers){
+    try{
+      await window.emailjs?.send(EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, {
+        to_email:  gf.email,
+        to_name:   gf.name||'Geschäftsführung',
+        art:       params.art||'Bericht',
+        von:       params.von||'Leitung',
+        details:   params.details||'',
+        app_url:   APP_URL,
+      }, {publicKey: EMAILJS_PUBLIC_KEY});
+    }catch(e){ console.warn('GF-Benachrichtigung fehlgeschlagen:',e); }
+  }
+}
 
 export function renderGFBerichte(){
   const content=document.getElementById('gf-berichte-content');
@@ -147,6 +174,11 @@ export function sendTeamReport(){
   };
   mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[key]=report; });
   toast('Teambericht an Geschäftsführung gesendet. ✓','ok');
+  notifyGF({
+    art: 'Teambericht',
+    von: cu.name,
+    details: MONTHS[window.mon-1]+' '+window.year+(report.managedTeams&&report.managedTeams.length?' – '+report.managedTeams.join(', '):''),
+  });
   _openPerEmpPrint(emps,window.year,window.mon);
 }
 
@@ -168,6 +200,11 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   };
   mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]=report; });
   toast('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
+  notifyGF({
+    art: 'Teambericht',
+    von: cu.name,
+    details: MONTHS[m-1]+' '+y+' – '+teamName,
+  });
   window.renderOverview?.();
   _openPerEmpPrint(emps,y,m);
 }

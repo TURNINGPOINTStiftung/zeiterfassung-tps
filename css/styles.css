@@ -181,7 +181,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.kw-c{font-size:10px;color:var(--muted);text-align:center;min-width:28px}
 .zt td.day-c{font-size:10px;text-align:center;min-width:24px;font-weight:700}
 .zt td.day-c.we{color:var(--warn)}
-.zt td.sep-c{width:8px;background:#e8edf2;padding:0}
+.zt td.sep-c{width:10px;background:#aab4bf;padding:0;border-left:1px solid #8d99a6;border-right:1px solid #8d99a6}
 .zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
