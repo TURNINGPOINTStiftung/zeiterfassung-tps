@@ -169,10 +169,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt thead th{background:var(--primary);color:#fff;padding:7px 5px;text-align:center;font-size:11px;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:5}
 .zt thead th.l{text-align:left;padding-left:8px}
 .zt thead th.block-head{background:#2d4f70}
-.zt thead th.sep-head{background:#0e2235;width:8px;padding:0}
-/* Trennspalte nach Block 2: im Tabellenkopf bewusst NICHT dunkel absetzen
-   (bleibt im blauen Header-Balken), nur im Tabellenkörper als grauer Streifen. */
-.zt thead th.sep-col2{width:10px;padding:0}
+/* Trennspalten (Block1/Block2 und Block2/Kleinteilig): im Tabellenkopf
+   bewusst NICHT absetzen (bleiben im blauen Header-Balken), nur im
+   Tabellenkörper als heller, sanfter grauer Streifen sichtbar. */
+.zt thead th.sep-head,.zt thead th.sep-col2{background:var(--primary);width:10px;padding:0}
 /* Freiberufler: Block 2 + Kleinteilig + Pause ausblenden */
 .no-b2-kt .b2-col,.no-b2-kt .kt-col,.no-b2-kt .sep-col,.no-b2-kt .sep-col2,.no-b2-kt .pause-col{display:none!important}
 .zt tbody tr{border-bottom:1px solid var(--border)}
@@ -184,7 +184,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td.kw-c{font-size:10px;color:var(--muted);text-align:center;min-width:28px}
 .zt td.day-c{font-size:10px;text-align:center;min-width:24px;font-weight:700}
 .zt td.day-c.we{color:var(--warn)}
-.zt td.sep-c{width:10px;background:#aab4bf;padding:0;border-left:1px solid #8d99a6;border-right:1px solid #8d99a6}
+.zt td.sep-c{width:10px;background:#dde2e8;padding:0;border-left:1px solid #ccd3da;border-right:1px solid #ccd3da}
 .zt td.sum-c{text-align:center;font-weight:700;font-size:11px;min-width:48px;color:var(--primary)}
 .zt td.pause-c{text-align:center;font-size:11px;font-weight:600;min-width:48px;color:var(--muted);background:rgba(0,0,0,.02)}
 .zt td.total-c{text-align:center;font-weight:700;font-size:13px;min-width:58px;color:var(--primary);background:rgba(26,58,92,.05)}
@@ -202,6 +202,8 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt tr.readonly td input,.zt tr.readonly td select{background:#f0f2f5;pointer-events:none;border-color:transparent}
 .zt tfoot td{background:#1a3a5c;color:#fff;font-weight:700;font-size:12px;padding:8px 5px;text-align:center}
 .zt tfoot td.l{text-align:left;padding-left:8px}
+/* Trennstreifen im Footer nicht zeigen – Footer bleibt durchgängig dunkelblau */
+.zt tfoot td.sep-c{background:#1a3a5c;border:none}
 
 /* ── Summary Cards ── */
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:18px}
