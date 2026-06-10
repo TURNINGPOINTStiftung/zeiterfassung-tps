@@ -4,6 +4,7 @@ import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel
 import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
 import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam, currentCatsForUser } from '../cats.js';
+import { notifyGF } from './gfberichte.js';
 
 // Baut eine Zuordnung "kleingeschriebene Kategorie" -> Anzeige-Label aus den
 // AKTUELL gültigen Kategorien der übergebenen Mitarbeiter. Bevorzugt gemischte
@@ -591,6 +592,11 @@ export function sendJahresbericht(uid,y){
   mutate(d=>{ if(!d.yearReports) d.yearReports={}; d.yearReports[rKey]=report; });
   closeModal();
   toast(`Jahresbericht ${y} für ${user.name} an GF gesendet ✓`,'ok');
+  notifyGF({
+    art: 'Jahresbericht',
+    von: cu.name,
+    details: 'Jahr '+y+' – '+user.name+(user.team?' ('+user.team+')':''),
+  });
 }
 
 // Einen an die GF gesendeten Jahresbericht wieder zurückziehen (Leitung/Admin).

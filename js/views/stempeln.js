@@ -287,6 +287,10 @@ function _recomputeFromSessions(day){
   const sorted=[...sessions].sort((a,b)=>b.min-a.min);
   const top2=sorted.slice(0,2).sort((a,b)=>a.von<b.von?-1:1);
   const rest=sorted.slice(2);
+  // Manuell eingetragene Bemerkungen NICHT verwerfen, auch wenn der Stempel
+  // selbst keine Notiz hat (z.B. wenn versehentlich ins Block-2-Feld
+  // geschrieben wurde, bevor überhaupt für Block 2 gestempelt war).
+  const oldB1bem=day.b1bem||'', oldB2bem=day.b2bem||'';
   day.b1von=''; day.b1bis=''; day.b1zuord=''; day.b1bem='';
   day.b2von=''; day.b2bis=''; day.b2zuord=''; day.b2bem='';
   day.ktmin=0;
@@ -298,14 +302,17 @@ function _recomputeFromSessions(day){
     const _d1=diffMin(top2[0].von,top2[0].bis);
     day.b1bis=_d1>0?addMin(day.b1von,Math.round(_d1/15)*15):_round15(top2[0].bis);
     if(top2[0].zuord) day.b1zuord=top2[0].zuord;
-    if(top2[0].note)  day.b1bem=top2[0].note;
+    day.b1bem=top2[0].note||oldB1bem;
   }
   if(top2[1]){
     day.b2von=_round15(top2[1].von);
     const _d2=diffMin(top2[1].von,top2[1].bis);
     day.b2bis=_d2>0?addMin(day.b2von,Math.round(_d2/15)*15):_round15(top2[1].bis);
     if(top2[1].zuord) day.b2zuord=top2[1].zuord;
-    if(top2[1].note)  day.b2bem=top2[1].note;
+    day.b2bem=top2[1].note||oldB2bem;
+  } else if(oldB2bem){
+    // (Noch) kein zweiter Block aus Stempel-Sessions -> Bemerkung nicht verlieren.
+    day.b2bem=oldB2bem;
   }
   const restMin=rest.reduce((s,r)=>s+r.min,0);
   day.ktmin=Math.round(restMin/15)*15;

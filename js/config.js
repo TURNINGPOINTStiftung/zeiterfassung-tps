@@ -10,6 +10,7 @@ export const EMAILJS_PUBLIC_KEY  = 'kVDBaSTAaW731NrK6';
 export const EMAILJS_SERVICE_ID  = 'service_63jube9';
 export const EMAILJS_TEMPLATE_ID = 'template_8z8vi0g';          // Passwort-Reset
 export const EMAILJS_REMINDER_TEMPLATE_ID = 'template_seoonqa'; // Erinnerung Zeiterfassung
+export const EMAILJS_GF_REPORT_TEMPLATE_ID = 'template_gfreport'; // GF-Benachrichtigung bei neuem Bericht
 export const APP_URL = 'https://turningpointstiftung.github.io/zeiterfassung-tps/';
 
 // ── Standard-Berechtigungen (werden in den Einstellungen überschrieben) ──
