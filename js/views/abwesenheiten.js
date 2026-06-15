@@ -81,6 +81,7 @@ export function showVacRequestForm(editId){
   const type=editing?editing.type:'Urlaub';
   const note=editing?.note||'';
   const isManualUrlaub=editing&&editing.type==='Urlaub'&&!editing.halfDay;
+  const vrMode=editing?(editing.hoursMode||(isManualUrlaub?'manual':'vhpd')):'vhpd';
   openModal(`
     <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">${editing?'Abwesenheit bearbeiten':'Abwesenheit eintragen'}</h3>
     ${empSelector}
@@ -123,13 +124,17 @@ export function showVacRequestForm(editId){
       <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Urlaubstage berechnen:</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" ${isManualUrlaub?'':'checked'} onchange="calcVrDays()">
-          Automatisch nach Profil <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
+          <input type="radio" name="vr-mode" id="vr-mode-vhpd" value="vhpd" ${vrMode==='vhpd'?'checked':''} onchange="calcVrDays()">
+          Automatisch <span id="vr-mode-vhpd-hint" style="font-size:11px;color:var(--muted)"></span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" ${isManualUrlaub?'checked':''} onchange="calcVrDays()">
+          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" ${vrMode==='auto'?'checked':''} onchange="calcVrDays()">
+          Automatisch nach Stunden/Woche <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" ${vrMode==='manual'?'checked':''} onchange="calcVrDays()">
           Anzahl selbst eingeben:
-          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="${isManualUrlaub?editing.workDays:1}"
+          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="${vrMode==='manual'?editing.workDays:1}"
             style="width:70px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
             oninput="calcVrDays()">
           <span style="font-size:11px;color:var(--muted)">(max 5/Woche)</span>
@@ -223,12 +228,16 @@ export function calcVrDays(){
   const weekdays=countWorkDays(f,t,vrUser); // Mo-Fr (mit Feiertagscheck)
   const dpw=Math.max(1,Math.min(7,vrUser?.dpw||5));
   const wh=vrUser?.wh||40;
-  const hoursPerDay=Math.round((wh/dpw)*10)/10; // Stunden pro Urlaubstag
-  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
+  const profileHoursPerDay=Math.round((wh/dpw)*10)/10; // Stunden pro Urlaubstag nach Stunden/Woche
+  const vhpdHoursPerDay=vrUser?.vacHoursPerDay||Math.round(wh/(dpw||5))||8; // Stunden pro Urlaubstag aus Einstellung
+  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'vhpd';
   // Auto-Wert nach Profil (Werktage pro Woche auf dpw gedeckelt)
   const autoDays=countVacationDays(f,t,vrUser);
+  const vhpdHint=document.getElementById('vr-mode-vhpd-hint');
+  if(vhpdHint) vhpdHint.textContent=`(${vhpdHoursPerDay}h pro Urlaubstag)`;
   const autoHint=document.getElementById('vr-mode-auto-hint');
-  if(autoHint) autoHint.textContent=`(${wh}h / ${dpw} Tage → ${hoursPerDay}h pro Urlaubstag)`;
+  if(autoHint) autoHint.textContent=`(${wh}h / ${dpw} Tage → ${profileHoursPerDay}h pro Urlaubstag)`;
+  const hoursPerDay=mode==='auto'?profileHoursPerDay:vhpdHoursPerDay;
   let effective;
   if(type==='Urlaub'&&mode==='manual'){
     effective=parseFloat(document.getElementById('vr-manual-days')?.value)||1;
@@ -313,7 +322,7 @@ export async function saveVacRequest(){
   const isLeiter=cu.role==='leitung';
   const weekdays=countWorkDays(from,to,targetUser);
   const dpw=Math.max(1,Math.min(7,targetUser?.dpw||5));
-  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
+  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'vhpd';
   let wd;
   if(halfDay){ wd=0.5; }
   else if(type==='Urlaub'&&mode==='manual'){
@@ -324,6 +333,11 @@ export async function saveVacRequest(){
   } else {
     wd=weekdays;
   }
+  // Stunden pro Urlaubstag: aus Einstellung (vacHoursPerDay) oder nach Stunden/Woche (wh/dpw)
+  const whU=targetUser?.wh||40;
+  const profileHoursPerDay=Math.round((whU/dpw)*10)/10;
+  const vhpdHoursPerDay=targetUser?.vacHoursPerDay||Math.round(whU/(dpw||5))||8;
+  const hoursPerDay=type==='Urlaub'?(mode==='auto'?profileHoursPerDay:vhpdHoursPerDay):null;
   // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
   // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
   // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
@@ -339,6 +353,7 @@ export async function saveVacRequest(){
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
+    hoursMode:type==='Urlaub'?mode:null, hoursPerDay,
     status:autoApprove?'approved':'pending',
     submittedAt:old?old.submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,
@@ -346,7 +361,7 @@ export async function saveVacRequest(){
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay);
+  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay);
   closeModal(); renderAbwesenheiten();
   if(old){
     toast(autoApprove?'Abwesenheit aktualisiert. ✓':'Abwesenheit aktualisiert – wartet erneut auf Genehmigung der Leitung. ✓','ok');
@@ -377,7 +392,7 @@ export function approveVacRequest(id){
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
-  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false);
+  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay);
   renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 

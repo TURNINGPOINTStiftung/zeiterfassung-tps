@@ -919,14 +919,15 @@ function _isoWeekKey(d){
   return t.getUTCFullYear()+'-'+week;
 }
 
-export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false){
+export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null){
   const isFree=isFreelancer(user);
   const holFree=user.holidaysLikeSunday!==false;
   const dpw=Math.max(1,Math.min(7,user.dpw||5));
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
   // Freiberufler (alles), Sonstiges, Arbeitszeitausgleich → nur Bemerkung.
   const hoursType=!isFree&&(type==='Urlaub'||type==='AU/Krank');
-  const dailyMin=dailyMinutes(user)||480;
+  // Urlaub: Stunden/Tag aus der gewählten Berechnung (Einstellung oder Stunden/Woche), sonst Profil-Default.
+  const dailyMin=(type==='Urlaub'&&hoursPerDay)?Math.round(hoursPerDay*60):(dailyMinutes(user)||480);
   mutate(d=>{
     const perWeek={}; // KW → bereits eingetragene Tage (Deckel dpw)
     let cur=new Date(from+'T12:00:00');
