@@ -24,7 +24,7 @@ import { populateUeberYear, populateUeberMon, populateUeberTeam,
          printJahresübersicht, sendJahresbericht, recallYearReport,
          sendTimesheetReminders } from './views/uebersicht.js';
 
-import { showVacRequestForm, onVrTypeChange, calcVrDays, saveVacRequest, renderVADays, fillVADays,
+import { showVacRequestForm, onVrTypeChange, calcVrDays, onVrManualDaysInput, saveVacRequest, renderVADays, fillVADays,
          showRejectModal, approveVacRequest, deleteVacRequest, confirmRejectVac,
          updateAbBadge, setAbView, setAbSubView, changeAbNav, changeAbMonth,
          renderAbCalendar, renderAbCalendarWeek, renderAbCalendarYear,
@@ -134,6 +134,7 @@ window.sendTimesheetReminders = sendTimesheetReminders;
 window.showVacRequestForm = showVacRequestForm;
 window.onVrTypeChange     = onVrTypeChange;
 window.calcVrDays         = calcVrDays;
+window.onVrManualDaysInput = onVrManualDaysInput;
 window.saveVacRequest     = saveVacRequest;
 window.renderVADays       = renderVADays;
 window.fillVADays         = fillVADays;
