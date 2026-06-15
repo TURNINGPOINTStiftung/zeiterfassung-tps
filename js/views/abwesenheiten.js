@@ -58,38 +58,46 @@ export function countVacationDays(start,end,user){
   return Object.values(perWeek).reduce((s,n)=>s+Math.min(n,dpw),0);
 }
 
-export function showVacRequestForm(){
+export function showVacRequestForm(editId){
   const cu=window.cu;
   const today=new Date().toISOString().slice(0,10);
   const isMgr=cu.role==='leitung'||cu.role==='admin'||cu.role==='geschaeftsfuehrer';
   const d=getData();
+  const editing=editId?d.vacRequests?.[editId]:null;
+  window._vrEditId=editing?editId:null;
+  window._vrEditDayTimes=editing?.dayTimes?{...editing.dayTimes}:{};
   const teamEmps=isMgr
     ? d.users.filter(u=>u.id!==cu.id&&canSeeEmployee(cu,u))
     : [];
   const empSelector=isMgr&&teamEmps.length
     ? `<div class="form-group"><label>Für wen?</label>
         <select id="vr-emp" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="calcVrDays()">
-          <option value="">– Mich selbst –</option>
-          ${teamEmps.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join('')}
+          <option value=""${(!editing||editing.userId===cu.id)?' selected':''}>– Mich selbst –</option>
+          ${teamEmps.map(u=>`<option value="${u.id}"${editing&&editing.userId===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}
         </select></div>`
     : '';
+  const from=editing?editing.startDate:today;
+  const to=editing?editing.endDate:today;
+  const type=editing?editing.type:'Urlaub';
+  const note=editing?.note||'';
+  const isManualUrlaub=editing&&editing.type==='Urlaub'&&!editing.halfDay;
   openModal(`
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Abwesenheit eintragen</h3>
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">${editing?'Abwesenheit bearbeiten':'Abwesenheit eintragen'}</h3>
     ${empSelector}
     <div class="form-group"><label>Art der Abwesenheit</label>
       <select id="vr-type" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="onVrTypeChange()">
-        <option value="Urlaub">Urlaub</option>
-        <option value="AU/Krank">AU / Krank</option>
-        <option value="Arbeitszeitausgleich">Arbeitszeitausgleich</option>
-        <option value="Veranstaltung">Veranstaltung Krank / AU (mit Uhrzeiten)</option>
-        <option value="Sonstiges">Sonstiges</option>
+        <option value="Urlaub"${type==='Urlaub'?' selected':''}>Urlaub</option>
+        <option value="AU/Krank"${type==='AU/Krank'?' selected':''}>AU / Krank</option>
+        <option value="Arbeitszeitausgleich"${type==='Arbeitszeitausgleich'?' selected':''}>Arbeitszeitausgleich</option>
+        <option value="Veranstaltung"${type==='Veranstaltung'?' selected':''}>Veranstaltung Krank / AU (mit Uhrzeiten)</option>
+        <option value="Sonstiges"${type==='Sonstiges'?' selected':''}>Sonstiges</option>
       </select></div>
     <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
       🤒 Krankmeldung – wird sofort als aktiv eingetragen (kein Genehmigungsschritt).
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${today}" oninput="calcVrDays()"></div>
-      <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${today}" oninput="calcVrDays()"></div>
+      <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${from}" oninput="calcVrDays()"></div>
+      <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${to}" oninput="calcVrDays()"></div>
     </div>
     <div id="vr-va-wrap" style="display:none">
       <div style="background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
@@ -107,7 +115,7 @@ export function showVacRequestForm(){
     </div>
     <div id="vr-halfday-wrap" style="display:none;margin:-4px 0 10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="vr-halfday" onchange="calcVrDays()" style="width:16px;height:16px">
+        <input type="checkbox" id="vr-halfday" ${editing?.halfDay?'checked':''} onchange="calcVrDays()" style="width:16px;height:16px">
         <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
       </label>
     </div>
@@ -115,13 +123,13 @@ export function showVacRequestForm(){
       <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Urlaubstage berechnen:</div>
       <div style="display:flex;flex-direction:column;gap:6px">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" checked onchange="calcVrDays()">
+          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" ${isManualUrlaub?'':'checked'} onchange="calcVrDays()">
           Automatisch nach Profil <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" onchange="calcVrDays()">
+          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" ${isManualUrlaub?'checked':''} onchange="calcVrDays()">
           Anzahl selbst eingeben:
-          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="1"
+          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="${isManualUrlaub?editing.workDays:1}"
             style="width:70px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
             oninput="calcVrDays()">
           <span style="font-size:11px;color:var(--muted)">(max 5/Woche)</span>
@@ -133,12 +141,12 @@ export function showVacRequestForm(){
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
     </div>
     <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:11px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
-      <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…"></textarea></div>
+      <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…">${esc(note)}</textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-      <button class="btn btn-ok" id="vr-submit-btn" onclick="saveVacRequest()">📨 Antrag einreichen</button>
+      <button class="btn btn-ok" id="vr-submit-btn" onclick="saveVacRequest()">${editing?'💾 Änderungen speichern':'📨 Antrag einreichen'}</button>
     </div>
-    <script>calcVrDays()<\/script>`);
+    <script>onVrTypeChange()<\/script>`);
 }
 
 export function onVrTypeChange(){
@@ -154,7 +162,7 @@ export function onVrTypeChange(){
   const vaWrap=document.getElementById('vr-va-wrap');
   if(vaWrap) vaWrap.style.display=isVA?'block':'none';
   const info=document.getElementById('vr-days-info'); if(info) info.style.display=isVA?'none':'';
-  const btn=document.getElementById('vr-submit-btn'); if(btn) btn.textContent=isVA?'📅 Veranstaltung eintragen':'📨 Antrag einreichen';
+  const btn=document.getElementById('vr-submit-btn'); if(btn) btn.textContent=window._vrEditId?'💾 Änderungen speichern':(isVA?'📅 Veranstaltung eintragen':'📨 Antrag einreichen');
   if(isVA) renderVADays();
   calcVrDays();
 }
@@ -166,13 +174,14 @@ export function renderVADays(){
   if(!f||!t||f>t){ wrap.innerHTML='<div style="font-size:12px;color:var(--muted)">Bitte Zeitraum wählen.</div>'; return; }
   const prev={};
   wrap.querySelectorAll('.va-day').forEach(r=>{ prev[r.dataset.ds]={von:r.querySelector('.va-von')?.value||'',bis:r.querySelector('.va-bis')?.value||''}; });
+  const editTimes=window._vrEditDayTimes||{};
   const DAYS=['So','Mo','Di','Mi','Do','Fr','Sa'];
   let html='', cur=new Date(f+'T12:00:00'); const end=new Date(t+'T12:00:00'); let n=0;
   while(cur<=end&&n<92){
     const y=cur.getFullYear(),m=cur.getMonth()+1,dd=cur.getDate();
     const ds=`${y}-${String(m).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
     const we=cur.getDay()===0||cur.getDay()===6;
-    const p=prev[ds]||{von:'',bis:''};
+    const p=prev[ds]||editTimes[ds]||{von:'',bis:''};
     html+=`<div class="va-day" data-ds="${ds}" style="display:flex;align-items:center;gap:8px">
       <span style="width:120px;font-size:12px;${we?'color:var(--warn)':''}">${DAYS[cur.getDay()]}, ${String(dd).padStart(2,'0')}.${String(m).padStart(2,'0')}.</span>
       <input type="time" class="va-von" value="${p.von}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
@@ -239,6 +248,8 @@ export function calcVrDays(){
 
 export async function saveVacRequest(){
   const cu=window.cu;
+  const editId=window._vrEditId||null;
+  window._vrEditId=null;
   const type=document.getElementById('vr-type').value;
   const from=document.getElementById('vr-from').value;
   const to=document.getElementById('vr-to').value;
@@ -248,7 +259,8 @@ export async function saveVacRequest(){
   if(from>to){ toast('Startdatum muss vor dem Enddatum liegen.','err'); return; }
   const empSelVal=document.getElementById('vr-emp')?.value||'';
   const d=getData();
-  const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:cu;
+  const old=editId?d.vacRequests?.[editId]:null;
+  const targetUser=empSelVal?d.users.find(u=>u.id===empSelVal)||cu:(old?getUser(old.userId)||cu:cu);
   const forOther=targetUser.id!==cu.id;
   // Abwesenheiten in bereits eingereichte/genehmigte Monate sind gesperrt (außer Admin) –
   // sonst landet der Eintrag nicht in der Zeiterfassung bzw. würde abgegebene Daten
@@ -283,18 +295,22 @@ export async function saveVacRequest(){
     const req={ id:key, userId:targetUser.id, userName:targetUser.name,
       team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
       type:'Veranstaltung', startDate:from, endDate:to, workDays:dsKeys.length, halfDay:false, note,
-      dayTimes, status:'approved', submittedAt:now, reviewedBy:cu.id, reviewedAt:now,
+      dayTimes, status:'approved', submittedAt:old?old.submittedAt:now, reviewedBy:cu.id, reviewedAt:now,
       reviewNote:forOther?`Eingetragen durch ${cu.name}`:'' };
+    if(old){
+      const oldUser=getUser(old.userId)||targetUser;
+      window.clearAbsenceFromTimesheets?.(old.userId,oldUser,'Veranstaltung',old.startDate,old.endDate);
+      if(editId!==key) await mutate(d=>{ if(d.vacRequests?.[editId]) delete d.vacRequests[editId]; });
+    }
     await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
     const _vr=window.syncVeranstaltungToTimesheets?.(targetUser.id,dayTimes,note)||{};
     closeModal(); renderAbwesenheiten();
     if(_vr.skipped>0) toast(`Veranstaltung gespeichert – aber ${_vr.skipped} Tag(e) liegen in bereits eingereichten/genehmigten Monaten und wurden NICHT in die Zeiterfassung geschrieben.`,'err');
-    else toast(`Veranstaltung für ${targetUser.name} eingetragen (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
+    else toast(`Veranstaltung für ${targetUser.name} ${old?'aktualisiert':'eingetragen'} (${dsKeys.length} Tag${dsKeys.length!==1?'e':''}). ✓`,'ok');
     return;
   }
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
-  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich';
   const weekdays=countWorkDays(from,to,targetUser);
   const dpw=Math.max(1,Math.min(7,targetUser?.dpw||5));
   const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'auto';
@@ -308,14 +324,23 @@ export async function saveVacRequest(){
   } else {
     wd=weekdays;
   }
+  // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
+  // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
+  // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
+  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich'||wd<5;
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
+  if(old){
+    const oldUser=getUser(old.userId)||targetUser;
+    if(old.status==='approved') window.clearAbsenceFromTimesheets?.(old.userId,oldUser,old.type,old.startDate,old.endDate);
+    if(editId!==key) await mutate(d=>{ if(d.vacRequests?.[editId]) delete d.vacRequests[editId]; });
+  }
   const req={
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
     status:autoApprove?'approved':'pending',
-    submittedAt:now,
+    submittedAt:old?old.submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,
     reviewedAt:autoApprove?now:null,
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
@@ -323,7 +348,9 @@ export async function saveVacRequest(){
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
   if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay);
   closeModal(); renderAbwesenheiten();
-  if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
+  if(old){
+    toast(autoApprove?'Abwesenheit aktualisiert. ✓':'Abwesenheit aktualisiert – wartet erneut auf Genehmigung der Leitung. ✓','ok');
+  } else if(autoApprove) toast(`${isSick?'Krankmeldung':'Abwesenheit'} für ${targetUser.name} eingetragen. ✓`,'ok');
   else toast('Antrag eingereicht – wartet auf Genehmigung. ✓','ok');
 }
 
@@ -572,9 +599,12 @@ export function renderAbwesenheiten(){
     // Offen: Antragsteller:in oder Genehmiger. Genehmigt: NUR Antragsteller:in oder Admin.
     const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role)))
                   ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
+    // Bearbeiten: Antragsteller:in selbst oder Admin – auch nach Genehmigung.
+    const canEdit=r.userId===cu.id||cu.role==='admin';
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
-      ?`<div style="margin-top:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button></div>`
+      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button>`:''}</div>`
+      :canEdit?`<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button></div>`
       :'';
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
                 r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
