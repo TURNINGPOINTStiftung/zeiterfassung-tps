@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey, hasPendingSync, setPendingSync } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -17,6 +17,16 @@ export async function initFirebase(){
   window._fbRef=_fbRef;
   window._offlineMode=false;
   window._pendingSync=false;
+  // Wird von saveRaw() nach jedem erfolgreichen Firebase-Write aufgerufen –
+  // falls _offlineMode irrtümlich hängen geblieben war, hier zurücksetzen
+  // und den Realtime-Listener (nach)aktivieren.
+  window._fbOnlineRecover=function(){
+    if(window._offlineMode){
+      window._offlineMode=false;
+      _setupRealtimeSync();
+      window.toast?.('📶 Verbindung wiederhergestellt – Änderungen synchronisiert ✓','ok');
+    }
+  };
 
   let fbData=null;
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
@@ -49,6 +59,19 @@ export async function initFirebase(){
   } else if(fbOk){ data=fbData; }
   else if(lsOk){ data=lsData; }
 
+  // Lokale Änderungen, die wegen eines hängenden Offline-Zustands nie nach
+  // Firebase geschrieben wurden, additiv übernehmen (z.B. eine Stempelung
+  // oder ein Abwesenheitsantrag, die nur lokal in localStorage standen).
+  let pendingMerge=false;
+  if(hasPendingSync()&&lsOk&&data){
+    for(const coll of ['stamps','vacRequests','entries','teamReports','yearReports']){
+      if(!data[coll]) data[coll]={};
+      for(const [k,v] of Object.entries(lsData[coll]||{})){
+        if(data[coll][k]===undefined){ data[coll][k]=v; pendingMerge=true; }
+      }
+    }
+  }
+
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     const needsCleanup=
       data.users.some(u=>u.id==='admin'&&u.role!=='admin')||
@@ -66,7 +89,7 @@ export async function initFirebase(){
     const hadFreeRb=!!(data._fixes&&data._fixes.freelancerPauseRollbackV1);
     const hadAbsV3=!!(data._fixes&&data._fixes.absSpecV3);
     const hadVANoPause=!!(data._fixes&&data._fixes.veranstaltungNoPauseV1);
-    let needsSave=needsCleanup;
+    let needsSave=needsCleanup||pendingMerge;
     let migrated=_migrate(data);
     // Wenn eine Pausen-Migration gerade gelaufen ist → unbedingt nach Firebase speichern
     if(!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1) needsSave=true;
@@ -79,7 +102,12 @@ export async function initFirebase(){
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
-    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
+    if(needsSave){
+      try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){}
+      // Auch im (evtl. fälschlich gesetzten) Offline-Modus versuchen – das
+      // Firebase-SDK queued den Write und schreibt ihn bei Verbindung nach.
+      await _fbRef.set(migrated).then(()=>{ if(pendingMerge) setPendingSync(false); }).catch(()=>{});
+    }
   } else if(!window._offlineMode){
     const d=freshData();
     for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
@@ -142,9 +170,9 @@ export async function _pollFirebase(){
     // Offline-Modus blieb hängen, obwohl das Gerät online ist – das 'online'-Event
     // feuert dann nie, also hier aktiv einen Reconnect-Versuch unternehmen.
     try{
-      if(window._pendingSync){
+      if(hasPendingSync()){
         await window._fbRef.set(getData());
-        window._pendingSync=false;
+        setPendingSync(false);
         window._offlineMode=false;
         window.toast?.('📶 Verbindung wiederhergestellt – Änderungen synchronisiert ✓','ok');
         _setupRealtimeSync();
@@ -168,9 +196,10 @@ export function initFirebaseEvents(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
-    if(window._pendingSync&&getData()){
-      window._fbRef.set(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
+    if(hasPendingSync()&&getData()){
+      window._fbRef.set(getData()).then(()=>{ setPendingSync(false); window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
     }
+    _setupRealtimeSync();
   });
   window.addEventListener('offline',()=>{
     window._offlineMode=true;
