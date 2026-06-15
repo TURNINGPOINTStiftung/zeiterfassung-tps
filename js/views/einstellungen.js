@@ -421,7 +421,7 @@ function userForm(u={}){
         <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" value="${u.al||24}"></div>
+        <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${u.al||24}"></div>
         <div class="form-group"><label>Stunden / Urlaubstag</label>
           <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
         </div>
@@ -489,7 +489,7 @@ function collectUserForm(){
     bundesland:document.getElementById('uf-bl').value,
     wh,
     dpw,
-    al:isFree?0:parseInt(document.getElementById('uf-al').value)||24,
+    al:isFree?0:parseFloat(document.getElementById('uf-al').value)||24,
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(wh/dpw)||8),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
