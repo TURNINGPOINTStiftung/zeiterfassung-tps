@@ -130,12 +130,33 @@ function _applyFirebaseSnap(val){
 }
 
 function _setupRealtimeSync(){
-  if(window._offlineMode) return;
+  if(window._offlineMode||window._fbRealtimeAttached) return;
+  window._fbRealtimeAttached=true;
   window._fbRef.on('value', snap=>{ _applyFirebaseSnap(snap.val()); });
 }
 
 export async function _pollFirebase(){
-  if(window._offlineMode||!getData()) return;
+  if(!getData()) return;
+  if(window._offlineMode){
+    // Verbindung war evtl. nur beim App-Start kurz zu langsam (Timeout) und der
+    // Offline-Modus blieb hängen, obwohl das Gerät online ist – das 'online'-Event
+    // feuert dann nie, also hier aktiv einen Reconnect-Versuch unternehmen.
+    try{
+      if(window._pendingSync){
+        await window._fbRef.set(getData());
+        window._pendingSync=false;
+        window._offlineMode=false;
+        window.toast?.('📶 Verbindung wiederhergestellt – Änderungen synchronisiert ✓','ok');
+        _setupRealtimeSync();
+      }else{
+        const snap=await window._fbRef.once('value');
+        window._offlineMode=false;
+        _applyFirebaseSnap(snap.val());
+        _setupRealtimeSync();
+      }
+    }catch(e){}
+    return;
+  }
   try{
     const snap=await window._fbRef.once('value');
     _applyFirebaseSnap(snap.val());
