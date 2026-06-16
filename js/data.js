@@ -197,34 +197,14 @@ export function getData(){ return _dataCache||freshData(); }
 export function setDataCache(d){ _dataCache=d; }
 export function getDataCache(){ return _dataCache; }
 
-// Persistierte "Sync ausstehend"-Markierung – überlebt Reloads. Nötig, falls
-// _offlineMode beim App-Start fälschlich hängen bleibt (z.B. nach einem
-// einmaligen Timeout, obwohl das Gerät online ist) und das 'online'-Event
-// danach nie mehr feuert.
-const _PENDING_KEY = STORAGE_KEY+'_pending';
-export function hasPendingSync(){
-  try{ return localStorage.getItem(_PENDING_KEY)==='1'; }catch(e){ return false; }
-}
-export function setPendingSync(v){
-  window._pendingSync=v;
-  try{ if(v) localStorage.setItem(_PENDING_KEY,'1'); else localStorage.removeItem(_PENDING_KEY); }catch(e){}
-}
-
 export function saveRaw(d){
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
-  setPendingSync(true);
-  if(!window._fbRef) return Promise.resolve();
-  // Immer versuchen zu schreiben, auch wenn _offlineMode (noch) gesetzt ist:
-  // das Firebase-SDK queued den Write offline und schreibt ihn automatisch,
-  // sobald die Verbindung wieder da ist – das Promise löst dann erst auf.
-  return window._fbRef.set(d).then(()=>{
-    setPendingSync(false);
-    window._fbOnlineRecover?.();
-  }).catch(e=>{
+  if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
+  return window._fbRef?.set(d).catch(e=>{
     console.warn('Firebase sync error:',e);
-    setPendingSync(true);
-  });
+    window._pendingSync=true;
+  })||Promise.resolve();
 }
 export function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
 

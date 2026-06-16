@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey, hasPendingSync, setPendingSync } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -17,16 +17,6 @@ export async function initFirebase(){
   window._fbRef=_fbRef;
   window._offlineMode=false;
   window._pendingSync=false;
-  // Wird von saveRaw() nach jedem erfolgreichen Firebase-Write aufgerufen –
-  // falls _offlineMode irrtümlich hängen geblieben war, hier zurücksetzen
-  // und den Realtime-Listener (nach)aktivieren.
-  window._fbOnlineRecover=function(){
-    if(window._offlineMode){
-      window._offlineMode=false;
-      _setupRealtimeSync();
-      window.toast?.('📶 Verbindung wiederhergestellt – Änderungen synchronisiert ✓','ok');
-    }
-  };
 
   let fbData=null;
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
@@ -44,36 +34,16 @@ export async function initFirebase(){
 
   const fbOk=fbData&&Array.isArray(fbData.users)&&fbData.users.length>0;
   const lsOk=lsData&&Array.isArray(lsData.users)&&lsData.users.length>0;
-  const _pendingAtStart=hasPendingSync();
   let data=null;
-  let pendingMerge=false;
-
   if(fbOk&&lsOk){
-    if(_pendingAtStart){
-      // Lokale Daten sind neuer (ausstehender Schreibvorgang war beim letzten
-      // App-Lauf nicht bestätigt worden) → localStorage als Basis verwenden.
-      // Einträge, die Firebase hat und wir nicht (von anderen Geräten), additiv ergänzen.
-      const _colls=['stamps','vacRequests','entries','teamReports','yearReports'];
-      data={...lsData};
-      for(const coll of _colls){
-        data[coll]={...(lsData[coll]||{})};
-        for(const [k,v] of Object.entries(fbData[coll]||{})){
-          if(data[coll][k]===undefined){ data[coll][k]=v; }
-        }
-      }
-      pendingMerge=true;
-    } else {
-      // Firebase ist autoritativ. Sicherheitshalber fehlende Einträge aus
-      // localStorage ergänzen (z.B. wenn Firebase weniger Einträge als lokal).
-      const fbCnt=Object.keys(fbData.entries||{}).length;
-      const lsCnt=Object.keys(lsData.entries||{}).length;
-      data=fbData;
-      if(lsCnt>fbCnt){
-        if(!data.entries) data.entries={};
-        for(const [k,v] of Object.entries(lsData.entries||{})){
-          if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
-            data.entries[k]=v;
-        }
+    const fbCnt=Object.keys(fbData.entries||{}).length;
+    const lsCnt=Object.keys(lsData.entries||{}).length;
+    data=fbData;
+    if(lsCnt>fbCnt){
+      if(!data.entries) data.entries={};
+      for(const [k,v] of Object.entries(lsData.entries||{})){
+        if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
+          data.entries[k]=v;
       }
     }
   } else if(fbOk){ data=fbData; }
@@ -96,7 +66,7 @@ export async function initFirebase(){
     const hadFreeRb=!!(data._fixes&&data._fixes.freelancerPauseRollbackV1);
     const hadAbsV3=!!(data._fixes&&data._fixes.absSpecV3);
     const hadVANoPause=!!(data._fixes&&data._fixes.veranstaltungNoPauseV1);
-    let needsSave=needsCleanup||pendingMerge;
+    let needsSave=needsCleanup;
     let migrated=_migrate(data);
     // Wenn eine Pausen-Migration gerade gelaufen ist → unbedingt nach Firebase speichern
     if(!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1) needsSave=true;
@@ -109,12 +79,7 @@ export async function initFirebase(){
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
-    if(needsSave){
-      try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){}
-      // Auch im (evtl. fälschlich gesetzten) Offline-Modus versuchen – das
-      // Firebase-SDK queued den Write und schreibt ihn bei Verbindung nach.
-      await _fbRef.set(migrated).then(()=>{ if(pendingMerge) setPendingSync(false); }).catch(()=>{});
-    }
+    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
     for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
@@ -129,11 +94,7 @@ export async function initFirebase(){
 }
 
 function _applyFirebaseSnap(val){
-  if(!val) return;
-  // Ausstehende lokale Änderungen haben Vorrang: Firebase-Snapshot ignorieren,
-  // bis der eigene Schreibvorgang bestätigt ist. Sonst würden alte Firebase-Daten
-  // (vor unserem Write) die lokalen Änderungen überschreiben.
-  if(hasPendingSync()) return;
+  if(!val||!getData()) return;
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
@@ -169,36 +130,12 @@ function _applyFirebaseSnap(val){
 }
 
 function _setupRealtimeSync(){
-  if(window._offlineMode||window._fbRealtimeAttached) return;
-  window._fbRealtimeAttached=true;
+  if(window._offlineMode) return;
   window._fbRef.on('value', snap=>{ _applyFirebaseSnap(snap.val()); });
 }
 
 export async function _pollFirebase(){
-  if(!getData()) return;
-  if(window._offlineMode){
-    // Verbindung war evtl. nur beim App-Start kurz zu langsam (Timeout) und der
-    // Offline-Modus blieb hängen, obwohl das Gerät online ist – das 'online'-Event
-    // feuert dann nie, also hier aktiv einen Reconnect-Versuch unternehmen.
-    try{
-      if(hasPendingSync()){
-        await window._fbRef.set(getData());
-        setPendingSync(false);
-        window._offlineMode=false;
-        window.toast?.('📶 Verbindung wiederhergestellt – Änderungen synchronisiert ✓','ok');
-        _setupRealtimeSync();
-      }else{
-        const snap=await window._fbRef.once('value');
-        window._offlineMode=false;
-        _applyFirebaseSnap(snap.val());
-        _setupRealtimeSync();
-      }
-    }catch(e){}
-    return;
-  }
-  // Nur anwenden wenn keine lokalen Änderungen ausstehen – sonst würde der
-  // Poll-Snapshot unsere noch nicht bestätigten Schreibvorgänge überschreiben.
-  if(hasPendingSync()) return;
+  if(window._offlineMode||!getData()) return;
   try{
     const snap=await window._fbRef.once('value');
     _applyFirebaseSnap(snap.val());
@@ -210,10 +147,9 @@ export function initFirebaseEvents(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
-    if(hasPendingSync()&&getData()){
-      window._fbRef.set(getData()).then(()=>{ setPendingSync(false); window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
+    if(window._pendingSync&&getData()){
+      window._fbRef.set(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
     }
-    _setupRealtimeSync();
   });
   window.addEventListener('offline',()=>{
     window._offlineMode=true;
