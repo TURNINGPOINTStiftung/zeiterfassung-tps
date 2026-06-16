@@ -44,33 +44,40 @@ export async function initFirebase(){
 
   const fbOk=fbData&&Array.isArray(fbData.users)&&fbData.users.length>0;
   const lsOk=lsData&&Array.isArray(lsData.users)&&lsData.users.length>0;
+  const _pendingAtStart=hasPendingSync();
   let data=null;
+  let pendingMerge=false;
+
   if(fbOk&&lsOk){
-    const fbCnt=Object.keys(fbData.entries||{}).length;
-    const lsCnt=Object.keys(lsData.entries||{}).length;
-    data=fbData;
-    if(lsCnt>fbCnt){
-      if(!data.entries) data.entries={};
-      for(const [k,v] of Object.entries(lsData.entries||{})){
-        if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
-          data.entries[k]=v;
+    if(_pendingAtStart){
+      // Lokale Daten sind neuer (ausstehender Schreibvorgang war beim letzten
+      // App-Lauf nicht bestätigt worden) → localStorage als Basis verwenden.
+      // Einträge, die Firebase hat und wir nicht (von anderen Geräten), additiv ergänzen.
+      const _colls=['stamps','vacRequests','entries','teamReports','yearReports'];
+      data={...lsData};
+      for(const coll of _colls){
+        data[coll]={...(lsData[coll]||{})};
+        for(const [k,v] of Object.entries(fbData[coll]||{})){
+          if(data[coll][k]===undefined){ data[coll][k]=v; }
+        }
+      }
+      pendingMerge=true;
+    } else {
+      // Firebase ist autoritativ. Sicherheitshalber fehlende Einträge aus
+      // localStorage ergänzen (z.B. wenn Firebase weniger Einträge als lokal).
+      const fbCnt=Object.keys(fbData.entries||{}).length;
+      const lsCnt=Object.keys(lsData.entries||{}).length;
+      data=fbData;
+      if(lsCnt>fbCnt){
+        if(!data.entries) data.entries={};
+        for(const [k,v] of Object.entries(lsData.entries||{})){
+          if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
+            data.entries[k]=v;
+        }
       }
     }
   } else if(fbOk){ data=fbData; }
   else if(lsOk){ data=lsData; }
-
-  // Lokale Änderungen, die wegen eines hängenden Offline-Zustands nie nach
-  // Firebase geschrieben wurden, additiv übernehmen (z.B. eine Stempelung
-  // oder ein Abwesenheitsantrag, die nur lokal in localStorage standen).
-  let pendingMerge=false;
-  if(hasPendingSync()&&lsOk&&data){
-    for(const coll of ['stamps','vacRequests','entries','teamReports','yearReports']){
-      if(!data[coll]) data[coll]={};
-      for(const [k,v] of Object.entries(lsData[coll]||{})){
-        if(data[coll][k]===undefined){ data[coll][k]=v; pendingMerge=true; }
-      }
-    }
-  }
 
   if(data&&Array.isArray(data.users)&&data.users.length>0){
     const needsCleanup=
@@ -122,7 +129,11 @@ export async function initFirebase(){
 }
 
 function _applyFirebaseSnap(val){
-  if(!val||!getData()) return;
+  if(!val) return;
+  // Ausstehende lokale Änderungen haben Vorrang: Firebase-Snapshot ignorieren,
+  // bis der eigene Schreibvorgang bestätigt ist. Sonst würden alte Firebase-Daten
+  // (vor unserem Write) die lokalen Änderungen überschreiben.
+  if(hasPendingSync()) return;
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
@@ -185,6 +196,9 @@ export async function _pollFirebase(){
     }catch(e){}
     return;
   }
+  // Nur anwenden wenn keine lokalen Änderungen ausstehen – sonst würde der
+  // Poll-Snapshot unsere noch nicht bestätigten Schreibvorgänge überschreiben.
+  if(hasPendingSync()) return;
   try{
     const snap=await window._fbRef.once('value');
     _applyFirebaseSnap(snap.val());
