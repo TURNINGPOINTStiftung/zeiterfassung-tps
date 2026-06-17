@@ -27,12 +27,24 @@ const val   = id => { const el=document.getElementById(id); return el ? el.value
 const fmtDate = ts => { try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '';} };
 const fmtDateTime = ts => { try{ return new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
 
+// Namenskürzel (Initialen) – für Datums-/Namensstempel an Notizen & Einträgen
+function initials(name){
+  const n=String(name||'').trim(); if(!n) return '';
+  const parts=n.split(/\s+/);
+  if(parts.length===1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();
+}
+function curName(){ return (window.cu&&window.cu.name)||''; }
+function curKuerzel(){ return initials(curName()); }
+
 function curEntity(){ return window._crmSelId ? getEntity(window._crmTree, window._crmSelId) : null; }
 
-// Eintrag laden → ändern → speichern
+// Eintrag laden → ändern → speichern (mit Änderungs-Stempel)
 function mutateEntity(fn){
   const ent = curEntity(); if(!ent) return;
   try{ fn(ent); }catch(e){ console.error('CRM mutate:',e); return; }
+  ent.updatedByKuerzel = curKuerzel();
+  ent.updatedByName    = curName();
   saveEntity(window._crmTree, ent);
 }
 // Bestimmtes ToDo in einem bestimmten Eintrag ändern (für die Team-Ansicht)
@@ -40,6 +52,8 @@ function updateTodoIn(tree, eid, tid, fn){
   const ent = getEntity(tree, eid); if(!ent) return;
   const t = (ent.todos||[]).find(x=>x.id===tid); if(!t) return;
   try{ fn(t); }catch(e){ console.error('CRM updateTodoIn:',e); return; }
+  ent.updatedByKuerzel = curKuerzel();
+  ent.updatedByName    = curName();
   saveEntity(tree, ent);
 }
 
@@ -277,7 +291,7 @@ function paintDetail(){
 
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
-      <div class="lh"><span>${esc(l.autor||'')}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmDeleteNote('${l.id}')">✕</button></span></div>
+      <div class="lh"><span>${esc(l.autor||'')}${l.kuerzel?` <strong>[${esc(l.kuerzel)}]</strong>`:''}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmDeleteNote('${l.id}')">✕</button></span></div>
       <div class="lt">${nl2br(l.text||'')}</div>
       ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${nl2br(l.summary)}</div>`:''}
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
@@ -289,6 +303,9 @@ function paintDetail(){
       <button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>
       <button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>
     </div>
+    ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${
+        e.createdAt?`angelegt ${e.createdByKuerzel?'von '+esc(e.createdByKuerzel)+' ':''}am ${esc(fmtDate(e.createdAt))}`:''
+      }${e.updatedByKuerzel?` · zuletzt geändert von ${esc(e.updatedByKuerzel)}${e.updatedAt?' am '+esc(fmtDateTime(e.updatedAt)):''}`:''}</div>`:''}
 
     ${fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:''}
 
@@ -375,7 +392,8 @@ function crmSaveStamm(isNew){
   if(!stamm.name){ toast('Bitte einen Namen eingeben.','err'); return; }
   if(isNew){
     const id=newId();
-    const ent={ id, tree:window._crmTree, createdAt:Date.now(), stamm,
+    const ent={ id, tree:window._crmTree, createdAt:Date.now(),
+      createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
       kontakte:[], termine:[], angebote:[], statusQuo:'', todos:[], log:[] };
     saveEntity(window._crmTree, ent);
     window._crmSelId=id;
@@ -726,9 +744,10 @@ function crmSaveNote(){
   _stopDictation();
   const text=val('crm-note-text');
   if(!text){ toast('Bitte zuerst etwas diktieren oder tippen.','err'); return; }
+  const autor=val('crm-note-autor');
   mutateEntity(e=>{
     if(!Array.isArray(e.log)) e.log=[];
-    e.log.push({ id:newId(), ts:Date.now(), autor:val('crm-note-autor'), text, summary:val('crm-note-summary') });
+    e.log.push({ id:newId(), ts:Date.now(), autor, kuerzel:(initials(autor)||curKuerzel()), text, summary:val('crm-note-summary') });
   });
   crmCloseModal(); paintDetail(); toast('Notiz gespeichert ✓','ok');
 }
