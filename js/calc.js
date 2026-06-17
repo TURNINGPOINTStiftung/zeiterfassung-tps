@@ -36,9 +36,10 @@ export function dayMinutes(dd,user){
   const isAbs=_isAbsDay(dd);
   const net=isAbs?gross:Math.max(0,gross-autoPauseMin(dd,user));
   if(net<=0) return 0;
-  // Identisch zur Zeiterfassungs-Ansicht: Arbeitstage auf 15-Min-Raster, max 10h/Tag.
-  // (Sonst weicht der Monats-/Übertragswert von der angezeigten Monatssumme ab.)
-  return Math.min(isAbs?net:Math.round(net/15)*15,600);
+  // Identisch zur Zeiterfassungs-Ansicht: Arbeitstage auf 15-Min-Raster.
+  // Kein 10h-Cap mehr – die echte Arbeitszeit zählt voll (Tage >10h werden in der
+  // Ansicht rot markiert, aber nicht mehr gekappt/übertragen).
+  return isAbs?net:Math.round(net/15)*15;
 }
 export function monthIST(entry,user){
   if(!entry||!entry.days) return 0;

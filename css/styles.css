@@ -52,8 +52,14 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 #login-user-list{max-height:220px;overflow-y:auto;padding-right:2px}
 /* ── Abwesenheiten-Kalender: 140% Zoom NUR auf Desktop (auf Mobil würde er überlaufen) ── */
 @media(min-width:1025px){ .ab-cal-wrap{zoom:1.4} }
-/* ── Werkstudent: Wochen über 20h rot markieren ── */
+/* ── Werkstudent: Wochen über 20h rot markieren (nur Mo–Fr im Semester) ── */
+.wstd-over td{background:#fff4f4}
 .wstd-over .total-c{color:var(--danger)!important;font-weight:700}
+/* ── Tag über 10h reine Arbeitszeit → Warnung (ArbZG; kein automatischer Übertrag mehr) ── */
+.over10h td{background:#fff4f4}
+.over10h .total-c{color:var(--danger)!important;font-weight:700}
+/* Kleiner Vermerk hinter der Tagessumme */
+.zt-warn{font-size:8px;display:block;color:var(--danger);font-weight:600;line-height:1.15;margin-top:1px}
 /* ── Login-Autocomplete-Dropdown ── */
 #login-user-dropdown{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;background:#fff;border:1.5px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:200;max-height:220px;overflow-y:auto}
 .login-ac-item{padding:10px 14px;font-size:14px;cursor:pointer;transition:background .12s}
