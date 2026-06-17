@@ -1,6 +1,13 @@
-import { getUser, mutate } from './data.js';
+import { getUser, getData, mutate } from './data.js';
 import { verifyPw, makePwRecord } from './auth.js';
 import { esc, openModal, closeModal, toast } from './utils.js';
+
+// Ist der/die aktuelle Nutzer:in als „Werkstudent" benannt?
+function _cuIsWerkstudent(cu){
+  const crs=getData().customRoles||[];
+  const ids=Array.isArray(cu.customRoles)?cu.customRoles:(cu.customRole?[cu.customRole]:[]);
+  return ids.some(cid=>{ const cr=crs.find(r=>r.id===cid); return cr&&(cr.label||'').toLowerCase().includes('werkstudent'); });
+}
 
 export function openProfileModal(){
   const cu=window.cu;
@@ -10,6 +17,27 @@ export function openProfileModal(){
     ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
     ['SH','Schleswig-Holstein'],['TH','Thüringen']];
   const blOpts=BL.map(([v,l])=>`<option value="${v}"${(cu.bundesland||'')===v?' selected':''}>${l}</option>`).join('');
+  // Werkstudent: eigene Vorlesungszeiten pflegen – bis zu einem Jahr im Voraus.
+  const _maxD=new Date(); _maxD.setFullYear(_maxD.getFullYear()+1);
+  const maxDate=_maxD.toISOString().slice(0,10);
+  let wstSection='';
+  if(_cuIsWerkstudent(cu)){
+    const lp=Array.isArray(cu.lecturePeriods)?cu.lecturePeriods:[];
+    let rows='';
+    for(let i=0;i<4;i++){
+      const p=lp[i]||{von:'',bis:''};
+      rows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--muted);width:78px">Semester ${i+1}</span>
+        <input type="date" id="prof-lp-von-${i}" value="${p.von||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">bis</span>
+        <input type="date" id="prof-lp-bis-${i}" value="${p.bis||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+      </div>`;
+    }
+    wstSection=`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+      <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🎓 Meine Vorlesungszeiten</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze (Mo–Fr, 8–20 Uhr). Du kannst deine Semester bis zu einem Jahr im Voraus eintragen.</div>
+      ${rows}`;
+  }
   openModal(`<h3>👤 Mein Profil</h3>
     <div class="form-group"><label>Name</label>
       <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
@@ -19,6 +47,7 @@ export function openProfileModal(){
       <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
     <div class="form-group"><label>Bundesland</label>
       <select id="prof-bl">${blOpts}</select></div>
+    ${wstSection}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px">🔒 Passwort ändern</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nur ausfüllen, wenn Sie Ihr Passwort ändern möchten.</div>
@@ -57,9 +86,19 @@ export async function saveProfile(){
     if(pwNew.length<8){ toast('Neues Passwort zu kurz (min. 8 Zeichen).','err'); return; }
     newPwHash=await makePwRecord(pwNew);
   }
+  // Werkstudent: eigene Vorlesungszeiten einsammeln (nur wenn die Felder existieren)
+  let lecturePeriods=null;
+  if(document.getElementById('prof-lp-von-0')){
+    lecturePeriods=[];
+    for(let i=0;i<4;i++){
+      const von=document.getElementById('prof-lp-von-'+i)?.value||'';
+      const bis=document.getElementById('prof-lp-bis-'+i)?.value||'';
+      if(von&&bis&&von<=bis) lecturePeriods.push({von,bis});
+    }
+  }
   await mutate(d=>{
     const u=d.users.find(x=>x.id===cu.id);
-    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; }
+    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; if(lecturePeriods) u.lecturePeriods=lecturePeriods; }
   });
   window.cu=getUser(cu.id);
   closeModal();
