@@ -709,6 +709,9 @@ export function td_b1bis_change(ds,val){
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
   const normVal=_normTime(val);
+  // Erneutes Auslösen mit dem bereits angezeigten (pausen-behafteten) Wert = keine echte
+  // Änderung → NICHT erneut verarbeiten, sonst würde die Pause doppelt aufgeschlagen.
+  if(normVal===(day.b1bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
   if(!normVal){
     setDay(uid,window.year,window.mon,ds,'b1bis','');
   } else {
@@ -726,6 +729,9 @@ export function td_b1bis_change(ds,val){
     // & idempotent aufgeschlagen (keine Mehrfach-Aufschläge beim Nachbearbeiten).
     setDay(uid,window.year,window.mon,ds,'b1bis',roundedNet);
   }
+  // Frisch getippter Wert = Netto-Ende → altes Pausen-Tracking auf b1bis verwerfen,
+  // damit _applyDayPause die nicht mehr enthaltene Pause nicht abzieht (sonst zu wenig).
+  mutate(d=>{ const dd=d.entries?.[entryKey(uid,window.year,window.mon)]?.days?.[ds]; if(dd&&dd._pausedF==='b1bis'){ dd._paused=0; dd._pausedF=''; } });
   _applyDayPause(uid,ds,'b1bis');
   rebuildNightShifts(uid);
   renderZeiterfassung();
@@ -829,6 +835,12 @@ export function td_tchange(ds,field,val){
   }
   // ────────────────────────────────────────────────────────────────
   const normVal=_normTime(val);
+  // Pausen-tragendes Endfeld (b2bis) erneut mit unverändertem Wert ausgelöst → nicht
+  // neu verarbeiten (sonst Doppel-Aufschlag der Pause, analog b1bis).
+  if(field==='b2bis'){
+    const _cur=getEntry(uid,window.year,window.mon).days?.[ds]||{};
+    if(normVal===(_cur.b2bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
+  }
   setDay(uid,window.year,window.mon,ds,field,normVal);
   const block=field.startsWith('b2')?'2':'1';
   const vonF=`b${block}von`, bisF=`b${block}bis`, zuordF=`b${block}zuord`;
@@ -847,6 +859,9 @@ export function td_tchange(ds,field,val){
       }
     }
   }
+  // Frisch getippter Wert in b2bis = Netto-Ende → altes Pausen-Tracking dieses Feldes
+  // verwerfen, damit _applyDayPause die Pause nicht doppelt aufschlägt.
+  if(field==='b2bis') mutate(d=>{ const dd=d.entries?.[entryKey(uid,window.year,window.mon)]?.days?.[ds]; if(dd&&dd._pausedF==='b2bis'){ dd._paused=0; dd._pausedF=''; } });
   _applyDayPause(uid,ds,field);
   rebuildNightShifts(uid);
   renderZeiterfassung();
