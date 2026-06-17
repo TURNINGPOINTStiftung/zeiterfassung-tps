@@ -147,6 +147,14 @@ function injectStyles(){
   .btn-sm-crm.danger{color:#c0392b;border-color:#f0bcb6}
   .crm-team-group{margin-bottom:22px}
   .crm-team-h{font-size:14px;font-weight:700;color:var(--primary);margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid var(--primary);display:flex;align-items:center;gap:8px;cursor:pointer}
+  .crm-mtask{border:1.5px solid var(--border);border-radius:9px;padding:6px 10px;margin-bottom:10px;background:var(--row-alt)}
+  .crm-mtask>.crm-task:first-child{border-top:none}
+  .crm-subs{margin:2px 0 2px 12px;padding-left:10px;border-left:2px solid var(--border)}
+  .crm-task.sub{padding:6px 0}
+  .crm-task.blocked{opacity:.7}
+  .crm-locked{color:#b56a00;font-weight:600}
+  .crm-deps-box{max-height:150px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff}
+  .crm-deps-box label{display:block;font-size:13px;margin:3px 0;cursor:pointer}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -237,16 +245,57 @@ function paintList(){
   }</div>`;
 }
 
-// ── Aufgaben-Zeile (Eintrags-Ansicht) ──────────────────────────────
-function taskRowHtml(t){
-  const st=taskStatusByKey(t.status);
-  const meta=[t.team?('👥 '+t.team):'', t.assigneeName?('👤 '+t.assigneeName):'', t.due?('📅 '+fmtDate(Date.parse(t.due))):'']
-    .filter(Boolean).map(esc).join(' · ');
-  return `<div class="crm-task${t.status==='erledigt'?' done':''}">
+// ── Aufgaben: hierarchisch (Hauptaufgabe + Unterpunkte) + Abhängigkeiten
+// Datenmodell je Eintrag:
+//   e.todos = [ { id, text, team, assigneeId, assigneeName, due, status,
+//                 deps:[ids], subs:[ { id, text, assigneeId, assigneeName,
+//                                      due, status, deps:[ids] } ] } ]
+// Eine Aufgabe ist „blockiert", solange eine ihrer deps nicht 'erledigt' ist.
+
+// Flache Liste aller Aufgaben (Haupt + Unter) eines Eintrags
+function flatTasks(e){
+  const out=[];
+  (e.todos||[]).forEach(m=>{
+    out.push({ id:m.id, text:m.text, status:m.status, kind:'main', ref:m });
+    (m.subs||[]).forEach(s=>out.push({ id:s.id, text:s.text, status:s.status, kind:'sub', parent:m.id, ref:s }));
+  });
+  return out;
+}
+// Liefert die Texte blockierender (noch nicht erledigter) deps – oder null
+function blockingTexts(e, t){
+  const deps=t&&t.deps; if(!Array.isArray(deps)||!deps.length) return null;
+  const map={}; flatTasks(e).forEach(x=>map[x.id]=x);
+  const open=deps.map(d=>map[d]).filter(x=>x && x.status!=='erledigt');
+  return open.length?open.map(x=>x.text):null;
+}
+function statusOfId(e,id){ const x=flatTasks(e).find(y=>y.id===id); return x?x.status:null; }
+
+function subTaskHtml(e,m,s){
+  const st=taskStatusByKey(s.status);
+  const blk=blockingTexts(e,s);
+  const meta=[s.assigneeName?('👤 '+s.assigneeName):'', s.due?('📅 '+fmtDate(Date.parse(s.due))):''].filter(Boolean).map(esc).join(' · ');
+  return `<div class="crm-task sub${s.status==='erledigt'?' done':''}${blk?' blocked':''}">
     <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-    <div class="grow"><span class="tx">${esc(t.text)}</span>${meta?`<div class="small">${meta}</div>`:''}</div>
-    <button class="btn-sm-crm" onclick="crmOpenTask('${t.id}')">✎</button>
-    <button class="crm-x" title="Löschen" onclick="crmDeleteTask('${t.id}')">✕</button>
+    <div class="grow"><span class="tx">${esc(s.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
+    <button class="btn-sm-crm" onclick="crmOpenSub('${m.id}','${s.id}')">✎</button>
+    <button class="crm-x" title="Löschen" onclick="crmDeleteSub('${m.id}','${s.id}')">✕</button>
+  </div>`;
+}
+function mainTaskHtml(e,m){
+  const st=taskStatusByKey(m.status);
+  const blk=blockingTexts(e,m);
+  const meta=[m.team?('👥 '+m.team):'', m.assigneeName?('👤 '+m.assigneeName):'', m.due?('📅 '+fmtDate(Date.parse(m.due))):''].filter(Boolean).map(esc).join(' · ');
+  const subs=(m.subs||[]).map(s=>subTaskHtml(e,m,s)).join('');
+  return `<div class="crm-mtask${m.status==='erledigt'?' done':''}">
+    <div class="crm-task${blk?' blocked':''}">
+      <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+      <div class="grow"><span class="tx">${esc(m.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
+      <button class="btn-sm-crm" onclick="crmOpenTask('${m.id}')">✎</button>
+      <button class="crm-x" title="Löschen" onclick="crmDeleteTask('${m.id}')">✕</button>
+    </div>
+    <div class="crm-subs">${subs}
+      <button class="btn-sm-crm" style="margin-top:6px" onclick="crmOpenSub('${m.id}','')">＋ Unterpunkt</button>
+    </div>
   </div>`;
 }
 
@@ -287,7 +336,7 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
-  const todos=(e.todos||[]).map(taskRowHtml).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+  const todos=(e.todos||[]).map(m=>mainTaskHtml(e,m)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
 
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
@@ -507,6 +556,26 @@ function crmSaveStatusQuo(){
 // ══════════════════════════════════════════════════════════════════
 //  AUFGABEN  (am Eintrag) – Team + Zuständige + Status + Fälligkeit
 // ══════════════════════════════════════════════════════════════════
+// Abhängigkeits-Auswahl (Checkboxen aller anderen Aufgaben des Eintrags)
+function depsBoxHtml(e, selfId, selected){
+  const sel=new Set(selected||[]);
+  const rows=flatTasks(e).filter(t=>t.id!==selfId).map(t=>
+    `<label><input type="checkbox" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${t.kind==='sub'?'↳ ':''}${esc(t.text)}${t.status==='erledigt'?' ✓':''}</label>`
+  ).join('');
+  return `<div class="crm-deps-box">${rows||'<div class="small" style="color:var(--muted)">Keine anderen Aufgaben vorhanden.</div>'}</div>`;
+}
+function readChecked(containerId){
+  const c=document.getElementById(containerId); if(!c) return [];
+  return Array.from(c.querySelectorAll('input[type=checkbox]:checked')).map(x=>x.value);
+}
+// Verhindert, dass eine blockierte Aufgabe gestartet/erledigt wird
+function enforceBlock(e, deps, status){
+  const open=(deps||[]).map(d=>statusOfId(e,d)).filter(s=>s&&s!=='erledigt');
+  if(status!=='offen' && open.length){ toast('🔒 Noch blockiert – Status bleibt „Offen".','err'); return 'offen'; }
+  return status;
+}
+
+// ── Hauptaufgabe ───────────────────────────────────────────────────
 function crmOpenTask(tid){
   const e=curEntity(); if(!e) return;
   const t = tid ? (e.todos||[]).find(x=>x.id===tid) : {};
@@ -515,7 +584,7 @@ function crmOpenTask(tid){
   const teamOpts=['<option value="">– kein Team –</option>']
     .concat(zeTeams().map(tm=>`<option ${t.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
   const statusOpts=TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${tid?'✎ Aufgabe':'＋ Aufgabe'}</h3>
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${tid?'✎ Hauptaufgabe':'＋ Hauptaufgabe'}</h3>
    <div class="crm-modal-field"><label>Aufgabe *</label><input id="crm-task-text" value="${esc(t.text||'')}"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Team</label><select id="crm-task-team" onchange="crmTaskTeamChange()">${teamOpts}</select></div>
@@ -525,6 +594,7 @@ function crmOpenTask(tid){
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(t.due||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
    </div>
+   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-task-deps">${depsBoxHtml(e, tid||null, t.deps)}</div></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTask('${tid}')">Speichern</button></div>`);
 }
@@ -534,20 +604,62 @@ function crmTaskTeamChange(){
   if(sel) sel.innerHTML=assigneeOptsHtml(team, '');
 }
 function crmSaveTask(tid){
+  const e=curEntity(); if(!e) return;
   const text=val('crm-task-text'); if(!text){ toast('Bitte eine Aufgabe eingeben.','err'); return; }
   const assigneeId=val('crm-task-assignee');
+  const deps=readChecked('crm-task-deps');
+  const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, team:val('crm-task-team'), assigneeId,
     assigneeName: assigneeId?userName(assigneeId):'',
-    due:val('crm-task-due'), status:val('crm-task-status')||'offen' };
-  mutateEntity(e=>{
-    if(!Array.isArray(e.todos)) e.todos=[];
-    if(tid){ const t=e.todos.find(x=>x.id===tid); if(t) Object.assign(t,rec); }
-    else { rec.id=newId(); e.todos.push(rec); }
+    due:val('crm-task-due'), status, deps };
+  mutateEntity(en=>{
+    if(!Array.isArray(en.todos)) en.todos=[];
+    if(tid){ const t=en.todos.find(x=>x.id===tid); if(t){ Object.assign(t,rec); if(!Array.isArray(t.subs)) t.subs=[]; } }
+    else { rec.id=newId(); rec.subs=[]; en.todos.push(rec); }
   });
   crmCloseModal(); paintDetail();
 }
 function crmDeleteTask(tid){
   mutateEntity(e=>{ e.todos=(e.todos||[]).filter(x=>x.id!==tid); });
+  paintDetail();
+}
+
+// ── Unterpunkt ─────────────────────────────────────────────────────
+function crmOpenSub(mid, sid){
+  const e=curEntity(); if(!e) return;
+  const m=(e.todos||[]).find(x=>x.id===mid); if(!m) return;
+  const s = sid ? ((m.subs||[]).find(x=>x.id===sid)) : {};
+  if(sid && !s) return;
+  crmOpenModalShell();
+  const statusOpts=TASK_STATUS.map(st=>`<option value="${st.key}" ${s.status===st.key?'selected':''}>${esc(st.label)}</option>`).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${sid?'✎ Unterpunkt':'＋ Unterpunkt'} <span style="font-weight:400;font-size:13px;color:var(--muted)">zu „${esc(m.text)}"</span></h3>
+   <div class="crm-modal-field"><label>Unterpunkt *</label><input id="crm-sub-text" value="${esc(s.text||'')}"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig${m.team?' ('+esc(m.team)+')':''}</label><select id="crm-sub-assignee">${assigneeOptsHtml(m.team||'', s.assigneeId||'')}</select></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-sub-due" type="date" value="${esc(s.due||'')}"></div>
+   </div>
+   <div class="crm-modal-field"><label>Status</label><select id="crm-sub-status">${statusOpts}</select></div>
+   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-sub-deps">${depsBoxHtml(e, sid||null, s.deps)}</div></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveSub('${mid}','${sid}')">Speichern</button></div>`);
+}
+function crmSaveSub(mid, sid){
+  const e=curEntity(); if(!e) return;
+  const text=val('crm-sub-text'); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
+  const assigneeId=val('crm-sub-assignee');
+  const deps=readChecked('crm-sub-deps');
+  const status=enforceBlock(e, deps, val('crm-sub-status')||'offen');
+  const rec={ text, assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-sub-due'), status, deps };
+  mutateEntity(en=>{
+    const m=(en.todos||[]).find(x=>x.id===mid); if(!m) return;
+    if(!Array.isArray(m.subs)) m.subs=[];
+    if(sid){ const s=m.subs.find(x=>x.id===sid); if(s) Object.assign(s,rec); }
+    else { rec.id=newId(); m.subs.push(rec); }
+  });
+  crmCloseModal(); paintDetail();
+}
+function crmDeleteSub(mid, sid){
+  mutateEntity(en=>{ const m=(en.todos||[]).find(x=>x.id===mid); if(m) m.subs=(m.subs||[]).filter(x=>x.id!==sid); });
   paintDetail();
 }
 
@@ -557,36 +669,74 @@ function crmApplyVorlagePick(){
   if(!vs.length){ if(confirm('Es gibt noch keine Vorlagen.\nJetzt eine anlegen?')) crmOpenVorlagen(); return; }
   crmOpenModalShell();
   const rows=vs.map(v=>`<div class="crm-row">
-    <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} ToDos</span></div>
+    <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} Hauptaufgaben</span></div>
     <button class="btn-sm-crm primary" onclick="crmApplyVorlage('${v.id}')">Anwenden</button>
   </div>`).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 Vorlage anwenden</h3>${rows}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
    <button class="btn-sm-crm" onclick="crmOpenVorlagen()">Vorlagen verwalten</button></div>`);
 }
+// Stellt sicher, dass Vorlagen-Items ids, subs[] und deps[] haben (Lazy-Migration)
+function _normVorlageItems(v){
+  let changed=false;
+  (v.items||[]).forEach(it=>{
+    if(!it.id){ it.id=newId(); changed=true; }
+    if(!Array.isArray(it.subs)){ it.subs=[]; changed=true; }
+    if(!Array.isArray(it.deps)){ it.deps=[]; changed=true; }
+    it.subs.forEach(su=>{ if(!su.id){ su.id=newId(); changed=true; } if(!Array.isArray(su.deps)) su.deps=[]; });
+  });
+  if(changed) saveVorlage(v);
+}
 function crmApplyVorlage(id){
   const v=getVorlage(id); if(!v) return;
-  const items=v.items||[];
-  mutateEntity(e=>{
-    if(!Array.isArray(e.todos)) e.todos=[];
-    items.forEach(it=>{ e.todos.push({ id:newId(), text:it.text, team:it.team||'', assigneeId:'', assigneeName:'', due:'', status:'offen' }); });
-  });
+  _normVorlageItems(v);
+  // Neue ids vergeben und Abhängigkeiten darauf ummappen
+  const idMap={};
+  (v.items||[]).forEach(it=>{ idMap[it.id]=newId(); (it.subs||[]).forEach(su=>{ idMap[su.id]=newId(); }); });
+  const mains=(v.items||[]).map(it=>({
+    id:idMap[it.id], text:it.text, team:it.team||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
+    deps:(it.deps||[]).map(d=>idMap[d]).filter(Boolean),
+    subs:(it.subs||[]).map(su=>({ id:idMap[su.id], text:su.text, assigneeId:'', assigneeName:'', due:'', status:'offen', deps:(su.deps||[]).map(d=>idMap[d]).filter(Boolean) }))
+  }));
+  mutateEntity(e=>{ if(!Array.isArray(e.todos)) e.todos=[]; mains.forEach(m=>e.todos.push(m)); });
   crmCloseModal(); paintDetail();
-  toast(`${items.length} ToDo${items.length===1?'':'s'} aus „${v.name}" übernommen ✓`,'ok');
+  toast(`„${v.name}" übernommen (${mains.length} Hauptaufgabe${mains.length===1?'':'n'}) ✓`,'ok');
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  TEAM-ANSICHT  – sammelt alle Aufgaben je Team (eintragübergreifend)
 // ══════════════════════════════════════════════════════════════════
-// Alle Aufgaben mit Herkunft: [{tree, eid, ename, todo}]
-function allTasks(){
+// Hauptaufgaben eines Teams (eintragübergreifend): [{tree, eid, ename, main}]
+function teamMainTasks(team){
   const out=[];
   TREES.forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
-      (e.todos||[]).forEach(t=>{ out.push({ tree:tr.key, eid:e.id, ename:(e.stamm&&e.stamm.name)||'(ohne Name)', todo:t }); });
+      (e.todos||[]).forEach(m=>{
+        const match = team==='Ohne Team' ? !m.team : (m.team||'')===team;
+        if(match) out.push({ tree:tr.key, eid:e.id, ename:(e.stamm&&e.stamm.name)||'(ohne Name)', main:m });
+      });
     });
   });
   return out;
+}
+// Zählung (Haupt + Unter) für die Team-Kacheln
+function teamCounts(team){
+  let total=0, open=0;
+  teamMainTasks(team).forEach(x=>{
+    total++; if(x.main.status!=='erledigt') open++;
+    (x.main.subs||[]).forEach(s=>{ total++; if(s.status!=='erledigt') open++; });
+  });
+  return { total, open };
+}
+// Beliebige Aufgabe (Haupt ODER Unter) in einem Eintrag ändern
+function updateAnyTask(tree, eid, id, fn){
+  const ent=getEntity(tree,eid); if(!ent) return;
+  let target=null;
+  (ent.todos||[]).forEach(m=>{ if(m.id===id) target=m; (m.subs||[]).forEach(s=>{ if(s.id===id) target=s; }); });
+  if(!target) return;
+  try{ fn(target); }catch(e){ console.error('CRM updateAnyTask:',e); return; }
+  ent.updatedByKuerzel=curKuerzel(); ent.updatedByName=curName();
+  saveEntity(tree, ent);
 }
 function crmShowTeams(){ window._crmMode='teams'; window._crmTeamSel=null; paintTeamsList(); }
 function crmOpenTeam(enc){ window._crmTeamSel=decodeURIComponent(enc); paintTeamDetail(); }
@@ -601,14 +751,10 @@ function teamCardHtml(tm, total, open){
 }
 function paintTeamsList(){
   const root=document.getElementById('crm-root'); if(!root) return;
-  const tasks=allTasks();
   const cards=[];
-  zeTeams().forEach(tm=>{
-    const rel=tasks.filter(x=>(x.todo.team||'')===tm);
-    cards.push(teamCardHtml(tm, rel.length, rel.filter(x=>x.todo.status!=='erledigt').length));
-  });
-  const noTeam=tasks.filter(x=>!x.todo.team);
-  if(noTeam.length) cards.push(teamCardHtml('Ohne Team', noTeam.length, noTeam.filter(x=>x.todo.status!=='erledigt').length));
+  zeTeams().forEach(tm=>{ const c=teamCounts(tm); cards.push(teamCardHtml(tm, c.total, c.open)); });
+  const cNo=teamCounts('Ohne Team');
+  if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-list">${cards.join('')}</div>
     <div class="small" style="color:var(--muted);margin-top:16px">Aufgaben werden an den Einträgen angelegt und hier nach Team gesammelt. Die Leitung verteilt sie über die Spalte „Zuständig".</div>
@@ -617,25 +763,33 @@ function paintTeamsList(){
 function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const team=window._crmTeamSel;
-  const rel=allTasks().filter(x=> team==='Ohne Team' ? !x.todo.team : (x.todo.team||'')===team);
-  // nach Eintrag gruppieren
+  const rel=teamMainTasks(team);
   const groups=[];
   rel.forEach(x=>{
     let g=groups.find(y=>y.tree===x.tree && y.eid===x.eid);
-    if(!g){ g={tree:x.tree, eid:x.eid, ename:x.ename, items:[]}; groups.push(g); }
-    g.items.push(x.todo);
+    if(!g){ g={tree:x.tree, eid:x.eid, ename:x.ename, mains:[]}; groups.push(g); }
+    g.mains.push(x.main);
   });
-  const statusSel=(t)=>TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
+  const aOpts=(id)=>assigneeOptsHtml(team==='Ohne Team'?'':team, id||'');
+  const stOpts=(t)=>TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
+  const rowFor=(g,e,t,isSub)=>{
+    const blk=e?blockingTexts(e,t):null;
+    return `<div class="crm-task${isSub?' sub':''}${t.status==='erledigt'?' done':''}${blk?' blocked':''}">
+      <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${t.id}',this.value)">${stOpts(t)}</select>
+      <div class="grow"><span class="tx">${esc(t.text)}</span>${t.due?`<div class="small">📅 ${esc(fmtDate(Date.parse(t.due)))}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
+      <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${t.id}',this.value)">${aOpts(t.assigneeId)}</select>
+    </div>`;
+  };
   const blocks=groups.map(g=>{
     const tr=treeByKey(g.tree);
-    const rows=g.items.map(t=>`
-      <div class="crm-task${t.status==='erledigt'?' done':''}">
-        <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${t.id}',this.value)">${statusSel(t)}</select>
-        <div class="grow"><span class="tx">${esc(t.text)}</span>${t.due?`<div class="small">📅 ${esc(fmtDate(Date.parse(t.due)))}</div>`:''}</div>
-        <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${t.id}',this.value)">${assigneeOptsHtml(team==='Ohne Team'?'':team, t.assigneeId||'')}</select>
+    const e=getEntity(g.tree,g.eid);
+    const rows=g.mains.map(m=>
+      `<div class="crm-mtask${m.status==='erledigt'?' done':''}">
+        ${rowFor(g,e,m,false)}
+        ${(m.subs||[]).length?`<div class="crm-subs">${m.subs.map(s=>rowFor(g,e,s,true)).join('')}</div>`:''}
       </div>`).join('');
     return `<div class="crm-team-group">
-      <div class="crm-team-h" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)} <span class="crm-chip">${g.items.length}</span></div>
+      <div class="crm-team-h" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)} <span class="crm-chip">${g.mains.length}</span></div>
       ${rows}
     </div>`;
   }).join('');
@@ -647,10 +801,16 @@ function paintTeamDetail(){
     ${ rel.length ? blocks : `<div class="crm-empty">Diesem Team sind noch keine Aufgaben zugeordnet.</div>` }
   </div>`;
 }
-function crmTeamSetStatus(tree,eid,tid,value){ updateTodoIn(tree,eid,tid,t=>{ t.status=value; }); paintTeamDetail(); }
-function crmTeamSetAssignee(tree,eid,tid,value){
+function crmTeamSetStatus(tree,eid,id,value){
+  const e=getEntity(tree,eid); if(!e) return;
+  const x=flatTasks(e).find(t=>t.id===id); if(!x) return;
+  const v=enforceBlock(e, x.ref.deps, value);
+  updateAnyTask(tree,eid,id, t=>{ t.status=v; });
+  paintTeamDetail();
+}
+function crmTeamSetAssignee(tree,eid,id,value){
   const name=value?userName(value):'';
-  updateTodoIn(tree,eid,tid,t=>{ t.assigneeId=value; t.assigneeName=name; });
+  updateAnyTask(tree,eid,id, t=>{ t.assigneeId=value; t.assigneeName=name; });
   paintTeamDetail();
 }
 
@@ -661,7 +821,7 @@ function crmOpenVorlagen(){
   crmOpenModalShell();
   const vs=listVorlagen();
   const rows=vs.length ? vs.map(v=>`<div class="crm-row">
-      <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} ToDos</span></div>
+      <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} Hauptaufgaben</span></div>
       <button class="btn-sm-crm" onclick="crmEditVorlage('${v.id}')">Bearbeiten</button>
       <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage('${v.id}')">✕</button>
     </div>`).join('') : `<div class="small" style="color:var(--muted)">Noch keine Vorlagen.</div>`;
@@ -681,32 +841,84 @@ function crmCreateVorlage(){
 }
 function crmEditVorlage(id){
   const v=getVorlage(id); if(!v) return;
+  _normVorlageItems(v);
   crmOpenModalShell();
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option>${esc(tm)}</option>`)).join('');
-  const rows=(v.items||[]).map((it,idx)=>`<div class="crm-row">
-      <div class="grow"><span class="tx">${esc(it.text)}</span>${it.team?` <span class="fn">${esc(it.team)}</span>`:''}</div>
-      <button class="crm-x" onclick="crmVorlageRemoveItem('${id}',${idx})">✕</button>
-    </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine ToDos in dieser Vorlage.</div>`;
+  const itemsHtml=(v.items||[]).map((it,i)=>{
+    const subs=(it.subs||[]).map((su,si)=>`<div class="crm-task sub">
+        <div class="grow"><span class="tx">${esc(su.text)}</span></div>
+        <button class="crm-x" onclick="crmVorlageRemoveSub('${id}',${i},${si})">✕</button>
+      </div>`).join('');
+    const depNames=(it.deps||[]).map(d=>{ const m=(v.items||[]).find(x=>x.id===d); return m?m.text:''; }).filter(Boolean);
+    return `<div class="crm-mtask">
+      <div class="crm-task">
+        <div class="grow"><span class="tx">${esc(it.text)}</span>${it.team?` <span class="fn">${esc(it.team)}</span>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
+        <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVorlageItemDeps('${id}',${i})">⛓</button>
+        <button class="crm-x" title="Hauptaufgabe entfernen" onclick="crmVorlageRemoveItem('${id}',${i})">✕</button>
+      </div>
+      <div class="crm-subs">${subs}
+        <div class="crm-add-inline" style="margin-top:6px"><input id="crm-vsub-${i}" placeholder="Unterpunkt …" style="flex:1;min-width:130px"><button class="btn-sm-crm" onclick="crmVorlageAddSub('${id}',${i})">＋ Unterpunkt</button></div>
+      </div>
+    </div>`;
+  }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Hauptaufgaben.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 ${esc(v.name)}</h3>
-   ${rows}
-   <div class="crm-add-inline">
-     <input id="crm-vit-text" placeholder="ToDo …" style="flex:1;min-width:150px">
+   ${itemsHtml}
+   <div class="crm-add-inline" style="margin-top:10px">
+     <input id="crm-vit-text" placeholder="Neue Hauptaufgabe …" style="flex:1;min-width:150px">
      <select id="crm-vit-team" title="Standard-Team">${teamOpts}</select>
-     <button class="btn-sm-crm primary" onclick="crmVorlageAddItem('${id}')">＋</button>
+     <button class="btn-sm-crm primary" onclick="crmVorlageAddItem('${id}')">＋ Hauptaufgabe</button>
    </div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmOpenVorlagen()">← Zurück</button>
    <button class="btn-sm-crm primary" onclick="crmCloseModal()">Fertig</button></div>`, true);
 }
 function crmVorlageAddItem(id){
   const v=getVorlage(id); if(!v) return;
-  const text=val('crm-vit-text'); if(!text){ toast('Bitte ein ToDo eingeben.','err'); return; }
+  const text=val('crm-vit-text'); if(!text){ toast('Bitte eine Hauptaufgabe eingeben.','err'); return; }
   if(!Array.isArray(v.items)) v.items=[];
-  v.items.push({ text, team:val('crm-vit-team') });
+  v.items.push({ id:newId(), text, team:val('crm-vit-team'), subs:[], deps:[] });
   saveVorlage(v); crmEditVorlage(id);
 }
 function crmVorlageRemoveItem(id,idx){
   const v=getVorlage(id); if(!v) return;
-  if(Array.isArray(v.items)) v.items.splice(idx,1);
+  if(Array.isArray(v.items)){
+    const removed=v.items[idx];
+    v.items.splice(idx,1);
+    // verwaiste Abhängigkeiten bereinigen
+    if(removed) v.items.forEach(it=>{ if(Array.isArray(it.deps)) it.deps=it.deps.filter(d=>d!==removed.id); });
+  }
+  saveVorlage(v); crmEditVorlage(id);
+}
+function crmVorlageAddSub(id,idx){
+  const v=getVorlage(id); if(!v) return;
+  const it=(v.items||[])[idx]; if(!it) return;
+  const text=val('crm-vsub-'+idx); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
+  if(!Array.isArray(it.subs)) it.subs=[];
+  it.subs.push({ id:newId(), text, deps:[] });
+  saveVorlage(v); crmEditVorlage(id);
+}
+function crmVorlageRemoveSub(id,idx,sidx){
+  const v=getVorlage(id); if(!v) return;
+  const it=(v.items||[])[idx]; if(!it||!Array.isArray(it.subs)) return;
+  it.subs.splice(sidx,1);
+  saveVorlage(v); crmEditVorlage(id);
+}
+function crmVorlageItemDeps(id,idx){
+  const v=getVorlage(id); if(!v) return;
+  const it=(v.items||[])[idx]; if(!it) return;
+  crmOpenModalShell();
+  const sel=new Set(it.deps||[]);
+  const opts=(v.items||[]).filter((x,i)=>i!==idx).map(x=>
+    `<label><input type="checkbox" value="${x.id}" ${sel.has(x.id)?'checked':''}> ${esc(x.text)}</label>`
+  ).join('') || '<div class="small" style="color:var(--muted)">Keine anderen Hauptaufgaben vorhanden.</div>';
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">⛓ „${esc(it.text)}" startet erst nach …</h3>
+   <div class="crm-deps-box" id="crm-vdeps">${opts}</div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${id}')">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmVorlageSaveItemDeps('${id}',${idx})">Speichern</button></div>`);
+}
+function crmVorlageSaveItemDeps(id,idx){
+  const v=getVorlage(id); if(!v) return;
+  const it=(v.items||[])[idx]; if(!it) return;
+  it.deps=readChecked('crm-vdeps');
   saveVorlage(v); crmEditVorlage(id);
 }
 function crmDeleteVorlage(id){
@@ -820,14 +1032,16 @@ Object.assign(window, {
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo,
-  // Aufgaben
+  // Aufgaben (Haupt + Unter + Abhängigkeiten)
   crmOpenTask, crmTaskTeamChange, crmSaveTask, crmDeleteTask,
+  crmOpenSub, crmSaveSub, crmDeleteSub,
   crmApplyVorlagePick, crmApplyVorlage,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
   crmTeamSetStatus, crmTeamSetAssignee,
   // Vorlagen
-  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmVorlageRemoveItem, crmDeleteVorlage,
+  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmVorlageRemoveItem,
+  crmVorlageAddSub, crmVorlageRemoveSub, crmVorlageItemDeps, crmVorlageSaveItemDeps, crmDeleteVorlage,
   // Kommunikation
   crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmDeleteNote, crmConfigAi
 });
