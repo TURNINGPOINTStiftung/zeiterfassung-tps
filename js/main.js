@@ -57,6 +57,11 @@ import { openProfileModal, saveProfile, shareApp, _downloadHtml } from './profil
 import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
          catOptionsForUser } from './cats.js';
 
+// ── CRM-Modul (isoliert, self-registriert window.renderCRM & co.) ──
+// Nur als Seiteneffekt importiert. Komplett unabhängig von der
+// Zeiterfassung (eigener Firebase-Ref, eigener Cache, Lazy-Init).
+import './crm/crm.js';
+
 // ══════════════════════════════════════════════════════════════════
 // Expose everything to window (for inline onclick handlers in HTML)
 // ══════════════════════════════════════════════════════════════════
