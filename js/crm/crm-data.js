@@ -22,13 +22,15 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, projekte:{} }; }
+function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{} }; }
 
 function _normalize(v){
   const out = freshCrm();
   if(v && typeof v === 'object'){
     TREE_KEYS.forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
-    if(v.projekte && typeof v.projekte==='object') out.projekte = v.projekte;
+    if(v.vorlagen && typeof v.vorlagen==='object') out.vorlagen = v.vorlagen;
+    // Altbestand v90: 'projekte' wird nicht mehr verwendet, bleibt aber im
+    // Firebase-Baum unangetastet (kein Datenverlust, nur nicht mehr angezeigt).
   }
   return out;
 }
@@ -126,50 +128,44 @@ export function listEntities(tree){
   );
 }
 
-// ── Projekte (Projektmanagement) ───────────────────────────────────
-// Liegen im selben isolierten 'crm'-Ref unter crm/projekte/<id>, damit die
-// Verknüpfung mit CRM-Einträgen direkt funktioniert. Granulare Writes.
-export function saveProjekt(p){
-  if(!p || !p.id) return Promise.resolve();
-  p.updatedAt = Date.now();
+// ── Aufgaben-Vorlagen ──────────────────────────────────────────────
+// Wiederverwendbare ToDo-Sets (z. B. je Veranstaltung). Liegen unter
+// crm/vorlagen/<id>. Granulare Writes, isoliert wie alles Übrige.
+export function saveVorlage(v){
+  if(!v || !v.id) return Promise.resolve();
+  v.updatedAt = Date.now();
   const d = getCrm();
-  if(!d.projekte) d.projekte = {};
-  d.projekte[p.id] = p;
+  if(!d.vorlagen) d.vorlagen = {};
+  d.vorlagen[v.id] = v;
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('projekte').child(p.id).set(p).catch(e=>{
-      console.warn('CRM saveProjekt Firebase-Fehler (lokal gespeichert):', e && e.message);
+    if(_ref) return _ref.child('vorlagen').child(v.id).set(v).catch(e=>{
+      console.warn('CRM saveVorlage Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
-  }catch(e){ console.warn('CRM saveProjekt:', e && e.message); }
+  }catch(e){ console.warn('CRM saveVorlage:', e && e.message); }
   return Promise.resolve();
 }
-export function deleteProjekt(id){
+export function deleteVorlage(id){
   const d = getCrm();
-  if(d.projekte) delete d.projekte[id];
+  if(d.vorlagen) delete d.vorlagen[id];
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('projekte').child(id).remove().catch(e=>{
-      console.warn('CRM deleteProjekt Firebase-Fehler:', e && e.message);
+    if(_ref) return _ref.child('vorlagen').child(id).remove().catch(e=>{
+      console.warn('CRM deleteVorlage Firebase-Fehler:', e && e.message);
     });
-  }catch(e){ console.warn('CRM deleteProjekt:', e && e.message); }
+  }catch(e){ console.warn('CRM deleteVorlage:', e && e.message); }
   return Promise.resolve();
 }
-export function getProjekt(id){
+export function getVorlage(id){
   const d = getCrm();
-  return (d.projekte && d.projekte[id]) || null;
+  return (d.vorlagen && d.vorlagen[id]) || null;
 }
-export function listProjekte(){
+export function listVorlagen(){
   const d = getCrm();
-  return Object.values(d.projekte || {}).sort((a,b)=>
-    String(a.titel||'').localeCompare(String(b.titel||''), 'de', {sensitivity:'base'})
-  );
-}
-// Alle Projekte, die mit einem bestimmten CRM-Eintrag verknüpft sind.
-export function listProjekteForEntity(tree, id){
-  return listProjekte().filter(p =>
-    Array.isArray(p.links) && p.links.some(l => l && l.tree===tree && l.id===id)
+  return Object.values(d.vorlagen || {}).sort((a,b)=>
+    String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'})
   );
 }
 
