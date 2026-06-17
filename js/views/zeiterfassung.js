@@ -6,6 +6,22 @@ import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
+// Uhrzeit "HH:MM" → Minuten seit Mitternacht
+function _hhmmToMin(t){ const p=String(t||'').split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
+// Gearbeitete Minuten eines Tages, die im Zeitfenster [lo,hi] (Minuten ab 0:00) liegen.
+// Für die Werkstudent-20h-Grenze: nur Arbeitszeit zwischen 08:00 und 20:00 zählt.
+// Kleinteilig (ktmin) hat keine Uhrzeit → wird als Tagesarbeit voll mitgezählt.
+function _workMinInWindow(dd,lo,hi){
+  const clamp=(von,bis)=>{
+    if(!von||!bis) return 0;
+    let a=_hhmmToMin(von), b=_hhmmToMin(bis);
+    if(b<a) b+=1440; // über Mitternacht
+    const s=Math.max(a,lo), e=Math.min(b,hi);
+    return Math.max(0,e-s);
+  };
+  return clamp(dd.b1von,dd.b1bis)+clamp(dd.b2von,dd.b2bis)+Number(dd.ktmin||0);
+}
+
 // v2026-06-fix
 export function renderZeiterfassung(){
   const uid=window.viewEmpId||window.cu.id;
@@ -83,24 +99,31 @@ export function renderZeiterfassung(){
   // weekMinsYTD = Januar bis aktueller Monat (für Jahres-Counter)
   const weekMins={};
   const weekMinsYTD={};
+  // Vorlesungszeiten (Semester) des Werkstudenten – nur in diesen Zeiträumen greift die 20h-Grenze.
+  const _lectPeriods=Array.isArray(user.lecturePeriods)?user.lecturePeriods.filter(p=>p&&p.von&&p.bis):[];
+  const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis);
   if(isWerkstudent){
-    const _addDay=(target,kw,dd)=>{
-      const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-      const pause=autoPauseMin(dd,user);
-      target[kw]=(target[kw]||0)+Math.min(Math.max(0,Math.round((gross-pause)/15)*15),600);
+    const _addDay=(target,kw,dd,dObj,ds)=>{
+      // Nur Vorlesungszeit, nur Mo–Fr, nur Arbeitszeit zwischen 08:00 und 20:00.
+      const wd=dObj.getDay();
+      if(wd===0||wd===6) return;       // Wochenende ignorieren
+      if(!_inSemester(ds)) return;     // außerhalb der Vorlesungszeit ignorieren
+      const win=_workMinInWindow(dd,480,1200); // 8–20 Uhr
+      const net=Math.max(0,win-autoPauseMin(dd,user));
+      if(net>0) target[kw]=(target[kw]||0)+net;
     };
     // Aktueller Monat
     for(let d=1;d<=dim;d++){
-      const kw=isoWeek(new Date(year,mon-1,d));
-      _addDay(weekMins,kw,(entry.days||{})[dateStr(year,mon,d)]||{});
+      const dObj=new Date(year,mon-1,d), ds2=dateStr(year,mon,d);
+      _addDay(weekMins,isoWeek(dObj),(entry.days||{})[ds2]||{},dObj,ds2);
     }
     // Jahr bis aktuellem Monat (für Counter)
     for(let m=1;m<=mon;m++){
       const e=m===mon?entry:getEntry(uid,year,m);
       const dim2=daysInMonth(year,m);
       for(let d=1;d<=dim2;d++){
-        const kw=isoWeek(new Date(year,m-1,d));
-        _addDay(weekMinsYTD,kw,(e.days||{})[dateStr(year,m,d)]||{});
+        const dObj=new Date(year,m-1,d), ds2=dateStr(year,m,d);
+        _addDay(weekMinsYTD,isoWeek(dObj),(e.days||{})[ds2]||{},dObj,ds2);
       }
     }
   }
@@ -127,15 +150,21 @@ export function renderZeiterfassung(){
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     monthPause+=pauseMinAuto;
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
-    const effDayMin=Math.min(roundedDayMin,600);
+    // Kein 10h-Übertrag mehr (rechtlich unzulässig): die echte Arbeitszeit zählt voll.
+    const effDayMin=roundedDayMin;
     monthTotal+=effDayMin;
+    // Reine Arbeitszeit über 10h/Tag → Zeile rot + Vermerk (ArbZG-Warnung, kein Festangestellten-Cap).
+    const over10h=!isAbsDay&&!isFree&&roundedDayMin>600;
+    // Werkstudent: Woche über 20h → nur Mo–Fr-Tage im Semester rot markieren.
+    const wsOver=isWerkstudent&&!we&&_inSemester(ds)&&overWeeks.has(kw);
 
     const tr=document.createElement('tr');
     if(we) tr.classList.add('weekend');
     if(hol) tr.classList.add('holiday');
     if(tod) tr.classList.add('today-row');
     if(readonly) tr.classList.add('readonly');
-    if(isWerkstudent&&overWeeks.has(kw)) tr.classList.add('wstd-over');
+    if(over10h) tr.classList.add('over10h');
+    if(wsOver) tr.classList.add('wstd-over');
     const dis=readonly;
     const dateFmt=`${String(d).padStart(2,'0')}.${String(mon).padStart(2,'0')}.${String(year).slice(2)}`;
     tr.innerHTML=`
@@ -157,7 +186,7 @@ export function renderZeiterfassung(){
       <td class="kt-col"><input id="kt_${ds}" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
-      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}</td>
+      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -691,7 +720,6 @@ export function td_b1bis_change(ds,val){
     setDay(uid,window.year,window.mon,ds,'b1bis',roundedNet);
   }
   _applyDayPause(uid,ds,'b1bis');
-  check10hCarryover(uid,window.year,window.mon,ds);
   rebuildNightShifts(uid);
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
@@ -813,60 +841,9 @@ export function td_tchange(ds,field,val){
     }
   }
   _applyDayPause(uid,ds,field);
-  check10hCarryover(uid,window.year,window.mon,ds);
   rebuildNightShifts(uid);
   renderZeiterfassung();
   if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0);
-}
-
-export function check10hCarryover(uid,y,m,ds,depth){
-  if((depth||0)>31) return;
-  const entry=getEntry(uid,y,m);
-  const day=(entry.days||{})[ds]||{};
-  const rawGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const raw=Math.max(0,rawGross-autoPauseMin(day,getUser(uid)));
-  const rounded=raw>0?Math.round(raw/15)*15:0;
-  const overflow=Math.max(0,rounded-600);
-  const date=new Date(ds+'T12:00:00');
-  date.setDate(date.getDate()+1);
-  const nY=date.getFullYear(),nM=date.getMonth()+1,nD=date.getDate();
-  const nDs=dateStr(nY,nM,nD);
-  let hadCarryover=false;
-  mutate(d=>{
-    const nK=entryKey(uid,nY,nM);
-    const _nst=d.entries?.[nK]?.status; if(_nst==='submitted'||_nst==='approved') return; // genehmigten/eingereichten Folgemonat nicht anfassen
-    const nd=d.entries?.[nK]?.days?.[nDs];
-    if(nd){
-      if(nd.b1bem==='Übertrag 10h Korrektur'){ nd.b1von=''; nd.b1bis=''; nd.b1zuord=''; nd.b1bem=''; hadCarryover=true; }
-      if(nd.b2bem==='Übertrag 10h Korrektur'){ nd.b2von=''; nd.b2bis=''; nd.b2zuord=''; nd.b2bem=''; hadCarryover=true; }
-    }
-    if(overflow>0){
-      const startStr='08:00', bisStr=addMin(startStr,overflow);
-      if(!d.entries[nK]) d.entries[nK]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-      if(!d.entries[nK].days) d.entries[nK].days={};
-      if(!d.entries[nK].days[nDs]) d.entries[nK].days[nDs]={};
-      const nd2=d.entries[nK].days[nDs];
-      if(!nd2.b1von){ nd2.b1von=startStr; nd2.b1bis=bisStr; nd2.b1bem='Übertrag 10h Korrektur'; }
-      else if(!nd2.b2von){ nd2.b2von=startStr; nd2.b2bis=bisStr; nd2.b2bem='Übertrag 10h Korrektur'; }
-      else { nd2.ktmin=(Number(nd2.ktmin||0)+overflow); }
-      if(!depth){
-        const ok=entryKey(uid,y,m);
-        const od=d.entries[ok]?.days?.[ds];
-        if(od){
-          let toRemove=overflow;
-          if(toRemove>0&&Number(od.ktmin||0)>0){ const cut=Math.min(toRemove,Number(od.ktmin)); od.ktmin=Number(od.ktmin)-cut; toRemove-=cut; }
-          if(toRemove>0&&od.b2von&&od.b2bis){ const b2m=diffMin(od.b2von,od.b2bis); const cut=Math.min(toRemove,b2m); od.b2bis=addMin(od.b2von,b2m-cut); toRemove-=cut; }
-          if(toRemove>0&&od.b1von&&od.b1bis){ const b1m=diffMin(od.b1von,od.b1bis); od.b1bis=addMin(od.b1von,Math.max(0,b1m-toRemove)); }
-        }
-      }
-    }
-    const nd3=d.entries?.[nK]?.days?.[nDs];
-    if(nd3&&!nd3.b1von&&!nd3.b1bis&&!nd3.b2von&&!nd3.b2bis&&!Number(nd3.ktmin)&&!nd3.b1bem&&!nd3.b2bem){
-      delete d.entries[nK].days[nDs];
-    }
-  });
-  if(overflow>0||hadCarryover) check10hCarryover(uid,nY,nM,nDs,(depth||0)+1);
-  if(!depth&&overflow>0) toast('⚠ Tageslimit 10h überschritten – '+minFmt(overflow)+' auf Folgetag übertragen.','warn');
 }
 
 // Übertrag-Eingabe robust lesen: 'H:MM' / '-H:MM' ODER Dezimalstunden ('14,25').

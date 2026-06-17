@@ -1,0 +1,11 @@
+﻿{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zeiterfassung",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "7891", "--directory", "C:\\Users\\morit\\OneDrive\\Desktop\\TPS\\Claude\\zeiterfassung"],
+      "port": 7891
+    }
+  ]
+}

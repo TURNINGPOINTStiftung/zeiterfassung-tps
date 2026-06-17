@@ -14,7 +14,7 @@ import { openModal, closeModal } from './utils.js';
 
 // ── View modules ───────────────────────────────────────────────────
 import { renderZeiterfassung, renderSignature, td_change, td_zuord,
-         td_b1bis_change, td_tchange, fmtTimeIn, focusNextTInp, ztNav, check10hCarryover, saveCarryover,
+         td_b1bis_change, td_tchange, fmtTimeIn, focusNextTInp, ztNav, saveCarryover,
          resetCarryover, syncAbsenceToTimesheets, clearAbsenceFromTimesheets,
          syncSickToTimesheets, syncVeranstaltungToTimesheets, doSubmit, doRecall, doApprove, doReject,
          doResetToDraft, rebuildAutoAbsences, rebuildNightShifts } from './views/zeiterfassung.js';
@@ -42,7 +42,7 @@ import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, s
          addTeamHistEntry, updateTeamHistEntry, deleteTeamHistEntry,
          addCategory, removeCat, addTeamCat, removeTeamCat, moveTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
-         _resolveUfRole, toggleFreelancerFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
+         _resolveUfRole, toggleFreelancerFields, toggleWerkstudentFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
          saveNewUser, saveEditUser, fixApproverToLeitung } from './views/einstellungen.js';
 
 // ── Utility / print modules ────────────────────────────────────────
@@ -103,7 +103,6 @@ window.td_tchange                = td_tchange;
 window.fmtTimeIn                 = fmtTimeIn;
 window.focusNextTInp             = focusNextTInp;
 window.ztNav                     = ztNav;
-window.check10hCarryover         = check10hCarryover;
 window.saveCarryover             = saveCarryover;
 window.resetCarryover            = resetCarryover;
 window.syncAbsenceToTimesheets   = syncAbsenceToTimesheets;
@@ -197,6 +196,7 @@ window.showEditDpw           = showEditDpw;
 window.saveEditDpw           = saveEditDpw;
 window._resolveUfRole        = _resolveUfRole;
 window.toggleFreelancerFields= toggleFreelancerFields;
+window.toggleWerkstudentFields= toggleWerkstudentFields;
 window.toggleGFTimesheet     = toggleGFTimesheet;
 window.toggleLeitungReport   = toggleLeitungReport;
 window.deleteUser            = deleteUser;

@@ -367,7 +367,6 @@ export function stopZeitstempel(bisOverride){
       delete d.entries[k].days[ds];
     }
   });
-  window.check10hCarryover?.(cu.id,sy,sm,ds);
   window.rebuildNightShifts?.(cu.id); // Nachtschicht über Mitternacht erkennen
   try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
   mutate(d=>{ if(d.stamps) delete d.stamps[cu.id]; });
