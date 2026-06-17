@@ -615,10 +615,14 @@ function _applyDayPause(uid,ds,editedField){
     if((e.status==='submitted'||e.status==='approved')&&!(window.cu&&window.cu.role==='admin')) return;
     const day=e.days?.[ds]; if(!day||day._nightShift) return;
     const hasB2=!!(day.b2von&&day.b2bis);
-    // 1) bisher aufgeschlagene Pause entfernen (Tracking, sonst Schätzung aus Altdaten)
+    // 1) Bisher aufgeschlagene Pause IMMER zuerst entfernen (Tracking, sonst Schätzung
+    //    aus Altdaten). Frueher wurde bei erneuter Bearbeitung DESSELBEN Feldes nicht
+    //    entfernt (prevF!==editedField) – dadurch wurde die in der Endzeit bereits
+    //    enthaltene Pause als Netto missverstanden und ein zweites Mal aufgeschlagen
+    //    (Bug: 20:00 → 20:45 → 21:30). Jetzt idempotent: Endzeit = Netto + genau eine Pause.
     const prevF=day._pausedF||(hasB2?'b2bis':'b1bis');
     const prevP=day._pInit?Number(day._paused||0):autoPauseMin(day,user);
-    if(prevP>0&&prevF!==editedField&&day[prevF]) day[prevF]=addMin(day[prevF],-prevP);
+    if(prevP>0&&day[prevF]) day[prevF]=addMin(day[prevF],-prevP);
     day._paused=0; day._pausedF=''; day._pInit=true;
     // 2) Pause neu berechnen – keine bei Freiberufler / Veranstaltung / Abwesenheit
     const z=day.b1zuord||'', bem=day.b1bem||'';
