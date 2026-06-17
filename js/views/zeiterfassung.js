@@ -97,34 +97,35 @@ export function renderZeiterfassung(){
   // Werkstudenten: Wochensummen vorberechnen
   // weekMins = aktueller Monat (für Zeilenmarkierung)
   // weekMinsYTD = Januar bis aktueller Monat (für Jahres-Counter)
-  const weekMins={};
-  const weekMinsYTD={};
-  // Vorlesungszeiten (Semester) des Werkstudenten – nur in diesen Zeiträumen greift die 20h-Grenze.
+  const weekMins={};      // aktueller Monat – nur Semester/Mo–Fr/8–20 Uhr → Rot-Markierung der Zeilen
+  const weekMinsYTD={};    // ganzes Jahr bis Monat – gesamte Wochenarbeit → 26-Wochen-Zähler
+  // Vorlesungszeiten (Semester) des Werkstudenten – nur darin greift die 20h-Zeilen-Markierung.
   const _lectPeriods=Array.isArray(user.lecturePeriods)?user.lecturePeriods.filter(p=>p&&p.von&&p.bis):[];
   const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis);
   if(isWerkstudent){
-    const _addDay=(target,kw,dd,dObj,ds)=>{
-      // Nur Vorlesungszeit, nur Mo–Fr, nur Arbeitszeit zwischen 08:00 und 20:00.
+    // a) Rot-Markierung im Semester: nur Mo–Fr, nur Arbeitszeit 8–20 Uhr (aktueller Monat)
+    const _addWin=(kw,dd,dObj,ds)=>{
       const wd=dObj.getDay();
       if(wd===0||wd===6) return;       // Wochenende ignorieren
       if(!_inSemester(ds)) return;     // außerhalb der Vorlesungszeit ignorieren
-      const win=_workMinInWindow(dd,480,1200); // 8–20 Uhr
-      const net=Math.max(0,win-autoPauseMin(dd,user));
-      if(net>0) target[kw]=(target[kw]||0)+net;
+      const net=Math.max(0,_workMinInWindow(dd,480,1200)-autoPauseMin(dd,user));
+      if(net>0) weekMins[kw]=(weekMins[kw]||0)+net;
     };
-    // Aktueller Monat
     for(let d=1;d<=dim;d++){
       const dObj=new Date(year,mon-1,d), ds2=dateStr(year,mon,d);
-      _addDay(weekMins,isoWeek(dObj),(entry.days||{})[ds2]||{},dObj,ds2);
+      _addWin(isoWeek(dObj),(entry.days||{})[ds2]||{},dObj,ds2);
     }
-    // Jahr bis aktuellem Monat (für Counter)
+    // b) 26-Wochen-Zähler (Werkstudentenprivileg): alle Wochen Jan–aktueller Monat,
+    //    gezählt wird die gesamte Nettoarbeit/Tag (max 10h) – unabhängig von Uhrzeit/Wochenende.
+    const _addTot=(kw,dd)=>{
+      const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+      const net=Math.min(Math.max(0,Math.round((gross-autoPauseMin(dd,user))/15)*15),600);
+      if(net>0) weekMinsYTD[kw]=(weekMinsYTD[kw]||0)+net;
+    };
     for(let m=1;m<=mon;m++){
       const e=m===mon?entry:getEntry(uid,year,m);
       const dim2=daysInMonth(year,m);
-      for(let d=1;d<=dim2;d++){
-        const dObj=new Date(year,m-1,d), ds2=dateStr(year,m,d);
-        _addDay(weekMinsYTD,isoWeek(dObj),(e.days||{})[ds2]||{},dObj,ds2);
-      }
+      for(let d=1;d<=dim2;d++) _addTot(isoWeek(new Date(year,m-1,d)),(e.days||{})[dateStr(year,m,d)]||{});
     }
   }
   const overWeeks=new Set(Object.entries(weekMins).filter(([,v])=>v>_wsLimit).map(([k])=>Number(k)));
@@ -262,10 +263,11 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       <div class="sub">${c.sub||''}</div>
     </div>`).join('');
   if(wsOverWeeks>0){
-    cardsHtml+=`<div class="s-card" style="border:2px solid var(--danger)">
-      <div class="lbl">⚠ Werkstudent 20h-Grenze</div>
-      <div class="big neg">${wsOverWeeks} Woche${wsOverWeeks!==1?'n':''}</div>
-      <div class="sub">Jan–${MONTHS[mon-1].slice(0,3)} über 20h/Woche</div>
+    const _wsOk=wsOverWeeks<=26;
+    cardsHtml+=`<div class="s-card" style="border:2px solid var(--${_wsOk?'warn':'danger'})">
+      <div class="lbl">🎓 Werkstudent: Wochen über 20h</div>
+      <div class="big${_wsOk?'':' neg'}">${wsOverWeeks} / 26</div>
+      <div class="sub">Jan–${MONTHS[mon-1].slice(0,3)} · max. 26 Wochen/Jahr</div>
     </div>`;
   }
   document.getElementById('summary-cards').innerHTML=cardsHtml;
