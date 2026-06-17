@@ -41,15 +41,14 @@ export const MEMBER_FUNCTIONS = [
   'Trainer/in','Ansprechpartner/in','Mitglied','Sonstiges'
 ];
 
-// ── Projektmanagement ──────────────────────────────────────────────
-// Status eines Projekts (Reihenfolge = Anzeige). Farbe für Badges.
-export const PROJEKT_STATUS = [
-  { key:'geplant',      label:'Geplant',       color:'#7f8c8d' },
-  { key:'aktiv',        label:'Aktiv',         color:'#2d6099' },
-  { key:'pausiert',     label:'Pausiert',      color:'#b56a00' },
-  { key:'abgeschlossen',label:'Abgeschlossen', color:'#48ae4d' },
+// ── Aufgaben (ToDos) ───────────────────────────────────────────────
+// Status einer Aufgabe (Reihenfolge = Anzeige). Farbe für Badges.
+export const TASK_STATUS = [
+  { key:'offen',    label:'Offen',     color:'#7f8c8d' },
+  { key:'inarbeit', label:'In Arbeit', color:'#2d6099' },
+  { key:'erledigt', label:'Erledigt',  color:'#48ae4d' },
 ];
-export function statusByKey(k){ return PROJEKT_STATUS.find(s=>s.key===k) || PROJEKT_STATUS[0]; }
+export function taskStatusByKey(k){ return TASK_STATUS.find(s=>s.key===k) || TASK_STATUS[0]; }
 
 // Fallback-Teams, falls die Zeiterfassungs-Teams (read-only) nicht lesbar sind.
 export const FALLBACK_TEAMS = ['Akademie','Marketing & Öffentlichkeitsarbeit','Verwaltung','Vereinsentwicklung'];
