@@ -22,13 +22,14 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{} }; }
+function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{}, teamprojekte:{} }; }
 
 function _normalize(v){
   const out = freshCrm();
   if(v && typeof v === 'object'){
     TREE_KEYS.forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
     if(v.vorlagen && typeof v.vorlagen==='object') out.vorlagen = v.vorlagen;
+    if(v.teamprojekte && typeof v.teamprojekte==='object') out.teamprojekte = v.teamprojekte;
     // Altbestand v90: 'projekte' wird nicht mehr verwendet, bleibt aber im
     // Firebase-Baum unangetastet (kein Datenverlust, nur nicht mehr angezeigt).
   }
@@ -68,7 +69,7 @@ export function ensureCrmReady(){
         // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
         const fb    = _normalize(snap.val() || {});
         const local = _cache || freshCrm();
-        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen'];
+        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen','teamprojekte'];
         COLLS.forEach(coll=>{
           const lobj = local[coll] || {};
           Object.keys(lobj).forEach(id=>{
@@ -186,6 +187,47 @@ export function listVorlagen(){
   return Object.values(d.vorlagen || {}).sort((a,b)=>
     String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'})
   );
+}
+
+// ── Team-Projekte (eigenständig, unabhängig von Einträgen) ─────────
+// Liegen unter crm/teamprojekte/<id>. Enthalten eigene Aufgaben (todos)
+// in derselben hierarchischen Struktur wie die Einträge.
+export function saveTeamProjekt(p){
+  if(!p || !p.id) return Promise.resolve();
+  p.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.teamprojekte) d.teamprojekte = {};
+  d.teamprojekte[p.id] = p;
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('teamprojekte').child(p.id).set(p).catch(e=>{
+      console.warn('CRM saveTeamProjekt Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveTeamProjekt:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteTeamProjekt(id){
+  const d = getCrm();
+  if(d.teamprojekte) delete d.teamprojekte[id];
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('teamprojekte').child(id).remove().catch(e=>{
+      console.warn('CRM deleteTeamProjekt Firebase-Fehler:', e && e.message);
+    });
+  }catch(e){ console.warn('CRM deleteTeamProjekt:', e && e.message); }
+  return Promise.resolve();
+}
+export function getTeamProjekt(id){
+  const d = getCrm();
+  return (d.teamprojekte && d.teamprojekte[id]) || null;
+}
+export function listTeamProjekte(team){
+  const d = getCrm();
+  let arr = Object.values(d.teamprojekte || {});
+  if(team!=null) arr = arr.filter(p => (p.team||'') === (team||''));
+  return arr.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'}));
 }
 
 // Kurze, kollisionsarme ID
