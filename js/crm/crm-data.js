@@ -22,12 +22,13 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{} }; }
+function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, projekte:{} }; }
 
 function _normalize(v){
   const out = freshCrm();
   if(v && typeof v === 'object'){
     TREE_KEYS.forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
+    if(v.projekte && typeof v.projekte==='object') out.projekte = v.projekte;
   }
   return out;
 }
@@ -122,6 +123,53 @@ export function listEntities(tree){
   const obj = d[tree] || {};
   return Object.values(obj).sort((a,b)=>
     String((a.stamm&&a.stamm.name)||'').localeCompare(String((b.stamm&&b.stamm.name)||''), 'de', {sensitivity:'base'})
+  );
+}
+
+// ── Projekte (Projektmanagement) ───────────────────────────────────
+// Liegen im selben isolierten 'crm'-Ref unter crm/projekte/<id>, damit die
+// Verknüpfung mit CRM-Einträgen direkt funktioniert. Granulare Writes.
+export function saveProjekt(p){
+  if(!p || !p.id) return Promise.resolve();
+  p.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.projekte) d.projekte = {};
+  d.projekte[p.id] = p;
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('projekte').child(p.id).set(p).catch(e=>{
+      console.warn('CRM saveProjekt Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveProjekt:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteProjekt(id){
+  const d = getCrm();
+  if(d.projekte) delete d.projekte[id];
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('projekte').child(id).remove().catch(e=>{
+      console.warn('CRM deleteProjekt Firebase-Fehler:', e && e.message);
+    });
+  }catch(e){ console.warn('CRM deleteProjekt:', e && e.message); }
+  return Promise.resolve();
+}
+export function getProjekt(id){
+  const d = getCrm();
+  return (d.projekte && d.projekte[id]) || null;
+}
+export function listProjekte(){
+  const d = getCrm();
+  return Object.values(d.projekte || {}).sort((a,b)=>
+    String(a.titel||'').localeCompare(String(b.titel||''), 'de', {sensitivity:'base'})
+  );
+}
+// Alle Projekte, die mit einem bestimmten CRM-Eintrag verknüpft sind.
+export function listProjekteForEntity(tree, id){
+  return listProjekte().filter(p =>
+    Array.isArray(p.links) && p.links.some(l => l && l.tree===tree && l.id===id)
   );
 }
 
