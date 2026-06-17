@@ -61,8 +61,27 @@ export function ensureCrmReady(){
       if(window.firebase && firebase.apps && firebase.apps.length){
         _ref = firebase.database().ref('crm');
         const snap = await _ref.once('value');
-        const val  = snap.val();
-        if(val){ _cache = _normalize(val); _persistLocal(); }
+        // ── Merge lokal ⇄ Cloud (Auto-Upload) ────────────────────────
+        // Firebase ist Quelle der Wahrheit; ABER lokal vorhandene Datensätze,
+        // die in der Cloud fehlen ODER lokal neuer sind (updatedAt), werden
+        // hochgeladen. So gehen offline/regel-blockiert angelegte Einträge
+        // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
+        const fb    = _normalize(snap.val() || {});
+        const local = _cache || freshCrm();
+        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen'];
+        COLLS.forEach(coll=>{
+          const lobj = local[coll] || {};
+          Object.keys(lobj).forEach(id=>{
+            const lrec = lobj[id]; if(!lrec) return;
+            const frec = fb[coll][id];
+            if(!frec || (lrec.updatedAt||0) > (frec.updatedAt||0)){
+              fb[coll][id] = lrec;
+              try{ if(_ref) _ref.child(coll).child(id).set(lrec).catch(()=>{}); }catch(e){}
+            }
+          });
+        });
+        _cache = fb;
+        _persistLocal();
         // Realtime: nur den CRM-Teilbaum beobachten
         _ref.on('value', s => {
           try{
