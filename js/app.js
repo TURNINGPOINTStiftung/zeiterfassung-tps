@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v88':'Zeiterfassung';
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v89':'Zeiterfassung';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -81,6 +81,9 @@ export function switchModule(name){
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(name===m)?'flex':'none';
   });
+  // CRM rendert sich selbst (isoliert). In try/catch, damit ein CRM-Fehler
+  // niemals das Umschalten oder die Zeiterfassung beeinträchtigt.
+  if(name==='crm'){ try{ window.renderCRM&&window.renderCRM(); }catch(e){ console.error('CRM Render-Fehler (ignoriert):',e); } }
 }
 
 export function rebuildEmpSelect(){
