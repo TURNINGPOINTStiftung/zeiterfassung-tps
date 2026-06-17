@@ -153,9 +153,9 @@ export function renderZeiterfassung(){
     // Kein 10h-Übertrag mehr (rechtlich unzulässig): die echte Arbeitszeit zählt voll.
     const effDayMin=roundedDayMin;
     monthTotal+=effDayMin;
-    // Reine Arbeitszeit über 10h/Tag → Zeile rot + Vermerk. Gilt für ALLE
-    // (auch Freiberufler), nur echte Abwesenheitstage sind ausgenommen.
-    const over10h=!isAbsDay&&roundedDayMin>600;
+    // Reine Arbeitszeit über 10h/Tag → Zeile rot + Vermerk (ArbZG-Warnung).
+    // Freiberufler/Selbstständige fallen nicht unter das ArbZG → ausgenommen.
+    const over10h=!isAbsDay&&!isFree&&roundedDayMin>600;
     // Werkstudent: Woche über 20h → nur Mo–Fr-Tage im Semester rot markieren.
     const wsOver=isWerkstudent&&!we&&_inSemester(ds)&&overWeeks.has(kw);
 
