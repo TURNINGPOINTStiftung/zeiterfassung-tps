@@ -6,14 +6,23 @@
 //  hier niemals die Zeiterfassung beeinträchtigt.
 
 import { openModal, closeModal, toast } from '../utils.js';
+import { getData } from '../data.js';   // NUR Lesen (Teams) – nie schreiben
 import {
   ensureCrmReady, setCrmRenderHook, getCrm, getEntity, listEntities,
-  saveEntity, deleteEntity, newId
+  saveEntity, deleteEntity, newId,
+  saveProjekt, deleteProjekt, getProjekt, listProjekte, listProjekteForEntity
 } from './crm-data.js';
 import {
   TREES, treeByKey, stammFields, MEMBER_FUNCTIONS,
-  getAiEndpoint, setAiEndpoint
+  getAiEndpoint, setAiEndpoint,
+  PROJEKT_STATUS, statusByKey, FALLBACK_TEAMS
 } from './crm-config.js';
+
+// Teams read-only aus der Zeiterfassung (mit Fallback). Schreibt NIE zurück.
+function zeTeams(){
+  try{ const t=getData().teams; if(Array.isArray(t)&&t.length) return t.slice(); }catch(e){}
+  return FALLBACK_TEAMS.slice();
+}
 
 // ── kleine Helfer ──────────────────────────────────────────────────
 const esc = s => String(s==null?'':s)
@@ -32,6 +41,13 @@ function mutateEntity(fn){
   const ent = curEntity(); if(!ent) return;
   try{ fn(ent); }catch(e){ console.error('CRM mutate:',e); return; }
   saveEntity(window._crmTree, ent);
+}
+
+// Projekt laden → ändern → speichern
+function mutateProjekt(fn){
+  const p = getProjekt(window._crmProjSelId); if(!p) return;
+  try{ fn(p); }catch(e){ console.error('CRM mutateProjekt:',e); return; }
+  saveProjekt(p);
 }
 
 // ── Styles (einmalig injizieren) ───────────────────────────────────
@@ -95,6 +111,9 @@ function injectStyles(){
   .btn-sm-crm:hover{border-color:var(--primary)}
   .btn-sm-crm.primary{background:var(--primary);border-color:var(--primary);color:#fff}
   .btn-sm-crm.danger{color:#c0392b;border-color:#f0bcb6}
+  .crm-team-group{margin-bottom:22px}
+  .crm-team-h{font-size:13px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid var(--primary);display:flex;align-items:center;gap:8px}
+  .crm-status-sel{padding:5px 9px;border:none;border-radius:14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -117,20 +136,37 @@ setCrmRenderHook(()=>{ try{ paint(); }catch(e){} });
 
 function paint(){
   window._crmModalOpen = false;
+  const mode = window._crmMode || 'kontakte';
+  if(mode==='projekte'){
+    if(window._crmProjSelId && getProjekt(window._crmProjSelId)) paintProjectDetail();
+    else { window._crmProjSelId = null; paintProjectsList(); }
+    return;
+  }
   if(window._crmSelId && curEntity()) paintDetail();
   else { window._crmSelId = null; paintList(); }
 }
 
-// ── Bar (Baum-Tabs + Suche) ────────────────────────────────────────
+// ── Bar (Baum-Tabs + Projekte + Kontext-Steuerung) ─────────────────
 function barHtml(){
-  const tabs = TREES.map(t=>
-    `<button class="crm-tree-tab${t.key===window._crmTree?' active':''}" onclick="crmSwitchTree('${t.key}')">${t.icon} ${esc(t.label)}</button>`
+  const mode = window._crmMode || 'kontakte';
+  const treeTabs = TREES.map(t=>
+    `<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${t.icon} ${esc(t.label)}</button>`
   ).join('');
+  const projTab = `<button class="crm-tree-tab${mode==='projekte'?' active':''}" style="margin-left:8px" onclick="crmShowProjekte()">📋 Projekte</button>`;
   const aiOn = getAiEndpoint() ? '✓' : '–';
+  let right;
+  if(mode==='projekte'){
+    const opts = ['<option value="">Alle Teams</option>']
+      .concat(zeTeams().map(t=>`<option ${window._crmProjTeamFilter===t?'selected':''}>${esc(t)}</option>`)).join('');
+    right = `<select class="crm-search" style="min-width:150px" onchange="crmProjTeamFilter(this.value)">${opts}</select>
+      <button class="btn-sm-crm primary" onclick="crmOpenNewProjekt()">＋ Projekt</button>`;
+  } else {
+    right = `<input class="crm-search" type="search" placeholder="Suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearch(this.value)">
+      <button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Neu</button>`;
+  }
   return `<div class="crm-bar">
-    <div class="crm-trees">${tabs}</div>
-    <input class="crm-search" type="search" placeholder="Suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearch(this.value)">
-    <button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Neu</button>
+    <div class="crm-trees">${treeTabs}${projTab}</div>
+    ${right}
     <button class="btn-sm-crm" title="KI-Proxy für Zusammenfassungen" onclick="crmConfigAi()">⚙️ KI ${aiOn}</button>
   </div>`;
 }
@@ -226,6 +262,19 @@ function paintDetail(){
       ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${nl2br(l.summary)}</div>`:''}
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
 
+  // Verknüpfte Projekte (Cross-Link zum Projektmanagement)
+  const linkedProjekte = listProjekteForEntity(window._crmTree, e.id);
+  const projekteRows = linkedProjekte.length ? linkedProjekte.map(p=>{
+      const st=statusByKey(p.status);
+      return `<div class="crm-row">
+        <div class="grow"><span class="name">${esc(p.titel||'')}</span>
+          <span class="crm-chip" style="background:${st.color};color:#fff;border-color:${st.color}">${esc(st.label)}</span>
+          ${p.team?` <span class="small">${esc(p.team)}</span>`:''}
+        </div>
+        <button class="btn-sm-crm" onclick="crmOpenProjFromEntity('${p.id}')">Öffnen</button>
+      </div>`;
+    }).join('') : `<div class="small" style="color:var(--muted)">Keine verknüpften Projekte.</div>`;
+
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${esc(tree.label)}</button>
@@ -252,6 +301,11 @@ function paintDetail(){
     </div>
 
     <div class="crm-sec">
+      <h4><span class="ttl">📋 Verknüpfte Projekte</span><button class="btn-sm-crm" onclick="crmNewProjektForEntity()">＋ Projekt</button></h4>
+      ${projekteRows}
+    </div>
+
+    <div class="crm-sec">
       <h4><span class="ttl">🧭 Status quo</span></h4>
       <textarea class="crm-ta" id="crm-statusquo" rows="3" placeholder="Wo stehen wir aktuell mit ${esc(s.name||'')}?">${esc(e.statusQuo||'')}</textarea>
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmSaveStatusQuo()">Speichern</button></div>
@@ -275,7 +329,7 @@ function paintDetail(){
 }
 
 // ── Navigation ─────────────────────────────────────────────────────
-function crmSwitchTree(key){ window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
+function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
 function crmSearch(v){ window._crmSearch=v; paintList(); }
 function crmOpenDetail(id){ window._crmSelId=id; paintDetail(); }
 function crmBackToList(){ window._crmSelId=null; paintList(); }
@@ -458,10 +512,10 @@ function crmDeleteTodo(tid){
 }
 
 // ── Interne Kommunikation: Notiz + Diktat + KI ─────────────────────
-function crmOpenNote(){
-  crmOpenModalShell();
+// Gemeinsame Modal-Vorlage – von Eintrags- UND Projekt-Notizen genutzt.
+function noteModalHtml(saveFn){
   const autor=esc((window.cu&&window.cu.name)||'');
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🎤 Neue Notiz</h3>
+  return `<h3 style="color:var(--primary);margin:0 0 14px">🎤 Neue Notiz</h3>
    <div class="crm-modal-field"><label>Autor</label><input id="crm-note-autor" value="${autor}"></div>
    <div class="crm-modal-field"><label>Notiz / Diktat</label>
      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
@@ -473,9 +527,10 @@ function crmOpenNote(){
    <div class="crm-modal-field"><label>KI-Zusammenfassung (optional)</label><textarea class="crm-ta" id="crm-note-summary" rows="3" placeholder="Wird durch ✨ erzeugt – oder leer lassen"></textarea></div>
    <div class="crm-modal-actions">
      <button class="btn-sm-crm" onclick="crmCancelNote()">Abbrechen</button>
-     <button class="btn-sm-crm primary" onclick="crmSaveNote()">Speichern</button>
-   </div>`, true);
+     <button class="btn-sm-crm primary" onclick="${saveFn}()">Speichern</button>
+   </div>`;
 }
+function crmOpenNote(){ crmOpenModalShell(); openModal(noteModalHtml('crmSaveNote'), true); }
 function _stopDictation(){
   if(window._crmRec){ try{ window._crmRec.stop(); }catch(e){} window._crmRec=null; }
 }
@@ -564,6 +619,246 @@ function crmConfigAi(){
   if(window._activeModule==='crm' && !window._crmModalOpen) paint();
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  PROJEKTMANAGEMENT  –  Projekte nach Team, verknüpft mit CRM-Einträgen
+// ══════════════════════════════════════════════════════════════════
+
+function crmShowProjekte(){ window._crmMode='projekte'; window._crmProjSelId=null; paintProjectsList(); }
+function crmProjTeamFilter(v){ window._crmProjTeamFilter=v; paintProjectsList(); }
+function crmOpenProjDetail(id){ window._crmProjSelId=id; paintProjectDetail(); }
+function crmBackToProjects(){ window._crmProjSelId=null; paintProjectsList(); }
+
+// Sprung Projekt ⇄ CRM-Eintrag (Verknüpfung)
+function crmOpenProjFromEntity(id){ window._crmMode='projekte'; window._crmProjSelId=id; paintProjectDetail(); }
+function crmOpenLinkedEntity(tree,id){ window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=id; paintDetail(); }
+
+// Projekt-Karte
+function projCardHtml(p){
+  const st=statusByKey(p.status);
+  const openTasks=(p.tasks||[]).filter(t=>!t.done).length;
+  const links=(p.links||[]).length;
+  const due=p.faellig?fmtDate(Date.parse(p.faellig)):'';
+  const sub=[p.verantwortlich?('👤 '+p.verantwortlich):'', due?('📅 '+due):''].filter(Boolean).map(esc).join(' · ');
+  return `<div class="crm-card" onclick="crmOpenProjDetail('${p.id}')">
+    <h3>${esc(p.titel||'(ohne Titel)')}</h3>
+    ${sub?`<div class="sub">${sub}</div>`:''}
+    <div class="meta">
+      <span class="crm-chip" style="background:${st.color};color:#fff;border-color:${st.color}">${esc(st.label)}</span>
+      ${openTasks?`<span class="crm-chip warn">✓ ${openTasks} offen</span>`:''}
+      ${links?`<span class="crm-chip">🔗 ${links}</span>`:''}
+    </div>
+  </div>`;
+}
+
+// Liste, gruppiert nach Team (gleiche Teams wie in der Zeiterfassung)
+function paintProjectsList(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const filter=window._crmProjTeamFilter||'';
+  let items=listProjekte();
+  if(filter) items=items.filter(p=>(p.team||'')===filter);
+  const order=zeTeams();
+  const groups=[];
+  const ensure=name=>{ let g=groups.find(x=>x.name===name); if(!g){ g={name,items:[]}; groups.push(g);} return g; };
+  order.forEach(ensure);
+  items.forEach(p=>{ if(p.team && !order.includes(p.team)) ensure(p.team); });
+  ensure('Ohne Team');
+  items.forEach(p=>{ ensure(p.team||'Ohne Team').items.push(p); });
+  const blocks=groups.filter(g=>g.items.length).map(g=>
+    `<div class="crm-team-group"><div class="crm-team-h">${esc(g.name)} <span class="crm-chip">${g.items.length}</span></div>
+     <div class="crm-list">${g.items.map(projCardHtml).join('')}</div></div>`
+  ).join('');
+  root.innerHTML = barHtml() + `<div class="crm-body">${
+    items.length ? blocks
+      : `<div class="crm-empty">Noch keine Projekte${filter?' in diesem Team':''}.<br><br><button class="btn-sm-crm primary" onclick="crmOpenNewProjekt()">＋ Projekt anlegen</button></div>`
+  }</div>`;
+}
+
+// Detail
+function paintProjectDetail(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const p=getProjekt(window._crmProjSelId); if(!p){ window._crmProjSelId=null; paintProjectsList(); return; }
+  const st=statusByKey(p.status);
+  const statusOpts=PROJEKT_STATUS.map(s=>`<option value="${s.key}" ${s.key===p.status?'selected':''}>${esc(s.label)}</option>`).join('');
+
+  const links=(p.links||[]).map((l,idx)=>{
+    const ent=getEntity(l.tree,l.id); const tr=treeByKey(l.tree);
+    const name=ent?((ent.stamm&&ent.stamm.name)||'(ohne Name)'):'(gelöscht)';
+    return `<div class="crm-row">
+      <div class="grow"><span class="name">${tr.icon} ${esc(name)}</span> <span class="small">${esc(tr.single)}</span></div>
+      ${ent?`<button class="btn-sm-crm" onclick="crmOpenLinkedEntity('${l.tree}','${l.id}')">Öffnen</button>`:''}
+      <button class="crm-x" title="Verknüpfung entfernen" onclick="crmProjRemoveLink(${idx})">✕</button>
+    </div>`;
+  }).join('') || `<div class="small" style="color:var(--muted)">Keine Verknüpfungen.</div>`;
+
+  const tasks=(p.tasks||[]).map(t=>`
+    <div class="crm-todo${t.done?' done':''}">
+      <input type="checkbox" ${t.done?'checked':''} onchange="crmProjToggleTask('${t.id}')">
+      <div class="grow"><span class="tx">${esc(t.text)}</span>${t.zustaendig?` <span class="fn">${esc(t.zustaendig)}</span>`:''}${t.faellig?` <span class="small">📅 ${esc(fmtDate(Date.parse(t.faellig)))}</span>`:''}</div>
+      <button class="crm-x" onclick="crmProjDeleteTask('${t.id}')">✕</button>
+    </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+
+  const log=(p.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
+    <div class="crm-logitem">
+      <div class="lh"><span>${esc(l.autor||'')}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmProjDeleteNote('${l.id}')">✕</button></span></div>
+      <div class="lt">${nl2br(l.text||'')}</div>
+      ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${nl2br(l.summary)}</div>`:''}
+    </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
+
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    <div class="crm-detail-head">
+      <button class="btn-sm-crm" onclick="crmBackToProjects()">← Projekte</button>
+      <h2>${esc(p.titel||'(ohne Titel)')}</h2>
+      <button class="btn-sm-crm" onclick="crmEditProjekt()">✎ Bearbeiten</button>
+      <button class="btn-sm-crm danger" onclick="crmDeleteProjekt()">Löschen</button>
+    </div>
+
+    <div class="crm-sec">
+      <h4><span class="ttl">📋 Projekt</span>
+        <select class="crm-status-sel" style="background:${st.color}" onchange="crmProjSetStatus(this.value)">${statusOpts}</select>
+      </h4>
+      <div class="crm-fields">
+        <div class="crm-field"><label>Team</label><div class="v">${esc(p.team||'– kein Team –')}</div></div>
+        <div class="crm-field"><label>Verantwortlich</label><div class="v">${esc(p.verantwortlich||'–')}</div></div>
+        <div class="crm-field"><label>Start</label><div class="v">${p.start?esc(fmtDate(Date.parse(p.start))):'–'}</div></div>
+        <div class="crm-field"><label>Fällig</label><div class="v">${p.faellig?esc(fmtDate(Date.parse(p.faellig))):'–'}</div></div>
+      </div>
+      ${p.beschreibung?`<div class="crm-field" style="margin-top:12px"><label>Beschreibung</label><div class="v">${nl2br(p.beschreibung)}</div></div>`:''}
+    </div>
+
+    <div class="crm-sec">
+      <h4><span class="ttl">🔗 Verknüpfte CRM-Einträge</span><button class="btn-sm-crm" onclick="crmProjAddLink()">＋ Verknüpfen</button></h4>
+      ${links}
+    </div>
+
+    <div class="crm-sec">
+      <h4><span class="ttl">✅ Aufgaben &amp; Zuständigkeit</span></h4>
+      ${tasks}
+      <div class="crm-add-inline">
+        <input id="crm-ptask-text" placeholder="Neue Aufgabe …" style="flex:1;min-width:150px">
+        <input id="crm-ptask-resp" placeholder="Zuständig" style="width:120px">
+        <input id="crm-ptask-due" type="date" style="width:150px">
+        <button class="btn-sm-crm primary" onclick="crmProjAddTask()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="crm-sec">
+      <h4><span class="ttl">💬 Verlauf / Notizen</span><button class="btn-sm-crm primary" onclick="crmProjOpenNote()">🎤 Neue Notiz</button></h4>
+      ${log}
+    </div>
+  </div>`;
+}
+
+// Formular (Anlegen/Bearbeiten)
+function projFormHtml(p){
+  const teamOpts=['<option value="">– kein Team –</option>']
+    .concat(zeTeams().map(t=>`<option ${p.team===t?'selected':''}>${esc(t)}</option>`)).join('');
+  const statusOpts=PROJEKT_STATUS.map(s=>`<option value="${s.key}" ${p.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
+  return `
+   <div class="crm-modal-field"><label>Titel *</label><input id="crm-pf-titel" value="${esc(p.titel||'')}"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:160px"><label>Team</label><select id="crm-pf-team">${teamOpts}</select></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-pf-status">${statusOpts}</select></div>
+   </div>
+   <div class="crm-modal-field"><label>Verantwortlich</label><input id="crm-pf-resp" value="${esc(p.verantwortlich||'')}"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Start</label><input id="crm-pf-start" type="date" value="${esc(p.start||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-pf-faellig" type="date" value="${esc(p.faellig||'')}"></div>
+   </div>
+   <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-pf-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>`;
+}
+function crmOpenNewProjekt(){
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Projekt anlegen</h3>
+    ${projFormHtml({status:'geplant', team:window._crmProjTeamFilter||''})}
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmSaveProjekt(true)">Anlegen</button></div>`, true);
+}
+// Projekt aus einem CRM-Eintrag heraus anlegen (gleich verknüpft)
+function crmNewProjektForEntity(){
+  const e=curEntity(); if(!e) return;
+  window._crmPendingLink={ tree:window._crmTree, id:e.id };
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Projekt für „${esc((e.stamm&&e.stamm.name)||'')}"</h3>
+    ${projFormHtml({status:'geplant'})}
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCancelEntityProjekt()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmSaveProjekt(true,true)">Anlegen &amp; verknüpfen</button></div>`, true);
+}
+function crmCancelEntityProjekt(){ window._crmPendingLink=null; crmCloseModal(); }
+function crmEditProjekt(){
+  const p=getProjekt(window._crmProjSelId); if(!p) return;
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Projekt</h3>
+    ${projFormHtml(p)}
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmSaveProjekt(false)">Speichern</button></div>`, true);
+}
+function crmSaveProjekt(isNew, fromEntity){
+  const titel=val('crm-pf-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
+  const data={ titel, team:val('crm-pf-team'), status:val('crm-pf-status')||'geplant',
+    verantwortlich:val('crm-pf-resp'), start:val('crm-pf-start'), faellig:val('crm-pf-faellig'),
+    beschreibung:val('crm-pf-besch') };
+  if(isNew){
+    const id=newId();
+    const links=(fromEntity && window._crmPendingLink)?[window._crmPendingLink]:[];
+    const p={ id, createdAt:Date.now(), links, tasks:[], log:[], ...data };
+    saveProjekt(p);
+    window._crmPendingLink=null;
+    crmCloseModal();
+    if(fromEntity){ paintDetail(); toast('Projekt angelegt & verknüpft ✓','ok'); }
+    else { window._crmMode='projekte'; window._crmProjSelId=id; paintProjectDetail(); toast('Projekt angelegt ✓','ok'); }
+  } else {
+    mutateProjekt(p=>{ Object.assign(p, data); });
+    crmCloseModal(); paintProjectDetail(); toast('Gespeichert ✓','ok');
+  }
+}
+function crmDeleteProjekt(){
+  const p=getProjekt(window._crmProjSelId); if(!p) return;
+  if(!confirm(`Projekt „${p.titel||''}" wirklich löschen?`)) return;
+  deleteProjekt(p.id); window._crmProjSelId=null; paintProjectsList(); toast('Gelöscht.','');
+}
+function crmProjSetStatus(key){ mutateProjekt(p=>{ p.status=key; }); paintProjectDetail(); }
+
+// Aufgaben
+function crmProjAddTask(){
+  const text=val('crm-ptask-text'); if(!text){ toast('Bitte eine Aufgabe eingeben.','err'); return; }
+  mutateProjekt(p=>{ if(!Array.isArray(p.tasks)) p.tasks=[]; p.tasks.push({ id:newId(), text, zustaendig:val('crm-ptask-resp'), faellig:val('crm-ptask-due'), done:false }); });
+  paintProjectDetail();
+}
+function crmProjToggleTask(tid){ mutateProjekt(p=>{ const t=(p.tasks||[]).find(x=>x.id===tid); if(t) t.done=!t.done; }); paintProjectDetail(); }
+function crmProjDeleteTask(tid){ mutateProjekt(p=>{ p.tasks=(p.tasks||[]).filter(x=>x.id!==tid); }); paintProjectDetail(); }
+
+// Verknüpfungen mit CRM-Einträgen
+function crmProjAddLink(){
+  const groups=TREES.map(tr=>{
+    const opts=listEntities(tr.key).map(e=>`<option value="${tr.key}:${e.id}">${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('');
+    return opts?`<optgroup label="${esc(tr.label)}">${opts}</optgroup>`:'';
+  }).join('');
+  if(!groups){ toast('Es gibt noch keine CRM-Einträge zum Verknüpfen.',''); return; }
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🔗 CRM-Eintrag verknüpfen</h3>
+    <div class="crm-modal-field"><label>Eintrag</label><select id="crm-link-sel">${groups}</select></div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmProjSaveLink()">Verknüpfen</button></div>`);
+}
+function crmProjSaveLink(){
+  const v=val('crm-link-sel'); if(!v) return;
+  const i=v.indexOf(':'); if(i<0) return;
+  const tree=v.slice(0,i), id=v.slice(i+1);
+  mutateProjekt(p=>{ if(!Array.isArray(p.links)) p.links=[]; if(!p.links.some(l=>l.tree===tree&&l.id===id)) p.links.push({tree,id}); });
+  crmCloseModal(); paintProjectDetail();
+}
+function crmProjRemoveLink(idx){ mutateProjekt(p=>{ if(Array.isArray(p.links)) p.links.splice(idx,1); }); paintProjectDetail(); }
+
+// Projekt-Notizen (gleiche Diktat-/KI-Vorlage)
+function crmProjOpenNote(){ crmOpenModalShell(); openModal(noteModalHtml('crmProjSaveNote'), true); }
+function crmProjSaveNote(){
+  _stopDictation();
+  const text=val('crm-note-text'); if(!text){ toast('Bitte zuerst etwas diktieren oder tippen.','err'); return; }
+  mutateProjekt(p=>{ if(!Array.isArray(p.log)) p.log=[]; p.log.push({ id:newId(), ts:Date.now(), autor:val('crm-note-autor'), text, summary:val('crm-note-summary') }); });
+  crmCloseModal(); paintProjectDetail(); toast('Notiz gespeichert ✓','ok');
+}
+function crmProjDeleteNote(nid){ mutateProjekt(p=>{ p.log=(p.log||[]).filter(x=>x.id!==nid); }); paintProjectDetail(); }
+
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM,
@@ -573,5 +868,12 @@ Object.assign(window, {
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmAddTodo, crmToggleTodo, crmDeleteTodo,
-  crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmConfigAi
+  crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmConfigAi,
+  // Projektmanagement
+  crmShowProjekte, crmProjTeamFilter, crmOpenProjDetail, crmBackToProjects,
+  crmOpenProjFromEntity, crmOpenLinkedEntity, crmNewProjektForEntity, crmCancelEntityProjekt,
+  crmOpenNewProjekt, crmEditProjekt, crmSaveProjekt, crmDeleteProjekt, crmProjSetStatus,
+  crmProjAddTask, crmProjToggleTask, crmProjDeleteTask,
+  crmProjAddLink, crmProjSaveLink, crmProjRemoveLink,
+  crmProjOpenNote, crmProjSaveNote, crmProjDeleteNote
 });
