@@ -51,21 +51,36 @@ function mutateEntity(fn){
 // ── Aufgaben-Container: Eintrag ODER eigenständiges Team-Projekt ────
 // Die Aufgaben-Engine (Haupt/Unter/Abhängigkeiten/Vorlagen) läuft über
 // diese Abstraktion, damit sie an beiden Orten identisch funktioniert.
+// ctx = { kind:'entity', tree, eid }  ODER  { kind:'teamprojekt', id }
+// _crmAfterTask steuert, welche Ansicht nach einer Aufgaben-Aktion neu rendert.
 function isTPCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='teamprojekt'); }
 function curContainer(){
-  return isTPCtx() ? getTeamProjekt(window._crmTaskCtx.id) : curEntity();
+  const ctx=window._crmTaskCtx; if(!ctx) return null;
+  const c = ctx.kind==='teamprojekt' ? getTeamProjekt(ctx.id) : getEntity(ctx.tree, ctx.eid);
+  if(c) normTasks(c);
+  return c;
 }
 function mutateContainer(fn){
-  if(isTPCtx()){
-    const p=getTeamProjekt(window._crmTaskCtx.id); if(!p) return;
+  const ctx=window._crmTaskCtx; if(!ctx) return;
+  if(ctx.kind==='teamprojekt'){
+    const p=getTeamProjekt(ctx.id); if(!p) return; normTasks(p);
     try{ fn(p); }catch(e){ console.error('CRM mutateContainer:',e); return; }
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
   } else {
-    mutateEntity(fn);
+    const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return; normTasks(ent);
+    try{ fn(ent); }catch(e){ console.error('CRM mutateContainer:',e); return; }
+    ent.updatedByKuerzel=curKuerzel(); ent.updatedByName=curName();
+    saveEntity(ctx.tree, ent);
   }
 }
-function repaintContainer(){ if(isTPCtx()) paintTeamProjektDetail(); else paintDetail(); }
+function repaintContainer(){
+  switch(window._crmAfterTask){
+    case 'projektdetail': paintTeamProjektDetail(); break;
+    case 'teamdetail':    paintTeamDetail(); break;
+    default:              paintDetail();
+  }
+}
 
 // ── Read-only aus der Zeiterfassung (Teams & Nutzer) ───────────────
 function zeTeams(){
@@ -165,6 +180,9 @@ function injectStyles(){
   .crm-locked{color:#b56a00;font-weight:600}
   .crm-deps-box{max-height:150px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff}
   .crm-deps-box label{display:block;font-size:13px;margin:3px 0;cursor:pointer}
+  .crm-tnode.top{border:1.5px solid var(--border);border-radius:9px;padding:4px 10px;margin-bottom:10px;background:var(--row-alt)}
+  .crm-tnode>.crm-task{border-top:none}
+  .crm-check{width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -263,50 +281,67 @@ function paintList(){
 //                                      due, status, deps:[ids] } ] } ]
 // Eine Aufgabe ist „blockiert", solange eine ihrer deps nicht 'erledigt' ist.
 
-// Flache Liste aller Aufgaben (Haupt + Unter) eines Eintrags
-function flatTasks(e){
+// Knoten-Normalisierung: altes `subs` → `children`, Felder absichern (rekursiv)
+function normNode(n){
+  if(n.subs && !n.children) n.children=n.subs;
+  if(n.subs) delete n.subs;
+  if(!Array.isArray(n.children)) n.children=[];
+  if(!Array.isArray(n.deps)) n.deps=[];
+  n.children.forEach(normNode);
+}
+function normTasks(c){ if(c && Array.isArray(c.todos)) c.todos.forEach(normNode); return c; }
+
+// Flache Liste aller Knoten (rekursiv) mit Tiefe
+function flatTasks(c){
   const out=[];
-  (e.todos||[]).forEach(m=>{
-    out.push({ id:m.id, text:m.text, status:m.status, kind:'main', ref:m });
-    (m.subs||[]).forEach(s=>out.push({ id:s.id, text:s.text, status:s.status, kind:'sub', parent:m.id, ref:s }));
-  });
+  const walk=(n,d)=>{ out.push({ id:n.id, text:n.text, status:n.status, depth:d, ref:n }); (n.children||[]).forEach(ch=>walk(ch,d+1)); };
+  (c.todos||[]).forEach(n=>walk(n,0));
   return out;
 }
-// Liefert die Texte blockierender (noch nicht erledigter) deps – oder null
-function blockingTexts(e, t){
+// Knoten + Elternarray finden (für Bearbeiten/Löschen/Anhängen)
+function findNode(c, id){
+  let res=null;
+  const walk=(n, parent, arr)=>{ if(n.id===id){ res={ node:n, parent, arr }; } (n.children||[]).forEach(ch=>walk(ch, n, n.children)); };
+  (c.todos||[]).forEach(n=>walk(n, null, c.todos));
+  return res;
+}
+// Effektives Team eines Knotens = Team des obersten Vorfahren
+function effectiveTeam(c, id){
+  let found='';
+  const walk=(n, depth, inherited)=>{ const t = depth===0 ? (n.team||'') : inherited; if(n.id===id) found=t; (n.children||[]).forEach(ch=>walk(ch, depth+1, t)); };
+  (c.todos||[]).forEach(n=>walk(n,0,''));
+  return found;
+}
+// Texte blockierender (noch nicht erledigter) deps – oder null
+function blockingTexts(c, t){
   const deps=t&&t.deps; if(!Array.isArray(deps)||!deps.length) return null;
-  const map={}; flatTasks(e).forEach(x=>map[x.id]=x);
+  const map={}; flatTasks(c).forEach(x=>map[x.id]=x);
   const open=deps.map(d=>map[d]).filter(x=>x && x.status!=='erledigt');
   return open.length?open.map(x=>x.text):null;
 }
-function statusOfId(e,id){ const x=flatTasks(e).find(y=>y.id===id); return x?x.status:null; }
+function statusOfId(c,id){ const x=flatTasks(c).find(y=>y.id===id); return x?x.status:null; }
 
-function subTaskHtml(e,m,s){
-  const st=taskStatusByKey(s.status);
-  const blk=blockingTexts(e,s);
-  const meta=[s.assigneeName?('👤 '+s.assigneeName):'', s.due?('📅 '+fmtDate(Date.parse(s.due))):''].filter(Boolean).map(esc).join(' · ');
-  return `<div class="crm-task sub${s.status==='erledigt'?' done':''}${blk?' blocked':''}">
-    <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-    <div class="grow"><span class="tx">${esc(s.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
-    <button class="btn-sm-crm" onclick="crmOpenSub('${m.id}','${s.id}')">✎</button>
-    <button class="crm-x" title="Löschen" onclick="crmDeleteSub('${m.id}','${s.id}')">✕</button>
-  </div>`;
-}
-function mainTaskHtml(e,m){
-  const st=taskStatusByKey(m.status);
-  const blk=blockingTexts(e,m);
-  const meta=[m.team?('👥 '+m.team):'', m.assigneeName?('👤 '+m.assigneeName):'', m.due?('📅 '+fmtDate(Date.parse(m.due))):''].filter(Boolean).map(esc).join(' · ');
-  const subs=(m.subs||[]).map(s=>subTaskHtml(e,m,s)).join('');
-  return `<div class="crm-mtask${m.status==='erledigt'?' done':''}">
+// Rekursive Aufgaben-Darstellung (Detail-Ansicht: Eintrag & Team-Projekt)
+function taskNodeHtml(c, n, depth){
+  const st=taskStatusByKey(n.status);
+  const blk=blockingTexts(c,n);
+  const done=n.status==='erledigt';
+  const parts=[];
+  if(depth===0 && n.team) parts.push('👥 '+n.team);
+  if(n.assigneeName) parts.push('👤 '+n.assigneeName);
+  if(n.due) parts.push('📅 '+fmtDate(Date.parse(n.due)));
+  const meta=parts.map(esc).join(' · ');
+  const children=(n.children||[]).map(ch=>taskNodeHtml(c,ch,depth+1)).join('');
+  return `<div class="crm-tnode${depth===0?' top':''}${done?' done':''}">
     <div class="crm-task${blk?' blocked':''}">
+      <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmToggleDone('${n.id}')">
       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-      <div class="grow"><span class="tx">${esc(m.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
-      <button class="btn-sm-crm" onclick="crmOpenTask('${m.id}')">✎</button>
-      <button class="crm-x" title="Löschen" onclick="crmDeleteTask('${m.id}')">✕</button>
+      <div class="grow"><span class="tx">${esc(n.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
+      <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmAddChild('${n.id}')">＋</button>
+      <button class="btn-sm-crm" title="Bearbeiten" onclick="crmOpenTask('${n.id}')">✎</button>
+      <button class="crm-x" title="Löschen" onclick="crmDeleteNode('${n.id}')">✕</button>
     </div>
-    <div class="crm-subs">${subs}
-      <button class="btn-sm-crm" style="margin-top:6px" onclick="crmOpenSub('${m.id}','')">＋ Unterpunkt</button>
-    </div>
+    ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
   </div>`;
 }
 
@@ -314,7 +349,9 @@ function mainTaskHtml(e,m){
 function paintDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const e=curEntity(); if(!e){ window._crmSelId=null; paintList(); return; }
-  window._crmTaskCtx={ kind:'entity' };  // Aufgaben-Engine zielt auf den Eintrag
+  normTasks(e);
+  window._crmTaskCtx={ kind:'entity', tree:window._crmTree, eid:e.id };  // Engine zielt auf den Eintrag
+  window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
 
@@ -348,7 +385,7 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
-  const todos=(e.todos||[]).map(m=>mainTaskHtml(e,m)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+  const todos=(e.todos||[]).map(m=>taskNodeHtml(e,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
 
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
@@ -569,10 +606,10 @@ function crmSaveStatusQuo(){
 //  AUFGABEN  (am Eintrag) – Team + Zuständige + Status + Fälligkeit
 // ══════════════════════════════════════════════════════════════════
 // Abhängigkeits-Auswahl (Checkboxen aller anderen Aufgaben des Eintrags)
-function depsBoxHtml(e, selfId, selected){
+function depsBoxHtml(c, selfId, selected){
   const sel=new Set(selected||[]);
-  const rows=flatTasks(e).filter(t=>t.id!==selfId).map(t=>
-    `<label><input type="checkbox" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${t.kind==='sub'?'↳ ':''}${esc(t.text)}${t.status==='erledigt'?' ✓':''}</label>`
+  const rows=flatTasks(c).filter(t=>t.id!==selfId).map(t=>
+    `<label><input type="checkbox" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${'↳ '.repeat(t.depth)}${esc(t.text)}${t.status==='erledigt'?' ✓':''}</label>`
   ).join('');
   return `<div class="crm-deps-box">${rows||'<div class="small" style="color:var(--muted)">Keine anderen Aufgaben vorhanden.</div>'}</div>`;
 }
@@ -587,99 +624,100 @@ function enforceBlock(e, deps, status){
   return status;
 }
 
-// ── Hauptaufgabe (Eintrag ODER Team-Projekt via Container) ─────────
-function crmOpenTask(tid){
+// ── Aufgaben-Knoten (beliebig tief): Modal-Vorlage ─────────────────
+// isTop=true → Team-Feld (außer im Team-Projekt). Sonst Team geerbt.
+function nodeModal(o){
   const e=curContainer(); if(!e) return;
-  const t = tid ? (e.todos||[]).find(x=>x.id===tid) : {};
-  if(tid && !t) return;
+  const n=o.node||{}; const tp=isTPCtx();
   crmOpenModalShell();
-  const tp=isTPCtx();
-  const statusOpts=TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
-  // Im Team-Projekt erbt die Aufgabe das Team des Projekts → kein Team-Feld
+  const statusOpts=TASK_STATUS.map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
   let teamRow;
-  if(tp){
-    teamRow=`<div class="crm-modal-field"><label>Zuständig${e.team?' ('+esc(e.team)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(e.team||'', t.assigneeId||'')}</select></div>`;
-  } else {
-    const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${t.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  if(o.isTop && !tp){
+    const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${n.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
     teamRow=`<div style="display:flex;gap:10px;flex-wrap:wrap">
        <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Team</label><select id="crm-task-team" onchange="crmTaskTeamChange()">${teamOpts}</select></div>
-       <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(t.team||'', t.assigneeId||'')}</select></div>
+       <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(n.team||'', n.assigneeId||'')}</select></div>
      </div>`;
+  } else {
+    const it = tp ? (e.team||'') : (o.inheritTeam||'');
+    teamRow=`<div class="crm-modal-field"><label>Zuständig${it?' ('+esc(it)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
   }
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${tid?'✎ Hauptaufgabe':'＋ Hauptaufgabe'}</h3>
-   <div class="crm-modal-field"><label>Aufgabe *</label><input id="crm-task-text" value="${esc(t.text||'')}"></div>
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(o.titel)}</h3>
+   <div class="crm-modal-field"><label>${o.isTop?'Aufgabe':'Unterpunkt'} *</label><input id="crm-task-text" value="${esc(n.text||'')}"></div>
    ${teamRow}
    <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(t.due||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(n.due||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
    </div>
-   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-task-deps">${depsBoxHtml(e, tid||null, t.deps)}</div></div>
+   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-task-deps">${depsBoxHtml(e, n.id||null, n.deps)}</div></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveTask('${tid}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="${o.saveOnclick}">Speichern</button></div>`);
+}
+function crmOpenTask(tid){  // tid='' → neue Hauptaufgabe, sonst Bearbeiten
+  const e=curContainer(); if(!e) return;
+  if(!tid){ nodeModal({ titel:'＋ Hauptaufgabe', node:{}, isTop:true, saveOnclick:"crmSaveTask('')" }); return; }
+  const f=findNode(e, tid); if(!f) return;
+  const isTop=(f.parent===null);
+  nodeModal({ titel:isTop?'✎ Hauptaufgabe':'✎ Unterpunkt', node:f.node, isTop,
+    inheritTeam:isTop?'':effectiveTeam(e, tid), saveOnclick:`crmSaveTask('${tid}')` });
+}
+function crmAddChild(parentId){
+  const e=curContainer(); if(!e) return;
+  const f=findNode(e, parentId); if(!f) return;
+  nodeModal({ titel:'＋ Unterpunkt zu „'+(f.node.text||'')+'"', node:{}, isTop:false,
+    inheritTeam:isTPCtx()?(e.team||''):effectiveTeam(e, parentId),
+    saveOnclick:`crmSaveChild('${parentId}')` });
 }
 function crmTaskTeamChange(){
   const team=val('crm-task-team');
   const sel=document.getElementById('crm-task-assignee');
   if(sel) sel.innerHTML=assigneeOptsHtml(team, '');
 }
-function crmSaveTask(tid){
-  const e=curContainer(); if(!e) return;
-  const text=val('crm-task-text'); if(!text){ toast('Bitte eine Aufgabe eingeben.','err'); return; }
+function _readNodeForm(e, isTop){
+  const text=val('crm-task-text'); if(!text){ toast('Bitte einen Text eingeben.','err'); return null; }
   const assigneeId=val('crm-task-assignee');
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
-  const team = isTPCtx() ? (e.team||'') : val('crm-task-team');
-  const rec={ text, team, assigneeId,
-    assigneeName: assigneeId?userName(assigneeId):'',
-    due:val('crm-task-due'), status, deps };
+  const rec={ text, assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
+  if(isTop && !isTPCtx()) rec.team=val('crm-task-team');  // Team nur bei Top-Aufgaben am Eintrag
+  return rec;
+}
+function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
+  const e=curContainer(); if(!e) return;
+  let isTop=true; if(tid){ const f=findNode(e,tid); if(f) isTop=(f.parent===null); }
+  const rec=_readNodeForm(e, isTop); if(!rec) return;
   mutateContainer(en=>{
     if(!Array.isArray(en.todos)) en.todos=[];
-    if(tid){ const t=en.todos.find(x=>x.id===tid); if(t){ Object.assign(t,rec); if(!Array.isArray(t.subs)) t.subs=[]; } }
-    else { rec.id=newId(); rec.subs=[]; en.todos.push(rec); }
+    if(tid){ const f=findNode(en, tid); if(f){ Object.assign(f.node, rec); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
+    else { en.todos.push({ id:newId(), children:[], team: isTPCtx()?'':(rec.team||''), ...rec }); }
   });
   crmCloseModal(); repaintContainer();
 }
-function crmDeleteTask(tid){
-  mutateContainer(e=>{ e.todos=(e.todos||[]).filter(x=>x.id!==tid); });
+function crmSaveChild(parentId){
+  const e=curContainer(); if(!e) return;
+  const rec=_readNodeForm(e, false); if(!rec) return;
+  mutateContainer(en=>{
+    const f=findNode(en, parentId); if(!f) return;
+    if(!Array.isArray(f.node.children)) f.node.children=[];
+    f.node.children.push({ id:newId(), children:[], ...rec });
+  });
+  crmCloseModal(); repaintContainer();
+}
+function crmDeleteNode(id){
+  if(!confirm('Diese Aufgabe samt Unterpunkten löschen?')) return;
+  mutateContainer(en=>{ const f=findNode(en, id); if(f && f.arr){ const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1); } });
   repaintContainer();
 }
-
-// ── Unterpunkt ─────────────────────────────────────────────────────
-function crmOpenSub(mid, sid){
+function crmToggleDone(id){
   const e=curContainer(); if(!e) return;
-  const m=(e.todos||[]).find(x=>x.id===mid); if(!m) return;
-  const s = sid ? ((m.subs||[]).find(x=>x.id===sid)) : {};
-  if(sid && !s) return;
-  crmOpenModalShell();
-  const statusOpts=TASK_STATUS.map(st=>`<option value="${st.key}" ${s.status===st.key?'selected':''}>${esc(st.label)}</option>`).join('');
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${sid?'✎ Unterpunkt':'＋ Unterpunkt'} <span style="font-weight:400;font-size:13px;color:var(--muted)">zu „${esc(m.text)}"</span></h3>
-   <div class="crm-modal-field"><label>Unterpunkt *</label><input id="crm-sub-text" value="${esc(s.text||'')}"></div>
-   <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig${m.team?' ('+esc(m.team)+')':''}</label><select id="crm-sub-assignee">${assigneeOptsHtml(m.team||'', s.assigneeId||'')}</select></div>
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-sub-due" type="date" value="${esc(s.due||'')}"></div>
-   </div>
-   <div class="crm-modal-field"><label>Status</label><select id="crm-sub-status">${statusOpts}</select></div>
-   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-sub-deps">${depsBoxHtml(e, sid||null, s.deps)}</div></div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveSub('${mid}','${sid}')">Speichern</button></div>`);
-}
-function crmSaveSub(mid, sid){
-  const e=curContainer(); if(!e) return;
-  const text=val('crm-sub-text'); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
-  const assigneeId=val('crm-sub-assignee');
-  const deps=readChecked('crm-sub-deps');
-  const status=enforceBlock(e, deps, val('crm-sub-status')||'offen');
-  const rec={ text, assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-sub-due'), status, deps };
-  mutateContainer(en=>{
-    const m=(en.todos||[]).find(x=>x.id===mid); if(!m) return;
-    if(!Array.isArray(m.subs)) m.subs=[];
-    if(sid){ const s=m.subs.find(x=>x.id===sid); if(s) Object.assign(s,rec); }
-    else { rec.id=newId(); m.subs.push(rec); }
-  });
-  crmCloseModal(); repaintContainer();
-}
-function crmDeleteSub(mid, sid){
-  mutateContainer(en=>{ const m=(en.todos||[]).find(x=>x.id===mid); if(m) m.subs=(m.subs||[]).filter(x=>x.id!==sid); });
+  const f=findNode(e, id); if(!f) return;
+  if(f.node.status==='erledigt'){
+    mutateContainer(en=>{ const g=findNode(en,id); if(g) g.node.status='offen'; });
+  } else {
+    const blk=blockingTexts(e, f.node);
+    if(blk){ toast('🔒 Blockiert durch: '+blk.join(', '),'err'); repaintContainer(); return; }
+    mutateContainer(en=>{ const g=findNode(en,id); if(g) g.node.status='erledigt'; });
+  }
   repaintContainer();
 }
 
@@ -714,9 +752,9 @@ function crmApplyVorlage(id){
   const idMap={};
   (v.items||[]).forEach(it=>{ idMap[it.id]=newId(); (it.subs||[]).forEach(su=>{ idMap[su.id]=newId(); }); });
   const mains=(v.items||[]).map(it=>({
-    id:idMap[it.id], text:it.text, team:it.team||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
+    id:idMap[it.id], text:it.text, team:isTPCtx()?'':(it.team||''), assigneeId:'', assigneeName:'', due:'', status:'offen',
     deps:(it.deps||[]).map(d=>idMap[d]).filter(Boolean),
-    subs:(it.subs||[]).map(su=>({ id:idMap[su.id], text:su.text, assigneeId:'', assigneeName:'', due:'', status:'offen', deps:(su.deps||[]).map(d=>idMap[d]).filter(Boolean) }))
+    children:(it.subs||[]).map(su=>({ id:idMap[su.id], text:su.text, assigneeId:'', assigneeName:'', due:'', status:'offen', children:[], deps:(su.deps||[]).map(d=>idMap[d]).filter(Boolean) }))
   }));
   mutateContainer(e=>{ if(!Array.isArray(e.todos)) e.todos=[]; mains.forEach(m=>e.todos.push(m)); });
   crmCloseModal(); repaintContainer();
@@ -731,6 +769,7 @@ function teamMainTasks(team){
   const out=[];
   TREES.forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
+      normTasks(e);
       (e.todos||[]).forEach(m=>{
         const match = team==='Ohne Team' ? !m.team : (m.team||'')===team;
         if(match) out.push({ tree:tr.key, eid:e.id, ename:(e.stamm&&e.stamm.name)||'(ohne Name)', main:m });
@@ -739,22 +778,19 @@ function teamMainTasks(team){
   });
   return out;
 }
-// Zählung (Haupt + Unter) für die Team-Kacheln
+// Zählung (alle Ebenen) für die Team-Kacheln
 function teamCounts(team){
   let total=0, open=0;
   teamMainTasks(team).forEach(x=>{
-    total++; if(x.main.status!=='erledigt') open++;
-    (x.main.subs||[]).forEach(s=>{ total++; if(s.status!=='erledigt') open++; });
+    flatTasks({ todos:[x.main] }).forEach(t=>{ total++; if(t.status!=='erledigt') open++; });
   });
   return { total, open };
 }
-// Beliebige Aufgabe (Haupt ODER Unter) in einem Eintrag ändern
+// Beliebigen Knoten (jede Ebene) in einem Eintrag ändern
 function updateAnyTask(tree, eid, id, fn){
-  const ent=getEntity(tree,eid); if(!ent) return;
-  let target=null;
-  (ent.todos||[]).forEach(m=>{ if(m.id===id) target=m; (m.subs||[]).forEach(s=>{ if(s.id===id) target=s; }); });
-  if(!target) return;
-  try{ fn(target); }catch(e){ console.error('CRM updateAnyTask:',e); return; }
+  const ent=getEntity(tree,eid); if(!ent) return; normTasks(ent);
+  const f=findNode(ent, id); if(!f) return;
+  try{ fn(f.node); }catch(e){ console.error('CRM updateAnyTask:',e); return; }
   ent.updatedByKuerzel=curKuerzel(); ent.updatedByName=curName();
   saveEntity(tree, ent);
 }
@@ -794,22 +830,26 @@ function paintTeamDetail(){
   });
   const aOpts=(id)=>assigneeOptsHtml(team==='Ohne Team'?'':team, id||'');
   const stOpts=(t)=>TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
-  const rowFor=(g,e,t,isSub)=>{
-    const blk=e?blockingTexts(e,t):null;
-    return `<div class="crm-task${isSub?' sub':''}${t.status==='erledigt'?' done':''}${blk?' blocked':''}">
-      <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${t.id}',this.value)">${stOpts(t)}</select>
-      <div class="grow"><span class="tx">${esc(t.text)}</span>${t.due?`<div class="small">📅 ${esc(fmtDate(Date.parse(t.due)))}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
-      <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${t.id}',this.value)">${aOpts(t.assigneeId)}</select>
+  const teamNodeHtml=(g,e,n,depth)=>{
+    const blk=e?blockingTexts(e,n):null;
+    const done=n.status==='erledigt';
+    const children=(n.children||[]).map(ch=>teamNodeHtml(g,e,ch,depth+1)).join('');
+    return `<div class="crm-tnode${depth===0?' top':''}${done?' done':''}">
+      <div class="crm-task${blk?' blocked':''}">
+        <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
+        <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${n.id}',this.value)">${stOpts(n)}</select>
+        <div class="grow"><span class="tx">${esc(n.text)}</span>${n.due?`<div class="small">📅 ${esc(fmtDate(Date.parse(n.due)))}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
+        <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${n.id}',this.value)">${aOpts(n.assigneeId)}</select>
+        <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋</button>
+        <button class="btn-sm-crm" title="Bearbeiten" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">✎</button>
+      </div>
+      ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
     </div>`;
   };
   const blocks=groups.map(g=>{
     const tr=treeByKey(g.tree);
     const e=getEntity(g.tree,g.eid);
-    const rows=g.mains.map(m=>
-      `<div class="crm-mtask${m.status==='erledigt'?' done':''}">
-        ${rowFor(g,e,m,false)}
-        ${(m.subs||[]).length?`<div class="crm-subs">${m.subs.map(s=>rowFor(g,e,s,true)).join('')}</div>`:''}
-      </div>`).join('');
+    const rows=g.mains.map(m=>teamNodeHtml(g,e,m,0)).join('');
     return `<div class="crm-team-group">
       <div class="crm-team-h" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)} <span class="crm-chip">${g.mains.length}</span></div>
       ${rows}
@@ -839,7 +879,7 @@ function paintTeamDetail(){
   </div>`;
 }
 function crmTeamSetStatus(tree,eid,id,value){
-  const e=getEntity(tree,eid); if(!e) return;
+  const e=getEntity(tree,eid); if(!e) return; normTasks(e);
   const x=flatTasks(e).find(t=>t.id===id); if(!x) return;
   const v=enforceBlock(e, x.ref.deps, value);
   updateAnyTask(tree,eid,id, t=>{ t.status=v; });
@@ -850,14 +890,20 @@ function crmTeamSetAssignee(tree,eid,id,value){
   updateAnyTask(tree,eid,id, t=>{ t.assigneeId=value; t.assigneeName=name; });
   paintTeamDetail();
 }
+// Häkchen / Unterpunkt / Bearbeiten aus der Team-Ansicht (zielt auf den Eintrag)
+function crmTeamToggleDone(tree,eid,id){ window._crmTaskCtx={kind:'entity',tree,eid}; window._crmAfterTask='teamdetail'; crmToggleDone(id); }
+function crmTeamAddChild(tree,eid,id){ window._crmTaskCtx={kind:'entity',tree,eid}; window._crmAfterTask='teamdetail'; crmAddChild(id); }
+function crmTeamEditNode(tree,eid,id){ window._crmTaskCtx={kind:'entity',tree,eid}; window._crmAfterTask='teamdetail'; crmOpenTask(id); }
 
 // ── Eigenständige Team-Projekte ────────────────────────────────────
 function paintTeamProjektDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const p=getTeamProjekt(window._crmTeamProjSel);
   if(!p){ window._crmTeamProjSel=null; paintTeamDetail(); return; }
+  normTasks(p);
   window._crmTaskCtx={ kind:'teamprojekt', id:p.id };  // Aufgaben-Engine zielt aufs Projekt
-  const todos=(p.todos||[]).map(m=>mainTaskHtml(p,m)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+  window._crmAfterTask='projektdetail';
+  const todos=(p.todos||[]).map(m=>taskNodeHtml(p,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${esc(p.team||'Team')}</button>
@@ -1138,13 +1184,13 @@ Object.assign(window, {
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo,
-  // Aufgaben (Haupt + Unter + Abhängigkeiten)
-  crmOpenTask, crmTaskTeamChange, crmSaveTask, crmDeleteTask,
-  crmOpenSub, crmSaveSub, crmDeleteSub,
+  // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
+  crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
+  crmDeleteNode, crmToggleDone,
   crmApplyVorlagePick, crmApplyVorlage,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
-  crmTeamSetStatus, crmTeamSetAssignee,
+  crmTeamSetStatus, crmTeamSetAssignee, crmTeamToggleDone, crmTeamAddChild, crmTeamEditNode,
   // Eigenständige Team-Projekte
   crmOpenTeamProjekt, crmBackToTeamProjekte, crmNewTeamProjekt,
   crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt,
