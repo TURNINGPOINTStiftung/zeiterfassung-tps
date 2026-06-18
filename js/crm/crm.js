@@ -121,17 +121,20 @@ function crmSetupModuleBar(){
   try{
     const cu=window.cu; if(!cu) return;
     const isAdmin=cu.role==='admin';
+    const bar=document.getElementById('module-bar');
+    if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
       const lvl=accessLevel();
       const hasCrm = isAdmin || lvl==='full' || lvl==='verein';
-      const bar=document.getElementById('module-bar');
-      if(bar) bar.style.display=(isAdmin||hasCrm)?'flex':'none';
-      const setTab=(mod,show)=>{ const b=document.querySelector('.mb-tab[data-mod="'+mod+'"]'); if(b) b.style.display=show?'':'none'; };
-      setTab('zeiterfassung', true);
-      setTab('website', isAdmin);
-      setTab('forum', isAdmin);
-      setTab('crm', hasCrm);
-      setTab('verwaltung', isAdmin);
+      const show={ zeiterfassung:true, website:isAdmin, forum:isAdmin, crm:hasCrm, verwaltung:isAdmin };
+      let count=0;
+      Object.keys(show).forEach(mod=>{
+        const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
+        if(b) b.style.display=show[mod]?'':'none';
+        if(show[mod]) count++;
+      });
+      // ☰-Menü nur zeigen, wenn es mehr als ein Modul gibt
+      const menuBtn=document.getElementById('mb-menu-btn'); if(menuBtn) menuBtn.style.display=count>1?'':'none';
       // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
       if(isAdmin){ try{ ensureVerwMounted(); }catch(e){} }
     }).catch(()=>{});

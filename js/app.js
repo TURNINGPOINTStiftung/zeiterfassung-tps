@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v99':'Zeiterfassung';
+  if(_hv) _hv.textContent=_showVer?'v100':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -60,29 +60,37 @@ export function initApp(){
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 
-  // Modul-Navigation: Admin sieht alles; CRM-berechtigte Nicht-Admins sehen
-  // zusätzlich den CRM-Tab. Feinsteuerung übernimmt das CRM-Modul (Rechte).
+  // Top-Leiste ist jetzt der EINZIGE Header (für alle sichtbar). Welche Module
+  // im ☰-Menü erscheinen (und ob das Menü überhaupt nötig ist), steuert das
+  // CRM-Modul anhand der Rechte (crmSetupModuleBar).
   const moduleBar=document.getElementById('module-bar');
-  if(moduleBar) moduleBar.style.display=isAdmin?'flex':'none';
+  if(moduleBar) moduleBar.style.display='flex';
   try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){ console.error('CRM Modulleiste:',e); }
   switchModule('zeiterfassung');
 }
 
-// Wechsel zwischen Modulen (Zeiterfassung / Website / Forum / CRM) – Admin
+const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',verwaltung:'Verwaltung'};
+
+// ☰-Dropdown öffnen/schließen
+export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
+export function closeModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display='none'; }
+
+// Wechsel zwischen Modulen (Zeiterfassung / Website / Forum / CRM / Verwaltung)
 export function switchModule(name){
   window._activeModule=name;
-  document.querySelectorAll('.mb-tab').forEach(t=>t.classList.toggle('active',t.dataset.mod===name));
+  document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active',t.dataset.mod===name));
+  const cur=document.getElementById('mb-current'); if(cur) cur.textContent=MODULE_LABELS[name]||name;
   const isZE=name==='zeiterfassung';
-  const hdr=document.querySelector('.app-header');
+  const bar=document.getElementById('module-bar'); if(bar) bar.classList.toggle('nonze',!isZE);
   const nav=document.getElementById('app-nav');
   const main=document.querySelector('.app-content');
-  if(hdr) hdr.style.display=isZE?'':'none';
   if(nav) nav.style.display=isZE?'':'none';
   if(main) main.style.display=isZE?'':'none';
   ['website','forum','crm','verwaltung'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(name===m)?'flex':'none';
   });
+  closeModuleMenu();
   // CRM/Verwaltung rendern sich selbst (isoliert). In try/catch, damit ein
   // Fehler dort niemals das Umschalten oder die Zeiterfassung beeinträchtigt.
   if(name==='crm'){ try{ window.renderCRM&&window.renderCRM(); }catch(e){ console.error('CRM Render-Fehler (ignoriert):',e); } }

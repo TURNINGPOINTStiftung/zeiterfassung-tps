@@ -8,7 +8,8 @@ import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          checkPasswordResetToken, saveResetPassword,
          filterLoginUsers, hideLoginDropdown, selectLoginUser,
          loginKeyNav } from './auth.js';
-import { initApp, switchView, switchModule, changeMonth, rebuildEmpSelect, onEmpSelect } from './app.js';
+import { initApp, switchView, switchModule, changeMonth, rebuildEmpSelect, onEmpSelect,
+         toggleModuleMenu, closeModuleMenu } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
 import { openModal, closeModal } from './utils.js';
 
@@ -86,6 +87,8 @@ window.loginKeyNav             = loginKeyNav;
 window.initApp          = initApp;
 window.switchView       = switchView;
 window.switchModule     = switchModule;
+window.toggleModuleMenu = toggleModuleMenu;
+window.closeModuleMenu  = closeModuleMenu;
 window.changeMonth      = changeMonth;
 window.rebuildEmpSelect = rebuildEmpSelect;
 window.onEmpSelect      = onEmpSelect;
@@ -246,6 +249,12 @@ window.catOptionsForUser= catOptionsForUser;
 // ══════════════════════════════════════════════════════════════════
 document.getElementById('modal-bg').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal-bg')) closeModal();
+});
+
+// ☰-Modul-Dropdown bei Klick außerhalb schließen
+document.addEventListener('click',e=>{
+  const wrap=document.querySelector('.mb-menu-wrap');
+  if(wrap && !wrap.contains(e.target)) closeModuleMenu();
 });
 
 // Aufgeschobenes Neu-Rendern nachholen, sobald der Nutzer die Zeiterfassungs-
