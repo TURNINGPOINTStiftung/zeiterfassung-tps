@@ -196,7 +196,7 @@ export function renderOverview(){
 
   // Erinnerungs-Button: nur für Leitung und Admin, nicht für GF
   const btnRem=document.getElementById('btn-reminders');
-  if(btnRem) btnRem.style.display=hasPermission('btn_erinnerungen',cu.role)?'':'none';
+  if(btnRem) btnRem.style.display=hasPermission('btn_erinnerungen',cu)?'':'none';
 
   const content=document.getElementById('overview-content');
   if(Object.keys(teamMap).length===0){
@@ -293,7 +293,7 @@ export function openJahresübersicht(uid,y){
   const user=getUser(uid);
   if(!user) return;
   const isFree=isFreelancer(user);
-  const canSendGF=cu&&hasPermission('btn_jahresbericht',cu.role);
+  const canSendGF=cu&&hasPermission('btn_jahresbericht',cu);
   const yrSent=!!(getData().yearReports&&getData().yearReports[uid+'_'+y]);
 
   const rows=MONTHS.map((mn,i)=>{

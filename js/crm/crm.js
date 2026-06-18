@@ -224,6 +224,11 @@ function injectStyles(){
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
   .crm-delta{font-size:11px;font-weight:700}
   .crm-delta.up{color:var(--accent)} .crm-delta.down{color:#c0392b}
+  .vw-table{width:100%;border-collapse:collapse;font-size:14px}
+  .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:6px 10px;border-bottom:2px solid var(--border);white-space:nowrap}
+  .vw-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .vw-name{font-weight:700;color:var(--primary)}
+  .vw-team{display:inline-block;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin:1px 3px 1px 0;color:var(--muted)}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -1335,20 +1340,20 @@ function roleLbl(u){
   return u.role==='geschaeftsfuehrer'?'Geschäftsführung':u.role==='leitung'?'Leitung':
          u.role==='berater'?'Berater/in':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
 }
-// Baut das Verwaltungs-Gerüst und hängt die ZE-Bausteine „Mitarbeiter" und
-// „Berechtigungen" EINMALIG hierher um (gleiche Elemente/IDs → renderSettings
-// funktioniert unverändert weiter). Idempotent.
+// Verwaltungs-Gerüst bauen + die ZE-Organisationsbausteine (Teams/Rollen/
+// Kategorien/Daten) EINMALIG hierher umhängen (gleiche Elemente/IDs →
+// renderSettings füllt sie am neuen Ort). Mitarbeiter rendern wir selbst
+// als breite Tabelle. Idempotent.
 function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
-  if(document.getElementById('verw-access')) return;
+  if(document.getElementById('verw-users')) return;
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
    <div class="crm-body">
-     <div id="verw-usersmount"></div>
-     <div id="verw-access"></div>
-     <div id="verw-permsmount"></div>
+     <div id="verw-users"></div>
+     <div id="verw-config"></div>
    </div>`;
-  const ub=document.getElementById('set-users-box'), um=document.getElementById('verw-usersmount'); if(ub&&um) um.appendChild(ub);
-  const pb=document.getElementById('set-perms-box'), pm=document.getElementById('verw-permsmount'); if(pb&&pm) pm.appendChild(pb);
+  const cfg=document.getElementById('verw-config');
+  ['set-org-box','set-cats-box'].forEach(id=>{ const el=document.getElementById(id); if(el&&cfg) cfg.appendChild(el); });
 }
 function renderVerwaltung(){
   try{
@@ -1358,14 +1363,14 @@ function renderVerwaltung(){
     ensureCrmReady().then(()=>{
       try{
         ensureVerwMounted();
-        paintVerwAccess();
-        if(window.renderSettings) window.renderSettings();  // füllt Mitarbeiter-/Berechtigungs-Bausteine
+        paintVerwUsers();
+        if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
       }catch(e){ console.error('Verwaltung:',e); }
     });
   }catch(e){ console.error('renderVerwaltung:',e); }
 }
-function paintVerwAccess(){
-  const host=document.getElementById('verw-access'); if(!host) return;
+function paintVerwUsers(){
+  const host=document.getElementById('verw-users'); if(!host) return;
   const vereine=listEntities('vereine');
   const vOpts=sel=>['<option value="">– Verein wählen –</option>']
     .concat(vereine.map(v=>`<option value="${v.id}" ${sel===v.id?'selected':''}>${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</option>`)).join('');
@@ -1376,23 +1381,35 @@ function paintVerwAccess(){
     const lvl=a.level||'none';
     const lvlSel=[['none','Kein Zugriff'],['verein','Nur eigener Verein'],['full','Voll']]
       .map(([L,t])=>`<option value="${L}" ${lvl===L?'selected':''}>${t}</option>`).join('');
-    return `<div class="crm-row">
-      <div class="grow"><span class="name">${esc(u.name)}</span> <span class="small">${esc(roleLbl(u))}</span></div>
-      <select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>
-      <select class="crm-tsel" ${lvl==='verein'?'':'style="visibility:hidden"'} title="Zugeordneter Verein" onchange="crmVerwSetVerein('${u.id}',this.value)">${vOpts(a.vereinId)}</select>
-    </div>`;
+    const teams=(Array.isArray(u.teams)&&u.teams.length?u.teams:(u.team?[u.team]:[])).filter(Boolean);
+    return `<tr>
+      <td><span class="vw-name">${esc(u.name)}</span></td>
+      <td>${esc(roleLbl(u))}</td>
+      <td>${teams.map(t=>`<span class="vw-team">${esc(t)}</span>`).join('')||'<span class="small" style="color:var(--muted)">–</span>'}</td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
+        <select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>
+        <select class="crm-tsel" ${lvl==='verein'?'':'style="display:none"'} onchange="crmVerwSetVerein('${u.id}',this.value)">${vOpts(a.vereinId)}</select>
+      </div></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-sm-crm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
+        <button class="crm-x" title="Löschen" onclick="deleteUser('${u.id}')">✕</button>
+      </td>
+    </tr>`;
   }).join('');
   host.innerHTML = `<div class="crm-sec">
-    <h4><span class="ttl">📇 CRM-Zugriff je Nutzer</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">„Nur eigener Verein" = sieht ausschließlich seinen zugeordneten Verein samt dessen Aufgaben. „Voll" = sieht das gesamte CRM.</div>
-    ${rows||'<div class="small" style="color:var(--muted)">Keine Nutzer.</div>'}
+    <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span><button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">CRM-Zugriff direkt hier setzen. „Bearbeiten" öffnet Rolle, Teams, Stunden und die Berechtigungen pro Person.</div>
+    <div style="overflow-x:auto"><table class="vw-table">
+      <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" class="small" style="color:var(--muted)">Keine Nutzer.</td></tr>'}</tbody>
+    </table></div>
   </div>`;
 }
 function crmVerwSetLevel(uid, level){
   const a=getAccess(uid)||{};
   if(level==='none') saveAccess(uid, null);
   else saveAccess(uid, { level, vereinId: level==='verein'?(a.vereinId||''):'' });
-  paintVerwAccess();
+  paintVerwUsers();
 }
 function crmVerwSetVerein(uid, vid){
   saveAccess(uid, { level:'verein', vereinId:vid });
@@ -1401,6 +1418,7 @@ function crmVerwSetVerein(uid, vid){
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwSetVerein,
+  _refreshVerwUsers: paintVerwUsers,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember,
