@@ -23,6 +23,7 @@ export const STAMM_FIELDS = [
   { key:'email',   label:'E-Mail',          type:'text' },
   { key:'tel',     label:'Telefon',         type:'text' },
   { key:'tags',    label:'Schlagworte',     type:'text',     hint:'kommagetrennt' },
+  { key:'statStart', label:'Statistik ab',  type:'date',     hint:'ab wann zählt die Statistik' },
 ];
 
 // Optionale baum-spezifische Überschreibung der Stammdaten.
