@@ -239,8 +239,10 @@ function injectStyles(){
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
   .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
-  .kb-col-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
-  .kb-col-title{font-weight:700;color:var(--primary);font-size:14px;cursor:pointer}
+  .kb-col-head{display:flex;align-items:center;gap:6px}
+  .kb-grip{cursor:grab;color:var(--muted);font-size:13px;line-height:1;user-select:none;flex-shrink:0}
+  .kb-grip:active{cursor:grabbing}
+  .kb-col-title{font-weight:700;color:var(--primary);font-size:14px;cursor:pointer;flex:1}
   .kb-col-sub{font-size:11px;color:var(--muted);margin-top:-4px}
   .kb-cards{display:flex;flex-direction:column;gap:8px;min-height:8px}
   .kb-card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 10px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:grab}
@@ -477,6 +479,7 @@ function taskBoardHtml(c){
     const cards=(top.children||[]).map(card=>kbCardHtml(c,card)).join('');
     return `<div class="kb-col" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
       <div class="kb-col-head">
+        <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,'${top.id}')" title="Spalte verschieben">⠿</span>
         <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}</span>
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
       </div>
@@ -486,24 +489,39 @@ function taskBoardHtml(c){
     </div>`;
   }).join('');
   return `<div class="kb-board">${cols}
-    <div class="kb-col kb-col-new"><button class="kb-add" onclick="crmOpenTask('')">＋ Spalte</button></div>
+    <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><button class="kb-add" onclick="crmOpenTask('')">＋ Spalte</button></div>
   </div>`;
 }
-function crmDragStart(ev,id){ window._crmDragId=id; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
+function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
+function crmColDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='col'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} ev.stopPropagation(); }
 function crmDragOver(ev){ ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(e){} }
 function crmDropOnColumn(ev,topId){
   ev.preventDefault();
-  const dragId=window._crmDragId||(ev.dataTransfer&&ev.dataTransfer.getData('text/plain'));
-  window._crmDragId=null;
-  if(!dragId||dragId===topId) return;
-  mutateContainer(c=>{
-    const f=findNode(c,dragId); if(!f) return;
-    if(flatNodes([f.node]).some(x=>x.id===topId)) return; // nicht in eigenen Teilbaum schieben
-    const target=findNode(c,topId); if(!target) return;
-    const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1);
-    if(!Array.isArray(target.node.children)) target.node.children=[];
-    target.node.children.push(f.node);
-  });
+  const dragId=window._crmDragId; const kind=window._crmDragKind;
+  window._crmDragId=null; window._crmDragKind=null;
+  if(!dragId) return;
+  if(kind==='col'){
+    // Spalten (Hauptaufgaben) umsortieren
+    if(dragId===topId) return;
+    mutateContainer(c=>{
+      const arr=c.todos||[]; const from=arr.findIndex(x=>x.id===dragId); if(from<0) return;
+      const [moved]=arr.splice(from,1);
+      let to = topId==='__end__' ? arr.length : arr.findIndex(x=>x.id===topId);
+      if(to<0) to=arr.length;
+      arr.splice(to,0,moved);
+    });
+  } else {
+    // Karte (Unterpunkt) in eine andere Spalte verschieben
+    if(dragId===topId || topId==='__end__') return;
+    mutateContainer(c=>{
+      const f=findNode(c,dragId); if(!f) return;
+      if(flatNodes([f.node]).some(x=>x.id===topId)) return; // nicht in eigenen Teilbaum
+      const target=findNode(c,topId); if(!target) return;
+      const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1);
+      if(!Array.isArray(target.node.children)) target.node.children=[];
+      target.node.children.push(f.node);
+    });
+  }
   repaintContainer();
 }
 
@@ -892,7 +910,11 @@ function nodeModal(o){
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
    </div>
    <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-task-note" rows="3" placeholder="Details, Kontext, Notizen …">${esc(n.note||'')}</textarea></div>
-   <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-task-deps">${depsBoxHtml(e, n.id||null, n.deps)}</div></div>
+   <details class="crm-modal-field"${(n.deps&&n.deps.length)?' open':''}>
+     <summary style="cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔗 Abhängig von …${(n.deps&&n.deps.length)?` (${n.deps.length})`:''}</summary>
+     <div style="font-size:11px;color:var(--muted);margin:6px 0">Diese Aufgabe startet erst, wenn die hier gewählten erledigt sind.</div>
+     <div id="crm-task-deps">${depsBoxHtml(e, n.id||null, n.deps)}</div>
+   </details>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="${o.saveOnclick}">Speichern</button></div>`);
 }
@@ -1538,7 +1560,7 @@ Object.assign(window, {
   crmDeleteNode, crmToggleDone,
   crmApplyVorlagePick, crmApplyVorlage,
   // Kanban-Board
-  crmSetTaskView, crmDragStart, crmDragOver, crmDropOnColumn,
+  crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
   crmTeamSetStatus, crmTeamSetAssignee, crmTeamToggleDone, crmTeamAddChild, crmTeamEditNode,

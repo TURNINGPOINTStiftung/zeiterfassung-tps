@@ -9,6 +9,7 @@ export const TREES = [
   { key:'vereine',       label:'Vereine',       icon:'🏛️', single:'Verein' },
   { key:'sozialakteure', label:'Sozialakteure', icon:'🤝', single:'Sozialakteur' },
   { key:'fundraising',   label:'Fundraising',   icon:'💶', single:'Fundraising-Kontakt' },
+  { key:'marketing',     label:'Marketing & Öffentlichkeitsarbeit', icon:'📣', single:'Marketing-Eintrag' },
 ];
 
 export function treeByKey(k){ return TREES.find(t=>t.key===k) || TREES[0]; }
