@@ -132,6 +132,8 @@ function crmSetupModuleBar(){
       setTab('forum', isAdmin);
       setTab('crm', hasCrm);
       setTab('verwaltung', isAdmin);
+      // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
+      if(isAdmin){ try{ ensureVerwMounted(); }catch(e){} }
     }).catch(()=>{});
   }catch(e){ console.error('crmSetupModuleBar:',e); }
 }
@@ -1330,17 +1332,37 @@ function roleLbl(u){
   return u.role==='geschaeftsfuehrer'?'Geschäftsführung':u.role==='leitung'?'Leitung':
          u.role==='berater'?'Berater/in':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
 }
+// Baut das Verwaltungs-Gerüst und hängt die ZE-Bausteine „Mitarbeiter" und
+// „Berechtigungen" EINMALIG hierher um (gleiche Elemente/IDs → renderSettings
+// funktioniert unverändert weiter). Idempotent.
+function ensureVerwMounted(){
+  const root=document.getElementById('verw-root'); if(!root) return;
+  if(document.getElementById('verw-access')) return;
+  root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
+   <div class="crm-body">
+     <div id="verw-usersmount"></div>
+     <div id="verw-access"></div>
+     <div id="verw-permsmount"></div>
+   </div>`;
+  const ub=document.getElementById('set-users-box'), um=document.getElementById('verw-usersmount'); if(ub&&um) um.appendChild(ub);
+  const pb=document.getElementById('set-perms-box'), pm=document.getElementById('verw-permsmount'); if(pb&&pm) pm.appendChild(pb);
+}
 function renderVerwaltung(){
   try{
     injectStyles();
     const root=document.getElementById('verw-root'); if(!root) return;
     if(!window.cu || window.cu.role!=='admin'){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
-    root.innerHTML='<div class="crm-empty">Lade …</div>';
-    ensureCrmReady().then(()=>{ try{ paintVerwaltung(); }catch(e){ console.error('Verwaltung:',e); } });
+    ensureCrmReady().then(()=>{
+      try{
+        ensureVerwMounted();
+        paintVerwAccess();
+        if(window.renderSettings) window.renderSettings();  // füllt Mitarbeiter-/Berechtigungs-Bausteine
+      }catch(e){ console.error('Verwaltung:',e); }
+    });
   }catch(e){ console.error('renderVerwaltung:',e); }
 }
-function paintVerwaltung(){
-  const root=document.getElementById('verw-root'); if(!root) return;
+function paintVerwAccess(){
+  const host=document.getElementById('verw-access'); if(!host) return;
   const vereine=listEntities('vereine');
   const vOpts=sel=>['<option value="">– Verein wählen –</option>']
     .concat(vereine.map(v=>`<option value="${v.id}" ${sel===v.id?'selected':''}>${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</option>`)).join('');
@@ -1357,20 +1379,17 @@ function paintVerwaltung(){
       <select class="crm-tsel" ${lvl==='verein'?'':'style="visibility:hidden"'} title="Zugeordneter Verein" onchange="crmVerwSetVerein('${u.id}',this.value)">${vOpts(a.vereinId)}</select>
     </div>`;
   }).join('');
-  root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung · CRM-Zugriff</span></div></div>
-   <div class="crm-body">
-     <div class="crm-sec">
-       <h4><span class="ttl">Wer darf ins CRM?</span></h4>
-       <div class="small" style="color:var(--muted);margin-bottom:10px">„Nur eigener Verein" = sieht ausschließlich seinen zugeordneten Verein samt dessen Aufgaben. „Voll" = sieht das gesamte CRM. Nutzer werden weiterhin in der Zeiterfassung angelegt.</div>
-       ${rows||'<div class="small" style="color:var(--muted)">Keine Nutzer.</div>'}
-     </div>
-   </div>`;
+  host.innerHTML = `<div class="crm-sec">
+    <h4><span class="ttl">📇 CRM-Zugriff je Nutzer</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">„Nur eigener Verein" = sieht ausschließlich seinen zugeordneten Verein samt dessen Aufgaben. „Voll" = sieht das gesamte CRM.</div>
+    ${rows||'<div class="small" style="color:var(--muted)">Keine Nutzer.</div>'}
+  </div>`;
 }
 function crmVerwSetLevel(uid, level){
   const a=getAccess(uid)||{};
   if(level==='none') saveAccess(uid, null);
   else saveAccess(uid, { level, vereinId: level==='verein'?(a.vereinId||''):'' });
-  paintVerwaltung();
+  paintVerwAccess();
 }
 function crmVerwSetVerein(uid, vid){
   saveAccess(uid, { level:'verein', vereinId:vid });
