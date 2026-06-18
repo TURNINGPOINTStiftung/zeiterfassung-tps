@@ -183,6 +183,11 @@ function injectStyles(){
   .crm-tnode.top{border:1.5px solid var(--border);border-radius:9px;padding:4px 10px;margin-bottom:10px;background:var(--row-alt)}
   .crm-tnode>.crm-task{border-top:none}
   .crm-check{width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0}
+  .crm-stats{width:100%;border-collapse:collapse;font-size:13px}
+  .crm-stats th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
+  .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .crm-delta{font-size:11px;font-weight:700}
+  .crm-delta.up{color:var(--accent)} .crm-delta.down{color:#c0392b}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -359,7 +364,7 @@ function paintDetail(){
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; return v ? `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${nl2br(v)}</div></div>` : ''; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):nl2br(v); return `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   const kontakte=(e.kontakte||[]).map(k=>`
@@ -372,14 +377,25 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteMember('${k.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Kontakte.</div>`;
 
-  const termine=(e.termine||[]).map(t=>`
-    <div class="crm-row">
+  const _today=new Date().toISOString().slice(0,10);
+  const terminRow=t=>{
+    const start=t.datum||''; const end=t.bis||'';
+    const dateStr = (end && end!==start) ? `${fmtDate(Date.parse(start))} – ${fmtDate(Date.parse(end))}`
+                                         : (start?fmtDate(Date.parse(start)):'');
+    return `<div class="crm-row">
       <div class="grow"><span class="name">${esc(t.titel)}</span>
-        <div class="small">${[t.datum?fmtDate(t.datumTs||Date.parse(t.datum)):'', t.ort].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="small">${[dateStr, t.ort].filter(Boolean).map(esc).join(' · ')}</div>
         ${t.note?`<div class="small">${esc(t.note)}</div>`:''}
       </div>
       <button class="crm-x" title="Entfernen" onclick="crmDeleteTermin('${t.id}')">✕</button>
-    </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Termine.</div>`;
+    </div>`;
+  };
+  const allTermine=(e.termine||[]).slice().sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
+  const isPast=t=>{ const end=t.bis||t.datum||''; return end && end < _today; };
+  const upcoming=allTermine.filter(t=>!isPast(t));
+  const past=allTermine.filter(isPast);
+  const termine = (upcoming.map(terminRow).join('') || `<div class="small" style="color:var(--muted)">Keine anstehenden Termine.</div>`)
+    + (past.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene Termine (${past.length})</summary><div style="margin-top:6px">${past.map(terminRow).join('')}</div></details>`:'');
 
   const angebote=(e.angebote||[]).map(a=>`
     <div class="crm-row">
@@ -395,6 +411,9 @@ function paintDetail(){
       <div class="lt">${nl2br(l.text||'')}</div>
       ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${nl2br(l.summary)}</div>`:''}
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
+
+  // Statistik (nur bei Vereinen)
+  const statsSec = (window._crmTree==='vereine') ? statsSecHtml(e) : '';
 
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
@@ -444,6 +463,8 @@ function paintDetail(){
       <h4><span class="ttl">💬 Interne Kommunikation</span><button class="btn-sm-crm primary" onclick="crmOpenNote()">🎤 Neue Notiz</button></h4>
       ${log}
     </div>
+
+    ${statsSec}
   </div>`;
 }
 
@@ -462,7 +483,9 @@ function stammFormHtml(s){
     const v=esc(s[f.key]||'');
     const inp = f.type==='textarea'
       ? `<textarea id="crm-sf-${f.key}" rows="2">${v}</textarea>`
-      : `<input id="crm-sf-${f.key}" value="${v}">`;
+      : f.type==='date'
+        ? `<input type="date" id="crm-sf-${f.key}" value="${v}">`
+        : `<input id="crm-sf-${f.key}" value="${v}">`;
     return `<div class="crm-modal-field"><label>${esc(f.label)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
   }).join('');
 }
@@ -554,7 +577,10 @@ function crmAddTermin(){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Termin / Training</h3>
    <div class="crm-modal-field"><label>Titel *</label><input id="crm-tf-titel" placeholder="z. B. Training, Treffen …"></div>
-   <div class="crm-modal-field"><label>Datum</label><input id="crm-tf-datum" type="date"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von</label><input id="crm-tf-datum" type="date"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-tf-bis" type="date"></div>
+   </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort"></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note"></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -562,10 +588,11 @@ function crmAddTermin(){
 }
 function crmSaveTermin(){
   const titel=val('crm-tf-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
-  const datum=val('crm-tf-datum');
+  const datum=val('crm-tf-datum'); let bis=val('crm-tf-bis');
+  if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note') });
+    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note') });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal(); paintDetail();
@@ -602,6 +629,61 @@ function crmSaveStatusQuo(){
   const v=val('crm-statusquo');
   mutateEntity(e=>{ e.statusQuo=v; });
   toast('Status gespeichert ✓','ok');
+}
+
+// ── Statistik (Zahlen·Daten·Fakten) – Entwicklung über die Zeit ────
+const STAT_METRICS=[
+  ['mitglieder','Vereinsmitglieder'],
+  ['trainerInkl','Inkl. Trainer'],
+  ['tnInkl','Inkl. TN'],
+  ['tnAktiv','aktiv im Training'],
+];
+function statsSecHtml(e){
+  const start=(e.stamm&&e.stamm.statStart)||'';
+  let stats=(e.stats||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  if(start) stats=stats.filter(s=>String(s.date)>=start);
+  const head=`<tr><th>Datum</th>${STAT_METRICS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th></th></tr>`;
+  const rows=stats.map((s,i)=>{
+    const prev=i>0?stats[i-1]:null;
+    const cells=STAT_METRICS.map(([k])=>{
+      const cur=Number(s[k]||0);
+      let d='';
+      if(prev){ const dv=cur-Number(prev[k]||0); if(dv) d=` <span class="crm-delta ${dv>0?'up':'down'}">${dv>0?'▲':'▼'}${Math.abs(dv)}</span>`; }
+      return `<td>${cur}${d}</td>`;
+    }).join('');
+    return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td>${cells}<td><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button></td></tr>`;
+  }).join('');
+  return `<div class="crm-sec">
+    <h4><span class="ttl">📊 Zahlen · Daten · Fakten</span><button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button></h4>
+    ${stats.length
+      ? `<div style="overflow-x:auto"><table class="crm-stats">${head}${rows}</table></div>`
+      : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.${start?` (Statistik ab ${esc(fmtDate(Date.parse(start)))})`:' Tipp: Startdatum unter „Stammdaten · Statistik ab" setzen.'}</div>`}
+  </div>`;
+}
+function crmAddStat(){
+  const e=curEntity(); if(!e) return;
+  crmOpenModalShell();
+  const def=(e.stamm&&e.stamm.statStart)||new Date().toISOString().slice(0,10);
+  const f=(id,l)=>`<div class="crm-modal-field" style="flex:1;min-width:130px"><label>${esc(l)}</label><input id="${id}" type="number" min="0" inputmode="numeric"></div>`;
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Erfassung</h3>
+   <div class="crm-modal-field"><label>Datum</label><input id="crm-stat-date" type="date" value="${esc(def)}"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${f('crm-stat-mitglieder','Vereinsmitglieder')}${f('crm-stat-trainerInkl','Inkl. Trainer')}</div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${f('crm-stat-tnInkl','Inkl. TN')}${f('crm-stat-tnAktiv','aktiv im Training')}</div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveStat()">Speichern</button></div>`);
+}
+function crmSaveStat(){
+  const date=val('crm-stat-date'); if(!date){ toast('Bitte ein Datum wählen.','err'); return; }
+  const num=id=>{ const x=document.getElementById(id); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
+  mutateEntity(e=>{
+    if(!Array.isArray(e.stats)) e.stats=[];
+    e.stats.push({ id:newId(), date, mitglieder:num('crm-stat-mitglieder'), trainerInkl:num('crm-stat-trainerInkl'), tnInkl:num('crm-stat-tnInkl'), tnAktiv:num('crm-stat-tnAktiv') });
+  });
+  crmCloseModal(); paintDetail(); toast('Erfassung gespeichert ✓','ok');
+}
+function crmDeleteStat(id){
+  mutateEntity(e=>{ e.stats=(e.stats||[]).filter(x=>x.id!==id); });
+  paintDetail();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1205,6 +1287,7 @@ Object.assign(window, {
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo,
+  crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
   crmDeleteNode, crmToggleDone,
