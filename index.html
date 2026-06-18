@@ -77,36 +77,36 @@
 <!-- ═══════════════ APP ═══════════════ -->
 <div id="app">
 
-  <!-- Modul-Navigation (nur Admin) – CI im Stil der Website -->
+  <!-- Eine Top-Leiste (blaues CI). Modulwechsel über das ☰-Dropdown. -->
   <div id="module-bar" class="module-bar" style="display:none">
-    <img class="mb-logo" id="mb-logo" src="" alt="TURNING POINT Stiftung">
-    <div class="mb-tabs">
-      <button class="mb-tab active" data-mod="zeiterfassung" onclick="switchModule('zeiterfassung')">Zeiterfassung</button>
-      <button class="mb-tab" data-mod="website" onclick="switchModule('website')">Website</button>
-      <button class="mb-tab" data-mod="forum" onclick="switchModule('forum')">Forum</button>
-      <button class="mb-tab" data-mod="crm" onclick="switchModule('crm')">CRM</button>
-      <button class="mb-tab" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
+    <div class="mb-menu-wrap">
+      <button class="mb-menu" id="mb-menu-btn" onclick="toggleModuleMenu()" aria-label="Modul wechseln">☰ <span id="mb-current">Zeiterfassung</span></button>
+      <div class="mb-dropdown" id="mb-dropdown" style="display:none">
+        <button class="mb-mod active" data-mod="zeiterfassung" onclick="switchModule('zeiterfassung')">Zeiterfassung</button>
+        <button class="mb-mod" data-mod="website" onclick="switchModule('website')">Website</button>
+        <button class="mb-mod" data-mod="forum" onclick="switchModule('forum')">Forum</button>
+        <button class="mb-mod" data-mod="crm" onclick="switchModule('crm')">CRM</button>
+        <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
+      </div>
     </div>
-    <button class="btn btn-outline btn-sm" onclick="doLogout()">Abmelden</button>
-  </div>
-
-  <header class="app-header">
-    <div class="brand"><img id="hdr-logo" src="" alt="TURNING POINT Stiftung" style="height:58px;width:auto;vertical-align:middle;filter:brightness(0) invert(1)"> <span id="hdr-version">Zeiterfassung</span></div>
+    <img class="mb-logo" id="mb-logo" src="" alt="TURNING POINT Stiftung">
+    <div class="mb-spacer"></div>
     <div class="header-right">
+      <span id="hdr-version" class="mb-version"></span>
       <div class="user-badge" id="hdr-user" onclick="openProfileModal()" title="Profileinstellungen">
         <span id="hdr-name">–</span>
         <span class="role" id="hdr-role" style="display:none"></span>
       </div>
-      <div id="stempel-live" style="display:none;align-items:center;gap:6px;background:var(--ok);color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer" onclick="openZeitstempel()" class="no-print">
+      <div id="stempel-live" class="ze-only no-print" style="display:none;align-items:center;gap:6px;background:var(--ok);color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer" onclick="openZeitstempel()">
         <span style="font-size:15px">⏱</span>
         <span id="stempel-live-von"></span>
         <span style="opacity:.75">·</span>
         <span id="stempel-live-dur"></span>
       </div>
-      <button class="btn btn-outline btn-sm no-print" id="btn-zeitstempel" onclick="openZeitstempel()" style="display:none">⏱ Stempeln</button>
+      <button class="btn btn-outline btn-sm ze-only no-print" id="btn-zeitstempel" onclick="openZeitstempel()" style="display:none">⏱ Stempeln</button>
       <button class="btn btn-outline btn-sm no-print" onclick="doLogout()">Abmelden</button>
     </div>
-  </header>
+  </div>
 
   <nav class="app-nav" id="app-nav">
     <div class="nav-tab nav-stempel-mobile" id="tab-stempeln-mobile" data-view="stempeln" onclick="switchView('stempeln')" style="display:none">&#x23F1; Stempeln</div>
@@ -404,6 +404,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=31"></script>
+<script type="module" src="js/main.js?v=32"></script>
 </body>
 </html>
