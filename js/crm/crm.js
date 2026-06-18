@@ -216,9 +216,13 @@ function injectStyles(){
   .crm-locked{color:#b56a00;font-weight:600}
   .crm-deps-box{max-height:150px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff}
   .crm-deps-box label{display:block;font-size:13px;margin:3px 0;cursor:pointer}
-  .crm-tnode.top{border:1.5px solid var(--border);border-radius:9px;padding:4px 10px;margin-bottom:10px;background:var(--row-alt)}
+  .crm-tnode.top{border:1.5px solid var(--border);border-radius:10px;padding:6px 12px;margin-bottom:10px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
   .crm-tnode>.crm-task{border-top:none}
   .crm-check{width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0}
+  .crm-subs{margin-left:14px;padding-left:12px;border-left:2px solid var(--border)}
+  .crm-tmeta{font-size:11px;color:var(--muted);margin-top:2px}
+  .crm-tnote{font-size:13px;color:var(--text);margin-top:4px;white-space:pre-line;background:rgba(0,0,0,.035);border-radius:6px;padding:5px 9px}
+  .crm-prog{font-size:11px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 9px;white-space:nowrap;flex-shrink:0}
   .crm-stats{width:100%;border-collapse:collapse;font-size:13px}
   .crm-stats th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -393,17 +397,20 @@ function taskNodeHtml(c, n, depth){
   if(n.assigneeName) parts.push('👤 '+n.assigneeName);
   if(n.due) parts.push('📅 '+fmtDate(Date.parse(n.due)));
   const meta=parts.map(esc).join(' · ');
-  const children=(n.children||[]).map(ch=>taskNodeHtml(c,ch,depth+1)).join('');
+  const kids=n.children||[];
+  const prog=kids.length?`<span class="crm-prog">✓ ${kids.filter(k=>k.status==='erledigt').length}/${kids.length}</span>`:'';
+  const children=kids.map(ch=>taskNodeHtml(c,ch,depth+1)).join('');
   return `<div class="crm-tnode${depth===0?' top':''}${done?' done':''}">
     <div class="crm-task${blk?' blocked':''}">
       <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmToggleDone('${n.id}')">
       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-      <div class="grow"><span class="tx">${esc(n.text)}</span>${meta?`<div class="small">${meta}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
+      <div class="grow"><span class="tx">${esc(n.text)}</span>${meta?`<div class="crm-tmeta">${meta}</div>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
+      ${prog}
       <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmAddChild('${n.id}')">＋</button>
       <button class="btn-sm-crm" title="Bearbeiten" onclick="crmOpenTask('${n.id}')">✎</button>
       <button class="crm-x" title="Löschen" onclick="crmDeleteNode('${n.id}')">✕</button>
     </div>
-    ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
+    ${kids.length?`<div class="crm-subs">${children}</div>`:''}
   </div>`;
 }
 
@@ -788,6 +795,7 @@ function nodeModal(o){
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(n.due||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
    </div>
+   <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-task-note" rows="3" placeholder="Details, Kontext, Notizen …">${esc(n.note||'')}</textarea></div>
    <div class="crm-modal-field"><label>Abhängig von (muss vorher erledigt sein)</label><div id="crm-task-deps">${depsBoxHtml(e, n.id||null, n.deps)}</div></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="${o.saveOnclick}">Speichern</button></div>`);
@@ -817,7 +825,7 @@ function _readNodeForm(e, isTop){
   const assigneeId=val('crm-task-assignee');
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
-  const rec={ text, assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
+  const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
   if(isTop && !isTPCtx()) rec.team=val('crm-task-team');  // Team nur bei Top-Aufgaben am Eintrag
   return rec;
 }
@@ -976,7 +984,7 @@ function paintTeamDetail(){
       <div class="crm-task${blk?' blocked':''}">
         <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
         <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${n.id}',this.value)">${stOpts(n)}</select>
-        <div class="grow"><span class="tx">${esc(n.text)}</span>${n.due?`<div class="small">📅 ${esc(fmtDate(Date.parse(n.due)))}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
+        <div class="grow"><span class="tx">${esc(n.text)}</span>${n.due?`<div class="crm-tmeta">📅 ${esc(fmtDate(Date.parse(n.due)))}</div>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
         <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${n.id}',this.value)">${aOpts(n.assigneeId)}</select>
         <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋</button>
         <button class="btn-sm-crm" title="Bearbeiten" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">✎</button>
@@ -1138,7 +1146,7 @@ function vNodeHtml(v,n,depth){
       <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
       <button class="btn-sm-crm" title="Unterpunkt" onclick="crmVNodeAdd('${v.id}','${n.id}')">＋</button>
       <button class="btn-sm-crm" title="Bearbeiten" onclick="crmVNodeEdit('${v.id}','${n.id}')">✎</button>
-      <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">⛓</button>
+      <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">🔗</button>
       <button class="crm-x" title="Löschen" onclick="crmVNodeDel('${v.id}','${n.id}')">✕</button>
     </div>
     ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
