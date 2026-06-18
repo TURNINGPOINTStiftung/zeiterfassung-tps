@@ -22,7 +22,7 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{}, teamprojekte:{} }; }
+function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{}, teamprojekte:{}, access:{} }; }
 
 function _normalize(v){
   const out = freshCrm();
@@ -30,6 +30,7 @@ function _normalize(v){
     TREE_KEYS.forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
     if(v.vorlagen && typeof v.vorlagen==='object') out.vorlagen = v.vorlagen;
     if(v.teamprojekte && typeof v.teamprojekte==='object') out.teamprojekte = v.teamprojekte;
+    if(v.access && typeof v.access==='object') out.access = v.access;
     // Altbestand v90: 'projekte' wird nicht mehr verwendet, bleibt aber im
     // Firebase-Baum unangetastet (kein Datenverlust, nur nicht mehr angezeigt).
   }
@@ -69,7 +70,7 @@ export function ensureCrmReady(){
         // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
         const fb    = _normalize(snap.val() || {});
         const local = _cache || freshCrm();
-        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen','teamprojekte'];
+        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen','teamprojekte','access'];
         COLLS.forEach(coll=>{
           const lobj = local[coll] || {};
           Object.keys(lobj).forEach(id=>{
@@ -229,6 +230,23 @@ export function listTeamProjekte(team){
   if(team!=null) arr = arr.filter(p => (p.team||'') === (team||''));
   return arr.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'}));
 }
+
+// ── CRM-Zugriffsrechte (pro ZE-Nutzer, isoliert unter crm/access) ──
+// { level:'none'|'verein'|'full', vereinId? }  – steuert die CRM-Sicht.
+export function saveAccess(uid, obj){
+  if(!uid) return Promise.resolve();
+  const d=getCrm(); if(!d.access) d.access={};
+  if(obj===null) delete d.access[uid]; else d.access[uid]=obj;
+  _cache=d; _persistLocal();
+  try{
+    if(_ref){
+      const ref=_ref.child('access').child(uid);
+      return (obj===null?ref.remove():ref.set(obj)).catch(e=>console.warn('CRM saveAccess:', e && e.message));
+    }
+  }catch(e){ console.warn('CRM saveAccess:', e && e.message); }
+  return Promise.resolve();
+}
+export function getAccess(uid){ const d=getCrm(); return (d.access && d.access[uid]) || null; }
 
 // Kurze, kollisionsarme ID
 export function newId(){

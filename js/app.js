@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v97':'Zeiterfassung';
+  if(_hv) _hv.textContent=_showVer?'Zeiterfassung · v98':'Zeiterfassung';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -60,9 +60,11 @@ export function initApp(){
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 
-  // Modul-Navigation nur für Admin
+  // Modul-Navigation: Admin sieht alles; CRM-berechtigte Nicht-Admins sehen
+  // zusätzlich den CRM-Tab. Feinsteuerung übernimmt das CRM-Modul (Rechte).
   const moduleBar=document.getElementById('module-bar');
   if(moduleBar) moduleBar.style.display=isAdmin?'flex':'none';
+  try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){ console.error('CRM Modulleiste:',e); }
   switchModule('zeiterfassung');
 }
 
@@ -77,13 +79,14 @@ export function switchModule(name){
   if(hdr) hdr.style.display=isZE?'':'none';
   if(nav) nav.style.display=isZE?'':'none';
   if(main) main.style.display=isZE?'':'none';
-  ['website','forum','crm'].forEach(m=>{
+  ['website','forum','crm','verwaltung'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(name===m)?'flex':'none';
   });
-  // CRM rendert sich selbst (isoliert). In try/catch, damit ein CRM-Fehler
-  // niemals das Umschalten oder die Zeiterfassung beeinträchtigt.
+  // CRM/Verwaltung rendern sich selbst (isoliert). In try/catch, damit ein
+  // Fehler dort niemals das Umschalten oder die Zeiterfassung beeinträchtigt.
   if(name==='crm'){ try{ window.renderCRM&&window.renderCRM(); }catch(e){ console.error('CRM Render-Fehler (ignoriert):',e); } }
+  if(name==='verwaltung'){ try{ window.renderVerwaltung&&window.renderVerwaltung(); }catch(e){ console.error('Verwaltung Render-Fehler (ignoriert):',e); } }
 }
 
 export function rebuildEmpSelect(){
