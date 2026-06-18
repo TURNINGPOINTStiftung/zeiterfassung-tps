@@ -562,8 +562,10 @@ export async function saveNewUser(){
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
+  const _plainPw=u.pw;  // Klartext vor dem Hashen für das Firebase-Konto
   u.pw=await makePwRecord(u.pw);
   await mutate(d=>d.users.push(u));
+  try{ window.provisionAuthAccount?.(u.id, _plainPw); }catch(e){}  // echtes Konto anlegen (best effort)
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 
