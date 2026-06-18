@@ -233,6 +233,32 @@ function injectStyles(){
   .vw-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
   .vw-name{font-weight:700;color:var(--primary)}
   .vw-team{display:inline-block;font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;margin:1px 3px 1px 0;color:var(--muted)}
+  .crm-viewtoggle{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
+  .crm-viewtoggle button{background:#fff;border:none;padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+  .crm-viewtoggle button.active{background:var(--primary);color:#fff}
+  .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
+  .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
+  .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
+  .kb-col-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .kb-col-title{font-weight:700;color:var(--primary);font-size:14px;cursor:pointer}
+  .kb-col-sub{font-size:11px;color:var(--muted);margin-top:-4px}
+  .kb-cards{display:flex;flex-direction:column;gap:8px;min-height:8px}
+  .kb-card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 10px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:grab}
+  .kb-card:active{cursor:grabbing}
+  .kb-card.done{opacity:.65}
+  .kb-card-top{display:flex;align-items:flex-start;gap:7px}
+  .kb-card-title{font-weight:600;color:var(--text);font-size:13.5px;cursor:pointer}
+  .kb-card.done .kb-card-title{text-decoration:line-through;color:var(--muted)}
+  .kb-card-note{font-size:12px;color:var(--muted);margin-top:5px;white-space:pre-line}
+  .kb-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
+  .kb-chip{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)}
+  .kb-checklist{margin-top:8px;border-top:1px solid var(--border);padding-top:6px;display:flex;flex-direction:column;gap:3px}
+  .kb-check{display:flex;align-items:center;gap:6px;font-size:12.5px}
+  .kb-check.done .kb-check-tx{text-decoration:line-through;color:var(--muted)}
+  .kb-check-tx{cursor:pointer;flex:1}
+  .kb-add,.kb-additem{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-align:left;padding:4px 2px}
+  .kb-add:hover,.kb-additem:hover{text-decoration:underline}
+  .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -414,6 +440,73 @@ function taskNodeHtml(c, n, depth){
   </div>`;
 }
 
+// ── Kanban-Board (Teams-Planner-Stil) ──────────────────────────────
+// Spalte = Hauptaufgabe · Karte = Unterpunkt · Checkliste = deren Unterpunkte.
+function crmSetTaskView(v){ window._crmTaskView=v; repaintContainer(); }
+function kbCardHtml(c, n){
+  const st=taskStatusByKey(n.status);
+  const kids=n.children||[];
+  const done=kids.filter(k=>k.status==='erledigt').length;
+  const checklist=kids.map(k=>{
+    const kdone=k.status==='erledigt';
+    return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
+      <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone('${k.id}')">
+      <span class="kb-check-tx" onclick="crmOpenTask('${k.id}')">${esc(k.text)}</span>
+      ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
+    </div>`;
+  }).join('');
+  const cdone=n.status==='erledigt';
+  return `<div class="kb-card${cdone?' done':''}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')">
+    <div class="kb-card-top">
+      <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">
+      <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}</span>
+    </div>
+    ${n.note?`<div class="kb-card-note">${esc(n.note)}</div>`:''}
+    ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
+       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+       ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
+       ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
+       ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
+     </div>`:''}
+    ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
+    <button class="kb-additem" onclick="event.stopPropagation();crmAddChild('${n.id}')">＋ Schritt</button>
+  </div>`;
+}
+function taskBoardHtml(c){
+  const cols=(c.todos||[]).map(top=>{
+    const cards=(top.children||[]).map(card=>kbCardHtml(c,card)).join('');
+    return `<div class="kb-col" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
+      <div class="kb-col-head">
+        <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}</span>
+        <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
+      </div>
+      ${top.team?`<div class="kb-col-sub">👥 ${esc(top.team)}</div>`:''}
+      <div class="kb-cards">${cards}</div>
+      <button class="kb-add" onclick="crmAddChild('${top.id}')">＋ Aufgabe</button>
+    </div>`;
+  }).join('');
+  return `<div class="kb-board">${cols}
+    <div class="kb-col kb-col-new"><button class="kb-add" onclick="crmOpenTask('')">＋ Spalte</button></div>
+  </div>`;
+}
+function crmDragStart(ev,id){ window._crmDragId=id; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
+function crmDragOver(ev){ ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(e){} }
+function crmDropOnColumn(ev,topId){
+  ev.preventDefault();
+  const dragId=window._crmDragId||(ev.dataTransfer&&ev.dataTransfer.getData('text/plain'));
+  window._crmDragId=null;
+  if(!dragId||dragId===topId) return;
+  mutateContainer(c=>{
+    const f=findNode(c,dragId); if(!f) return;
+    if(flatNodes([f.node]).some(x=>x.id===topId)) return; // nicht in eigenen Teilbaum schieben
+    const target=findNode(c,topId); if(!target) return;
+    const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1);
+    if(!Array.isArray(target.node.children)) target.node.children=[];
+    target.node.children.push(f.node);
+  });
+  repaintContainer();
+}
+
 // ── Detail eines Eintrags ──────────────────────────────────────────
 function paintDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
@@ -465,7 +558,9 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
-  const todos=(e.todos||[]).map(m=>taskNodeHtml(e,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+  const _tv=window._crmTaskView||'list';
+  const todos = _tv==='board' ? taskBoardHtml(e)
+    : ((e.todos||[]).map(m=>taskNodeHtml(e,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`);
 
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
@@ -493,8 +588,9 @@ function paintDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
-          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage anwenden</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Aufgabe</button>
+          <span class="crm-viewtoggle"><button class="${_tv==='list'?'active':''}" onclick="crmSetTaskView('list')">Liste</button><button class="${_tv==='board'?'active':''}" onclick="crmSetTaskView('board')">Board</button></span>
+          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ ${_tv==='board'?'Spalte':'Aufgabe'}</button>
         </span>
       </h4>
       ${todos}
@@ -1049,7 +1145,9 @@ function paintTeamProjektDetail(){
   normTasks(p);
   window._crmTaskCtx={ kind:'teamprojekt', id:p.id };  // Aufgaben-Engine zielt aufs Projekt
   window._crmAfterTask='projektdetail';
-  const todos=(p.todos||[]).map(m=>taskNodeHtml(p,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`;
+  const _tv=window._crmTaskView||'list';
+  const todos = _tv==='board' ? taskBoardHtml(p)
+    : ((p.todos||[]).map(m=>taskNodeHtml(p,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`);
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${esc(p.team||'Team')}</button>
@@ -1062,8 +1160,9 @@ function paintTeamProjektDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
-          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage anwenden</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Hauptaufgabe</button>
+          <span class="crm-viewtoggle"><button class="${_tv==='list'?'active':''}" onclick="crmSetTaskView('list')">Liste</button><button class="${_tv==='board'?'active':''}" onclick="crmSetTaskView('board')">Board</button></span>
+          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ ${_tv==='board'?'Spalte':'Hauptaufgabe'}</button>
         </span>
       </h4>
       ${todos}
@@ -1438,6 +1537,8 @@ Object.assign(window, {
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
   crmDeleteNode, crmToggleDone,
   crmApplyVorlagePick, crmApplyVorlage,
+  // Kanban-Board
+  crmSetTaskView, crmDragStart, crmDragOver, crmDropOnColumn,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
   crmTeamSetStatus, crmTeamSetAssignee, crmTeamToggleDone, crmTeamAddChild, crmTeamEditNode,
