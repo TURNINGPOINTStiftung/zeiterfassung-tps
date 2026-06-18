@@ -95,8 +95,9 @@ function zeUsers(){
 function userName(id){ const u=zeUsers().find(x=>x.id===id); return u?u.name:''; }
 // Mitarbeitende eines Teams (für Zuständig-Dropdown). Ohne Team → alle.
 function teamMembers(team){
+  const teams = Array.isArray(team) ? team.filter(Boolean) : (team?[team]:[]);
   const us=zeUsers().filter(u=>u.id!=='admin');
-  const list = !team ? us : us.filter(u=> u.team===team || (Array.isArray(u.teams)&&u.teams.includes(team)) );
+  const list = !teams.length ? us : us.filter(u=> teams.some(t=> u.team===t || (Array.isArray(u.teams)&&u.teams.includes(t)) ));
   return list.map(u=>({id:u.id, name:u.name}))
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
 }
@@ -379,6 +380,8 @@ function normNode(n){
   if(n.subs) delete n.subs;
   if(!Array.isArray(n.children)) n.children=[];
   if(!Array.isArray(n.deps)) n.deps=[];
+  // Einzel-Team (Alt) → Team-Array (mehrere Teams je Aufgabe)
+  if(!Array.isArray(n.teams)) n.teams = (n.team!=null && n.team!=='') ? [n.team] : [];
   n.children.forEach(normNode);
 }
 function normTasks(c){ if(c && Array.isArray(c.todos)) c.todos.forEach(normNode); return c; }
@@ -399,11 +402,11 @@ function findNodeIn(arr, id){
 }
 function flatTasks(c){ return flatNodes(c.todos); }
 function findNode(c, id){ return findNodeIn(c.todos, id); }
-// Effektives Team eines Knotens = Team des obersten Vorfahren
-function effectiveTeam(c, id){
-  let found='';
-  const walk=(n, depth, inherited)=>{ const t = depth===0 ? (n.team||'') : inherited; if(n.id===id) found=t; (n.children||[]).forEach(ch=>walk(ch, depth+1, t)); };
-  (c.todos||[]).forEach(n=>walk(n,0,''));
+// Effektive Teams eines Knotens = Teams des obersten Vorfahren (Array)
+function effectiveTeams(c, id){
+  let found=[];
+  const walk=(n, depth, inherited)=>{ const t = depth===0 ? (n.teams||[]) : inherited; if(n.id===id) found=t; (n.children||[]).forEach(ch=>walk(ch, depth+1, t)); };
+  (c.todos||[]).forEach(n=>walk(n,0,[]));
   return found;
 }
 // Texte blockierender (noch nicht erledigter) deps – oder null
@@ -421,7 +424,7 @@ function taskNodeHtml(c, n, depth){
   const blk=blockingTexts(c,n);
   const done=n.status==='erledigt';
   const parts=[];
-  if(depth===0 && n.team) parts.push('👥 '+n.team);
+  if(depth===0 && n.teams && n.teams.length) parts.push('👥 '+n.teams.join(', '));
   if(n.assigneeName) parts.push('👤 '+n.assigneeName);
   if(n.due) parts.push('📅 '+fmtDate(Date.parse(n.due)));
   const meta=parts.map(esc).join(' · ');
@@ -483,7 +486,7 @@ function taskBoardHtml(c){
         <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}</span>
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
       </div>
-      ${top.team?`<div class="kb-col-sub">👥 ${esc(top.team)}</div>`:''}
+      ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
       <div class="kb-cards">${cards}</div>
       <button class="kb-add" onclick="crmAddChild('${top.id}')">＋ Aufgabe</button>
     </div>`;
@@ -893,14 +896,13 @@ function nodeModal(o){
   const statusOpts=TASK_STATUS.map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
   let teamRow;
   if(o.isTop && !tp){
-    const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${n.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
-    teamRow=`<div style="display:flex;gap:10px;flex-wrap:wrap">
-       <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Team</label><select id="crm-task-team" onchange="crmTaskTeamChange()">${teamOpts}</select></div>
-       <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(n.team||'', n.assigneeId||'')}</select></div>
-     </div>`;
+    const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${(n.teams||[]).includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
+    teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
+     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(n.teams||[], n.assigneeId||'')}</select></div>`;
   } else {
-    const it = tp ? (e.team||'') : (o.inheritTeam||'');
-    teamRow=`<div class="crm-modal-field"><label>Zuständig${it?' ('+esc(it)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
+    const it = tp ? (e.team?[e.team]:[]) : (o.inheritTeam||[]);
+    const itLabel = it.join(', ');
+    teamRow=`<div class="crm-modal-field"><label>Zuständig${itLabel?' ('+esc(itLabel)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
   }
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(o.titel)}</h3>
    <div class="crm-modal-field"><label>${o.isTop?'Aufgabe':'Unterpunkt'} *</label><input id="crm-task-text" value="${esc(n.text||'')}"></div>
@@ -924,19 +926,19 @@ function crmOpenTask(tid){  // tid='' → neue Hauptaufgabe, sonst Bearbeiten
   const f=findNode(e, tid); if(!f) return;
   const isTop=(f.parent===null);
   nodeModal({ titel:isTop?'✎ Hauptaufgabe':'✎ Unterpunkt', node:f.node, isTop,
-    inheritTeam:isTop?'':effectiveTeam(e, tid), saveOnclick:`crmSaveTask('${tid}')` });
+    inheritTeam:isTop?[]:effectiveTeams(e, tid), saveOnclick:`crmSaveTask('${tid}')` });
 }
 function crmAddChild(parentId){
   const e=curContainer(); if(!e) return;
   const f=findNode(e, parentId); if(!f) return;
   nodeModal({ titel:'＋ Unterpunkt zu „'+(f.node.text||'')+'"', node:{}, isTop:false,
-    inheritTeam:isTPCtx()?(e.team||''):effectiveTeam(e, parentId),
+    inheritTeam:isTPCtx()?(e.team?[e.team]:[]):effectiveTeams(e, parentId),
     saveOnclick:`crmSaveChild('${parentId}')` });
 }
 function crmTaskTeamChange(){
-  const team=val('crm-task-team');
+  const teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);
   const sel=document.getElementById('crm-task-assignee');
-  if(sel) sel.innerHTML=assigneeOptsHtml(team, '');
+  if(sel){ const cur=sel.value; sel.innerHTML=assigneeOptsHtml(teams, cur); }
 }
 function _readNodeForm(e, isTop){
   const text=val('crm-task-text'); if(!text){ toast('Bitte einen Text eingeben.','err'); return null; }
@@ -944,7 +946,7 @@ function _readNodeForm(e, isTop){
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
-  if(isTop && !isTPCtx()) rec.team=val('crm-task-team');  // Team nur bei Top-Aufgaben am Eintrag
+  if(isTop && !isTPCtx()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe
   return rec;
 }
 function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
@@ -954,7 +956,7 @@ function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
   mutateContainer(en=>{
     if(!Array.isArray(en.todos)) en.todos=[];
     if(tid){ const f=findNode(en, tid); if(f){ Object.assign(f.node, rec); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
-    else { en.todos.push({ id:newId(), children:[], team: isTPCtx()?'':(rec.team||''), ...rec }); }
+    else { en.todos.push({ id:newId(), children:[], teams: isTPCtx()?[]:(rec.teams||[]), ...rec }); }
   });
   crmCloseModal(); repaintContainer();
 }
@@ -1016,7 +1018,7 @@ function crmApplyVorlage(id){
     const node={ id:idMap[n.id], text:n.text, assigneeId:'', assigneeName:'', due:'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
-    if(depth===0) node.team = isTPCtx()?'':(n.team||'');
+    if(depth===0) node.teams = isTPCtx()?[]:(n.team?[n.team]:[]);
     return node;
   };
   const mains=(v.items||[]).map(n=>build(n,0));
@@ -1035,7 +1037,7 @@ function teamMainTasks(team){
     listEntities(tr.key).forEach(e=>{
       normTasks(e);
       (e.todos||[]).forEach(m=>{
-        const match = team==='Ohne Team' ? !m.team : (m.team||'')===team;
+        const match = team==='Ohne Team' ? !(m.teams&&m.teams.length) : (m.teams||[]).includes(team);
         if(match) out.push({ tree:tr.key, eid:e.id, ename:(e.stamm&&e.stamm.name)||'(ohne Name)', main:m });
       });
     });
