@@ -85,6 +85,7 @@
       <button class="mb-tab" data-mod="website" onclick="switchModule('website')">Website</button>
       <button class="mb-tab" data-mod="forum" onclick="switchModule('forum')">Forum</button>
       <button class="mb-tab" data-mod="crm" onclick="switchModule('crm')">CRM</button>
+      <button class="mb-tab" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
     </div>
     <button class="btn btn-outline btn-sm" onclick="doLogout()">Abmelden</button>
   </div>
@@ -360,6 +361,10 @@
     <div id="crm-root"></div>
   </div>
 
+  <div id="mod-verwaltung" class="mod-frame" style="display:none">
+    <div id="verw-root"></div>
+  </div>
+
 </div>
 
 <!-- ─── Modals ─── -->
@@ -399,6 +404,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=29"></script>
+<script type="module" src="js/main.js?v=30"></script>
 </body>
 </html>

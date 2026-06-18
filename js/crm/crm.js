@@ -11,7 +11,8 @@ import {
   ensureCrmReady, setCrmRenderHook, getCrm, getEntity, listEntities,
   saveEntity, deleteEntity, newId,
   saveVorlage, deleteVorlage, getVorlage, listVorlagen,
-  saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte
+  saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
+  saveAccess, getAccess
 } from './crm-data.js';
 import {
   TREES, treeByKey, stammFields, MEMBER_FUNCTIONS,
@@ -103,6 +104,36 @@ function assigneeOptsHtml(team, selId){
   const opts=[`<option value="">– niemand –</option>`];
   teamMembers(team).forEach(u=>{ opts.push(`<option value="${esc(u.id)}" ${u.id===selId?'selected':''}>${esc(u.name)}</option>`); });
   return opts.join('');
+}
+
+// ── CRM-Zugriff des angemeldeten Nutzers ───────────────────────────
+function accessLevel(){
+  const cu=window.cu; if(!cu) return 'none';
+  if(cu.role==='admin') return 'admin';
+  const a=getAccess(cu.id);
+  return (a && a.level) || 'none';
+}
+function accessVerein(){ const cu=window.cu; if(!cu) return ''; const a=getAccess(cu.id); return (a && a.vereinId) || ''; }
+function crmRestricted(){ return accessLevel()==='verein'; }
+
+// Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
+function crmSetupModuleBar(){
+  try{
+    const cu=window.cu; if(!cu) return;
+    const isAdmin=cu.role==='admin';
+    ensureCrmReady().then(()=>{
+      const lvl=accessLevel();
+      const hasCrm = isAdmin || lvl==='full' || lvl==='verein';
+      const bar=document.getElementById('module-bar');
+      if(bar) bar.style.display=(isAdmin||hasCrm)?'flex':'none';
+      const setTab=(mod,show)=>{ const b=document.querySelector('.mb-tab[data-mod="'+mod+'"]'); if(b) b.style.display=show?'':'none'; };
+      setTab('zeiterfassung', true);
+      setTab('website', isAdmin);
+      setTab('forum', isAdmin);
+      setTab('crm', hasCrm);
+      setTab('verwaltung', isAdmin);
+    }).catch(()=>{});
+  }catch(e){ console.error('crmSetupModuleBar:',e); }
 }
 
 // ── Styles (einmalig injizieren) ───────────────────────────────────
@@ -204,13 +235,23 @@ export function renderCRM(){
     const root = document.getElementById('crm-root');
     if(!root) return;
     root.innerHTML = '<div class="crm-empty">Lade CRM …</div>';
-    ensureCrmReady().then(()=>{ try{ paint(); }catch(e){ console.error('CRM paint:',e); } });
+    ensureCrmReady().then(()=>{
+      try{
+        if(crmRestricted()){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); }
+        paint();
+      }catch(e){ console.error('CRM paint:',e); }
+    });
   }catch(e){ console.error('renderCRM Fehler:',e); }
 }
 setCrmRenderHook(()=>{ try{ paint(); }catch(e){} });
 
 function paint(){
   window._crmModalOpen = false;
+  if(crmRestricted()){
+    if(window._crmSelId && curEntity()) paintDetail();
+    else { const root=document.getElementById('crm-root'); if(root) root.innerHTML = barHtml()+`<div class="crm-body"><div class="crm-empty">Dir ist noch kein Verein zugeordnet.<br>Bitte an die Administration wenden.</div></div>`; }
+    return;
+  }
   const mode = window._crmMode || 'kontakte';
   if(mode==='teams'){
     if(window._crmTeamProjSel && getTeamProjekt(window._crmTeamProjSel)) paintTeamProjektDetail();
@@ -224,6 +265,10 @@ function paint(){
 
 // ── Bar ────────────────────────────────────────────────────────────
 function barHtml(){
+  if(crmRestricted()){
+    const e=curEntity(); const nm=(e&&e.stamm)?e.stamm.name:'';
+    return `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">📇 CRM${nm?' · '+esc(nm):''}</span></div></div>`;
+  }
   const mode = window._crmMode || 'kontakte';
   const treeTabs = TREES.map(t=>
     `<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${t.icon} ${esc(t.label)}</button>`
@@ -417,10 +462,10 @@ function paintDetail(){
 
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
-      <button class="btn-sm-crm" onclick="crmBackToList()">← ${esc(tree.label)}</button>
+      ${crmRestricted()?'':`<button class="btn-sm-crm" onclick="crmBackToList()">← ${esc(tree.label)}</button>`}
       <h2>${esc(s.name||'(ohne Name)')}</h2>
       <button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>
-      <button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>
+      ${crmRestricted()?'':`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`}
     </div>
     ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${
         e.createdAt?`angelegt ${e.createdByKuerzel?'von '+esc(e.createdByKuerzel)+' ':''}am ${esc(fmtDate(e.createdAt))}`:''
@@ -1278,9 +1323,62 @@ function crmConfigAi(){
   if(window._activeModule==='crm' && !window._crmModalOpen) paint();
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  VERWALTUNG  (eigene Top-Ebene, nur Admin) – CRM-Zugriff je Nutzer
+// ══════════════════════════════════════════════════════════════════
+function roleLbl(u){
+  return u.role==='geschaeftsfuehrer'?'Geschäftsführung':u.role==='leitung'?'Leitung':
+         u.role==='berater'?'Berater/in':u.role==='freiberuflich'?'Freiberuflich':'Mitarbeiter/in';
+}
+function renderVerwaltung(){
+  try{
+    injectStyles();
+    const root=document.getElementById('verw-root'); if(!root) return;
+    if(!window.cu || window.cu.role!=='admin'){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
+    root.innerHTML='<div class="crm-empty">Lade …</div>';
+    ensureCrmReady().then(()=>{ try{ paintVerwaltung(); }catch(e){ console.error('Verwaltung:',e); } });
+  }catch(e){ console.error('renderVerwaltung:',e); }
+}
+function paintVerwaltung(){
+  const root=document.getElementById('verw-root'); if(!root) return;
+  const vereine=listEntities('vereine');
+  const vOpts=sel=>['<option value="">– Verein wählen –</option>']
+    .concat(vereine.map(v=>`<option value="${v.id}" ${sel===v.id?'selected':''}>${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</option>`)).join('');
+  const users=zeUsers().filter(u=>u.id!=='admin')
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
+  const rows=users.map(u=>{
+    const a=getAccess(u.id)||{level:'none',vereinId:''};
+    const lvl=a.level||'none';
+    const lvlSel=[['none','Kein Zugriff'],['verein','Nur eigener Verein'],['full','Voll']]
+      .map(([L,t])=>`<option value="${L}" ${lvl===L?'selected':''}>${t}</option>`).join('');
+    return `<div class="crm-row">
+      <div class="grow"><span class="name">${esc(u.name)}</span> <span class="small">${esc(roleLbl(u))}</span></div>
+      <select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>
+      <select class="crm-tsel" ${lvl==='verein'?'':'style="visibility:hidden"'} title="Zugeordneter Verein" onchange="crmVerwSetVerein('${u.id}',this.value)">${vOpts(a.vereinId)}</select>
+    </div>`;
+  }).join('');
+  root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung · CRM-Zugriff</span></div></div>
+   <div class="crm-body">
+     <div class="crm-sec">
+       <h4><span class="ttl">Wer darf ins CRM?</span></h4>
+       <div class="small" style="color:var(--muted);margin-bottom:10px">„Nur eigener Verein" = sieht ausschließlich seinen zugeordneten Verein samt dessen Aufgaben. „Voll" = sieht das gesamte CRM. Nutzer werden weiterhin in der Zeiterfassung angelegt.</div>
+       ${rows||'<div class="small" style="color:var(--muted)">Keine Nutzer.</div>'}
+     </div>
+   </div>`;
+}
+function crmVerwSetLevel(uid, level){
+  const a=getAccess(uid)||{};
+  if(level==='none') saveAccess(uid, null);
+  else saveAccess(uid, { level, vereinId: level==='verein'?(a.vereinId||''):'' });
+  paintVerwaltung();
+}
+function crmVerwSetVerein(uid, vid){
+  saveAccess(uid, { level:'verein', vereinId:vid });
+}
+
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM,
+  renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwSetVerein,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember,
