@@ -13,7 +13,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 const CRM_LS_KEY = 'tps_crm_v1';
-const TREE_KEYS  = ['vereine','sozialakteure','fundraising'];
+const TREE_KEYS  = ['vereine','sozialakteure','fundraising','marketing'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -22,7 +22,7 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, vorlagen:{}, teamprojekte:{}, access:{} }; }
+function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, marketing:{}, vorlagen:{}, teamprojekte:{}, access:{} }; }
 
 function _normalize(v){
   const out = freshCrm();
@@ -70,7 +70,7 @@ export function ensureCrmReady(){
         // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
         const fb    = _normalize(snap.val() || {});
         const local = _cache || freshCrm();
-        const COLLS = ['vereine','sozialakteure','fundraising','vorlagen','teamprojekte','access'];
+        const COLLS = ['vereine','sozialakteure','fundraising','marketing','vorlagen','teamprojekte','access'];
         COLLS.forEach(coll=>{
           const lobj = local[coll] || {};
           Object.keys(lobj).forEach(id=>{
