@@ -42,7 +42,7 @@ export function renderZeiterfassung(){
 
   // "An GF senden"-Button nur für Leitung sichtbar halten
   const _btnTeam=document.getElementById('btn-teamberichte');
-  if(_btnTeam) _btnTeam.style.display=hasPermission('btn_teamberichte',cu.role)?'':'none';
+  if(_btnTeam) _btnTeam.style.display=hasPermission('btn_teamberichte',cu)?'':'none';
   const isFree=isFreelancer(user);
   // Bearbeitbar: eigener Entwurf; Admin immer; Leitung/GF nur Entwürfe (NICHT
   // eingereichte/genehmigte Monate – die sind nach dem Einreichen gesperrt und

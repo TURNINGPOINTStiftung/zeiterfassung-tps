@@ -81,6 +81,9 @@ export function renderSettings(){
   // ── Berechtigungs-Matrix ──
   const permEl=document.getElementById('permissions-section');
   if(permEl) renderPermissionsMatrix(permEl);
+
+  // Mitarbeiter-Tabelle in der Verwaltungs-Ebene mit aktualisieren (falls offen)
+  try{ window._refreshVerwUsers && window._refreshVerwUsers(); }catch(e){}
 }
 
 // ── Einmalige Datenkorrektur (Admin) ─────────────────────────────────
@@ -464,6 +467,16 @@ function userForm(u={}){
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
     </div>
+    <div class="uf-section-head">🔐 Berechtigungen <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
+    ${u.id==='admin'
+      ? `<div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`
+      : `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Häkchen = erlaubt. Überschreibt die Standardrechte der Rolle.</div>
+         <div id="uf-perms" style="padding:6px;border:1.5px solid var(--border);border-radius:6px">
+           ${PERM_DEFS.map(p=>{
+             const on=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,p.key))?!!u.perms[p.key]:(DEFAULT_PERMISSIONS[p.key]?.includes(u.role||'mitarbeiter')??false);
+             return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${p.key}" ${on?'checked':''} style="width:auto;cursor:pointer"> ${esc(p.label)}</label>`;
+           }).join('')}
+         </div>`}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
 }
 
@@ -516,7 +529,11 @@ function collectUserForm(){
     const bis=document.getElementById('uf-lp-bis-'+i)?.value||'';
     if(von&&bis&&von<=bis) lecturePeriods.push({von,bis});
   }
+  // Pro-User-Berechtigungen (überschreiben die Rolle). Admin: keine Häkchen → leer.
+  const perms={};
+  PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
   return {
+    perms,
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     email:document.getElementById('uf-email')?.value.trim()||'',

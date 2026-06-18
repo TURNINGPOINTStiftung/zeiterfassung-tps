@@ -35,14 +35,26 @@ export function monthStartDate(y,m){ return `${y}-${String(m).padStart(2,'0')}-0
 
 // Prüft ob eine Rolle eine bestimmte Berechtigung hat
 // Admin hat immer alle Berechtigungen
-export function hasPermission(permission, role){
+// hasPermission akzeptiert eine Rolle (String, legacy) ODER ein User-Objekt.
+// Bei einem User-Objekt gilt zuerst die pro-User-Übersteuerung (u.perms),
+// sonst die rollenbasierten Defaults. So lassen sich Rechte pro Person setzen,
+// ohne die bestehende rollenbasierte Logik zu brechen.
+export function hasPermission(permission, roleOrUser){
+  const user = (roleOrUser && typeof roleOrUser==='object') ? roleOrUser : null;
+  const role = user ? user.role : roleOrUser;
   if(role==='admin') return true;
+  if(user && user.perms && Object.prototype.hasOwnProperty.call(user.perms, permission)){
+    return !!user.perms[permission];
+  }
   const d=getData();
   const perms=(d.rolePermissions&&d.rolePermissions[permission])
     ?? DEFAULT_PERMISSIONS[permission]
     ?? [];
   return perms.includes(role);
 }
+
+// Effektives Recht eines konkreten Users (für die pro-User-Bearbeitung).
+export function userHasPermission(permission, user){ return hasPermission(permission, user); }
 
 export function isFreelancer(u){ return u&&u.role==='freiberuflich'; }
 export function isBerater(u){ return u&&u.role==='berater'; }

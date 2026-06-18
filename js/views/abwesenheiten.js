@@ -407,7 +407,7 @@ export function deleteVacRequest(id){
   const cu=window.cu;
   const r=getData().vacRequests?.[id];
   if(!r) return;
-  const mayManage=r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role);
+  const mayManage=r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu);
   if(!mayManage) return;
   // Offene Anträge: zurückziehen darf der/die Antragsteller:in oder ein Genehmiger.
   // GENEHMIGTE Abwesenheiten: nur noch der/die Mitarbeiter:in selbst oder der Admin
@@ -607,7 +607,7 @@ export function renderAbwesenheiten(){
   const _typeLabel=t=>t==='Veranstaltung'?'Veranstaltung Krank / AU':t;
   const canReview=r=>{
     if(r.status!=='pending') return false;
-    if(!hasPermission('genehmigung_abwesenheit',cu.role)) return false;
+    if(!hasPermission('genehmigung_abwesenheit',cu)) return false;
     if(isAdmin) return true;
     if(r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
     return false;
@@ -619,7 +619,7 @@ export function renderAbwesenheiten(){
       <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
     </div>`:'';
     // Offen: Antragsteller:in oder Genehmiger. Genehmigt: NUR Antragsteller:in oder Admin.
-    const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu.role)))
+    const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu)))
                   ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
     // Bearbeiten: Antragsteller:in selbst oder Admin – auch nach Genehmigung.
     const canEdit=r.userId===cu.id||cu.role==='admin';

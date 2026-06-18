@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v101':'';
+  if(_hv) _hv.textContent=_showVer?'v102':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -36,27 +36,27 @@ export function initApp(){
   const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';
-  document.getElementById('tab-uebersicht').style.display=hasPermission('tab_uebersicht',role)?'':'none';
-  document.getElementById('tab-gfberichte').style.display=hasPermission('tab_gfberichte',role)?'':'none';
+  document.getElementById('tab-uebersicht').style.display=hasPermission('tab_uebersicht',cu)?'':'none';
+  document.getElementById('tab-gfberichte').style.display=hasPermission('tab_gfberichte',cu)?'':'none';
   document.getElementById('tab-abwesenheiten').style.display='';
-  document.getElementById('tab-einstellungen').style.display=isAdmin?'':'none';
+  document.getElementById('tab-einstellungen').style.display='none'; // Einstellungen sind in die Verwaltung umgezogen
   const btnTeam=document.getElementById('btn-teamberichte');
-  if(btnTeam) btnTeam.style.display=hasPermission('btn_teamberichte',role)?'':'none';
-  const hideStempel=isAdmin||gfNoZE||!hasPermission('stempel',role);
+  if(btnTeam) btnTeam.style.display=hasPermission('btn_teamberichte',cu)?'':'none';
+  const hideStempel=isAdmin||gfNoZE||!hasPermission('stempel',cu);
   const btnZs=document.getElementById('btn-zeitstempel');
   if(btnZs) btnZs.style.display=hideStempel?'none':'inline-flex';
   const tabZsMob=document.getElementById('tab-stempeln-mobile');
   if(tabZsMob) tabZsMob.style.display=hideStempel?'none':'';
 
-  if(hasPermission('tab_uebersicht',role)){
+  if(hasPermission('tab_uebersicht',cu)){
     window.populateUeberYear?.();
     window.populateUeberMon?.();
     window.populateUeberTeam?.();
   }
   window.updateZeitstempelBtn?.();
   if(isAdmin) switchView('uebersicht');
-  else if(gfNoZE) switchView(hasPermission('tab_uebersicht',role)?'uebersicht':'gfberichte');
-  else if(hasPermission('tab_gfberichte',role)&&!hasPermission('tab_uebersicht',role)) switchView('gfberichte');
+  else if(gfNoZE) switchView(hasPermission('tab_uebersicht',cu)?'uebersicht':'gfberichte');
+  else if(hasPermission('tab_gfberichte',cu)&&!hasPermission('tab_uebersicht',cu)) switchView('gfberichte');
   else if(window.innerWidth<=640) switchView('stempeln');
   else switchView('zeiterfassung');
 
