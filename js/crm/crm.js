@@ -587,9 +587,7 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
-  const _tv=window._crmTaskView||'list';
-  const todos = _tv==='board' ? taskBoardHtml(e)
-    : ((e.todos||[]).map(m=>taskNodeHtml(e,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`);
+  const todos = taskBoardHtml(e);
 
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
@@ -615,17 +613,6 @@ function paintDetail(){
     ${fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:''}
 
     <div class="crm-sec">
-      <h4><span class="ttl">✅ Aufgaben</span>
-        <span class="hbtns">
-          <span class="crm-viewtoggle"><button class="${_tv==='list'?'active':''}" onclick="crmSetTaskView('list')">Liste</button><button class="${_tv==='board'?'active':''}" onclick="crmSetTaskView('board')">Board</button></span>
-          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ ${_tv==='board'?'Spalte':'Aufgabe'}</button>
-        </span>
-      </h4>
-      ${todos}
-    </div>
-
-    <div class="crm-sec">
       <h4><span class="ttl">👥 Kontakte / Mitglieder</span><button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></h4>
       ${kontakte}
     </div>
@@ -638,6 +625,16 @@ function paintDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
       ${angebote}
+    </div>
+
+    <div class="crm-sec">
+      <h4><span class="ttl">✅ Aufgaben</span>
+        <span class="hbtns">
+          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
+        </span>
+      </h4>
+      ${todos}
     </div>
 
     <div class="crm-sec">
@@ -1025,7 +1022,7 @@ function crmApplyVorlage(id){
   const idMap={};
   flatNodes(v.items).forEach(x=>{ idMap[x.id]=newId(); });
   const build=(n,depth)=>{
-    const node={ id:idMap[n.id], text:n.text, assigneeId:'', assigneeName:'', due:'', status:'offen',
+    const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
     if(depth===0) node.teams = isTPCtx()?[]:(n.team?[n.team]:[]);
@@ -1108,33 +1105,44 @@ function paintTeamDetail(){
     if(!g){ g={tree:x.tree, eid:x.eid, ename:x.ename, mains:[]}; groups.push(g); }
     g.mains.push(x.main);
   });
-  const aOpts=(id)=>assigneeOptsHtml(team==='Ohne Team'?'':team, id||'');
-  const stOpts=(t)=>TASK_STATUS.map(s=>`<option value="${s.key}" ${t.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
-  const teamNodeHtml=(g,e,n,depth)=>{
-    const blk=e?blockingTexts(e,n):null;
-    const done=n.status==='erledigt';
-    const children=(n.children||[]).map(ch=>teamNodeHtml(g,e,ch,depth+1)).join('');
-    return `<div class="crm-tnode${depth===0?' top':''}${done?' done':''}">
-      <div class="crm-task${blk?' blocked':''}">
-        <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
-        <select class="crm-tsel" onchange="crmTeamSetStatus('${g.tree}','${g.eid}','${n.id}',this.value)">${stOpts(n)}</select>
-        <div class="grow"><span class="tx">${esc(n.text)}</span>${n.due?`<div class="crm-tmeta">📅 ${esc(fmtDate(Date.parse(n.due)))}</div>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${blk?`<div class="small crm-locked">🔒 ${esc(blk.join(', '))}</div>`:''}</div>
-        <select class="crm-tsel" title="Zuständig" onchange="crmTeamSetAssignee('${g.tree}','${g.eid}','${n.id}',this.value)">${aOpts(n.assigneeId)}</select>
-        <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋</button>
-        <button class="btn-sm-crm" title="Bearbeiten" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">✎</button>
+  // Team-Aufgaben als Board: Spalte = Eintrag, Karte = team-zugeordnete Hauptaufgabe
+  const teamKbCard=(g,n)=>{
+    const st=taskStatusByKey(n.status);
+    const kids=n.children||[];
+    const done=kids.filter(k=>k.status==='erledigt').length;
+    const cdone=n.status==='erledigt';
+    const checklist=kids.map(k=>{
+      const kd=k.status==='erledigt';
+      return `<div class="kb-check${kd?' done':''}" onclick="event.stopPropagation()">
+        <input type="checkbox" ${kd?'checked':''} onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${k.id}')">
+        <span class="kb-check-tx" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${k.id}')">${esc(k.text)}</span>
+        ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="kb-card${cdone?' done':''}">
+      <div class="kb-card-top">
+        <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
+        <span class="kb-card-title" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">${esc(n.text)}</span>
       </div>
-      ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
+      ${n.note?`<div class="kb-card-note">${esc(n.note)}</div>`:''}
+      ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
+        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+        ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
+        ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
+        ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
+      </div>`:''}
+      ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
+      <button class="kb-additem" onclick="event.stopPropagation();crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋ Schritt</button>
     </div>`;
   };
-  const blocks=groups.map(g=>{
+  const blocks=`<div class="kb-board">${groups.map(g=>{
     const tr=treeByKey(g.tree);
-    const e=getEntity(g.tree,g.eid);
-    const rows=g.mains.map(m=>teamNodeHtml(g,e,m,0)).join('');
-    return `<div class="crm-team-group">
-      <div class="crm-team-h" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)} <span class="crm-chip">${g.mains.length}</span></div>
-      ${rows}
+    const cards=g.mains.map(m=>teamKbCard(g,m)).join('');
+    return `<div class="kb-col">
+      <div class="kb-col-head"><span class="kb-col-title" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)}</span></div>
+      <div class="kb-cards">${cards}</div>
     </div>`;
-  }).join('');
+  }).join('')}</div>`;
   // Eigenständige Team-Projekte (unabhängig von Einträgen; persönliche Projekte ausschließen)
   const tprojekte=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
   const projCards=tprojekte.map(p=>{
@@ -1183,9 +1191,7 @@ function paintTeamProjektDetail(){
   normTasks(p);
   window._crmTaskCtx={ kind:'teamprojekt', id:p.id };  // Aufgaben-Engine zielt aufs Projekt
   window._crmAfterTask='projektdetail';
-  const _tv=window._crmTaskView||'list';
-  const todos = _tv==='board' ? taskBoardHtml(p)
-    : ((p.todos||[]).map(m=>taskNodeHtml(p,m,0)).join('') || `<div class="small" style="color:var(--muted)">Keine Aufgaben.</div>`);
+  const todos = taskBoardHtml(p);
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${window._crmProjReturn==='meine'?'Meine Aufgaben':esc(p.team||'Team')}</button>
@@ -1198,9 +1204,8 @@ function paintTeamProjektDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
-          <span class="crm-viewtoggle"><button class="${_tv==='list'?'active':''}" onclick="crmSetTaskView('list')">Liste</button><button class="${_tv==='board'?'active':''}" onclick="crmSetTaskView('board')">Board</button></span>
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ ${_tv==='board'?'Spalte':'Hauptaufgabe'}</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
         </span>
       </h4>
       ${todos}
@@ -1345,7 +1350,7 @@ function vNodeHtml(v,n,depth){
   const children=(n.children||[]).map(ch=>vNodeHtml(v,ch,depth+1)).join('');
   return `<div class="crm-tnode${depth===0?' top':''}">
     <div class="crm-task">
-      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
+      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
       <button class="btn-sm-crm" title="Unterpunkt" onclick="crmVNodeAdd('${v.id}','${n.id}')">＋</button>
       <button class="btn-sm-crm" title="Bearbeiten" onclick="crmVNodeEdit('${v.id}','${n.id}')">✎</button>
       <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">🔗</button>
@@ -1381,6 +1386,7 @@ function crmVNodeAdd(vid, pid){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Unterpunkt</h3>
    <div class="crm-modal-field"><label>Unterpunkt *</label><input id="crm-vnode-text"></div>
+   <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-vnode-note" rows="2"></textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmVNodeAddSave('${vid}','${pid}')">Hinzufügen</button></div>`);
 }
@@ -1389,7 +1395,7 @@ function crmVNodeAddSave(vid, pid){
   const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
   const f=findNodeIn(v.items, pid); if(!f) return;
   if(!Array.isArray(f.node.children)) f.node.children=[];
-  f.node.children.push({ id:newId(), text, deps:[], children:[] });
+  f.node.children.push({ id:newId(), text, note:val('crm-vnode-note'), deps:[], children:[] });
   saveVorlage(v); crmEditVorlage(vid);
 }
 function crmVNodeEdit(vid, id){
@@ -1400,6 +1406,7 @@ function crmVNodeEdit(vid, id){
   const teamSel=isTop?`<div class="crm-modal-field"><label>Standard-Team</label><select id="crm-vnode-team">${['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${f.node.team===tm?'selected':''}>${esc(tm)}</option>`)).join('')}</select></div>`:'';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ ${isTop?'Hauptaufgabe':'Unterpunkt'}</h3>
    <div class="crm-modal-field"><label>Text *</label><input id="crm-vnode-text" value="${esc(f.node.text||'')}"></div>
+   <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-vnode-note" rows="2">${esc(f.node.note||'')}</textarea></div>
    ${teamSel}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmVNodeEditSave('${vid}','${id}')">Speichern</button></div>`);
@@ -1409,6 +1416,7 @@ function crmVNodeEditSave(vid, id){
   const f=findNodeIn(v.items, id); if(!f) return;
   const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Text eingeben.','err'); return; }
   f.node.text=text;
+  f.node.note=val('crm-vnode-note');
   if(f.parent===null){ const t=document.getElementById('crm-vnode-team'); if(t) f.node.team=t.value; }
   saveVorlage(v); crmEditVorlage(vid);
 }
