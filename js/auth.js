@@ -173,6 +173,8 @@ export async function doLogin(){
     else localStorage.removeItem('tp_zt_remember');
   }catch(e){}
   window.cu=getUser(u.id);
+  // Echtes Firebase-Konto im Hintergrund anlegen/verwenden (non-blocking).
+  try{ window.ensureRealAuth?.(u.id, pw); }catch(e){}
   try{ localStorage.setItem('tp_zt_session',u.id); }catch(e){}
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';

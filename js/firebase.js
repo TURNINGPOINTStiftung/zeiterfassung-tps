@@ -3,6 +3,49 @@ import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
+// ── Echte Firebase-Konten (Phase 1) ───────────────────────────────
+// Technische E-Mail je Nutzer-ID, damit der Name-Login erhalten bleibt.
+function _authEmail(id){
+  return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
+}
+// Beim Login: echtes Konto verwenden oder (einmalig) anlegen. NON-BLOCKING –
+// schlägt es fehl (z. B. Provider noch nicht aktiviert), bleibt der Login unberührt.
+export function ensureRealAuth(id, pw){
+  try{
+    if(!window.firebase || !firebase.auth || !id || !pw) return;
+    const email=_authEmail(id);
+    const auth=firebase.auth();
+    auth.signInWithEmailAndPassword(email, pw).catch(err=>{
+      const code=err&&err.code;
+      if(code==='auth/user-not-found'){
+        auth.createUserWithEmailAndPassword(email, pw).catch(e=>{
+          const c=e&&e.code;
+          if(c!=='auth/operation-not-allowed') console.warn('CRM-Auth anlegen:', e&&e.message);
+        });
+      } else if(code==='auth/operation-not-allowed'){
+        /* E-Mail/Passwort-Provider noch nicht aktiviert – später */
+      } else if(code==='auth/wrong-password'){
+        console.warn('CRM-Auth: Passwort weicht von Firebase ab für', id);
+      } else if(code!=='auth/network-request-failed'){
+        console.warn('CRM-Auth Login:', err&&err.message);
+      }
+    });
+  }catch(e){ console.warn('ensureRealAuth:', e&&e.message); }
+}
+// Admin legt Nutzer an → Konto über eine SEKUNDÄRE App-Instanz anlegen,
+// damit die Admin-Sitzung nicht ersetzt wird. Best effort.
+export function provisionAuthAccount(id, pw){
+  try{
+    if(!window.firebase || !id || !pw) return;
+    const email=_authEmail(id);
+    const cfg=firebase.app().options;
+    const sec=(firebase.apps||[]).find(a=>a.name==='admin-prov') || firebase.initializeApp(cfg, 'admin-prov');
+    sec.auth().createUserWithEmailAndPassword(email, pw)
+      .then(()=>{ try{ sec.auth().signOut(); }catch(_){} })
+      .catch(e=>{ const c=e&&e.code; if(c!=='auth/email-already-in-use'&&c!=='auth/operation-not-allowed') console.warn('CRM-Auth provisionieren:', e&&e.message); try{ sec.auth().signOut(); }catch(_){} });
+  }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
+}
+
 export async function initFirebase(){
   firebase.initializeApp({
     apiKey:'AIzaSyA1SxyoH1NwIk6nWK66PNvV2EmvSwPJNOk',
@@ -17,6 +60,9 @@ export async function initFirebase(){
   window._fbRef=_fbRef;
   window._offlineMode=false;
   window._pendingSync=false;
+  // Echte Konten (Phase 1): non-blocking im Hintergrund verfügbar machen.
+  window.ensureRealAuth = ensureRealAuth;
+  window.provisionAuthAccount = provisionAuthAccount;
 
   let fbData=null;
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
