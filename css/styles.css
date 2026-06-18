@@ -19,7 +19,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 
 /* ── Eine Top-Leiste (blaues CI) + Modul-Dropdown (☰) ── */
 .module-bar{display:flex;align-items:center;gap:14px;background:var(--primary);border-bottom:3px solid var(--accent);padding:8px 20px;box-shadow:0 2px 8px rgba(0,0,0,.25);position:sticky;top:0;z-index:100}
-.module-bar .mb-logo{height:46px;width:auto;flex-shrink:0;filter:brightness(0) invert(1)}
+.module-bar .mb-logo{height:46px;max-height:46px;width:auto;max-width:280px;flex-shrink:0;filter:brightness(0) invert(1)}
 .mb-spacer{flex:1}
 .module-bar .header-right{display:flex;align-items:center;gap:10px}
 .mb-version{color:rgba(255,255,255,.7);font-size:12px;white-space:nowrap}
@@ -567,11 +567,12 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   /* ─ Zoom: ausblenden ─ */
   .zoom-ctrl{display:none!important}
 
-  /* ─ Modul-Leiste + Header: nicht beide sticky (sonst Überlappung auf iOS) ─ */
-  .module-bar{position:static;gap:10px;padding:6px 12px;flex-wrap:wrap}
-  .module-bar .mb-logo{height:30px}
-  .mb-tabs{order:3;width:100%;justify-content:flex-start;gap:2px}
-  .mb-tab{font-size:15px;padding:9px 10px 11px}
+  /* ─ Modul-Leiste = einziger Header: kompakt, Logo hart begrenzt, nie überlappen ─ */
+  .module-bar{position:static;gap:8px;padding:6px 10px;flex-wrap:wrap}
+  .module-bar .mb-logo{height:28px!important;max-height:28px;max-width:44vw}
+  .mb-menu{font-size:13px;padding:6px 10px}
+  .mb-version{display:none}
+  .module-bar .header-right{gap:6px;margin-left:auto}
   .app-header{position:static}
 
   /* ─ iOS Safe Areas ─ */
