@@ -291,20 +291,22 @@ function normNode(n){
 }
 function normTasks(c){ if(c && Array.isArray(c.todos)) c.todos.forEach(normNode); return c; }
 
-// Flache Liste aller Knoten (rekursiv) mit Tiefe
-function flatTasks(c){
+// Flache Liste aller Knoten eines Arrays (rekursiv) mit Tiefe
+function flatNodes(arr){
   const out=[];
   const walk=(n,d)=>{ out.push({ id:n.id, text:n.text, status:n.status, depth:d, ref:n }); (n.children||[]).forEach(ch=>walk(ch,d+1)); };
-  (c.todos||[]).forEach(n=>walk(n,0));
+  (arr||[]).forEach(n=>walk(n,0));
   return out;
 }
-// Knoten + Elternarray finden (für Bearbeiten/Löschen/Anhängen)
-function findNode(c, id){
+// Knoten + Elternarray in einem Array finden
+function findNodeIn(arr, id){
   let res=null;
-  const walk=(n, parent, arr)=>{ if(n.id===id){ res={ node:n, parent, arr }; } (n.children||[]).forEach(ch=>walk(ch, n, n.children)); };
-  (c.todos||[]).forEach(n=>walk(n, null, c.todos));
+  const walk=(n, parent, a)=>{ if(n.id===id){ res={ node:n, parent, arr:a }; } (n.children||[]).forEach(ch=>walk(ch, n, n.children)); };
+  (arr||[]).forEach(n=>walk(n, null, arr));
   return res;
 }
+function flatTasks(c){ return flatNodes(c.todos); }
+function findNode(c, id){ return findNodeIn(c.todos, id); }
 // Effektives Team eines Knotens = Team des obersten Vorfahren
 function effectiveTeam(c, id){
   let found='';
@@ -734,28 +736,27 @@ function crmApplyVorlagePick(){
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
    <button class="btn-sm-crm" onclick="crmOpenVorlagen()">Vorlagen verwalten</button></div>`);
 }
-// Stellt sicher, dass Vorlagen-Items ids, subs[] und deps[] haben (Lazy-Migration)
-function _normVorlageItems(v){
-  let changed=false;
-  (v.items||[]).forEach(it=>{
-    if(!it.id){ it.id=newId(); changed=true; }
-    if(!Array.isArray(it.subs)){ it.subs=[]; changed=true; }
-    if(!Array.isArray(it.deps)){ it.deps=[]; changed=true; }
-    it.subs.forEach(su=>{ if(!su.id){ su.id=newId(); changed=true; } if(!Array.isArray(su.deps)) su.deps=[]; });
-  });
-  if(changed) saveVorlage(v);
+// Sichert ids/children/deps für Vorlagen-Knoten (rekursiv, Lazy-Migration von subs→children)
+function normVorlage(v){
+  if(!v||!Array.isArray(v.items)) { if(v) v.items=[]; return v; }
+  const fix=n=>{ if(!n.id) n.id=newId(); normNode(n); };
+  v.items.forEach(fix);
+  return v;
 }
 function crmApplyVorlage(id){
   const v=getVorlage(id); if(!v) return;
-  _normVorlageItems(v);
-  // Neue ids vergeben und Abhängigkeiten darauf ummappen
+  normVorlage(v);
+  // Neue ids für alle Knoten (jede Ebene) vergeben, Abhängigkeiten darauf ummappen
   const idMap={};
-  (v.items||[]).forEach(it=>{ idMap[it.id]=newId(); (it.subs||[]).forEach(su=>{ idMap[su.id]=newId(); }); });
-  const mains=(v.items||[]).map(it=>({
-    id:idMap[it.id], text:it.text, team:isTPCtx()?'':(it.team||''), assigneeId:'', assigneeName:'', due:'', status:'offen',
-    deps:(it.deps||[]).map(d=>idMap[d]).filter(Boolean),
-    children:(it.subs||[]).map(su=>({ id:idMap[su.id], text:su.text, assigneeId:'', assigneeName:'', due:'', status:'offen', children:[], deps:(su.deps||[]).map(d=>idMap[d]).filter(Boolean) }))
-  }));
+  flatNodes(v.items).forEach(x=>{ idMap[x.id]=newId(); });
+  const build=(n,depth)=>{
+    const node={ id:idMap[n.id], text:n.text, assigneeId:'', assigneeName:'', due:'', status:'offen',
+      deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
+      children:(n.children||[]).map(ch=>build(ch,depth+1)) };
+    if(depth===0) node.team = isTPCtx()?'':(n.team||'');
+    return node;
+  };
+  const mains=(v.items||[]).map(n=>build(n,0));
   mutateContainer(e=>{ if(!Array.isArray(e.todos)) e.todos=[]; mains.forEach(m=>e.todos.push(m)); });
   crmCloseModal(); repaintContainer();
   toast(`„${v.name}" übernommen (${mains.length} Hauptaufgabe${mains.length===1?'':'n'}) ✓`,'ok');
@@ -991,28 +992,27 @@ function crmCreateVorlage(){
   saveVorlage({ id, name, items:[] });
   crmEditVorlage(id);
 }
+// Rekursive Knoten-Darstellung im Vorlagen-Editor (beliebig tief)
+function vNodeHtml(v,n,depth){
+  const depNames=(n.deps||[]).map(d=>{ const x=flatNodes(v.items).find(y=>y.id===d); return x?x.text:''; }).filter(Boolean);
+  const children=(n.children||[]).map(ch=>vNodeHtml(v,ch,depth+1)).join('');
+  return `<div class="crm-tnode${depth===0?' top':''}">
+    <div class="crm-task">
+      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
+      <button class="btn-sm-crm" title="Unterpunkt" onclick="crmVNodeAdd('${v.id}','${n.id}')">＋</button>
+      <button class="btn-sm-crm" title="Bearbeiten" onclick="crmVNodeEdit('${v.id}','${n.id}')">✎</button>
+      <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">⛓</button>
+      <button class="crm-x" title="Löschen" onclick="crmVNodeDel('${v.id}','${n.id}')">✕</button>
+    </div>
+    ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
+  </div>`;
+}
 function crmEditVorlage(id){
   const v=getVorlage(id); if(!v) return;
-  _normVorlageItems(v);
+  normVorlage(v);
   crmOpenModalShell();
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option>${esc(tm)}</option>`)).join('');
-  const itemsHtml=(v.items||[]).map((it,i)=>{
-    const subs=(it.subs||[]).map((su,si)=>`<div class="crm-task sub">
-        <div class="grow"><span class="tx">${esc(su.text)}</span></div>
-        <button class="crm-x" onclick="crmVorlageRemoveSub('${id}',${i},${si})">✕</button>
-      </div>`).join('');
-    const depNames=(it.deps||[]).map(d=>{ const m=(v.items||[]).find(x=>x.id===d); return m?m.text:''; }).filter(Boolean);
-    return `<div class="crm-mtask">
-      <div class="crm-task">
-        <div class="grow"><span class="tx">${esc(it.text)}</span>${it.team?` <span class="fn">${esc(it.team)}</span>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
-        <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVorlageItemDeps('${id}',${i})">⛓</button>
-        <button class="crm-x" title="Hauptaufgabe entfernen" onclick="crmVorlageRemoveItem('${id}',${i})">✕</button>
-      </div>
-      <div class="crm-subs">${subs}
-        <div class="crm-add-inline" style="margin-top:6px"><input id="crm-vsub-${i}" placeholder="Unterpunkt …" style="flex:1;min-width:130px"><button class="btn-sm-crm" onclick="crmVorlageAddSub('${id}',${i})">＋ Unterpunkt</button></div>
-      </div>
-    </div>`;
-  }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Hauptaufgaben.</div>`;
+  const itemsHtml=(v.items||[]).map(it=>vNodeHtml(v,it,0)).join('') || `<div class="small" style="color:var(--muted)">Noch keine Hauptaufgaben.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 ${esc(v.name)}</h3>
    ${itemsHtml}
    <div class="crm-add-inline" style="margin-top:10px">
@@ -1024,54 +1024,75 @@ function crmEditVorlage(id){
    <button class="btn-sm-crm primary" onclick="crmCloseModal()">Fertig</button></div>`, true);
 }
 function crmVorlageAddItem(id){
-  const v=getVorlage(id); if(!v) return;
+  const v=getVorlage(id); if(!v) return; normVorlage(v);
   const text=val('crm-vit-text'); if(!text){ toast('Bitte eine Hauptaufgabe eingeben.','err'); return; }
-  if(!Array.isArray(v.items)) v.items=[];
-  v.items.push({ id:newId(), text, team:val('crm-vit-team'), subs:[], deps:[] });
+  v.items.push({ id:newId(), text, team:val('crm-vit-team'), deps:[], children:[] });
   saveVorlage(v); crmEditVorlage(id);
 }
-function crmVorlageRemoveItem(id,idx){
-  const v=getVorlage(id); if(!v) return;
-  if(Array.isArray(v.items)){
-    const removed=v.items[idx];
-    v.items.splice(idx,1);
-    // verwaiste Abhängigkeiten bereinigen
-    if(removed) v.items.forEach(it=>{ if(Array.isArray(it.deps)) it.deps=it.deps.filter(d=>d!==removed.id); });
-  }
-  saveVorlage(v); crmEditVorlage(id);
-}
-function crmVorlageAddSub(id,idx){
-  const v=getVorlage(id); if(!v) return;
-  const it=(v.items||[])[idx]; if(!it) return;
-  const text=val('crm-vsub-'+idx); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
-  if(!Array.isArray(it.subs)) it.subs=[];
-  it.subs.push({ id:newId(), text, deps:[] });
-  saveVorlage(v); crmEditVorlage(id);
-}
-function crmVorlageRemoveSub(id,idx,sidx){
-  const v=getVorlage(id); if(!v) return;
-  const it=(v.items||[])[idx]; if(!it||!Array.isArray(it.subs)) return;
-  it.subs.splice(sidx,1);
-  saveVorlage(v); crmEditVorlage(id);
-}
-function crmVorlageItemDeps(id,idx){
-  const v=getVorlage(id); if(!v) return;
-  const it=(v.items||[])[idx]; if(!it) return;
+// ── Vorlagen-Knoten (beliebig tief): Unterpunkt / Bearbeiten / Abhängigkeit / Löschen
+function crmVNodeAdd(vid, pid){
   crmOpenModalShell();
-  const sel=new Set(it.deps||[]);
-  const opts=(v.items||[]).filter((x,i)=>i!==idx).map(x=>
-    `<label><input type="checkbox" value="${x.id}" ${sel.has(x.id)?'checked':''}> ${esc(x.text)}</label>`
-  ).join('') || '<div class="small" style="color:var(--muted)">Keine anderen Hauptaufgaben vorhanden.</div>';
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">⛓ „${esc(it.text)}" startet erst nach …</h3>
-   <div class="crm-deps-box" id="crm-vdeps">${opts}</div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${id}')">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmVorlageSaveItemDeps('${id}',${idx})">Speichern</button></div>`);
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Unterpunkt</h3>
+   <div class="crm-modal-field"><label>Unterpunkt *</label><input id="crm-vnode-text"></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmVNodeAddSave('${vid}','${pid}')">Hinzufügen</button></div>`);
 }
-function crmVorlageSaveItemDeps(id,idx){
-  const v=getVorlage(id); if(!v) return;
-  const it=(v.items||[])[idx]; if(!it) return;
-  it.deps=readChecked('crm-vdeps');
-  saveVorlage(v); crmEditVorlage(id);
+function crmVNodeAddSave(vid, pid){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
+  const f=findNodeIn(v.items, pid); if(!f) return;
+  if(!Array.isArray(f.node.children)) f.node.children=[];
+  f.node.children.push({ id:newId(), text, deps:[], children:[] });
+  saveVorlage(v); crmEditVorlage(vid);
+}
+function crmVNodeEdit(vid, id){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, id); if(!f) return;
+  const isTop=f.parent===null;
+  crmOpenModalShell();
+  const teamSel=isTop?`<div class="crm-modal-field"><label>Standard-Team</label><select id="crm-vnode-team">${['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${f.node.team===tm?'selected':''}>${esc(tm)}</option>`)).join('')}</select></div>`:'';
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ ${isTop?'Hauptaufgabe':'Unterpunkt'}</h3>
+   <div class="crm-modal-field"><label>Text *</label><input id="crm-vnode-text" value="${esc(f.node.text||'')}"></div>
+   ${teamSel}
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmVNodeEditSave('${vid}','${id}')">Speichern</button></div>`);
+}
+function crmVNodeEditSave(vid, id){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, id); if(!f) return;
+  const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Text eingeben.','err'); return; }
+  f.node.text=text;
+  if(f.parent===null){ const t=document.getElementById('crm-vnode-team'); if(t) f.node.team=t.value; }
+  saveVorlage(v); crmEditVorlage(vid);
+}
+function crmVNodeDel(vid, id){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, id); if(!f) return;
+  if(!confirm('Diesen Punkt samt Unterpunkten löschen?')) return;
+  const removed=new Set(flatNodes([f.node]).map(x=>x.id));
+  const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1);
+  flatNodes(v.items).forEach(x=>{ if(Array.isArray(x.ref.deps)) x.ref.deps=x.ref.deps.filter(d=>!removed.has(d)); });
+  saveVorlage(v); crmEditVorlage(vid);
+}
+function crmVNodeDeps(vid, id){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, id); if(!f) return;
+  crmOpenModalShell();
+  const excl=new Set(flatNodes([f.node]).map(x=>x.id));  // sich selbst + eigene Unterpunkte
+  const sel=new Set(f.node.deps||[]);
+  const opts=flatNodes(v.items).filter(x=>!excl.has(x.id)).map(x=>
+    `<label><input type="checkbox" value="${x.id}" ${sel.has(x.id)?'checked':''}> ${'↳ '.repeat(x.depth)}${esc(x.text)}</label>`
+  ).join('') || '<div class="small" style="color:var(--muted)">Keine anderen Aufgaben vorhanden.</div>';
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">⛓ „${esc(f.node.text)}" startet erst nach …</h3>
+   <div class="crm-deps-box" id="crm-vdeps">${opts}</div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmVNodeDepsSave('${vid}','${id}')">Speichern</button></div>`);
+}
+function crmVNodeDepsSave(vid, id){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, id); if(!f) return;
+  f.node.deps=readChecked('crm-vdeps');
+  saveVorlage(v); crmEditVorlage(vid);
 }
 function crmDeleteVorlage(id){
   const v=getVorlage(id); if(!v) return;
@@ -1194,9 +1215,9 @@ Object.assign(window, {
   // Eigenständige Team-Projekte
   crmOpenTeamProjekt, crmBackToTeamProjekte, crmNewTeamProjekt,
   crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt,
-  // Vorlagen
-  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmVorlageRemoveItem,
-  crmVorlageAddSub, crmVorlageRemoveSub, crmVorlageItemDeps, crmVorlageSaveItemDeps, crmDeleteVorlage,
+  // Vorlagen (beliebig tief)
+  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmDeleteVorlage,
+  crmVNodeAdd, crmVNodeAddSave, crmVNodeEdit, crmVNodeEditSave, crmVNodeDel, crmVNodeDeps, crmVNodeDepsSave,
   // Kommunikation
   crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmDeleteNote, crmConfigAi
 });
