@@ -76,8 +76,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 
 /* ── User-Form Sektions-Überschriften ── */
 .uf-section-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--primary);padding:10px 0 5px;margin-top:6px;border-bottom:1.5px solid var(--primary-l);margin-bottom:10px}
-.uf-grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-@media(max-width:520px){.uf-grid2{grid-template-columns:1fr}}
+.uf-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;align-items:start}
+@media(max-width:560px){.uf-grid2{grid-template-columns:1fr;gap:4px}}
 
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
@@ -272,7 +272,7 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
 .modal-bg.show{display:flex}
 .modal{background:#fff;border-radius:10px;padding:26px;max-width:500px;width:93%;max-height:85vh;overflow-y:auto}
-.modal.modal-wide{max-width:720px}
+.modal.modal-wide{max-width:880px}
 .modal h3{font-size:17px;font-weight:700;margin-bottom:16px;color:var(--primary)}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 
