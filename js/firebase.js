@@ -20,18 +20,17 @@ export function ensureRealAuth(id, pw, email){
     const auth=firebase.auth();
     auth.signInWithEmailAndPassword(acct, pw).catch(err=>{
       const code=err&&err.code;
-      if(code==='auth/user-not-found'){
-        auth.createUserWithEmailAndPassword(acct, pw).catch(e=>{
-          const c=e&&e.code;
-          if(c!=='auth/operation-not-allowed') console.warn('CRM-Auth anlegen:', e&&e.message);
-        });
-      } else if(code==='auth/operation-not-allowed'){
-        /* E-Mail/Passwort-Provider noch nicht aktiviert – später */
-      } else if(code==='auth/wrong-password'){
-        console.warn('CRM-Auth: Passwort weicht von Firebase ab für', id);
-      } else if(code!=='auth/network-request-failed'){
-        console.warn('CRM-Auth Login:', err&&err.message);
-      }
+      if(code==='auth/operation-not-allowed' || code==='auth/network-request-failed') return;
+      // Login fehlgeschlagen → Konto existiert vermutlich noch nicht (neuere Firebase
+      // liefert dafür generisch 'auth/invalid-credential'). Also Konto anlegen.
+      auth.createUserWithEmailAndPassword(acct, pw).catch(e=>{
+        const c=e&&e.code;
+        if(c==='auth/email-already-in-use'){
+          /* Konto existiert bereits, Passwort weicht von Firebase ab (DB ≠ Auth) – ignorieren */
+        } else if(c!=='auth/operation-not-allowed' && c!=='auth/network-request-failed'){
+          console.warn('CRM-Auth anlegen:', e&&e.message);
+        }
+      });
     });
   }catch(e){ console.warn('ensureRealAuth:', e&&e.message); }
 }
