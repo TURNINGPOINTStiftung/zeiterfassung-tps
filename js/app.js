@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v114':'';
+  if(_hv) _hv.textContent=_showVer?'v115':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -66,7 +66,11 @@ export function initApp(){
   const moduleBar=document.getElementById('module-bar');
   if(moduleBar) moduleBar.style.display='flex';
   try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){ console.error('CRM Modulleiste:',e); }
-  switchModule('zeiterfassung');
+  // Zuletzt geöffnetes Modul wiederherstellen (sonst landet man nach Reload immer in der ZE).
+  let _lastMod='zeiterfassung';
+  try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || (isAdmin && (_lastMod==='website'||_lastMod==='forum'||_lastMod==='verwaltung'));
+  switchModule(_modOk?_lastMod:'zeiterfassung');
 }
 
 const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',verwaltung:'Verwaltung'};
@@ -78,6 +82,7 @@ export function closeModuleMenu(){ const d=document.getElementById('mb-dropdown'
 // Wechsel zwischen Modulen (Zeiterfassung / Website / Forum / CRM / Verwaltung)
 export function switchModule(name){
   window._activeModule=name;
+  try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
   document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active',t.dataset.mod===name));
   const cur=document.getElementById('mb-current'); if(cur) cur.textContent=MODULE_LABELS[name]||name;
   const isZE=name==='zeiterfassung';

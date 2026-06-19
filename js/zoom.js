@@ -2,10 +2,12 @@ const _ZOOM_KEY='tp_zt_zoom';
 const _ZOOM_DEFAULT=1.2;
 let _zoom=parseFloat(localStorage.getItem(_ZOOM_KEY)||String(_ZOOM_DEFAULT));
 
+function _isMobile(){ return window.innerWidth<=640; }
 function _applyZoom(z){
   _zoom=Math.round(Math.max(0.5,Math.min(2.0,z))*10)/10;
-  document.body.style.zoom=_zoom;
-  localStorage.setItem(_ZOOM_KEY,_zoom);
+  // Auf Mobil KEIN Seiten-Zoom (würde alles auf 120% skalieren → Layout verschoben).
+  document.body.style.zoom=_isMobile()?'1':_zoom;
+  if(!_isMobile()) localStorage.setItem(_ZOOM_KEY,_zoom);
   const lbl=document.getElementById('zoom-label');
   if(lbl) lbl.textContent=Math.round(_zoom*100)+'%';
 }
@@ -15,6 +17,8 @@ export function zoomReset(){ _applyZoom(_ZOOM_DEFAULT); }
 
 export function initZoom(){
   _applyZoom(_zoom);
+  // Beim Wechsel Mobil⇄Desktop (Drehen/Resize) Zoom passend neu setzen.
+  let _rt; window.addEventListener('resize',function(){ clearTimeout(_rt); _rt=setTimeout(function(){ _applyZoom(_zoom); },200); });
   window.addEventListener('wheel',function(e){
     if(!e.ctrlKey) return;
     e.preventDefault();
