@@ -263,7 +263,20 @@ function injectStyles(){
   .kb-add,.kb-additem{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-align:left;padding:4px 2px}
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
-  @media(max-width:640px){.crm-bar{padding:8px 12px}.crm-body{padding:12px}.crm-search{min-width:120px}}
+  @media(max-width:640px){
+    .crm-bar{padding:8px 10px;gap:7px}
+    .crm-trees{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:3px}
+    .crm-tree-tab{flex:0 0 auto;font-size:12.5px;padding:6px 12px}
+    .crm-search{min-width:0;flex:1 1 auto}
+    .crm-body{padding:12px 10px}
+    .crm-sec{padding:12px 12px}
+    .crm-detail-head h2{font-size:18px;min-width:0}
+    .crm-fields{grid-template-columns:1fr}
+    .crm-list{grid-template-columns:1fr}
+    .kb-col{flex:0 0 84vw;max-width:340px}
+    .kb-board{gap:10px}
+    .crm-modal-actions{gap:8px}
+  }
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
   document.head.appendChild(st);

@@ -294,6 +294,17 @@ initFirebase().then(function(){
   initFirebaseEvents();
   checkPasswordResetToken();
 
+  // Einmaliges erzwungenes Neu-Anmelden (Umstellung auf echte Firebase-Konten).
+  // Zahl hochsetzen, um erneut für alle einen Re-Login zu erzwingen.
+  try{
+    const _RELOGIN_EPOCH='1';
+    if(localStorage.getItem('tp_zt_relogin_epoch')!==_RELOGIN_EPOCH){
+      localStorage.setItem('tp_zt_relogin_epoch',_RELOGIN_EPOCH);
+      localStorage.removeItem('tp_zt_session');
+      localStorage.removeItem('tp_zt_remember');
+    }
+  }catch(e){}
+
   // Restore saved session (survives F5 reload)
   try{
     const savedUid=localStorage.getItem('tp_zt_session');
