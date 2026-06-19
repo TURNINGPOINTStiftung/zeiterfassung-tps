@@ -264,10 +264,13 @@ function injectStyles(){
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){
-    .crm-bar{padding:6px 9px;gap:5px}
-    .crm-trees{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:2px}
-    .crm-tree-tab{flex:0 0 auto;font-size:12px;padding:5px 11px}
-    .crm-search{min-width:0;flex:1 1 110px;padding:6px 10px}
+    /* Ganze CRM-Seite scrollt (kein interner Scroll) → Header + Leiste verschwinden beim Scrollen */
+    #crm-root{display:block;flex:none}
+    .crm-body{overflow:visible;flex:none;display:block}
+    .crm-bar{position:static;padding:8px 10px;gap:6px}
+    .crm-trees{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:3px}
+    .crm-tree-tab{flex:0 0 auto;font-size:14px;padding:8px 14px}
+    .crm-search{min-width:0;flex:1 1 110px;padding:8px 11px;font-size:14px}
     .crm-bar .btn-sm-crm{padding:6px 9px;font-size:12px}
     .btn-lbl{display:none}              /* Buttons in der Leiste nur als Icon */
     .crm-body{padding:11px 9px}

@@ -567,12 +567,14 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   /* ─ Zoom: ausblenden ─ */
   .zoom-ctrl{display:none!important}
 
-  /* ─ Modul-Leiste = einziger Header: kompakt, Logo hart begrenzt, nie überlappen ─ */
-  .module-bar{position:static;gap:8px;padding:6px 10px;flex-wrap:wrap}
-  .module-bar .mb-logo{height:28px!important;max-height:28px;max-width:44vw}
-  .mb-menu{font-size:13px;padding:6px 10px}
+  /* ─ Modul-Leiste = einziger Header: EINE Zeile (☰ · Name · Abmelden) ─ */
+  .module-bar{position:static;gap:8px;padding:7px 12px;flex-wrap:nowrap}
+  .module-bar .mb-logo{display:none}            /* Logo auf Mobil ausblenden → eine Zeile */
+  .mb-menu{font-size:15px;padding:7px 12px;flex-shrink:0}
   .mb-version{display:none}
-  .module-bar .header-right{gap:6px;margin-left:auto}
+  .module-bar .header-right{gap:8px;margin-left:auto;flex-shrink:1;min-width:0}
+  .user-badge{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .header-right .btn{flex-shrink:0}
   .app-header{position:static}
 
   /* ─ iOS Safe Areas ─ */
