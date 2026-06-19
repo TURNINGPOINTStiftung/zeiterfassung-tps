@@ -81,7 +81,7 @@
   <!-- Eine Top-Leiste (blaues CI). Modulwechsel über das ☰-Dropdown. -->
   <div id="module-bar" class="module-bar" style="display:none">
     <div class="mb-menu-wrap">
-      <button class="mb-menu" id="mb-menu-btn" onclick="toggleModuleMenu()" aria-label="Modul wechseln">☰ <span id="mb-current">Zeiterfassung</span></button>
+      <button class="mb-menu" id="mb-menu-btn" onclick="toggleModuleMenu()" aria-label="Modul wechseln" title="Modul wechseln">☰</button>
       <div class="mb-dropdown" id="mb-dropdown" style="display:none">
         <button class="mb-mod active" data-mod="zeiterfassung" onclick="switchModule('zeiterfassung')">Zeiterfassung</button>
         <button class="mb-mod" data-mod="website" onclick="switchModule('website')">Website</button>
@@ -405,6 +405,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=47"></script>
+<script type="module" src="js/main.js?v=48"></script>
 </body>
 </html>
