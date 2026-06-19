@@ -565,7 +565,7 @@ export async function saveNewUser(){
   const _plainPw=u.pw;  // Klartext vor dem Hashen für das Firebase-Konto
   u.pw=await makePwRecord(u.pw);
   await mutate(d=>d.users.push(u));
-  try{ window.provisionAuthAccount?.(u.id, _plainPw); }catch(e){}  // echtes Konto anlegen (best effort)
+  try{ window.provisionAuthAccount?.(u.id, _plainPw, u.email); }catch(e){}  // echtes Konto anlegen (best effort)
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 

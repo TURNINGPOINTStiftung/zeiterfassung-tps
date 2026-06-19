@@ -4,21 +4,24 @@ import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
 // ── Echte Firebase-Konten (Phase 1) ───────────────────────────────
-// Technische E-Mail je Nutzer-ID, damit der Name-Login erhalten bleibt.
-function _authEmail(id){
+// Bevorzugt die hinterlegte echte E-Mail; sonst technische E-Mail je ID
+// (damit der Name-Login erhalten bleibt und niemand ohne E-Mail aussteigt).
+function _accountEmail(id, email){
+  const e=String(email||'').trim().toLowerCase();
+  if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return e;
   return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 }
 // Beim Login: echtes Konto verwenden oder (einmalig) anlegen. NON-BLOCKING –
 // schlägt es fehl (z. B. Provider noch nicht aktiviert), bleibt der Login unberührt.
-export function ensureRealAuth(id, pw){
+export function ensureRealAuth(id, pw, email){
   try{
     if(!window.firebase || !firebase.auth || !id || !pw) return;
-    const email=_authEmail(id);
+    const acct=_accountEmail(id, email);
     const auth=firebase.auth();
-    auth.signInWithEmailAndPassword(email, pw).catch(err=>{
+    auth.signInWithEmailAndPassword(acct, pw).catch(err=>{
       const code=err&&err.code;
       if(code==='auth/user-not-found'){
-        auth.createUserWithEmailAndPassword(email, pw).catch(e=>{
+        auth.createUserWithEmailAndPassword(acct, pw).catch(e=>{
           const c=e&&e.code;
           if(c!=='auth/operation-not-allowed') console.warn('CRM-Auth anlegen:', e&&e.message);
         });
@@ -34,13 +37,13 @@ export function ensureRealAuth(id, pw){
 }
 // Admin legt Nutzer an → Konto über eine SEKUNDÄRE App-Instanz anlegen,
 // damit die Admin-Sitzung nicht ersetzt wird. Best effort.
-export function provisionAuthAccount(id, pw){
+export function provisionAuthAccount(id, pw, email){
   try{
     if(!window.firebase || !id || !pw) return;
-    const email=_authEmail(id);
+    const acct=_accountEmail(id, email);
     const cfg=firebase.app().options;
     const sec=(firebase.apps||[]).find(a=>a.name==='admin-prov') || firebase.initializeApp(cfg, 'admin-prov');
-    sec.auth().createUserWithEmailAndPassword(email, pw)
+    sec.auth().createUserWithEmailAndPassword(acct, pw)
       .then(()=>{ try{ sec.auth().signOut(); }catch(_){} })
       .catch(e=>{ const c=e&&e.code; if(c!=='auth/email-already-in-use'&&c!=='auth/operation-not-allowed') console.warn('CRM-Auth provisionieren:', e&&e.message); try{ sec.auth().signOut(); }catch(_){} });
   }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
