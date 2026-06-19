@@ -264,18 +264,28 @@ function injectStyles(){
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){
-    .crm-bar{padding:8px 10px;gap:7px}
-    .crm-trees{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:3px}
-    .crm-tree-tab{flex:0 0 auto;font-size:12.5px;padding:6px 12px}
-    .crm-search{min-width:0;flex:1 1 auto}
-    .crm-body{padding:12px 10px}
-    .crm-sec{padding:12px 12px}
-    .crm-detail-head h2{font-size:18px;min-width:0}
+    .crm-bar{padding:6px 9px;gap:5px}
+    .crm-trees{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;padding-bottom:2px}
+    .crm-tree-tab{flex:0 0 auto;font-size:12px;padding:5px 11px}
+    .crm-search{min-width:0;flex:1 1 110px;padding:6px 10px}
+    .crm-bar .btn-sm-crm{padding:6px 9px;font-size:12px}
+    .btn-lbl{display:none}              /* Buttons in der Leiste nur als Icon */
+    .crm-body{padding:11px 9px}
+    .crm-sec{padding:11px 11px;margin-bottom:11px}
+    .crm-sec h4{font-size:12px}
+    .crm-detail-head{gap:8px;margin-bottom:12px}
+    .crm-detail-head h2{order:-1;width:100%;min-width:0;font-size:18px}   /* Titel auf eigener Zeile */
     .crm-fields{grid-template-columns:1fr}
     .crm-list{grid-template-columns:1fr}
-    .kb-col{flex:0 0 84vw;max-width:340px}
-    .kb-board{gap:10px}
+    .kb-board{gap:10px;scroll-snap-type:x mandatory}
+    .kb-col{flex:0 0 86vw;max-width:360px;scroll-snap-align:start}
     .crm-modal-actions{gap:8px}
+    /* Verwaltungs-Mitarbeitertabelle als Karten statt breiter Tabelle */
+    .vw-table,.vw-table tbody,.vw-table tr,.vw-table td{display:block;width:auto}
+    .vw-table thead{display:none}
+    .vw-table tr{border:1.5px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:9px;background:#fff}
+    .vw-table td{border:none;padding:3px 0}
+    .vw-table td .crm-tsel{margin:3px 6px 3px 0}
   }
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
@@ -343,13 +353,13 @@ function barHtml(){
   let right = '';
   if(full && mode==='kontakte'){
     right = `<input class="crm-search" type="search" placeholder="Suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearch(this.value)">
-      <button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Neu</button>`;
+      <button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`;
   } else {
     right = `<span style="margin-left:auto"></span>`;
   }
   const adminBtns = full
-    ? `<button class="btn-sm-crm" title="Aufgaben-Vorlagen verwalten" onclick="crmOpenVorlagen()">📋 Vorlagen</button>
-       <button class="btn-sm-crm" title="KI-Proxy für Zusammenfassungen" onclick="crmConfigAi()">⚙️ KI ${getAiEndpoint()?'✓':'–'}</button>`
+    ? `<button class="btn-sm-crm" title="Aufgaben-Vorlagen verwalten" onclick="crmOpenVorlagen()">📋<span class="btn-lbl"> Vorlagen</span></button>
+       <button class="btn-sm-crm" title="KI-Proxy für Zusammenfassungen" onclick="crmConfigAi()">⚙️<span class="btn-lbl"> KI ${getAiEndpoint()?'✓':'–'}</span></button>`
     : '';
   return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div>${right}${adminBtns}</div>`;
 }
