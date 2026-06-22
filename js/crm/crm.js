@@ -238,6 +238,8 @@ function injectStyles(){
   .crm-viewtoggle{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
   .crm-viewtoggle button{background:#fff;border:none;padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
   .crm-viewtoggle button.active{background:var(--primary);color:#fff}
+  .crm-board-title{display:inline-flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin-bottom:10px;cursor:pointer}
+  .crm-board-title:hover{border-color:var(--primary-l)}
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
   .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
@@ -667,6 +669,9 @@ function paintDetail(){
           <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
         </span>
       </h4>
+      ${e.boardTitle
+        ? `<div class="crm-board-title" onclick="crmEditBoardTitle()" title="Projektname bearbeiten">📌 ${esc(e.boardTitle)} <span style="color:var(--muted);font-size:12px">✎</span></div>`
+        : `<button class="btn-sm-crm" style="margin-bottom:10px" onclick="crmEditBoardTitle()">＋ Projektname</button>`}
       ${todos}
     </div>
 
@@ -848,6 +853,20 @@ function crmSaveStatusQuo(){
   const v=val('crm-statusquo');
   mutateEntity(e=>{ e.statusQuo=v; });
   toast('Status gespeichert ✓','ok');
+}
+// Editierbarer Projektname über dem Aufgaben-Board (wird von der Vorlage übernommen)
+function crmEditBoardTitle(){
+  const e=curEntity(); if(!e) return;
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📌 Projektname</h3>
+   <div class="crm-modal-field"><label>Name des Aufgaben-Projekts</label><input id="crm-bt" value="${esc(e.boardTitle||'')}" placeholder="z. B. Wendekurs ${esc((e.stamm&&e.stamm.name)||'')}"></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveBoardTitle()">Speichern</button></div>`);
+}
+function crmSaveBoardTitle(){
+  const v=val('crm-bt');
+  mutateEntity(e=>{ e.boardTitle=v; });
+  crmCloseModal(); paintDetail();
 }
 
 // ── Statistik (Zahlen·Daten·Fakten) – Entwicklung über die Zeit ────
@@ -1062,7 +1081,7 @@ function crmApplyVorlage(id){
     return node;
   };
   const mains=(v.items||[]).map(n=>build(n,0));
-  mutateContainer(e=>{ if(!Array.isArray(e.todos)) e.todos=[]; mains.forEach(m=>e.todos.push(m)); });
+  mutateContainer(e=>{ if(!Array.isArray(e.todos)) e.todos=[]; mains.forEach(m=>e.todos.push(m)); if(!isTPCtx() && !e.boardTitle) e.boardTitle=v.name; });
   crmCloseModal(); repaintContainer();
   toast(`„${v.name}" übernommen (${mains.length} Hauptaufgabe${mains.length===1?'':'n'}) ✓`,'ok');
 }
@@ -1704,7 +1723,7 @@ Object.assign(window, {
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
-  crmSaveStatusQuo,
+  crmSaveStatusQuo, crmEditBoardTitle, crmSaveBoardTitle,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
