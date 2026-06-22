@@ -482,11 +482,14 @@ function taskNodeHtml(c, n, depth){
 // ── Kanban-Board (Teams-Planner-Stil) ──────────────────────────────
 // Spalte = Hauptaufgabe · Karte = Unterpunkt · Checkliste = deren Unterpunkte.
 function crmSetTaskView(v){ window._crmTaskView=v; repaintContainer(); }
+function _hideDone(){ return !!window._crmHideDone; }
+function crmToggleHideDone(){ window._crmHideDone=!window._crmHideDone; paint(); }
 function kbCardHtml(c, n){
   const st=taskStatusByKey(n.status);
   const kids=n.children||[];
   const done=kids.filter(k=>k.status==='erledigt').length;
-  const checklist=kids.map(k=>{
+  const visKids=_hideDone()?kids.filter(k=>k.status!=='erledigt'):kids;
+  const checklist=visKids.map(k=>{
     const kdone=k.status==='erledigt';
     return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
       <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone('${k.id}')">
@@ -512,8 +515,10 @@ function kbCardHtml(c, n){
   </div>`;
 }
 function taskBoardHtml(c){
-  const cols=(c.todos||[]).map(top=>{
-    const cards=(top.children||[]).map(card=>kbCardHtml(c,card)).join('');
+  const tops=_hideDone()?(c.todos||[]).filter(t=>t.status!=='erledigt'):(c.todos||[]);
+  const cols=tops.map(top=>{
+    const childs=_hideDone()?(top.children||[]).filter(card=>card.status!=='erledigt'):(top.children||[]);
+    const cards=childs.map(card=>kbCardHtml(c,card)).join('');
     return `<div class="kb-col" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
       <div class="kb-col-head">
         <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,'${top.id}')" title="Spalte verschieben">⠿</span>
@@ -656,6 +661,7 @@ function paintDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
+          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
           <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
         </span>
@@ -1137,7 +1143,8 @@ function paintTeamDetail(){
     const kids=n.children||[];
     const done=kids.filter(k=>k.status==='erledigt').length;
     const cdone=n.status==='erledigt';
-    const checklist=kids.map(k=>{
+    const visKids=_hideDone()?kids.filter(k=>k.status!=='erledigt'):kids;
+    const checklist=visKids.map(k=>{
       const kd=k.status==='erledigt';
       return `<div class="kb-check${kd?' done':''}" onclick="event.stopPropagation()">
         <input type="checkbox" ${kd?'checked':''} onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${k.id}')">
@@ -1163,24 +1170,25 @@ function paintTeamDetail(){
   };
   const blocks=`<div class="kb-board">${groups.map(g=>{
     const tr=treeByKey(g.tree);
-    const cards=g.mains.map(m=>teamKbCard(g,m)).join('');
+    const mains=_hideDone()?g.mains.filter(m=>m.status!=='erledigt'):g.mains;
+    const cards=mains.map(m=>teamKbCard(g,m)).join('');
     return `<div class="kb-col">
       <div class="kb-col-head"><span class="kb-col-title" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)}</span></div>
       <div class="kb-cards">${cards}</div>
     </div>`;
   }).join('')}</div>`;
-  // Eigenständige Team-Projekte (unabhängig von Einträgen; persönliche Projekte ausschließen)
-  const tprojekte=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
-  const projCards=tprojekte.map(p=>{
-    const all=flatTasks(p); const openN=all.filter(t=>t.status!=='erledigt').length;
+  // Eigenständige Team-Projekte (persönliche ausschließen), offen + abgeschlossen getrennt
+  const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
+  const projCardHtml=p=>{ const all=flatTasks(p); const openN=all.filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenTeamProjekt('${p.id}')">
-      <h3>📂 ${esc(p.name||'(ohne Name)')}</h3>
+      <h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div>
-    </div>`;
-  }).join('');
+    </div>`; };
+  const openP=allProj.filter(p=>!p.closed), closedP=allProj.filter(p=>p.closed);
   const projektSec=`<div class="crm-sec">
     <h4><span class="ttl">📂 Eigene Projekte</span><button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button></h4>
-    ${tprojekte.length?`<div class="crm-list">${projCards}</div>`:`<div class="small" style="color:var(--muted)">Noch keine eigenen Projekte.</div>`}
+    ${openP.length?`<div class="crm-list">${openP.map(projCardHtml).join('')}</div>`:`<div class="small" style="color:var(--muted)">Noch keine eigenen Projekte.</div>`}
+    ${closedP.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedP.length})</summary><div class="crm-list" style="margin-top:8px">${closedP.map(projCardHtml).join('')}</div></details>`:''}
   </div>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
@@ -1188,7 +1196,10 @@ function paintTeamDetail(){
       <h2>👥 ${esc(team)}</h2>
     </div>
     ${projektSec}
-    <div style="font-size:13px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px">📋 Aufgaben aus Einträgen</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0 10px">
+      <span style="font-size:13px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px">📋 Aufgaben aus Einträgen</span>
+      <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
+    </div>
     ${ rel.length ? blocks : `<div class="small" style="color:var(--muted)">Diesem Team sind noch keine Aufgaben aus Einträgen zugeordnet.</div>` }
   </div>`;
 }
@@ -1221,7 +1232,8 @@ function paintTeamProjektDetail(){
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${window._crmProjReturn==='meine'?'Meine Aufgaben':esc(p.team||'Team')}</button>
-      <h2>📂 ${esc(p.name||'(ohne Name)')}</h2>
+      <h2>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
+      <button class="btn-sm-crm" onclick="${p.closed?'crmReopenProjekt':'crmCloseProjekt'}()">${p.closed?'↺ Wieder öffnen':'✓ Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditTeamProjekt()">✎ Bearbeiten</button>
       <button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>
     </div>
@@ -1230,6 +1242,7 @@ function paintTeamProjektDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
+          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
           <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
         </span>
@@ -1282,6 +1295,17 @@ function crmDeleteTeamProjekt(){
   if(ret==='meine'){ window._crmProjReturn=null; window._crmMode='meine'; paintMeine(); } else paintTeamDetail();
   toast('Gelöscht.','');
 }
+function crmCloseProjekt(){
+  const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
+  p.closed=true; p.closedAt=Date.now(); p.closedByKuerzel=curKuerzel();
+  p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
+  saveTeamProjekt(p); paintTeamProjektDetail(); toast('Projekt abgeschlossen ✓','ok');
+}
+function crmReopenProjekt(){
+  const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
+  p.closed=false; p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
+  saveTeamProjekt(p); paintTeamProjektDetail(); toast('Projekt wieder geöffnet ✓','ok');
+}
 
 // ══════════════════════════════════════════════════════════════════
 //  MEINE AUFGABEN  (für jede angemeldete Person) – zugewiesen + eigene
@@ -1292,7 +1316,7 @@ function paintMeine(){
   // 1) Mir zugewiesene Aufgaben (über alle Einträge und Projekte)
   const assigned=[];
   TREES.forEach(tr=>{ listEntities(tr.key).forEach(e=>{ normTasks(e); flatNodes(e.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); });
-  listTeamProjekte().forEach(p=>{ normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
+  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';
@@ -1305,11 +1329,11 @@ function paintMeine(){
       <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','${idArg}','${cArg}','${t.id}')">Öffnen</button>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
-  // 2) Meine eigenen Projekte
+  // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
   const myProj=listTeamProjekte().filter(p=>p.owner===me);
-  const pcards=myProj.map(p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length;
-    return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div></div>`;
-  }).join('');
+  const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length;
+    return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div></div>`; };
+  const openMine=myProj.filter(p=>!p.closed), closedMine=myProj.filter(p=>p.closed);
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-sec">
       <h4><span class="ttl">📌 Mir zugewiesen</span></h4>
@@ -1317,7 +1341,8 @@ function paintMeine(){
     </div>
     <div class="crm-sec">
       <h4><span class="ttl">📂 Meine Projekte</span><button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button></h4>
-      ${myProj.length?`<div class="crm-list">${pcards}</div>`:`<div class="small" style="color:var(--muted)">Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</div>`}
+      ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</div>`}
+      ${closedMine.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedMine.length})</summary><div class="crm-list" style="margin-top:8px">${closedMine.map(pcard).join('')}</div></details>`:''}
     </div>
   </div>`;
 }
@@ -1677,13 +1702,13 @@ Object.assign(window, {
   crmDeleteNode, crmToggleDone,
   crmApplyVorlagePick, crmApplyVorlage,
   // Kanban-Board
-  crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn,
+  crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn, crmToggleHideDone,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
   crmTeamSetStatus, crmTeamSetAssignee, crmTeamToggleDone, crmTeamAddChild, crmTeamEditNode,
   // Eigenständige Team-Projekte
   crmOpenTeamProjekt, crmBackToTeamProjekte, crmNewTeamProjekt,
-  crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt,
+  crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt, crmCloseProjekt, crmReopenProjekt,
   // Vorlagen (beliebig tief)
   crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmDeleteVorlage,
   crmVNodeAdd, crmVNodeAddSave, crmVNodeEdit, crmVNodeEditSave, crmVNodeDel, crmVNodeDeps, crmVNodeDepsSave,
