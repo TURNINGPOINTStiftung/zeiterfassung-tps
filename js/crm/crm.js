@@ -308,8 +308,8 @@ export function renderCRM(){
     ensureCrmReady().then(()=>{
       try{
         const lvl=accessLevel();
-        if(lvl==='none') window._crmMode='meine';
-        else if(lvl==='verein' && window._crmMode!=='meine'){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); }
+        if(lvl==='none') window._crmMode='teams';
+        else if(lvl==='verein' && window._crmMode!=='teams' && window._crmMode!=='meine'){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); }
         paint();
       }catch(e){ console.error('CRM paint:',e); }
     });
@@ -345,10 +345,11 @@ function barHtml(){
   const mode = window._crmMode || 'kontakte';
   const full = crmFull();
   const lvl  = accessLevel();
-  const tabs = [`<button class="crm-tree-tab${mode==='meine'?' active':''}" onclick="crmShowMeine()">🙋 Meine Aufgaben</button>`];
+  const homeActive = (mode==='teams'||mode==='meine');
+  const homeLabel  = full ? '👥 Teams' : '🙋 Meine Aufgaben';
+  const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(full){
     TREES.forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${t.icon} ${esc(t.label)}</button>`));
-    tabs.push(`<button class="crm-tree-tab${mode==='teams'?' active':''}" style="margin-left:6px" onclick="crmShowTeams()">👥 Teams</button>`);
   } else if(lvl==='verein'){
     const vid=accessVerein(); const ve=vid?getEntity('vereine',vid):null; const nm=(ve&&ve.stamm&&ve.stamm.name)||'Mein Verein';
     tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmOpenMyVerein()">🏛️ ${esc(nm)}</button>`);
@@ -689,7 +690,7 @@ function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; wi
 function crmSearch(v){ window._crmSearch=v; paintList(); }
 function crmOpenDetail(id){ window._crmMode='kontakte'; window._crmSelId=id; paintDetail(); }
 function crmBackToList(){ window._crmSelId=null; if(crmFull()) paintList(); else { window._crmMode='meine'; paintMeine(); } }
-function crmShowMeine(){ window._crmMode='meine'; window._crmTeamProjSel=null; window._crmSelId=null; paintMeine(); }
+function crmShowMeine(){ crmShowTeams(); }   /* „Meine Aufgaben" ist in die Teams-Ansicht integriert */
 function crmOpenMyVerein(){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); paintDetail(); }
 
 function crmOpenModalShell(){ window._crmModalOpen=true; }
@@ -1118,14 +1119,23 @@ function teamCardHtml(tm, total, open){
 }
 function paintTeamsList(){
   const root=document.getElementById('crm-root'); if(!root) return;
-  const cards=[];
-  zeTeams().forEach(tm=>{ const c=teamCounts(tm); cards.push(teamCardHtml(tm, c.total, c.open)); });
-  const cNo=teamCounts('Ohne Team');
-  if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
-  root.innerHTML = barHtml() + `<div class="crm-body">
-    <div class="crm-list">${cards.join('')}</div>
-    <div class="small" style="color:var(--muted);margin-top:16px">Aufgaben werden an den Einträgen angelegt und hier nach Team gesammelt. Die Leitung verteilt sie über die Spalte „Zuständig".</div>
-  </div>`;
+  window._crmTaskCtx=null;
+  // „Meine Aufgaben" oben – für alle
+  const meine = meineSectionsHtml();
+  // Teams-Kacheln nur für Voll-Zugriff
+  let teamsBlock='';
+  if(crmFull()){
+    const cards=[];
+    zeTeams().forEach(tm=>{ const c=teamCounts(tm); cards.push(teamCardHtml(tm, c.total, c.open)); });
+    const cNo=teamCounts('Ohne Team');
+    if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
+    teamsBlock = `<div class="crm-sec">
+      <h4><span class="ttl">👥 Teams</span></h4>
+      <div class="crm-list">${cards.join('')}</div>
+      <div class="small" style="color:var(--muted);margin-top:10px">Aufgaben werden an den Einträgen angelegt und hier nach Team gesammelt.</div>
+    </div>`;
+  }
+  root.innerHTML = barHtml() + `<div class="crm-body">${meine}${teamsBlock}</div>`;
 }
 function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
@@ -1310,8 +1320,9 @@ function crmReopenProjekt(){
 // ══════════════════════════════════════════════════════════════════
 //  MEINE AUFGABEN  (für jede angemeldete Person) – zugewiesen + eigene
 // ══════════════════════════════════════════════════════════════════
-function paintMeine(){
-  const root=document.getElementById('crm-root'); if(!root) return;
+// „Meine Aufgaben" als wiederverwendbarer Baustein (in der Teams-Ansicht eingebettet)
+function paintMeine(){ window._crmMode='teams'; window._crmTeamSel=null; paintTeamsList(); }
+function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (über alle Einträge und Projekte)
   const assigned=[];
@@ -1334,8 +1345,7 @@ function paintMeine(){
   const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div></div>`; };
   const openMine=myProj.filter(p=>!p.closed), closedMine=myProj.filter(p=>p.closed);
-  root.innerHTML = barHtml() + `<div class="crm-body">
-    <div class="crm-sec">
+  return `<div class="crm-sec">
       <h4><span class="ttl">📌 Mir zugewiesen</span></h4>
       ${arows}
     </div>
@@ -1343,8 +1353,7 @@ function paintMeine(){
       <h4><span class="ttl">📂 Meine Projekte</span><button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button></h4>
       ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</div>`}
       ${closedMine.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedMine.length})</summary><div class="crm-list" style="margin-top:8px">${closedMine.map(pcard).join('')}</div></details>`:''}
-    </div>
-  </div>`;
+    </div>`;
 }
 function _meSetCtx(kind,tree,id){
   window._crmTaskCtx = (kind==='teamprojekt') ? {kind:'teamprojekt',id} : {kind:'entity',tree,eid:id};
