@@ -1678,15 +1678,17 @@ function _normEmails(parts){
   });
   return out;
 }
-// Outlook/Standard-Mailprogramm mit allen Adressen im BCC öffnen
-function _openBcc(emails){
+// Outlook/Standard-Mailprogramm öffnen – feld='bcc' (verdeckt) oder 'to' (sichtbar)
+function _openMail(emails, feld){
   const list=_normEmails(emails);
   if(!list.length){ toast('Keine gültigen E-Mail-Adressen.','err'); return; }
-  const url='mailto:?bcc='+encodeURIComponent(list.join(','));
+  const url='mailto:?'+(feld||'bcc')+'='+encodeURIComponent(list.join(','));
   if(url.length>1900) toast('Sehr viele Adressen – falls Outlook nicht alle übernimmt, nutze „Adressen kopieren".','');
   try{ window.location.href=url; }
   catch(e){ try{ const a=document.createElement('a'); a.href=url; document.body.appendChild(a); a.click(); a.remove(); }catch(_){ toast('Mail konnte nicht geöffnet werden.','err'); } }
 }
+function _openBcc(emails){ _openMail(emails,'bcc'); }
+function _openTo(emails){ _openMail(emails,'to'); }
 function _copyEmails(emails){
   const txt=_normEmails(emails).join('; ');
   if(!txt){ toast('Keine Adressen zum Kopieren.','err'); return; }
@@ -1768,7 +1770,7 @@ function crmMailKontakte(){
   const e=curEntity(); if(!e) return;
   const emails=(e.kontakte||[]).map(k=>k.email).filter(Boolean);
   if(!emails.length){ toast('An diesem Eintrag sind keine Kontakt-E-Mails hinterlegt.','err'); return; }
-  _openBcc(emails);
+  _openTo(emails);  // Kontakte eines Eintrags kennen sich → sichtbar im An-Feld
 }
 
 // ══════════════════════════════════════════════════════════════════
