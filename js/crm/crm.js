@@ -240,6 +240,13 @@ function injectStyles(){
   .crm-viewtoggle button.active{background:var(--primary);color:#fff}
   .crm-board-title{display:inline-flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin-bottom:10px;cursor:pointer}
   .crm-board-title:hover{border-color:var(--primary-l)}
+  .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .kb-att{font-size:11px;background:#eef2fa;border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kb-att:hover{background:#e2e9f6}
+  .kb-cardbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .crm-att-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
+  .crm-att-row .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-att-row .crm-x{border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;padding:2px 6px}
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
   .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
@@ -419,6 +426,7 @@ function normNode(n){
   if(!Array.isArray(n.deps)) n.deps=[];
   // Einzel-Team (Alt) → Team-Array (mehrere Teams je Aufgabe)
   if(!Array.isArray(n.teams)) n.teams = (n.team!=null && n.team!=='') ? [n.team] : [];
+  if(!Array.isArray(n.attachments)) n.attachments=[];
   n.children.forEach(normNode);
 }
 function normTasks(c){ if(c && Array.isArray(c.todos)) c.todos.forEach(normNode); return c; }
@@ -514,7 +522,11 @@ function kbCardHtml(c, n){
        ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
      </div>`:''}
     ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-    <button class="kb-additem" onclick="event.stopPropagation();crmAddChild('${n.id}')">＋ Schritt</button>
+    ${attachChips(n)}
+    <div class="kb-cardbtns">
+      <button class="kb-additem" onclick="event.stopPropagation();crmAddChild('${n.id}')">＋ Schritt</button>
+      <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen('${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
+    </div>
   </div>`;
 }
 function taskBoardHtml(c){
@@ -868,6 +880,75 @@ function crmSaveBoardTitle(){
   mutateEntity(e=>{ e.boardTitle=v; });
   crmCloseModal(); paintDetail();
 }
+// ── Anlagen (Links + Dateien via Firebase Storage) an einer Aufgabe ──
+function _storageOn(){ return !!(window.firebase && firebase.storage); }
+function attachChips(n){
+  const a=(n&&n.attachments)||[]; if(!a.length) return '';
+  return `<div class="kb-atts" onclick="event.stopPropagation()">${a.map(x=>
+    `<a class="kb-att" href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title||x.name||x.url)}">${x.type==='file'?'📎':'🔗'} ${esc((x.title||x.name||x.url).slice(0,26))}</a>`
+  ).join('')}</div>`;
+}
+function crmAttOpen(nid){
+  const c=curContainer(); if(!c) return;
+  const f=findNode(c, nid); if(!f) return;
+  crmOpenModalShell();
+  const a=f.node.attachments||[];
+  const rows=a.length ? a.map(x=>`<div class="crm-att-row">
+      <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
+      ${x.size?`<span class="small" style="color:var(--muted)">${Math.round(x.size/1024)} KB</span>`:''}
+      <button class="crm-x" title="Entfernen" onclick="crmAttDel('${nid}','${x.id}')">✕</button>
+    </div>`).join('') : `<div class="small" style="color:var(--muted);padding:4px 0">Noch keine Anlagen.</div>`;
+  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📎 Anlagen</h3>
+   <div style="margin-bottom:6px;font-size:13px;color:var(--muted)">${esc(f.node.text||'')}</div>
+   ${rows}
+   <div class="crm-att-add">
+     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">🔗 Link hinzufügen</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <input id="crm-att-title" placeholder="Bezeichnung (optional)" style="flex:1;min-width:130px">
+       <input id="crm-att-url" placeholder="https://…" style="flex:2;min-width:170px">
+       <button class="btn-sm-crm primary" onclick="crmAttLink('${nid}')">＋ Link</button>
+     </div>
+   </div>
+   <div class="crm-att-add">
+     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">📎 Datei hochladen</div>
+     ${_storageOn()
+       ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="crm-att-file" style="flex:1;min-width:160px"><button class="btn-sm-crm" onclick="crmAttFile('${nid}')">Hochladen</button></div>
+          <div class="small" style="color:var(--muted);margin-top:4px">Max. 15 MB pro Datei.</div>`
+       : `<div class="small" style="color:var(--muted)">Datei-Upload ist noch nicht aktiv – dafür muss <b>Firebase Storage</b> in der Konsole freigeschaltet werden. Links funktionieren bereits.</div>`}
+   </div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmCloseModal();repaintContainer()">Fertig</button></div>`);
+}
+function crmAttLink(nid){
+  const url=val('crm-att-url'); if(!url){ toast('Bitte eine URL eingeben.','err'); return; }
+  const u=/^https?:\/\//i.test(url)?url:('https://'+url.replace(/^\/+/,''));
+  const title=val('crm-att-title');
+  mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'link',title,url:u}); });
+  crmAttOpen(nid); toast('Link hinzugefügt ✓','ok');
+}
+function crmAttFile(nid){
+  const fi=document.getElementById('crm-att-file'); const file=fi&&fi.files&&fi.files[0];
+  if(!file){ toast('Bitte eine Datei wählen.','err'); return; }
+  if(file.size>15*1024*1024){ toast('Datei zu groß (max. 15 MB).','err'); return; }
+  if(!_storageOn()){ toast('Firebase Storage ist nicht verfügbar.','err'); return; }
+  const safe=file.name.replace(/[^\w.\-]+/g,'_');
+  const path='crm-anlagen/'+nid+'/'+Date.now()+'_'+safe;
+  toast('Lädt hoch …','');
+  try{
+    const ref=firebase.storage().ref(path);
+    ref.put(file).then(s=>s.ref.getDownloadURL()).then(url=>{
+      mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'file',name:file.name,url,size:file.size,path}); });
+      crmAttOpen(nid); toast('Datei hochgeladen ✓','ok');
+    }).catch(e=>{ toast('Upload fehlgeschlagen: '+((e&&e.message)||''),'err'); });
+  }catch(e){ toast('Upload-Fehler: '+((e&&e.message)||''),'err'); }
+}
+function crmAttDel(nid, attId){
+  let delPath=null;
+  mutateContainer(c=>{ const f=findNode(c,nid); if(!f||!Array.isArray(f.node.attachments)) return; const x=f.node.attachments.find(a=>a.id===attId); if(x&&x.path) delPath=x.path; f.node.attachments=f.node.attachments.filter(a=>a.id!==attId); });
+  if(delPath && _storageOn()){ try{ firebase.storage().ref(delPath).delete().catch(()=>{}); }catch(e){} }
+  crmAttOpen(nid);
+}
+// Team-Ansicht: Anlagen mit passendem Container-Kontext öffnen
+function crmTeamAtt(tree,eid,id){ window._crmTaskCtx={kind:'entity',tree,eid}; window._crmAfterTask='teamdetail'; crmAttOpen(id); }
 
 // ── Statistik (Zahlen·Daten·Fakten) – Entwicklung über die Zeit ────
 const STAT_METRICS=[
@@ -1194,7 +1275,11 @@ function paintTeamDetail(){
         ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
       </div>`:''}
       ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-      <button class="kb-additem" onclick="event.stopPropagation();crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋ Schritt</button>
+      ${attachChips(n)}
+      <div class="kb-cardbtns">
+        <button class="kb-additem" onclick="event.stopPropagation();crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋ Schritt</button>
+        <button class="kb-additem" onclick="event.stopPropagation();crmTeamAtt('${g.tree}','${g.eid}','${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
+      </div>
     </div>`;
   };
   const blocks=`<div class="kb-board">${groups.map(g=>{
@@ -1724,6 +1809,7 @@ Object.assign(window, {
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmEditBoardTitle, crmSaveBoardTitle,
+  crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
