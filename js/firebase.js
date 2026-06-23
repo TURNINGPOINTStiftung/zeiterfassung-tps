@@ -7,6 +7,10 @@ import { addMin, diffMin, getHolidays } from './utils.js';
 // Bevorzugt die hinterlegte echte E-Mail; sonst technische E-Mail je ID
 // (damit der Name-Login erhalten bleibt und niemand ohne E-Mail aussteigt).
 function _accountEmail(id, email){
+  // Admin bekommt IMMER eine eigene technische Auth-Adresse. Sonst kollidiert er
+  // mit einer Person, die dieselbe E-Mail hinterlegt hat (z. B. Doppelfunktion) –
+  // beide würden auf EIN Firebase-Konto zeigen (Passwort-Konflikt).
+  if(String(id||'').toLowerCase()==='admin') return 'admin@tps.intern';
   const e=String(email||'').trim().toLowerCase();
   if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return e;
   return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
