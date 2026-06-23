@@ -13,7 +13,11 @@
 // ══════════════════════════════════════════════════════════════════
 
 const CRM_LS_KEY = 'tps_crm_v1';
-const TREE_KEYS  = ['vereine','sozialakteure','fundraising','marketing'];
+// Eingebaute Standard-Bäume (Erst-Befüllung). Weitere Bäume kann der Admin
+// über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
+// generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
+const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -22,17 +26,19 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
-function freshCrm(){ return { vereine:{}, sozialakteure:{}, fundraising:{}, marketing:{}, vorlagen:{}, teamprojekte:{}, access:{} }; }
+function freshCrm(){
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, config:null };
+  DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
+  return out;
+}
 
+// Generisch: ALLE objekt-wertigen Top-Level-Knoten übernehmen. So werden
+// admin-konfigurierte Bäume (crm/<neuerKey>) automatisch mitgeführt, ohne
+// die Datenschicht anzufassen. 'config' wird als Objekt durchgereicht.
 function _normalize(v){
   const out = freshCrm();
   if(v && typeof v === 'object'){
-    TREE_KEYS.forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
-    if(v.vorlagen && typeof v.vorlagen==='object') out.vorlagen = v.vorlagen;
-    if(v.teamprojekte && typeof v.teamprojekte==='object') out.teamprojekte = v.teamprojekte;
-    if(v.access && typeof v.access==='object') out.access = v.access;
-    // Altbestand v90: 'projekte' wird nicht mehr verwendet, bleibt aber im
-    // Firebase-Baum unangetastet (kein Datenverlust, nur nicht mehr angezeigt).
+    Object.keys(v).forEach(k=>{ if(v[k] && typeof v[k]==='object') out[k] = v[k]; });
   }
   return out;
 }
@@ -70,11 +76,13 @@ export function ensureCrmReady(){
         // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
         const fb    = _normalize(snap.val() || {});
         const local = _cache || freshCrm();
-        const COLLS = ['vereine','sozialakteure','fundraising','marketing','vorlagen','teamprojekte','access'];
+        // Datensatz-Sammlungen (alle objekt-wertigen Knoten außer 'config')
+        const COLLS = Object.keys(local).filter(k=> k!=='config' && local[k] && typeof local[k]==='object');
         COLLS.forEach(coll=>{
           const lobj = local[coll] || {};
+          if(!fb[coll]) fb[coll] = {};
           Object.keys(lobj).forEach(id=>{
-            const lrec = lobj[id]; if(!lrec) return;
+            const lrec = lobj[id]; if(!lrec || typeof lrec!=='object') return;
             const frec = fb[coll][id];
             if(!frec || (lrec.updatedAt||0) > (frec.updatedAt||0)){
               fb[coll][id] = lrec;
@@ -82,6 +90,11 @@ export function ensureCrmReady(){
             }
           });
         });
+        // Konfiguration: lokal neuere Version hochladen (sonst gewinnt die Cloud)
+        if(local.config && (!fb.config || (local.config.updatedAt||0) > (fb.config.updatedAt||0))){
+          fb.config = local.config;
+          try{ if(_ref) _ref.child('config').set(local.config).catch(()=>{}); }catch(e){}
+        }
         _cache = fb;
         _persistLocal();
         // Realtime: nur den CRM-Teilbaum beobachten
@@ -108,7 +121,7 @@ export function ensureCrmReady(){
 // ── Granulare Writes (pro Datensatz) ───────────────────────────────
 // Schreibt NUR  crm/<tree>/<id>  – belastet nichts anderes.
 export function saveEntity(tree, entity){
-  if(!TREE_KEYS.includes(tree) || !entity || !entity.id) return Promise.resolve();
+  if(!tree || typeof tree!=='string' || RESERVED_KEYS.includes(tree) || !entity || !entity.id) return Promise.resolve();
   entity.updatedAt = Date.now();
   const d = getCrm();
   if(!d[tree]) d[tree] = {};
@@ -247,6 +260,25 @@ export function saveAccess(uid, obj){
   return Promise.resolve();
 }
 export function getAccess(uid){ const d=getCrm(); return (d.access && d.access[uid]) || null; }
+
+// ── CRM-Konfiguration (admin-editierbare Bäume & Felder) ───────────
+// Liegt unter crm/config (ein einzelnes Objekt, kein Datensatz-Map).
+// null = noch nie konfiguriert → die UI fällt auf die Code-Defaults zurück.
+export function getCrmConfig(){ const d=getCrm(); return d.config || null; }
+export function saveCrmConfig(cfg){
+  if(!cfg || typeof cfg!=='object') return Promise.resolve();
+  cfg.updatedAt = Date.now();
+  const d = getCrm();
+  d.config = cfg;
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('config').set(cfg).catch(e=>{
+      console.warn('CRM saveCrmConfig Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveCrmConfig:', e && e.message); }
+  return Promise.resolve();
+}
 
 // Kurze, kollisionsarme ID
 export function newId(){
