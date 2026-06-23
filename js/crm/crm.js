@@ -1546,6 +1546,7 @@ function paintTeamProjektDetail(){
       <button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>
     </div>
     ${(p.createdAt||p.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${p.createdAt?`angelegt ${p.createdByKuerzel?'von '+esc(p.createdByKuerzel)+' ':''}am ${esc(fmtDate(p.createdAt))}`:''}${p.updatedByKuerzel?` · zuletzt von ${esc(p.updatedByKuerzel)}${p.updatedAt?' am '+esc(fmtDateTime(p.updatedAt)):''}`:''}</div>`:''}
+    ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity('${esc(p.linkTree)}','${esc(p.linkEid)}')">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
     ${p.beschreibung?`<div class="crm-sec"><div class="v" style="white-space:pre-line">${nl2br(p.beschreibung)}</div></div>`:''}
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
@@ -1559,11 +1560,39 @@ function paintTeamProjektDetail(){
     </div>
   </div>`;
 }
+// Optionen für die Zuordnung eines Projekts zu einem CRM-Eintrag (alle Bäume)
+function entityLinkOptions(selVal){
+  const opts=['<option value="">– keinem Eintrag zugeordnet –</option>'];
+  getTrees().forEach(tr=>{
+    listEntities(tr.key).forEach(e=>{
+      const v=tr.key+'::'+e.id;
+      opts.push(`<option value="${v}" ${selVal===v?'selected':''}>${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`);
+    });
+  });
+  return opts.join('');
+}
+function linkedEntityName(p){
+  if(!p||!p.linkEid||!p.linkTree) return '';
+  const e=getEntity(p.linkTree,p.linkEid);
+  return e?((e.stamm&&e.stamm.name)||'(ohne Name)'):'';
+}
+// "tree::eid" aus einem Select lesen und auf das Projekt anwenden (oder löschen)
+function _applyLink(p, raw){
+  if(raw && raw.indexOf('::')>0){ const i=raw.indexOf('::'); p.linkTree=raw.slice(0,i); p.linkEid=raw.slice(i+2); }
+  else { delete p.linkTree; delete p.linkEid; }
+}
+function crmOpenLinkedEntity(tree,eid){
+  if(!getEntity(tree,eid)){ toast('Verknüpfter Eintrag nicht gefunden.','err'); return; }
+  window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmTeamProjSel=null; window._crmProjReturn=null;
+  paintDetail();
+}
 function teamProjektFormHtml(p, isNew){
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${p.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  const linkSel=(p.linkTree&&p.linkEid)?p.linkTree+'::'+p.linkEid:'';
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Team-Projekt':'✎ Projekt'}</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-tp-name" value="${esc(p.name||'')}"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team">${teamOpts}</select></div>
+   <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link">${entityLinkOptions(linkSel)}</select></div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-tp-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -1580,16 +1609,18 @@ function crmEditTeamProjekt(){
 }
 function crmSaveTeamProjekt(isNew){
   const name=val('crm-tp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
-  const team=val('crm-tp-team'); const beschreibung=val('crm-tp-besch');
+  const team=val('crm-tp-team'); const beschreibung=val('crm-tp-besch'); const link=val('crm-tp-link');
   if(isNew){
     const id=newId();
-    saveTeamProjekt({ id, name, team, beschreibung, createdAt:Date.now(),
-      createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] });
+    const p={ id, name, team, beschreibung, createdAt:Date.now(),
+      createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] };
+    _applyLink(p, link);
+    saveTeamProjekt(p);
     window._crmTeamProjSel=id;
     crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
   } else {
     const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
-    p.name=name; p.team=team; p.beschreibung=beschreibung;
+    p.name=name; p.team=team; p.beschreibung=beschreibung; _applyLink(p, link);
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
     crmCloseModal(); paintTeamProjektDetail(); toast('Gespeichert ✓','ok');
@@ -1640,8 +1671,8 @@ function meineSectionsHtml(){
   }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
   const myProj=listTeamProjekte().filter(p=>p.owner===me);
-  const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length;
-    return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div></div>`; };
+  const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length; const ln=linkedEntityName(p);
+    return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}${ln?`<span class="crm-chip">🔗 ${esc(ln)}</span>`:''}</div></div>`; };
   const openMine=myProj.filter(p=>!p.closed), closedMine=myProj.filter(p=>p.closed);
   return `<div class="crm-sec">
       <h4><span class="ttl">📌 Mir zugewiesen</span></h4>
@@ -1669,6 +1700,7 @@ function crmNewMeinProjekt(){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Eigenes Projekt</h3>
     <div class="crm-modal-field"><label>Name *</label><input id="crm-mp-name"></div>
+    <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-mp-link">${entityLinkOptions('')}</select></div>
     <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-mp-besch" rows="3"></textarea></div>
     <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
     <button class="btn-sm-crm primary" onclick="crmSaveMeinProjekt()">Anlegen</button></div>`);
@@ -1676,8 +1708,10 @@ function crmNewMeinProjekt(){
 function crmSaveMeinProjekt(){
   const name=val('crm-mp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const id=newId();
-  saveTeamProjekt({ id, name, team:'', owner:(window.cu&&window.cu.id)||'', beschreibung:val('crm-mp-besch'),
-    createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] });
+  const p={ id, name, team:'', owner:(window.cu&&window.cu.id)||'', beschreibung:val('crm-mp-besch'),
+    createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] };
+  _applyLink(p, val('crm-mp-link'));
+  saveTeamProjekt(p);
   window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id;
   crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
 }
@@ -2368,6 +2402,7 @@ Object.assign(window, {
   // Eigenständige Team-Projekte
   crmOpenTeamProjekt, crmBackToTeamProjekte, crmNewTeamProjekt,
   crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt, crmCloseProjekt, crmReopenProjekt,
+  crmOpenLinkedEntity,
   // Vorlagen (beliebig tief)
   crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmDeleteVorlage,
   crmVNodeAdd, crmVNodeAddSave, crmVNodeEdit, crmVNodeEditSave, crmVNodeDel, crmVNodeDeps, crmVNodeDepsSave,
