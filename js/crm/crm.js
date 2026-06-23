@@ -509,6 +509,15 @@ function migEntityProjekte(e){
       createdAt:e.createdAt||Date.now()
     }] : [];
   }
+  // Alt-Felder NIE behalten, sobald das Projekt-Modell gilt. Sonst „aufersteht"
+  // ein gelöschtes/letztes Projekt wieder: Firebase verwirft das leere projekte:[],
+  // und aus dem noch vorhandenen e.todos würde erneut migriert. (in-memory; beim
+  // nächsten Speichern dauerhaft entfernt.)
+  if('todos' in e) delete e.todos;
+  if('boardTitle' in e) delete e.boardTitle;
+  if('boardClosed' in e) delete e.boardClosed;
+  if('boardClosedAt' in e) delete e.boardClosedAt;
+  if('boardClosedByKuerzel' in e) delete e.boardClosedByKuerzel;
   e.projekte.forEach(p=>{ if(!Array.isArray(p.todos)) p.todos=[]; p.todos.forEach(normNode); });
   return e;
 }
