@@ -12,7 +12,8 @@ import {
   saveEntity, deleteEntity, newId,
   saveVorlage, deleteVorlage, getVorlage, listVorlagen,
   saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
-  saveAccess, getAccess, getCrmConfig, saveCrmConfig
+  saveAccess, getAccess, getCrmConfig, saveCrmConfig,
+  saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler
 } from './crm-data.js';
 import {
   getTrees, treeByKey, stammFields, memberFunctions,
@@ -273,6 +274,7 @@ function injectStyles(){
   .crm-projhead .crm-board-title{margin-bottom:0}
   .crm-projhist{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
   .crm-projhist>summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
+  .vt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
   .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .kb-att{font-size:11px;background:#eef2fa;border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kb-att:hover{background:#e2e9f6}
@@ -368,6 +370,7 @@ setCrmRenderHook(()=>{ try{ paint(); }catch(e){} });
 function paint(){
   window._crmModalOpen = false;
   const mode = window._crmMode || 'kontakte';
+  if(mode==='verteiler' && crmFull()){ paintVerteiler(); return; }
   if(mode==='meine'){
     if(window._crmTeamProjSel && getTeamProjekt(window._crmTeamProjSel)) paintTeamProjektDetail();
     else paintMeine();
@@ -398,6 +401,7 @@ function barHtml(){
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(full){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
+    tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
   } else if(lvl==='verein'){
     const vid=accessVerein(); const ve=vid?getEntity('vereine',vid):null; const nm=(ve&&ve.stamm&&ve.stamm.name)||'Mein Verein';
     tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmOpenMyVerein()">🏛️ ${esc(nm)}</button>`);
@@ -736,7 +740,7 @@ function paintDetail(){
     ${fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:''}
 
     <div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></h4>
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
       ${kontakte}
     </div>
 
@@ -1637,6 +1641,113 @@ function crmSaveMeinProjekt(){
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  E-MAIL-VERTEILER  (Adresslisten → Outlook mit BCC öffnen)
+// ══════════════════════════════════════════════════════════════════
+// Adressen aus beliebigem Text (Zeilen/Komma/Semikolon) säubern + dedupen
+function _normEmails(parts){
+  const seen=new Set(); const out=[];
+  (Array.isArray(parts)?parts:[parts]).forEach(s=>{
+    String(s||'').split(/[,;\s]+/).forEach(tok=>{
+      const e=tok.trim();
+      if(e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ const k=e.toLowerCase(); if(!seen.has(k)){ seen.add(k); out.push(e); } }
+    });
+  });
+  return out;
+}
+// Outlook/Standard-Mailprogramm mit allen Adressen im BCC öffnen
+function _openBcc(emails){
+  const list=_normEmails(emails);
+  if(!list.length){ toast('Keine gültigen E-Mail-Adressen.','err'); return; }
+  const url='mailto:?bcc='+encodeURIComponent(list.join(','));
+  if(url.length>1900) toast('Sehr viele Adressen – falls Outlook nicht alle übernimmt, nutze „Adressen kopieren".','');
+  try{ window.location.href=url; }
+  catch(e){ try{ const a=document.createElement('a'); a.href=url; document.body.appendChild(a); a.click(); a.remove(); }catch(_){ toast('Mail konnte nicht geöffnet werden.','err'); } }
+}
+function _copyEmails(emails){
+  const txt=_normEmails(emails).join('; ');
+  if(!txt){ toast('Keine Adressen zum Kopieren.','err'); return; }
+  const done=()=>toast('Adressen kopiert ✓','ok');
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,()=>_copyFallback(txt,done)); return; } }catch(e){}
+  _copyFallback(txt,done);
+}
+function _copyFallback(txt,done){ try{ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }catch(e){ toast('Kopieren nicht möglich.','err'); } }
+
+function crmShowVerteiler(){ window._crmMode='verteiler'; window._crmSelId=null; window._crmTeamSel=null; window._crmTeamProjSel=null; paintVerteiler(); }
+function paintVerteiler(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  window._crmTaskCtx=null;
+  const lists=listVerteiler();
+  const cards=lists.map(v=>{
+    const n=_normEmails(v.emails).length;
+    return `<div class="crm-card">
+      <h3>✉️ ${esc(v.name||'(ohne Name)')}</h3>
+      <div class="meta"><span class="crm-chip">${n} Adresse${n===1?'':'n'}</span></div>
+      <div class="vt-actions">
+        <button class="btn-sm-crm primary" onclick="crmVerteilerMail('${v.id}')">✉️ Mail (BCC)</button>
+        <button class="btn-sm-crm" onclick="crmCopyVerteiler('${v.id}')">⧉ Kopieren</button>
+        <button class="btn-sm-crm" onclick="crmEditVerteiler('${v.id}')">Bearbeiten</button>
+        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC('${v.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Verteiler. Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</div>`;
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    <div class="crm-sec">
+      <h4><span class="ttl">✉️ E-Mail-Verteiler</span><button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button></h4>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">„Mail (BCC)" öffnet Outlook mit allen Adressen im <b>BCC</b>-Feld – die Empfänger sehen einander nicht.</div>
+      <div class="crm-list">${cards}</div>
+    </div>
+  </div>`;
+}
+function crmNewVerteiler(){ _verteilerModal({}); }
+function crmEditVerteiler(id){ const v=getVerteiler(id); if(v) _verteilerModal(v); }
+function _verteilerModal(v){
+  crmOpenModalShell();
+  const vereinOpts=['<option value="">– Kontakte eines Eintrags übernehmen –</option>']
+    .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${tr.key}::${e.id}">${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
+   <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
+   <div class="crm-modal-field"><label>E-Mail-Adressen <span style="font-size:11px;color:var(--muted)">(eine pro Zeile)</span></label><textarea id="crm-vt-emails" rows="8" placeholder="name@example.de">${esc((v.emails||[]).join('\n'))}</textarea></div>
+   <div class="crm-modal-field"><label>Schnell hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveVerteiler('${esc(v.id||'')}')">Speichern</button></div>`);
+}
+function crmVerteilerAddVerein(){
+  const sel=document.getElementById('crm-vt-pick'); const v0=sel?sel.value:''; if(!v0) return;
+  const sepIdx=v0.indexOf('::'); const tree=v0.slice(0,sepIdx), eid=v0.slice(sepIdx+2);
+  const e=getEntity(tree,eid);
+  if(sel) sel.value='';
+  if(!e) return;
+  const emails=(e.kontakte||[]).map(k=>k.email).filter(Boolean);
+  const stammMail=(e.stamm&&e.stamm.email)||''; if(stammMail) emails.push(stammMail);
+  const ta=document.getElementById('crm-vt-emails');
+  const before=_normEmails([ta?ta.value:'']).length;
+  const merged=_normEmails([(ta?ta.value:''), ...emails]);
+  if(ta) ta.value=merged.join('\n');
+  const added=merged.length-before;
+  toast(added?`${added} neue Adresse(n) übernommen ✓`:'Keine neuen Adressen gefunden','ok');
+}
+function crmSaveVerteiler(id){
+  const name=val('crm-vt-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  const ta=document.getElementById('crm-vt-emails');
+  const emails=_normEmails([ta?ta.value:'']);
+  const ex=id?getVerteiler(id):null;
+  saveVerteiler({ id:id||newId(), name, emails,
+    createdAt:(ex&&ex.createdAt)||Date.now(), createdByKuerzel:(ex&&ex.createdByKuerzel)||curKuerzel(),
+    updatedByKuerzel:curKuerzel(), updatedByName:curName() });
+  crmCloseModal(); paintVerteiler(); toast('Verteiler gespeichert ✓','ok');
+}
+function crmDeleteVerteilerC(id){ const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
+function crmVerteilerMail(id){ const v=getVerteiler(id); if(v) _openBcc(v.emails); }
+function crmCopyVerteiler(id){ const v=getVerteiler(id); if(v) _copyEmails(v.emails); }
+// Schnellaktion am Eintrag: Mail an alle Kontakte (BCC)
+function crmMailKontakte(){
+  const e=curEntity(); if(!e) return;
+  const emails=(e.kontakte||[]).map(k=>k.email).filter(Boolean);
+  if(!emails.length){ toast('An diesem Eintrag sind keine Kontakt-E-Mails hinterlegt.','err'); return; }
+  _openBcc(emails);
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  VORLAGEN-VERWALTUNG  (wiederverwendbare ToDo-Sets, z. B. je Event)
 // ══════════════════════════════════════════════════════════════════
 function crmOpenVorlagen(){
@@ -2176,6 +2287,9 @@ Object.assign(window, {
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
+  // E-Mail-Verteiler
+  crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
+  crmVerteilerAddVerein, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)

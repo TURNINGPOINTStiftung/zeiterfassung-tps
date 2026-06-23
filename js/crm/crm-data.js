@@ -17,7 +17,7 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -27,7 +27,7 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 export function setCrmRenderHook(fn){ _onChange = fn; }
 
 function freshCrm(){
-  const out = { vorlagen:{}, teamprojekte:{}, access:{}, config:null };
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, config:null };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }
@@ -242,6 +242,43 @@ export function listTeamProjekte(team){
   let arr = Object.values(d.teamprojekte || {});
   if(team!=null) arr = arr.filter(p => (p.team||'') === (team||''));
   return arr.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'}));
+}
+
+// ── E-Mail-Verteiler (gespeicherte Adresslisten) ──────────────────
+// Liegen unter crm/verteiler/<id> = { id, name, emails:[], note?, … }.
+export function saveVerteiler(v){
+  if(!v || !v.id) return Promise.resolve();
+  v.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.verteiler) d.verteiler = {};
+  d.verteiler[v.id] = v;
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('verteiler').child(v.id).set(v).catch(e=>{
+      console.warn('CRM saveVerteiler Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveVerteiler:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteVerteiler(id){
+  const d = getCrm();
+  if(d.verteiler) delete d.verteiler[id];
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('verteiler').child(id).remove().catch(e=>{
+      console.warn('CRM deleteVerteiler Firebase-Fehler:', e && e.message);
+    });
+  }catch(e){ console.warn('CRM deleteVerteiler:', e && e.message); }
+  return Promise.resolve();
+}
+export function getVerteiler(id){ const d=getCrm(); return (d.verteiler && d.verteiler[id]) || null; }
+export function listVerteiler(){
+  const d = getCrm();
+  return Object.values(d.verteiler || {}).sort((a,b)=>
+    String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'})
+  );
 }
 
 // ── CRM-Zugriffsrechte (pro ZE-Nutzer, isoliert unter crm/access) ──
