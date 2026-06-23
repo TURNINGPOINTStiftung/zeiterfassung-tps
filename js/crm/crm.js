@@ -1058,8 +1058,12 @@ function crmReopenBoard(){
   mutateContainer(p=>{ p.closed=false; });
   paintDetail(); toast('Projekt wieder geöffnet','ok');
 }
-// ── Anlagen (Links + Dateien via Firebase Storage) an einer Aufgabe ──
+// ── Anlagen an einer Aufgabe (Links + OneDrive/SharePoint-Dateien) ──
 function _storageOn(){ return !!(window.firebase && firebase.storage); }
+// Erkennt Datei-Freigaben (OneDrive/SharePoint/Teams oder Dateiendung) → 📎-Icon
+function _looksLikeFile(url){
+  return /sharepoint\.com|onedrive|1drv\.ms|office\.com|\.(pdf|docx?|xlsx?|pptx?|csv|txt|jpe?g|png|gif|zip|rar)(\?|#|$)/i.test(String(url||''));
+}
 function attachChips(n){
   const a=(n&&n.attachments)||[]; if(!a.length) return '';
   return `<div class="kb-atts" onclick="event.stopPropagation()">${a.map(x=>
@@ -1080,28 +1084,23 @@ function crmAttOpen(nid){
    <div style="margin-bottom:6px;font-size:13px;color:var(--muted)">${esc(f.node.text||'')}</div>
    ${rows}
    <div class="crm-att-add">
-     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">🔗 Link hinzufügen</div>
+     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">📎 Datei oder Link anhängen</div>
      <div style="display:flex;gap:8px;flex-wrap:wrap">
        <input id="crm-att-title" placeholder="Bezeichnung (optional)" style="flex:1;min-width:130px">
-       <input id="crm-att-url" placeholder="https://…" style="flex:2;min-width:170px">
-       <button class="btn-sm-crm primary" onclick="crmAttLink('${nid}')">＋ Link</button>
+       <input id="crm-att-url" placeholder="Link einfügen (z. B. OneDrive-Freigabelink)" style="flex:2;min-width:200px">
+       <button class="btn-sm-crm primary" onclick="crmAttLink('${nid}')">＋ Anhängen</button>
      </div>
-   </div>
-   <div class="crm-att-add">
-     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">📎 Datei hochladen</div>
-     ${_storageOn()
-       ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="crm-att-file" style="flex:1;min-width:160px"><button class="btn-sm-crm" onclick="crmAttFile('${nid}')">Hochladen</button></div>
-          <div class="small" style="color:var(--muted);margin-top:4px">Max. 15 MB pro Datei.</div>`
-       : `<div class="small" style="color:var(--muted)">Datei-Upload ist noch nicht aktiv – dafür muss <b>Firebase Storage</b> in der Konsole freigeschaltet werden. Links funktionieren bereits.</div>`}
+     <div class="small" style="color:var(--muted);margin-top:8px;line-height:1.5">📂 <b>Datei aus OneDrive / Teams anhängen:</b> Datei dort ablegen → <b>Teilen</b> → <b>Link kopieren</b> → oben einfügen. <a href="https://www.office.com/launch/onedrive" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">OneDrive öffnen ↗</a></div>
    </div>
    <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmCloseModal();repaintContainer()">Fertig</button></div>`);
 }
 function crmAttLink(nid){
-  const url=val('crm-att-url'); if(!url){ toast('Bitte eine URL eingeben.','err'); return; }
+  const url=val('crm-att-url'); if(!url){ toast('Bitte einen Link einfügen.','err'); return; }
   const u=/^https?:\/\//i.test(url)?url:('https://'+url.replace(/^\/+/,''));
   const title=val('crm-att-title');
-  mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'link',title,url:u}); });
-  crmAttOpen(nid); toast('Link hinzugefügt ✓','ok');
+  const type=_looksLikeFile(u)?'file':'link';
+  mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type,title,url:u}); });
+  crmAttOpen(nid); toast(type==='file'?'Datei verknüpft ✓':'Link hinzugefügt ✓','ok');
 }
 function crmAttFile(nid){
   const fi=document.getElementById('crm-att-file'); const file=fi&&fi.files&&fi.files[0];
