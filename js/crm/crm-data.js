@@ -21,10 +21,66 @@ const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteile
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
+let _histRef = null;   // firebase.database().ref('crm_history') – Backup-Verlauf
 let _ready   = null;   // Promise, einmalig (Lazy-Init)
 let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 
+const HISTORY_MS = 7*24*60*60*1000;  // Aufbewahrung: 7 Tage
+
 export function setCrmRenderHook(fn){ _onChange = fn; }
+
+// ── Änderungs-Verlauf (Backup) ─────────────────────────────────────
+// Jede inhaltliche Änderung (Anlegen/Ändern/Löschen) wird mit Person +
+// Zeitstempel als Voll-Schnappschuss nach crm_history/<autoId> geschrieben.
+// Liegt bewusst in einem EIGENEN Ref (nicht crm/), damit der normale Sync
+// klein bleibt. Alles best-effort und in try/catch – darf nie etwas brechen.
+function _logHistory(coll, recId, action, data, name){
+  try{
+    if(!_histRef || !data) return;
+    const cu = (typeof window!=='undefined' && window.cu) || {};
+    _histRef.push({
+      ts: Date.now(), action, coll, recId,
+      byId: cu.id||'', byName: cu.name||'',
+      byKuerzel: (data.updatedByKuerzel)||(data.createdByKuerzel)||'',
+      name: name||'',
+      data: JSON.parse(JSON.stringify(data))
+    }).catch(()=>{});
+  }catch(e){}
+}
+function pruneHistory(maxAgeMs){
+  try{
+    if(!_histRef) return;
+    const cutoff = Date.now() - (maxAgeMs||HISTORY_MS);
+    _histRef.orderByChild('ts').endAt(cutoff).once('value').then(snap=>{
+      const updates={}; snap.forEach(ch=>{ updates[ch.key]=null; });
+      if(Object.keys(updates).length) _histRef.update(updates).catch(()=>{});
+    }).catch(()=>{});
+  }catch(e){}
+}
+// Einträge der letzten maxAgeMs (neueste zuerst). Liefert immer ein Array.
+export function listHistory(maxAgeMs){
+  return new Promise(resolve=>{
+    try{
+      if(!_histRef){ resolve([]); return; }
+      const cutoff = Date.now() - (maxAgeMs||HISTORY_MS);
+      _histRef.orderByChild('ts').startAt(cutoff).once('value').then(snap=>{
+        const out=[]; snap.forEach(ch=>{ const v=ch.val()||{}; v._key=ch.key; out.push(v); });
+        out.sort((a,b)=>(b.ts||0)-(a.ts||0));
+        resolve(out);
+      }).catch(()=>resolve([]));
+    }catch(e){ resolve([]); }
+  });
+}
+// Einen Schnappschuss wieder einspielen (re-save in die passende Sammlung).
+export function restoreHistory(entry){
+  if(!entry || !entry.data) return Promise.resolve();
+  const coll=entry.coll, data=entry.data;
+  if(coll==='config')       return saveCrmConfig(data);
+  if(coll==='teamprojekte') return saveTeamProjekt(data);
+  if(coll==='vorlagen')     return saveVorlage(data);
+  if(coll==='verteiler')    return saveVerteiler(data);
+  return saveEntity(coll, data);  // sonst: Baum-Eintrag
+}
 
 function freshCrm(){
   const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, config:null };
@@ -68,6 +124,9 @@ export function ensureCrmReady(){
     try{
       if(window.firebase && firebase.apps && firebase.apps.length){
         _ref = firebase.database().ref('crm');
+        // Änderungs-Verlauf (Backup) liegt in einem SEPARATEN Ref, damit er den
+        // normalen CRM-Sync nicht aufbläht. Wird nur bei Bedarf (Admin) gelesen.
+        try{ _histRef = firebase.database().ref('crm_history'); pruneHistory(HISTORY_MS); }catch(e){ _histRef=null; }
         const snap = await _ref.once('value');
         // ── Merge lokal ⇄ Cloud (Auto-Upload) ────────────────────────
         // Firebase ist Quelle der Wahrheit; ABER lokal vorhandene Datensätze,
@@ -128,6 +187,7 @@ export function saveEntity(tree, entity){
   d[tree][entity.id] = entity;
   _cache = d;
   _persistLocal();
+  _logHistory(tree, entity.id, 'save', entity, (entity.stamm&&entity.stamm.name)||entity.name||'');
   try{
     if(_ref) return _ref.child(tree).child(entity.id).set(entity).catch(e=>{
       console.warn('CRM saveEntity Firebase-Fehler (lokal gespeichert):', e && e.message);
@@ -138,6 +198,8 @@ export function saveEntity(tree, entity){
 
 export function deleteEntity(tree, id){
   const d = getCrm();
+  const prev = d[tree] && d[tree][id];
+  if(prev) _logHistory(tree, id, 'delete', prev, (prev.stamm&&prev.stamm.name)||prev.name||'');
   if(d[tree]) delete d[tree][id];
   _cache = d;
   _persistLocal();
@@ -173,6 +235,7 @@ export function saveVorlage(v){
   d.vorlagen[v.id] = v;
   _cache = d;
   _persistLocal();
+  _logHistory('vorlagen', v.id, 'save', v, v.name||'');
   try{
     if(_ref) return _ref.child('vorlagen').child(v.id).set(v).catch(e=>{
       console.warn('CRM saveVorlage Firebase-Fehler (lokal gespeichert):', e && e.message);
@@ -182,6 +245,8 @@ export function saveVorlage(v){
 }
 export function deleteVorlage(id){
   const d = getCrm();
+  const prev = d.vorlagen && d.vorlagen[id];
+  if(prev) _logHistory('vorlagen', id, 'delete', prev, prev.name||'');
   if(d.vorlagen) delete d.vorlagen[id];
   _cache = d;
   _persistLocal();
@@ -214,6 +279,7 @@ export function saveTeamProjekt(p){
   d.teamprojekte[p.id] = p;
   _cache = d;
   _persistLocal();
+  _logHistory('teamprojekte', p.id, 'save', p, p.name||'');
   try{
     if(_ref) return _ref.child('teamprojekte').child(p.id).set(p).catch(e=>{
       console.warn('CRM saveTeamProjekt Firebase-Fehler (lokal gespeichert):', e && e.message);
@@ -223,6 +289,8 @@ export function saveTeamProjekt(p){
 }
 export function deleteTeamProjekt(id){
   const d = getCrm();
+  const prev = d.teamprojekte && d.teamprojekte[id];
+  if(prev) _logHistory('teamprojekte', id, 'delete', prev, prev.name||'');
   if(d.teamprojekte) delete d.teamprojekte[id];
   _cache = d;
   _persistLocal();
@@ -254,6 +322,7 @@ export function saveVerteiler(v){
   d.verteiler[v.id] = v;
   _cache = d;
   _persistLocal();
+  _logHistory('verteiler', v.id, 'save', v, v.name||'');
   try{
     if(_ref) return _ref.child('verteiler').child(v.id).set(v).catch(e=>{
       console.warn('CRM saveVerteiler Firebase-Fehler (lokal gespeichert):', e && e.message);
@@ -263,6 +332,8 @@ export function saveVerteiler(v){
 }
 export function deleteVerteiler(id){
   const d = getCrm();
+  const prev = d.verteiler && d.verteiler[id];
+  if(prev) _logHistory('verteiler', id, 'delete', prev, prev.name||'');
   if(d.verteiler) delete d.verteiler[id];
   _cache = d;
   _persistLocal();
@@ -309,6 +380,7 @@ export function saveCrmConfig(cfg){
   d.config = cfg;
   _cache = d;
   _persistLocal();
+  _logHistory('config', 'config', 'save', cfg, 'CRM-Konfiguration');
   try{
     if(_ref) return _ref.child('config').set(cfg).catch(e=>{
       console.warn('CRM saveCrmConfig Firebase-Fehler (lokal gespeichert):', e && e.message);

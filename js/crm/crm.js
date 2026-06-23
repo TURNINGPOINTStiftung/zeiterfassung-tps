@@ -13,7 +13,8 @@ import {
   saveVorlage, deleteVorlage, getVorlage, listVorlagen,
   saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
   saveAccess, getAccess, getCrmConfig, saveCrmConfig,
-  saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler
+  saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
+  listHistory, restoreHistory
 } from './crm-data.js';
 import {
   getTrees, treeByKey, stammFields, memberFunctions,
@@ -2089,6 +2090,7 @@ function ensureVerwMounted(){
    <div class="crm-body">
      <div id="verw-users"></div>
      <div id="verw-crmcfg"></div>
+     <div id="verw-history"></div>
      <div id="verw-config"></div>
    </div>`;
   const cfg=document.getElementById('verw-config');
@@ -2104,6 +2106,7 @@ function renderVerwaltung(){
         ensureVerwMounted();
         paintVerwUsers();
         paintVerwConfig();
+        paintVerwHistory();
         if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
       }catch(e){ console.error('Verwaltung:',e); }
     });
@@ -2158,6 +2161,59 @@ function crmVerwToggleVerein(uid, vid, checked){
   let ids=Array.isArray(a.vereinIds)?a.vereinIds.slice():(a.vereinId?[a.vereinId]:[]);
   if(checked){ if(!ids.includes(vid)) ids.push(vid); } else { ids=ids.filter(x=>x!==vid); }
   saveAccess(uid, { level:'verein', vereinIds:ids });
+}
+
+// ── Änderungs-Verlauf & Wiederherstellung (Backup) ─────────────────
+function _histCollLabel(coll){
+  if(coll==='teamprojekte') return 'Projekt';
+  if(coll==='vorlagen') return 'Vorlage';
+  if(coll==='verteiler') return 'Verteiler';
+  if(coll==='config') return 'Konfiguration';
+  try{ const t=getTrees().find(x=>x.key===coll); if(t) return t.single||t.label; }catch(e){}
+  return coll;
+}
+function histRowsHtml(rows){
+  if(!rows || !rows.length) return `<div class="small" style="color:var(--muted)">Keine Änderungen im gewählten Zeitraum.${' '}<br>Falls hier nie etwas erscheint, fehlt evtl. die Firebase-Regel für <code>crm_history</code> (siehe Hinweis vom Entwickler).</div>`;
+  const r=rows.map(h=>{
+    const del=h.action==='delete';
+    const icon=del?'🗑':'✎';
+    const who=esc(h.byName||h.byKuerzel||'?');
+    const when=esc(fmtDateTime(h.ts));
+    return `<tr>
+      <td style="white-space:nowrap">${when}</td>
+      <td>${who}</td>
+      <td><span class="vw-team" style="${del?'background:#fde8e8;color:#9b2c2c':''}">${icon} ${del?'gelöscht':'geändert'}</span></td>
+      <td>${esc(_histCollLabel(h.coll))}: <b>${esc(h.name||h.recId||'')}</b></td>
+      <td style="text-align:right"><button class="btn-sm-crm${del?' primary':''}" onclick="crmHistRestore('${h._key}')">↩ Wiederherstellen</button></td>
+    </tr>`;
+  }).join('');
+  return `<div style="overflow-x:auto"><table class="vw-table">
+    <thead><tr><th>Wann</th><th>Wer</th><th>Aktion</th><th>Betrifft</th><th></th></tr></thead>
+    <tbody>${r}</tbody></table></div>`;
+}
+function paintVerwHistory(){
+  const host=document.getElementById('verw-history'); if(!host) return;
+  const winH=window._histWinH||168;  // Stunden: 48 oder 168 (7 Tage)
+  host.innerHTML=`<div class="crm-sec">
+    <h4><span class="ttl">🕘 Änderungs-Verlauf & Wiederherstellung</span>
+      <span class="hbtns">
+        <button class="btn-sm-crm${winH===48?' primary':''}" onclick="crmHistWindow(48)">48 Std.</button>
+        <button class="btn-sm-crm${winH===168?' primary':''}" onclick="crmHistWindow(168)">7 Tage</button>
+        <button class="btn-sm-crm" title="Neu laden" onclick="crmHistReload()">↻</button>
+      </span>
+    </h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Jede inhaltliche Änderung (anlegen / ändern / löschen) der letzten ${winH===48?'48 Stunden':'7 Tage'} – mit Person und Zeit. <b>Wiederherstellen</b> spielt diesen Stand wieder ein (bei Gelöschtem wird der Eintrag neu angelegt; bei Geändertem auf diese Version zurückgesetzt). Verlauf wird nach 7 Tagen automatisch bereinigt.</div>
+    <div id="hist-list" class="small" style="color:var(--muted)">Lade …</div>
+  </div>`;
+  listHistory(winH*36e5).then(rows=>{ window._histRows=rows; const el=document.getElementById('hist-list'); if(el) el.innerHTML=histRowsHtml(rows); });
+}
+function crmHistWindow(h){ window._histWinH=h; paintVerwHistory(); }
+function crmHistReload(){ paintVerwHistory(); }
+function crmHistRestore(key){
+  const r=(window._histRows||[]).find(x=>x._key===key); if(!r){ toast('Eintrag nicht gefunden.','err'); return; }
+  const what=r.name||_histCollLabel(r.coll);
+  if(!window.confirm(`„${what}" auf den Stand vom ${fmtDateTime(r.ts)} (${r.byName||r.byKuerzel||'?'}) zurücksetzen?`)) return;
+  Promise.resolve(restoreHistory(r)).then(()=>{ toast('Wiederhergestellt ✓','ok'); setTimeout(crmHistReload, 500); });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2369,7 +2425,7 @@ function crmCfgFuncsSave(){
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
-  crmRestrictedOpen,
+  crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore,
   _refreshVerwUsers: paintVerwUsers,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
