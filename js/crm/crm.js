@@ -483,8 +483,11 @@ function migEntityProjekte(e){
   if(!e) return e;
   if(!Array.isArray(e.projekte)){
     const legacy = Array.isArray(e.todos) ? e.todos : [];
+    // WICHTIG: deterministische id (aus der Eintrags-id) – sonst bekäme das
+    // Projekt bei jedem Re-Render/Sync eine neue id und ctx.pid liefe ins Leere
+    // (z. B. „Abschließen" ohne Wirkung), solange noch nichts gespeichert wurde.
     e.projekte = (legacy.length || e.boardTitle) ? [{
-      id:newId(), name:e.boardTitle||'Projekt', todos:legacy,
+      id:'pl-'+e.id, name:e.boardTitle||'Projekt', todos:legacy,
       closed:!!e.boardClosed, closedAt:e.boardClosedAt||null, closedByKuerzel:e.boardClosedByKuerzel||'',
       createdAt:e.createdAt||Date.now()
     }] : [];
@@ -961,11 +964,10 @@ function entityProjekteSectionHtml(e){
 function entityProjBoardHtml(p){
   const closed=!!p.closed;
   return `<div class="crm-projhead">
-      <span class="crm-board-title" onclick="crmRenameProjekt('${p.id}')" title="Projektname bearbeiten">📌 ${esc(p.name||'Projekt')} <span style="color:var(--muted);font-size:12px">✎</span></span>
       ${closed?`<span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>`:''}
       <span class="hbtns" style="margin-left:auto">
+        <button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt('${p.id}')">✎ Umbenennen</button>
         <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
-        <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
         <button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
         <button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt('${p.id}')">✕</button>
       </span>
@@ -976,18 +978,32 @@ function entityProjBoardHtml(p){
 function crmSelProjekt(pid){ window._crmProjSel=pid; paintDetail(); }
 function crmNewEntityProjekt(){
   crmOpenModalShell();
+  const vs=listVorlagen();
+  const vorlageOpts=['<option value="">– ohne Vorlage (leeres Board) –</option>']
+    .concat(vs.map(v=>`<option value="${v.id}">${esc(v.name)} (${(v.items||[]).length})</option>`)).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Neues Projekt</h3>
    <div class="crm-modal-field"><label>Projektname *</label><input id="crm-np-name" placeholder="z. B. Wendekurs 2026"></div>
-   <div class="small" style="color:var(--muted)">Du kannst danach direkt eine Vorlage anwenden oder Spalten anlegen.</div>
+   <div class="crm-modal-field"><label>Vorlage</label><select id="crm-np-vorlage">${vorlageOpts}</select>
+     <div class="small" style="color:var(--muted);margin-top:4px">Die Aufgaben der Vorlage werden direkt ins neue Projekt übernommen.</div></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveEntityProjekt()">Anlegen</button></div>`);
 }
 function crmSaveEntityProjekt(){
   const name=val('crm-np-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  const vsel=document.getElementById('crm-np-vorlage'); const vid=vsel?vsel.value:'';
+  const e=curEntity(); if(!e) return;
   const id=newId();
-  mutateEntity(e=>{ migEntityProjekte(e); e.projekte.push({ id, name, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel() }); });
+  mutateEntity(en=>{ migEntityProjekte(en); en.projekte.push({ id, name, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel() }); });
   window._crmProjSel=id;
-  crmCloseModal(); paintDetail(); toast('Projekt angelegt ✓','ok');
+  // Vorlage (optional) direkt ins neue Projekt bauen
+  let added=0;
+  if(vid){
+    window._crmTaskCtx={ kind:'entity', tree:window._crmTree, eid:e.id, pid:id };
+    window._crmAfterTask='detail';
+    added=_applyVorlageCore(vid);
+  }
+  crmCloseModal(); paintDetail();
+  toast(added?`Projekt mit Vorlage angelegt (${added} Hauptaufgabe${added===1?'':'n'}) ✓`:'Projekt angelegt ✓','ok');
 }
 function crmRenameProjekt(pid){
   const e=curEntity(); if(!e) return; migEntityProjekte(e);
@@ -1015,6 +1031,8 @@ function crmDeleteProjekt(pid){
 // Ausgewähltes Projekt abschließen / wieder öffnen (Container = das Projekt)
 function crmCloseBoard(){
   mutateContainer(p=>{ p.closed=true; p.closedAt=Date.now(); p.closedByKuerzel=curKuerzel(); });
+  // Auswahl auf ein anderes offenes Projekt wechseln → das geschlossene wandert in die History
+  const e=curEntity(); if(e){ migEntityProjekte(e); const nextOpen=e.projekte.find(p=>!p.closed); window._crmProjSel = nextOpen?nextOpen.id:''; }
   paintDetail(); toast('Projekt abgeschlossen ✓','ok');
 }
 function crmReopenBoard(){
@@ -1289,10 +1307,11 @@ function normVorlage(v){
   v.items.forEach(fix);
   return v;
 }
-function crmApplyVorlage(id){
-  const v=getVorlage(id); if(!v) return;
+// Kern: baut die Vorlage in den AKTUELLEN Container (ctx) – ohne UI-Nebenwirkungen.
+// Liefert die Anzahl Hauptaufgaben (0 = nichts/Fehler).
+function _applyVorlageCore(id){
+  const v=getVorlage(id); if(!v) return 0;
   normVorlage(v);
-  // Neue ids für alle Knoten (jede Ebene) vergeben, Abhängigkeiten darauf ummappen
   const idMap={};
   flatNodes(v.items).forEach(x=>{ idMap[x.id]=newId(); });
   const build=(n,depth)=>{
@@ -1304,8 +1323,13 @@ function crmApplyVorlage(id){
   };
   const mains=(v.items||[]).map(n=>build(n,0));
   mutateContainer(c=>{ if(!Array.isArray(c.todos)) c.todos=[]; mains.forEach(m=>c.todos.push(m)); if(!isTPCtx() && !c.name) c.name=v.name; });
+  return mains.length;
+}
+function crmApplyVorlage(id){
+  const v=getVorlage(id);
+  const n=_applyVorlageCore(id);
   crmCloseModal(); repaintContainer();
-  toast(`„${v.name}" übernommen (${mains.length} Hauptaufgabe${mains.length===1?'':'n'}) ✓`,'ok');
+  if(n||v) toast(`„${v?v.name:''}" übernommen (${n} Hauptaufgabe${n===1?'':'n'}) ✓`,'ok');
 }
 
 // ══════════════════════════════════════════════════════════════════
