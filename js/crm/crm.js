@@ -1748,12 +1748,26 @@ function _verteilerModal(v){
   crmOpenModalShell();
   const vereinOpts=['<option value="">– Kontakte eines Eintrags übernehmen –</option>']
     .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${tr.key}::${e.id}">${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
+  const usersWithMail=zeUsers().filter(u=>u.id!=='admin' && u.email)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
+  const userOpts=['<option value="">– Person aus dem System hinzufügen –</option>']
+    .concat(usersWithMail.map(u=>`<option value="${esc(u.email)}">${esc(u.name)} (${esc(u.email)})</option>`)).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
    <div class="crm-modal-field"><label>E-Mail-Adressen <span style="font-size:11px;color:var(--muted)">(eine pro Zeile)</span></label><textarea id="crm-vt-emails" rows="8" placeholder="name@example.de">${esc((v.emails||[]).join('\n'))}</textarea></div>
-   <div class="crm-modal-field"><label>Schnell hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
+   <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
+   <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVerteiler('${esc(v.id||'')}')">Speichern</button></div>`);
+}
+function crmVerteilerAddUser(){
+  const sel=document.getElementById('crm-vt-user'); const mail=sel?sel.value:''; if(sel) sel.value='';
+  if(!mail) return;
+  const ta=document.getElementById('crm-vt-emails');
+  const before=_normEmails([ta?ta.value:'']).length;
+  const merged=_normEmails([(ta?ta.value:''), mail]);
+  if(ta) ta.value=merged.join('\n');
+  toast(merged.length>before?'Person übernommen ✓':'Adresse ist bereits in der Liste','ok');
 }
 function crmVerteilerAddVerein(){
   const sel=document.getElementById('crm-vt-pick'); const v0=sel?sel.value:''; if(!v0) return;
@@ -2339,7 +2353,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
