@@ -25,6 +25,26 @@ const esc = s => String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const nl2br = s => esc(s).replace(/\n/g,'<br>');
+// Telefonnummer → tel:-Link (mobil öffnet das Tastenfeld). Nur Ziffern und + behalten.
+const telHref  = t => 'tel:'+String(t==null?'':t).replace(/[^\d+]/g,'');
+const mailHref = m => 'mailto:'+esc(String(m==null?'':m).trim());
+// Freitext sicher escapen UND enthaltene Internet-Links / E-Mail-Adressen klickbar machen.
+function linkify(s){
+  let h = nl2br(s);
+  // http(s)://… – abschließende Satzzeichen nicht mitnehmen
+  h = h.replace(/\bhttps?:\/\/[^\s<]+/g, m=>{
+    const url=m.replace(/[.,;:!?)\]]+$/,''); const tail=m.slice(url.length);
+    return `<a href="${url}" target="_blank" rel="noopener">${url}</a>${tail}`;
+  });
+  // www.… ohne Protokoll (nicht, wenn schon Teil eines href oben)
+  h = h.replace(/(^|[\s(>])(www\.[^\s<]+)/g, (m,pre,u)=>{
+    const url=u.replace(/[.,;:!?)\]]+$/,''); const tail=u.slice(url.length);
+    return `${pre}<a href="https://${url}" target="_blank" rel="noopener">${url}</a>${tail}`;
+  });
+  // E-Mail-Adressen → mailto: (öffnet Outlook/Standard-Mailprogramm als neue Nachricht)
+  h = h.replace(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g, m=>`<a href="mailto:${m}">${m}</a>`);
+  return h;
+}
 const val   = id => { const el=document.getElementById(id); return el ? el.value.trim() : ''; };
 const fmtDate = ts => { try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '';} };
 const fmtDateTime = ts => { try{ return new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
@@ -244,6 +264,11 @@ function injectStyles(){
   .kb-att{font-size:11px;background:#eef2fa;border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kb-att:hover{background:#e2e9f6}
   .kb-cardbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .crm-contact{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:2px}
+  .crm-contact a{color:var(--primary);text-decoration:none;font-weight:600}
+  .crm-contact a:hover{text-decoration:underline}
+  .crm-contact .sep{color:var(--muted)}
+  .crm-field .v a,.kb-card-note a,.crm-logitem a{color:var(--primary)}
   .crm-att-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
   .crm-att-row .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .crm-att-row .crm-x{border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;padding:2px 6px}
@@ -514,7 +539,7 @@ function kbCardHtml(c, n){
       <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">
       <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}</span>
     </div>
-    ${n.note?`<div class="kb-card-note">${esc(n.note)}</div>`:''}
+    ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
     ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
        ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
@@ -594,14 +619,17 @@ function paintDetail(){
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):nl2br(v); return `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${disp}</div></div>`; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); return `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   const kontakte=(e.kontakte||[]).map(k=>`
     <div class="crm-row">
       <div class="grow"><span class="name">${esc(k.name)}</span>${k.funktion?` <span class="fn">${esc(k.funktion)}</span>`:''}
-        ${(k.email||k.tel)?`<div class="small">${[k.email,k.tel].filter(Boolean).map(esc).join(' · ')}</div>`:''}
-        ${k.note?`<div class="small">${esc(k.note)}</div>`:''}
+        ${(k.email||k.tel)?`<div class="small crm-contact">${[
+            k.email?`<a href="${mailHref(k.email)}" class="crm-mail">✉️ ${esc(k.email)}</a>`:'',
+            k.tel?`<a href="${telHref(k.tel)}" class="crm-tel">📞 ${esc(k.tel)}</a>`:''
+          ].filter(Boolean).join('<span class="sep">·</span>')}</div>`:''}
+        ${k.note?`<div class="small">${linkify(k.note)}</div>`:''}
       </div>
       <button class="btn-sm-crm" onclick="crmEditMember('${k.id}')">Bearbeiten</button>
       <button class="crm-x" title="Entfernen" onclick="crmDeleteMember('${k.id}')">✕</button>
@@ -615,7 +643,7 @@ function paintDetail(){
     return `<div class="crm-row">
       <div class="grow"><span class="name">${esc(t.titel)}</span>
         <div class="small">${[dateStr, t.ort].filter(Boolean).map(esc).join(' · ')}</div>
-        ${t.note?`<div class="small">${esc(t.note)}</div>`:''}
+        ${t.note?`<div class="small">${linkify(t.note)}</div>`:''}
       </div>
       <button class="crm-x" title="Entfernen" onclick="crmDeleteTermin('${t.id}')">✕</button>
     </div>`;
@@ -629,7 +657,7 @@ function paintDetail(){
 
   const angebote=(e.angebote||[]).map(a=>`
     <div class="crm-row">
-      <div class="grow"><span class="name">${esc(a.titel)}</span>${a.note?`<div class="small">${esc(a.note)}</div>`:''}</div>
+      <div class="grow"><span class="name">${esc(a.titel)}</span>${a.note?`<div class="small">${linkify(a.note)}</div>`:''}</div>
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
@@ -638,8 +666,8 @@ function paintDetail(){
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
       <div class="lh"><span>${esc(l.autor||'')}${l.kuerzel?` <strong>[${esc(l.kuerzel)}]</strong>`:''}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmDeleteNote('${l.id}')">✕</button></span></div>
-      <div class="lt">${nl2br(l.text||'')}</div>
-      ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${nl2br(l.summary)}</div>`:''}
+      <div class="lt">${linkify(l.text||'')}</div>
+      ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${linkify(l.summary)}</div>`:''}
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
 
   // Statistik (nur bei Vereinen)
@@ -1267,7 +1295,7 @@ function paintTeamDetail(){
         <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
         <span class="kb-card-title" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">${esc(n.text)}</span>
       </div>
-      ${n.note?`<div class="kb-card-note">${esc(n.note)}</div>`:''}
+      ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
       ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
         <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
         ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
