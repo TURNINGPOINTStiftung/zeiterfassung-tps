@@ -704,16 +704,18 @@ function paintDetail(){
     </div>
 
     <div class="crm-sec">
-      <h4><span class="ttl">✅ Aufgaben</span>
+      <h4><span class="ttl">✅ Aufgaben${e.boardClosed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</span>
         <span class="hbtns">
           <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm" onclick="${e.boardClosed?'crmReopenBoard':'crmCloseBoard'}()">${e.boardClosed?'↺ Wieder öffnen':'🏁 Projekt abschließen'}</button>
           <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
         </span>
       </h4>
       ${e.boardTitle
         ? `<div class="crm-board-title" onclick="crmEditBoardTitle()" title="Projektname bearbeiten">📌 ${esc(e.boardTitle)} <span style="color:var(--muted);font-size:12px">✎</span></div>`
         : `<button class="btn-sm-crm" style="margin-bottom:10px" onclick="crmEditBoardTitle()">＋ Projektname</button>`}
+      ${e.boardClosed?`<div class="small" style="color:var(--muted);margin:-4px 0 10px">🏁 Abgeschlossen am ${esc(fmtDate(e.boardClosedAt))}${e.boardClosedByKuerzel?' von '+esc(e.boardClosedByKuerzel):''}.</div>`:''}
       ${todos}
     </div>
 
@@ -909,6 +911,15 @@ function crmSaveBoardTitle(){
   const v=val('crm-bt');
   mutateEntity(e=>{ e.boardTitle=v; });
   crmCloseModal(); paintDetail();
+}
+// Ganzes Eintrags-Projekt (die Aufgaben-Tafel) abschließen / wieder öffnen
+function crmCloseBoard(){
+  mutateEntity(e=>{ e.boardClosed=true; e.boardClosedAt=Date.now(); e.boardClosedByKuerzel=curKuerzel(); });
+  paintDetail(); toast('Projekt abgeschlossen ✓','ok');
+}
+function crmReopenBoard(){
+  mutateEntity(e=>{ e.boardClosed=false; });
+  paintDetail(); toast('Projekt wieder geöffnet','ok');
 }
 // ── Anlagen (Links + Dateien via Firebase Storage) an einer Aufgabe ──
 function _storageOn(){ return !!(window.firebase && firebase.storage); }
@@ -1205,6 +1216,7 @@ function teamMainTasks(team){
   const out=[];
   getTrees().forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
+      if(e.boardClosed) return;
       normTasks(e);
       (e.todos||[]).forEach(m=>{
         const match = team==='Ohne Team' ? !(m.teams&&m.teams.length) : (m.teams||[]).includes(team);
@@ -1460,7 +1472,7 @@ function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (über alle Einträge und Projekte)
   const assigned=[];
-  getTrees().forEach(tr=>{ listEntities(tr.key).forEach(e=>{ normTasks(e); flatNodes(e.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); });
+  getTrees().forEach(tr=>{ listEntities(tr.key).forEach(e=>{ if(e.boardClosed) return; normTasks(e); flatNodes(e.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); });
   listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
@@ -2051,7 +2063,7 @@ Object.assign(window, {
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
-  crmSaveStatusQuo, crmEditBoardTitle, crmSaveBoardTitle,
+  crmSaveStatusQuo, crmEditBoardTitle, crmSaveBoardTitle, crmCloseBoard, crmReopenBoard,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
