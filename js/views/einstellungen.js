@@ -372,6 +372,14 @@ function userForm(u={}){
               <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
            </select>`}
     </div>
+    ${u.id==='admin'?'':`<div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="uf-crmonly" ${u.crmOnly?'checked':''} style="width:auto;cursor:pointer"
+          onchange="var f=document.getElementById('uf-employed-fields'); if(f) f.style.display=this.checked?'none':'';">
+        🚫 Nur CRM-Zugang – keine Zeiterfassung
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Für externe/zusätzliche Personen, die nur das CRM nutzen. Der Zeiterfassungs-Bereich wird für sie ausgeblendet; den CRM-Zugriff stellst du unten in der Tabelle ein.</div>
+    </div>`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
           const crs=getCustomRoles();
@@ -417,7 +425,7 @@ function userForm(u={}){
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
       <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     </div>
-    <div id="uf-employed-fields">
+    <div id="uf-employed-fields"${u.crmOnly?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
       <div class="uf-grid2">
         <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
@@ -532,8 +540,10 @@ function collectUserForm(){
   // Pro-User-Berechtigungen (überschreiben die Rolle). Admin: keine Häkchen → leer.
   const perms={};
   PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
+  const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
   return {
     perms,
+    crmOnly,
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     email:document.getElementById('uf-email')?.value.trim()||'',

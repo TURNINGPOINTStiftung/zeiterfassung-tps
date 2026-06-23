@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v130':'';
+  if(_hv) _hv.textContent=_showVer?'v131':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -33,16 +33,17 @@ export function initApp(){
   // noTimesheet: ZE komplett weg (GF-Konzept)
   // noReport: ZE bleibt, aber privat — kein Einreichen, GF hat keinen Zugriff (Leitungs-Konzept)
   const gfNoZE=isGF&&!!cu.noTimesheet;
+  const crmOnly=!!cu.crmOnly;   // Nutzer ohne Zeiterfassung (nur CRM)
   const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
-  if(tabZE) tabZE.style.display=(isAdmin||gfNoZE)?'none':'';
+  if(tabZE) tabZE.style.display=(isAdmin||gfNoZE||crmOnly)?'none':'';
   document.getElementById('tab-uebersicht').style.display=hasPermission('tab_uebersicht',cu)?'':'none';
   document.getElementById('tab-gfberichte').style.display=hasPermission('tab_gfberichte',cu)?'':'none';
   document.getElementById('tab-abwesenheiten').style.display='';
   document.getElementById('tab-einstellungen').style.display='none'; // Einstellungen sind in die Verwaltung umgezogen
   const btnTeam=document.getElementById('btn-teamberichte');
   if(btnTeam) btnTeam.style.display=hasPermission('btn_teamberichte',cu)?'':'none';
-  const hideStempel=isAdmin||gfNoZE||!hasPermission('stempel',cu);
+  const hideStempel=isAdmin||gfNoZE||crmOnly||!hasPermission('stempel',cu);
   const btnZs=document.getElementById('btn-zeitstempel');
   if(btnZs) btnZs.style.display=hideStempel?'none':'inline-flex';
   const tabZsMob=document.getElementById('tab-stempeln-mobile');
@@ -70,7 +71,8 @@ export function initApp(){
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
   const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || (isAdmin && (_lastMod==='website'||_lastMod==='forum'||_lastMod==='verwaltung'));
-  switchModule(_modOk?_lastMod:'zeiterfassung');
+  // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
+  switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
 }
 
 const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',verwaltung:'Verwaltung'};
