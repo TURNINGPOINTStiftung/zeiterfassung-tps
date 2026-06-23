@@ -140,9 +140,19 @@ function accessLevel(){
   const a=getAccess(cu.id);
   return (a && a.level) || 'none';
 }
-function accessVerein(){ const cu=window.cu; if(!cu) return ''; const a=getAccess(cu.id); return (a && a.vereinId) || ''; }
+// Zugeordnete Vereine (mehrere möglich; Abwärtskompat. zu einzelnem vereinId)
+function accessVereine(){
+  const cu=window.cu; if(!cu) return [];
+  const a=getAccess(cu.id); if(!a) return [];
+  if(Array.isArray(a.vereinIds)) return a.vereinIds.filter(Boolean);
+  return a.vereinId ? [a.vereinId] : [];
+}
+function accessVerein(){ const v=accessVereine(); return v[0]||''; }  // Kompat (erster Verein)
 function crmRestricted(){ return accessLevel()==='verein'; }
 function crmFull(){ const l=accessLevel(); return l==='admin'||l==='full'; }
+// Sieht alles (alle Bäume/Teams/Verteiler), aber 'readonly' darf nichts Strukturelles
+// anlegen/löschen (Einträge, Projekte, Vorlagen, Verteiler) – nur Aufgaben bearbeiten.
+function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l==='readonly'; }
 
 // Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
 function crmSetupModuleBar(){
@@ -153,7 +163,7 @@ function crmSetupModuleBar(){
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
       // CRM für ALLE (jede Person hat „Meine Aufgaben"); Tiefe der Sicht regelt das CRM selbst.
-      const show={ zeiterfassung:true, website:isAdmin, forum:isAdmin, crm:true, verwaltung:isAdmin };
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, verwaltung:isAdmin };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -275,6 +285,8 @@ function injectStyles(){
   .crm-projhist{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
   .crm-projhist>summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
   .vt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .vw-vpick{display:flex;flex-direction:column;gap:2px;margin-top:6px;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px}
+  .vw-vpick label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}
   .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .kb-att{font-size:11px;background:#eef2fa;border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kb-att:hover{background:#e2e9f6}
@@ -359,7 +371,10 @@ export function renderCRM(){
       try{
         const lvl=accessLevel();
         if(lvl==='none') window._crmMode='teams';
-        else if(lvl==='verein' && window._crmMode!=='teams' && window._crmMode!=='meine'){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); }
+        else if(lvl==='verein' && window._crmMode!=='teams' && window._crmMode!=='meine'){
+          window._crmMode='kontakte'; window._crmTree='vereine';
+          const vs=accessVereine(); if(!vs.includes(window._crmSelId)) window._crmSelId=vs[0]||'';
+        }
         paint();
       }catch(e){ console.error('CRM paint:',e); }
     });
@@ -370,7 +385,7 @@ setCrmRenderHook(()=>{ try{ paint(); }catch(e){} });
 function paint(){
   window._crmModalOpen = false;
   const mode = window._crmMode || 'kontakte';
-  if(mode==='verteiler' && crmFull()){ paintVerteiler(); return; }
+  if(mode==='verteiler' && crmCanView()){ paintVerteiler(); return; }
   if(mode==='meine'){
     if(window._crmTeamProjSel && getTeamProjekt(window._crmTeamProjSel)) paintTeamProjektDetail();
     else paintMeine();
@@ -383,7 +398,7 @@ function paint(){
     return;
   }
   if(window._crmSelId && curEntity()) paintDetail();
-  else if(!crmFull()){
+  else if(!crmCanView()){
     const vid=accessVerein();
     if(vid && getEntity('vereine',vid)){ window._crmTree='vereine'; window._crmSelId=vid; paintDetail(); }
     else { window._crmMode='meine'; paintMeine(); }
@@ -395,21 +410,22 @@ function paint(){
 function barHtml(){
   const mode = window._crmMode || 'kontakte';
   const full = crmFull();
+  const view = crmCanView();
   const lvl  = accessLevel();
   const homeActive = (mode==='teams'||mode==='meine');
-  const homeLabel  = full ? '👥 Teams' : '🙋 Meine Aufgaben';
+  const homeLabel  = view ? '👥 Teams' : '🙋 Meine Aufgaben';
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
-  if(full){
+  if(view){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
   } else if(lvl==='verein'){
-    const vid=accessVerein(); const ve=vid?getEntity('vereine',vid):null; const nm=(ve&&ve.stamm&&ve.stamm.name)||'Mein Verein';
-    tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmOpenMyVerein()">🏛️ ${esc(nm)}</button>`);
+    accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
+      tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
   }
   let right = '';
-  if(full && mode==='kontakte'){
+  if(view && mode==='kontakte'){
     right = `<input class="crm-search" type="search" placeholder="Suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearch(this.value)">
-      <button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`;
+      ${full?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
   } else {
     right = `<span style="margin-left:auto"></span>`;
   }
@@ -731,9 +747,9 @@ function paintDetail(){
 
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
-      <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmFull()?esc(tree.label):'Meine Aufgaben'}</button>
+      <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?esc(tree.label):'Meine Aufgaben'}</button>
       <h2>${esc(s.name||'(ohne Name)')}</h2>
-      <button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>
+      ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
     </div>
     ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${
@@ -778,9 +794,11 @@ function paintDetail(){
 function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
 function crmSearch(v){ window._crmSearch=v; paintList(); }
 function crmOpenDetail(id){ window._crmMode='kontakte'; window._crmSelId=id; paintDetail(); }
-function crmBackToList(){ window._crmSelId=null; if(crmFull()) paintList(); else { window._crmMode='meine'; paintMeine(); } }
+function crmBackToList(){ window._crmSelId=null; if(crmCanView()) paintList(); else { window._crmMode='meine'; paintMeine(); } }
 function crmShowMeine(){ crmShowTeams(); }   /* „Meine Aufgaben" ist in die Teams-Ansicht integriert */
 function crmOpenMyVerein(){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=accessVerein(); paintDetail(); }
+// Restriktiver Nutzer öffnet einen seiner zugeordneten Vereine
+function crmRestrictedOpen(vid){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=vid; paintDetail(); }
 
 function crmOpenModalShell(){ window._crmModalOpen=true; }
 function crmCloseModal(){ window._crmModalOpen=false; closeModal(); }
@@ -955,7 +973,7 @@ function entityProjekteSectionHtml(e){
       <div class="crm-projtabs" style="margin-top:8px">${closedP.map(tab).join('')}</div>
     </details>` : '';
   return `<div class="crm-sec">
-    <h4><span class="ttl">📋 Projekte</span><button class="btn-sm-crm primary" onclick="crmNewEntityProjekt()">＋ Neues Projekt</button></h4>
+    <h4><span class="ttl">📋 Projekte</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewEntityProjekt()">＋ Neues Projekt</button>`:''}</h4>
     ${openTabs}
     ${board}
     ${history}
@@ -966,10 +984,10 @@ function entityProjBoardHtml(p){
   return `<div class="crm-projhead">
       ${closed?`<span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>`:''}
       <span class="hbtns" style="margin-left:auto">
-        <button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt('${p.id}')">✎ Umbenennen</button>
+        ${crmFull()?`<button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt('${p.id}')">✎ Umbenennen</button>`:''}
         <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
-        <button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
-        <button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt('${p.id}')">✕</button>
+        ${crmFull()?`<button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>`:''}
+        ${crmFull()?`<button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt('${p.id}')">✕</button>`:''}
       </span>
     </div>
     ${closed?`<div class="small" style="color:var(--muted);margin:-2px 0 10px">🏁 Abgeschlossen am ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' von '+esc(p.closedByKuerzel):''}.</div>`:''}
@@ -1391,9 +1409,9 @@ function paintTeamsList(){
   window._crmTaskCtx=null;
   // „Meine Aufgaben" oben – für alle
   const meine = meineSectionsHtml();
-  // Teams-Kacheln nur für Voll-Zugriff
+  // Teams-Kacheln für alle, die alles sehen dürfen (voll + erweitert)
   let teamsBlock='';
-  if(crmFull()){
+  if(crmCanView()){
     const cards=[];
     zeTeams().forEach(tm=>{ const c=teamCounts(tm); cards.push(teamCardHtml(tm, c.total, c.open)); });
     const cNo=teamCounts('Ohne Team');
@@ -1711,14 +1729,14 @@ function paintVerteiler(){
       <div class="vt-actions">
         <button class="btn-sm-crm primary" onclick="crmVerteilerMail('${v.id}')">✉️ Mail (BCC)</button>
         <button class="btn-sm-crm" onclick="crmCopyVerteiler('${v.id}')">⧉ Kopieren</button>
-        <button class="btn-sm-crm" onclick="crmEditVerteiler('${v.id}')">Bearbeiten</button>
-        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC('${v.id}')">✕</button>
+        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler('${v.id}')">Bearbeiten</button>
+        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC('${v.id}')">✕</button>`:''}
       </div>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Verteiler. Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</div>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-sec">
-      <h4><span class="ttl">✉️ E-Mail-Verteiler</span><button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button></h4>
+      <h4><span class="ttl">✉️ E-Mail-Verteiler</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button>`:''}</h4>
       <div class="small" style="color:var(--muted);margin-bottom:10px">„Mail (BCC)" öffnet Outlook mit allen Adressen im <b>BCC</b>-Feld – die Empfänger sehen einander nicht.</div>
       <div class="crm-list">${cards}</div>
     </div>
@@ -2051,19 +2069,20 @@ function paintVerwUsers(){
   const users=zeUsers().filter(u=>u.id!=='admin')
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const rows=users.map(u=>{
-    const a=getAccess(u.id)||{level:'none',vereinId:''};
+    const a=getAccess(u.id)||{level:'none'};
     const lvl=a.level||'none';
-    const lvlSel=[['none','Kein Zugriff'],['verein','Nur eigener Verein'],['full','Voll']]
+    const vereinIds=Array.isArray(a.vereinIds)?a.vereinIds:(a.vereinId?[a.vereinId]:[]);
+    const lvlSel=[['none','Kein Zugriff'],['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles sehen'],['full','Voll']]
       .map(([L,t])=>`<option value="${L}" ${lvl===L?'selected':''}>${t}</option>`).join('');
     const teams=(Array.isArray(u.teams)&&u.teams.length?u.teams:(u.team?[u.team]:[])).filter(Boolean);
+    const vereinPick = lvl==='verein'
+      ? `<div class="vw-vpick">${vereine.map(v=>`<label><input type="checkbox" ${vereinIds.includes(v.id)?'checked':''} onchange="crmVerwToggleVerein('${u.id}','${v.id}',this.checked)"> ${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</label>`).join('')||'<span class="small" style="color:var(--muted)">Keine Vereine angelegt.</span>'}</div>`
+      : '';
     return `<tr>
-      <td><span class="vw-name">${esc(u.name)}</span></td>
+      <td><span class="vw-name">${esc(u.name)}</span>${u.crmOnly?' <span class="vw-team" title="Nur CRM, keine Zeiterfassung">CRM-only</span>':''}</td>
       <td>${esc(roleLbl(u))}</td>
       <td>${teams.map(t=>`<span class="vw-team">${esc(t)}</span>`).join('')||'<span class="small" style="color:var(--muted)">–</span>'}</td>
-      <td><div style="display:flex;gap:6px;flex-wrap:wrap">
-        <select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>
-        <select class="crm-tsel" ${lvl==='verein'?'':'style="display:none"'} onchange="crmVerwSetVerein('${u.id}',this.value)">${vOpts(a.vereinId)}</select>
-      </div></td>
+      <td><select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>${vereinPick}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
         <button class="crm-x" title="Löschen" onclick="deleteUser('${u.id}')">✕</button>
@@ -2072,7 +2091,7 @@ function paintVerwUsers(){
   }).join('');
   host.innerHTML = `<div class="crm-sec">
     <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span><button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">CRM-Zugriff direkt hier setzen. „Bearbeiten" öffnet Rolle, Teams, Stunden und die Berechtigungen pro Person.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">CRM-Zugriff direkt hier setzen. <b>Erweitert</b> = sieht alle Bäume/Teams, kann aber nichts anlegen/löschen/umbenennen (nur Aufgaben bearbeiten). Bei <b>Nur zugeordnete Vereine</b> mehrere Vereine ankreuzbar. „Bearbeiten" öffnet Rolle, Teams, Stunden und Berechtigungen.</div>
     <div style="overflow-x:auto"><table class="vw-table">
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
       <tbody>${rows||'<tr><td colspan="5" class="small" style="color:var(--muted)">Keine Nutzer.</td></tr>'}</tbody>
@@ -2081,12 +2100,16 @@ function paintVerwUsers(){
 }
 function crmVerwSetLevel(uid, level){
   const a=getAccess(uid)||{};
+  const vereinIds=Array.isArray(a.vereinIds)?a.vereinIds:(a.vereinId?[a.vereinId]:[]);
   if(level==='none') saveAccess(uid, null);
-  else saveAccess(uid, { level, vereinId: level==='verein'?(a.vereinId||''):'' });
+  else saveAccess(uid, { level, vereinIds: level==='verein'?vereinIds:[] });
   paintVerwUsers();
 }
-function crmVerwSetVerein(uid, vid){
-  saveAccess(uid, { level:'verein', vereinId:vid });
+function crmVerwToggleVerein(uid, vid, checked){
+  const a=getAccess(uid)||{level:'verein'};
+  let ids=Array.isArray(a.vereinIds)?a.vereinIds.slice():(a.vereinId?[a.vereinId]:[]);
+  if(checked){ if(!ids.includes(vid)) ids.push(vid); } else { ids=ids.filter(x=>x!==vid); }
+  saveAccess(uid, { level:'verein', vereinIds:ids });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2297,7 +2320,8 @@ function crmCfgFuncsSave(){
 
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwSetVerein,
+  renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
+  crmRestrictedOpen,
   _refreshVerwUsers: paintVerwUsers,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
