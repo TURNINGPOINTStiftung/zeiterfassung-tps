@@ -48,6 +48,25 @@ export function provisionAuthAccount(id, pw, email){
   }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
 }
 
+// Bestehende Firebase-Sitzung wiederverwenden statt sie beim Start mit einer
+// NEUEN anonymen zu überschreiben. Wer sich einmal echt angemeldet hat, läuft
+// danach dauerhaft als echter Nutzer (Firebase persistiert die Sitzung lokal) –
+// dadurch entstehen nicht mehr ständig neue „(anonymous)"-Konten. Nur wenn gar
+// keine Sitzung existiert, wird (wie bisher) anonym angemeldet. Fallback-sicher.
+function _ensureAuthSession(){
+  return new Promise(resolve=>{
+    let done=false; const finish=v=>{ if(!done){ done=true; resolve(v); } };
+    try{
+      const auth=firebase.auth();
+      const unsub=auth.onAuthStateChanged(u=>{
+        try{ unsub(); }catch(_){}
+        if(u) finish(u);                                   // vorhandene Sitzung (echt ODER anonym) behalten
+        else auth.signInAnonymously().then(finish).catch(()=>finish(null));
+      }, ()=>finish(null));
+    }catch(e){ finish(null); }
+  });
+}
+
 export async function initFirebase(){
   firebase.initializeApp({
     apiKey:'AIzaSyA1SxyoH1NwIk6nWK66PNvV2EmvSwPJNOk',
@@ -69,7 +88,7 @@ export async function initFirebase(){
   let fbData=null;
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   try{
-    await Promise.race([firebase.auth().signInAnonymously(),_timeout(5000)]);
+    await Promise.race([_ensureAuthSession(),_timeout(5000)]);
     const snap=await Promise.race([_fbRef.once('value'),_timeout(6000)]);
     fbData=snap.val();
   } catch(e){
