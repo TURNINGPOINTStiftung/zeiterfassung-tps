@@ -12,12 +12,13 @@ import {
   saveEntity, deleteEntity, newId,
   saveVorlage, deleteVorlage, getVorlage, listVorlagen,
   saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
-  saveAccess, getAccess
+  saveAccess, getAccess, getCrmConfig, saveCrmConfig
 } from './crm-data.js';
 import {
-  TREES, treeByKey, stammFields, MEMBER_FUNCTIONS,
+  getTrees, treeByKey, stammFields, memberFunctions,
   getAiEndpoint, setAiEndpoint,
-  TASK_STATUS, taskStatusByKey, FALLBACK_TEAMS
+  getTaskStatus, taskStatusByKey, FALLBACK_TEAMS,
+  DEFAULT_TREES, DEFAULT_STAMM_FIELDS, DEFAULT_MEMBER_FUNCTIONS, FIELD_TYPES
 } from './crm-config.js';
 
 // ── kleine Helfer ──────────────────────────────────────────────────
@@ -333,7 +334,8 @@ function injectStyles(){
 export function renderCRM(){
   try{
     injectStyles();
-    if(!window._crmTree) window._crmTree = TREES[0].key;
+    const _trees=getTrees();
+    if(!window._crmTree || !_trees.some(t=>t.key===window._crmTree)) window._crmTree = _trees[0].key;
     if(!window._crmMode) window._crmMode = 'kontakte';
     window._crmModalOpen = false;
     const root = document.getElementById('crm-root');
@@ -383,7 +385,7 @@ function barHtml(){
   const homeLabel  = full ? '👥 Teams' : '🙋 Meine Aufgaben';
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(full){
-    TREES.forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${t.icon} ${esc(t.label)}</button>`));
+    getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
   } else if(lvl==='verein'){
     const vid=accessVerein(); const ve=vid?getEntity('vereine',vid):null; const nm=(ve&&ve.stamm&&ve.stamm.name)||'Mein Verein';
     tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmOpenMyVerein()">🏛️ ${esc(nm)}</button>`);
@@ -799,7 +801,7 @@ function crmDeleteEntity(){
 
 // ── Kontakte / Mitglieder ──────────────────────────────────────────
 function memberFormHtml(k){
-  const opts=MEMBER_FUNCTIONS.map(f=>`<option ${k.funktion===f?'selected':''}>${esc(f)}</option>`).join('');
+  const opts=memberFunctions().map(f=>`<option ${k.funktion===f?'selected':''}>${esc(f)}</option>`).join('');
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
    <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
@@ -1061,7 +1063,7 @@ function nodeModal(o){
   const e=curContainer(); if(!e) return;
   const n=o.node||{}; const tp=isTPCtx();
   crmOpenModalShell();
-  const statusOpts=TASK_STATUS.map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
+  const statusOpts=getTaskStatus().map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
   let teamRow;
   if(o.isTop && !tp){
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${(n.teams||[]).includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
@@ -1201,7 +1203,7 @@ function crmApplyVorlage(id){
 // Hauptaufgaben eines Teams (eintragübergreifend): [{tree, eid, ename, main}]
 function teamMainTasks(team){
   const out=[];
-  TREES.forEach(tr=>{
+  getTrees().forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
       normTasks(e);
       (e.todos||[]).forEach(m=>{
@@ -1458,7 +1460,7 @@ function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (über alle Einträge und Projekte)
   const assigned=[];
-  TREES.forEach(tr=>{ listEntities(tr.key).forEach(e=>{ normTasks(e); flatNodes(e.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); });
+  getTrees().forEach(tr=>{ listEntities(tr.key).forEach(e=>{ normTasks(e); flatNodes(e.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); });
   listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
@@ -1760,6 +1762,7 @@ function ensureVerwMounted(){
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
    <div class="crm-body">
      <div id="verw-users"></div>
+     <div id="verw-crmcfg"></div>
      <div id="verw-config"></div>
    </div>`;
   const cfg=document.getElementById('verw-config');
@@ -1774,6 +1777,7 @@ function renderVerwaltung(){
       try{
         ensureVerwMounted();
         paintVerwUsers();
+        paintVerwConfig();
         if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
       }catch(e){ console.error('Verwaltung:',e); }
     });
@@ -1825,10 +1829,221 @@ function crmVerwSetVerein(uid, vid){
   saveAccess(uid, { level:'verein', vereinId:vid });
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  CRM-Konfiguration (admin): Bäume & Stammdaten-Felder editierbar
+// ══════════════════════════════════════════════════════════════════
+const CFG_RESERVED = ['vorlagen','teamprojekte','access','config'];
+const _clone = o => JSON.parse(JSON.stringify(o));
+// Arbeitskopie der Config: aus crm/config oder (falls leer) aus den Defaults.
+function _cfgWork(){
+  const c=getCrmConfig();
+  return {
+    trees: (c&&Array.isArray(c.trees)&&c.trees.length) ? _clone(c.trees) : _clone(DEFAULT_TREES),
+    stammFields: (c&&c.stammFields&&typeof c.stammFields==='object') ? _clone(c.stammFields) : { __default:_clone(DEFAULT_STAMM_FIELDS) },
+    memberFunctions: (c&&Array.isArray(c.memberFunctions)&&c.memberFunctions.length) ? _clone(c.memberFunctions) : _clone(DEFAULT_MEMBER_FUNCTIONS)
+  };
+}
+function _slug(label, takenArr){
+  let base=String(label||'').toLowerCase()
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'').slice(0,24) || 'x';
+  const taken=new Set([...(takenArr||[]), ...CFG_RESERVED]);
+  let k=base, i=2; while(taken.has(k)){ k=base+i; i++; } return k;
+}
+// Effektive Feldliste eines Baums innerhalb der Arbeitskopie
+function _cfgFields(work, sel){
+  if(sel==='__default') return work.stammFields.__default || _clone(DEFAULT_STAMM_FIELDS);
+  return work.stammFields[sel] || work.stammFields.__default || _clone(DEFAULT_STAMM_FIELDS);
+}
+
+function paintVerwConfig(){
+  const host=document.getElementById('verw-crmcfg'); if(!host) return;
+  const work=_cfgWork();
+  const live=!!getCrmConfig();
+  // ── Bäume ──
+  const treeRows=work.trees.map((t,i)=>`<tr>
+      <td style="font-size:18px">${esc(t.icon||'')}</td>
+      <td><span class="vw-name">${esc(t.label)}</span><div class="small" style="color:var(--muted)">${esc(t.single||'')} · <code>${esc(t.key)}</code></div></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgTreeMove('${t.key}',-1)">↑</button>
+        <button class="btn-sm-crm" ${i===work.trees.length-1?'disabled':''} onclick="crmCfgTreeMove('${t.key}',1)">↓</button>
+        <button class="btn-sm-crm" onclick="crmCfgTreeEdit('${t.key}')">✎</button>
+        <button class="crm-x" title="Entfernen" onclick="crmCfgTreeDel('${t.key}')">✕</button>
+      </td></tr>`).join('');
+  // ── Felder ──
+  const sel=window._cfgFieldTree||'__default';
+  const treeOpts=[`<option value="__default" ${sel==='__default'?'selected':''}>Standard (alle Bäume)</option>`]
+    .concat(work.trees.map(t=>`<option value="${esc(t.key)}" ${sel===t.key?'selected':''}>${esc(t.label)}</option>`)).join('');
+  const hasOverride = sel!=='__default' && Array.isArray(work.stammFields[sel]);
+  const usesDefault = sel!=='__default' && !hasOverride;
+  const fields=_cfgFields(work, sel);
+  const fieldRows=fields.map((f,i)=>`<tr>
+      <td><span class="vw-name">${esc(f.label)}</span>${f.required?' <span class="vw-team">Pflicht</span>':''}<div class="small" style="color:var(--muted)">${esc((FIELD_TYPES.find(x=>x.key===f.type)||{}).label||f.type||'text')} · <code>${esc(f.key)}</code>${f.hint?' · '+esc(f.hint):''}</div></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-sm-crm" ${i===0||usesDefault?'disabled':''} onclick="crmCfgFieldMove('${i}',-1)">↑</button>
+        <button class="btn-sm-crm" ${i===fields.length-1||usesDefault?'disabled':''} onclick="crmCfgFieldMove('${i}',1)">↓</button>
+        <button class="btn-sm-crm" ${usesDefault?'disabled':''} onclick="crmCfgFieldEdit('${f.key}')">✎</button>
+        <button class="crm-x" title="Entfernen" ${(usesDefault||f.key==='name')?'disabled':''} onclick="crmCfgFieldDel('${f.key}')">✕</button>
+      </td></tr>`).join('');
+  const funcs=(work.memberFunctions||[]).join('\n');
+
+  host.innerHTML = `
+  <div class="crm-sec">
+    <h4><span class="ttl">🌳 CRM-Bäume</span><button class="btn-sm-crm primary" onclick="crmCfgTreeEdit('')">＋ Baum</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Oberste Ebenen im CRM. Umbenennen/Icon ändern jederzeit; der interne Schlüssel bleibt fix. Löschen blendet den Baum aus – <b>vorhandene Einträge bleiben in der Datenbank erhalten</b>.${live?'':' <i>(Noch nicht angepasst – es gelten die Standardwerte.)</i>'}</div>
+    <div style="overflow-x:auto"><table class="vw-table"><tbody>${treeRows}</tbody></table></div>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">📋 Stammdaten-Felder</span><button class="btn-sm-crm primary" ${usesDefault?'disabled':''} onclick="crmCfgFieldEdit('')">＋ Feld</button></h4>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <label class="small" style="color:var(--muted)">Für:</label>
+      <select class="crm-tsel" onchange="crmCfgFieldTree(this.value)">${treeOpts}</select>
+      ${hasOverride?`<button class="btn-sm-crm" onclick="crmCfgFieldReset('${esc(sel)}')">↩ Auf Standard zurücksetzen</button>`:''}
+    </div>
+    ${usesDefault?`<div class="small" style="color:var(--muted);margin-bottom:8px">Dieser Baum nutzt aktuell die Standard-Felder. <button class="btn-sm-crm" onclick="crmCfgFieldOverride('${esc(sel)}')">Eigene Felder für diesen Baum anlegen</button></div>`:''}
+    <div style="overflow-x:auto"><table class="vw-table"><tbody>${fieldRows}</tbody></table></div>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">👤 Kontakt-Funktionen</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:6px">Auswahl im Kontakt-Formular – eine Funktion pro Zeile.</div>
+    <textarea id="cfg-funcs" rows="6" style="width:100%;box-sizing:border-box">${esc(funcs)}</textarea>
+    <div style="margin-top:8px"><button class="btn-sm-crm primary" onclick="crmCfgFuncsSave()">Funktionen speichern</button></div>
+  </div>`;
+}
+
+// ── Bäume ──
+function crmCfgTreeEdit(key){
+  const work=_cfgWork();
+  const t = key? work.trees.find(x=>x.key===key) : {icon:'',label:'',single:''};
+  if(!t) return;
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${key?'✎ Baum bearbeiten':'＋ Neuer Baum'}</h3>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="width:90px"><label>Icon</label><input id="cfg-tree-icon" value="${esc(t.icon||'')}" placeholder="🏛️" maxlength="4"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:160px"><label>Bezeichnung (Mehrzahl) *</label><input id="cfg-tree-label" value="${esc(t.label||'')}" placeholder="z. B. Vereine"></div>
+   </div>
+   <div class="crm-modal-field"><label>Einzahl (für „Neuer …")</label><input id="cfg-tree-single" value="${esc(t.single||'')}" placeholder="z. B. Verein"></div>
+   ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmCfgTreeSave('${esc(key)}')">Speichern</button></div>`);
+}
+function crmCfgTreeSave(origKey){
+  const label=val('cfg-tree-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
+  const work=_cfgWork();
+  const icon=val('cfg-tree-icon'), single=val('cfg-tree-single')||label;
+  if(origKey){ const t=work.trees.find(x=>x.key===origKey); if(t){ t.label=label; t.icon=icon; t.single=single; } }
+  else { const key=_slug(label, work.trees.map(t=>t.key)); work.trees.push({ key, label, icon, single }); }
+  saveCrmConfig(work); crmCloseModal(); paintVerwConfig();
+  toast('Baum gespeichert ✓','ok');
+}
+function crmCfgTreeMove(key, dir){
+  const work=_cfgWork(); const i=work.trees.findIndex(t=>t.key===key); const j=i+dir;
+  if(i<0||j<0||j>=work.trees.length) return;
+  const tmp=work.trees[i]; work.trees[i]=work.trees[j]; work.trees[j]=tmp;
+  saveCrmConfig(work); paintVerwConfig();
+}
+function crmCfgTreeDel(key){
+  const work=_cfgWork();
+  if(work.trees.length<=1){ toast('Mindestens ein Baum muss bestehen bleiben.','err'); return; }
+  const t=work.trees.find(x=>x.key===key);
+  const cnt=Object.keys((getCrm()[key])||{}).length;
+  const msg=`Baum „${(t&&t.label)||key}" entfernen?`+(cnt?`\n\n${cnt} vorhandene Einträge bleiben in der Datenbank erhalten, werden aber nicht mehr angezeigt.`:'');
+  if(!window.confirm(msg)) return;
+  work.trees=work.trees.filter(x=>x.key!==key);
+  if(work.stammFields[key]) delete work.stammFields[key];
+  saveCrmConfig(work);
+  if(window._cfgFieldTree===key) window._cfgFieldTree='__default';
+  paintVerwConfig();
+  toast('Baum entfernt.','ok');
+}
+
+// ── Stammdaten-Felder ──
+function crmCfgFieldTree(sel){ window._cfgFieldTree=sel; paintVerwConfig(); }
+function crmCfgFieldOverride(sel){
+  const work=_cfgWork();
+  work.stammFields[sel]=_clone(_cfgFields(work, sel));
+  saveCrmConfig(work); paintVerwConfig();
+}
+function crmCfgFieldReset(sel){
+  if(!window.confirm('Eigene Felder dieses Baums verwerfen und wieder die Standard-Felder nutzen?')) return;
+  const work=_cfgWork(); delete work.stammFields[sel];
+  saveCrmConfig(work); paintVerwConfig();
+}
+function _cfgEnsureArr(work, sel){
+  if(sel==='__default'){ if(!Array.isArray(work.stammFields.__default)) work.stammFields.__default=_clone(DEFAULT_STAMM_FIELDS); return work.stammFields.__default; }
+  if(!Array.isArray(work.stammFields[sel])) work.stammFields[sel]=_clone(_cfgFields(work, sel));
+  return work.stammFields[sel];
+}
+function crmCfgFieldEdit(key){
+  const sel=window._cfgFieldTree||'__default';
+  const work=_cfgWork();
+  const arr=_cfgFields(work, sel);
+  const f = key? arr.find(x=>x.key===key) : {label:'',type:'text',required:false,hint:''};
+  if(!f) return;
+  const typeOpts=FIELD_TYPES.map(t=>`<option value="${t.key}" ${f.type===t.key?'selected':''}>${esc(t.label)}</option>`).join('');
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${key?'✎ Feld bearbeiten':'＋ Neues Feld'}</h3>
+   <div class="crm-modal-field"><label>Bezeichnung *</label><input id="cfg-f-label" value="${esc(f.label||'')}" placeholder="z. B. Ansprechpartner"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+     <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Typ</label><select id="cfg-f-type">${typeOpts}</select></div>
+     <label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;font-size:14px"><input type="checkbox" id="cfg-f-req" ${f.required?'checked':''}> Pflichtfeld</label>
+   </div>
+   <div class="crm-modal-field"><label>Hinweis (optional)</label><input id="cfg-f-hint" value="${esc(f.hint||'')}" placeholder="kleiner Hilfetext"></div>
+   ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest.</div>`:''}
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmCfgFieldSave('${esc(key)}')">Speichern</button></div>`);
+}
+function crmCfgFieldSave(origKey){
+  const label=val('cfg-f-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
+  const sel=window._cfgFieldTree||'__default';
+  const work=_cfgWork();
+  const arr=_cfgEnsureArr(work, sel);
+  const type=val('cfg-f-type')||'text';
+  const required=!!(document.getElementById('cfg-f-req')&&document.getElementById('cfg-f-req').checked);
+  const hint=val('cfg-f-hint');
+  if(origKey){ const f=arr.find(x=>x.key===origKey); if(f){ f.label=label; f.type=type; f.required=required; f.hint=hint; } }
+  else { const key=_slug(label, arr.map(f=>f.key)); arr.push({ key, label, type, required, hint }); }
+  saveCrmConfig(work); crmCloseModal(); paintVerwConfig();
+  toast('Feld gespeichert ✓','ok');
+}
+function crmCfgFieldMove(idx, dir){
+  const sel=window._cfgFieldTree||'__default';
+  const work=_cfgWork(); const arr=_cfgEnsureArr(work, sel);
+  const i=parseInt(idx,10), j=i+dir;
+  if(i<0||j<0||j>=arr.length) return;
+  const tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
+  saveCrmConfig(work); paintVerwConfig();
+}
+function crmCfgFieldDel(key){
+  if(key==='name'){ toast('Das Namensfeld kann nicht entfernt werden.','err'); return; }
+  const sel=window._cfgFieldTree||'__default';
+  const work=_cfgWork(); const arr=_cfgEnsureArr(work, sel);
+  const f=arr.find(x=>x.key===key);
+  if(!window.confirm(`Feld „${(f&&f.label)||key}" entfernen?\n\nBereits erfasste Werte bleiben gespeichert, werden aber nicht mehr angezeigt.`)) return;
+  const idx=arr.findIndex(x=>x.key===key); if(idx>=0) arr.splice(idx,1);
+  saveCrmConfig(work); paintVerwConfig();
+}
+
+// ── Kontakt-Funktionen ──
+function crmCfgFuncsSave(){
+  const ta=document.getElementById('cfg-funcs');
+  const lines=(ta?ta.value:'').split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!lines.length){ toast('Mindestens eine Funktion angeben.','err'); return; }
+  const work=_cfgWork(); work.memberFunctions=lines;
+  saveCrmConfig(work); paintVerwConfig();
+  toast('Funktionen gespeichert ✓','ok');
+}
+
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwSetVerein,
   _refreshVerwUsers: paintVerwUsers,
+  // CRM-Konfiguration (Bäume & Felder)
+  crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
+  crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
+  crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
+  crmCfgFuncsSave,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,

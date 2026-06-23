@@ -1,22 +1,23 @@
 // ══════════════════════════════════════════════════════════════════
-//  CRM-Konfiguration  –  hier wird die Struktur "wie gezeichnet" gepflegt
+//  CRM-Konfiguration  –  Bäume & Felder sind admin-editierbar
 // ══════════════════════════════════════════════════════════════════
-//  Alle drei Bäume teilen dieselbe Engine. Was sich unterscheidet, steht
-//  hier (und nur hier) – Felder lassen sich ohne Code-Umbau anpassen.
+//  Die Defaults hier sind nur noch der FALLBACK. Die tatsächliche
+//  Struktur kommt – sofern gesetzt – aus crm/config (Verwaltung).
+//  Wird nichts konfiguriert, gilt unverändert das hier Definierte.
+//  → Kein Code-Anfassen mehr nötig, um Bäume/Felder zu ändern.
 
-// Die drei Bäume (oberste Ebene)
-export const TREES = [
+import { getCrmConfig } from './crm-data.js';
+
+// ── Standard-Bäume (Fallback) ──────────────────────────────────────
+export const DEFAULT_TREES = [
   { key:'vereine',       label:'Vereine',       icon:'🏛️', single:'Verein' },
   { key:'sozialakteure', label:'Sozialakteure', icon:'🤝', single:'Sozialakteur' },
   { key:'fundraising',   label:'Fundraising',   icon:'💶', single:'Fundraising-Kontakt' },
   { key:'marketing',     label:'Marketing & Öffentlichkeitsarbeit', icon:'📣', single:'Marketing-Eintrag' },
 ];
 
-export function treeByKey(k){ return TREES.find(t=>t.key===k) || TREES[0]; }
-
-// Stammdaten-Felder. Für alle Bäume gleich – bei Bedarf später pro Baum
-// über STAMM_FIELDS_BY_TREE überschreibbar.
-export const STAMM_FIELDS = [
+// ── Standard-Stammdatenfelder (Fallback) ───────────────────────────
+export const DEFAULT_STAMM_FIELDS = [
   { key:'name',    label:'Name',            type:'text',     required:true },
   { key:'adresse', label:'Adresse',         type:'textarea' },
   { key:'sitz',    label:'Sitz / Standort', type:'text' },
@@ -27,41 +28,60 @@ export const STAMM_FIELDS = [
   { key:'statStart', label:'Statistik ab',  type:'date',     hint:'ab wann zählt die Statistik' },
 ];
 
-// Optionale baum-spezifische Überschreibung der Stammdaten.
-// Beispiel: Fundraising braucht evtl. andere Felder. Leer = STAMM_FIELDS.
-export const STAMM_FIELDS_BY_TREE = {
-  // fundraising: [ ...eigene Felder... ],
-};
-
-export function stammFields(tree){
-  return STAMM_FIELDS_BY_TREE[tree] || STAMM_FIELDS;
-}
-
-// Funktionen, die ein Kontakt / Mitglied im Verein haben kann
-export const MEMBER_FUNCTIONS = [
+// ── Standard-Kontaktfunktionen (Fallback) ──────────────────────────
+export const DEFAULT_MEMBER_FUNCTIONS = [
   'Vorstand','1. Vorsitz','2. Vorsitz','Kassenwart','Schriftführer',
   'Trainer/in','Ansprechpartner/in','Mitglied','Sonstiges'
 ];
 
-// ── Aufgaben (ToDos) ───────────────────────────────────────────────
-// Status einer Aufgabe (Reihenfolge = Anzeige). Farbe für Badges.
+// Verfügbare Feldtypen (für den Felder-Editor in der Verwaltung)
+export const FIELD_TYPES = [
+  { key:'text',     label:'Text (einzeilig)' },
+  { key:'textarea', label:'Text (mehrzeilig)' },
+  { key:'date',     label:'Datum' },
+];
+
+// ── Live-Zugriffe (lesen crm/config, fallen auf Defaults zurück) ───
+function _cfg(){ try{ return getCrmConfig(); }catch(e){ return null; } }
+
+export function getTrees(){
+  const c=_cfg();
+  if(c && Array.isArray(c.trees) && c.trees.length) return c.trees;
+  return DEFAULT_TREES;
+}
+export function treeByKey(k){ const t=getTrees(); return t.find(x=>x.key===k) || t[0]; }
+
+// Stammdaten-Felder eines Baums: baum-spezifisch → Standard-Override → Code-Default
+export function stammFields(tree){
+  const c=_cfg();
+  const sf = c && c.stammFields;
+  if(sf && typeof sf==='object'){
+    if(Array.isArray(sf[tree]) && sf[tree].length) return sf[tree];
+    if(Array.isArray(sf.__default) && sf.__default.length) return sf.__default;
+  }
+  return DEFAULT_STAMM_FIELDS;
+}
+
+export function memberFunctions(){
+  const c=_cfg();
+  if(c && Array.isArray(c.memberFunctions) && c.memberFunctions.length) return c.memberFunctions;
+  return DEFAULT_MEMBER_FUNCTIONS;
+}
+
+// ── Aufgaben-Status (bewusst FIX – „erledigt" ist Logik-tragend) ───
 export const TASK_STATUS = [
   { key:'offen',    label:'Offen',     color:'#7f8c8d' },
   { key:'inarbeit', label:'In Arbeit', color:'#2d6099' },
   { key:'erledigt', label:'Erledigt',  color:'#48ae4d' },
 ];
+export function getTaskStatus(){ return TASK_STATUS; }
 export function taskStatusByKey(k){ return TASK_STATUS.find(s=>s.key===k) || TASK_STATUS[0]; }
 
 // Fallback-Teams, falls die Zeiterfassungs-Teams (read-only) nicht lesbar sind.
 export const FALLBACK_TEAMS = ['Akademie','Marketing & Öffentlichkeitsarbeit','Verwaltung','Vereinsentwicklung'];
 
 // ── KI-Zusammenfassung (Diktat) ────────────────────────────────────
-// Endpoint eines kleinen Proxys (z. B. Cloudflare Worker), der den Text
-// an ein LLM weitergibt. Leer = Diktat funktioniert (Text), nur die
-// automatische Zusammenfassung ist deaktiviert. Wird zur Laufzeit aus
-// localStorage gelesen, damit der Admin ihn ohne Deploy setzen kann.
 export const CRM_AI_ENDPOINT_LS = 'tps_crm_ai_endpoint';
-
 export function getAiEndpoint(){
   try{ return localStorage.getItem(CRM_AI_ENDPOINT_LS) || ''; }catch(e){ return ''; }
 }
