@@ -956,12 +956,19 @@ function crmDeleteEntity(){
 // ── Kontakte / Mitglieder ──────────────────────────────────────────
 function memberFormHtml(k){
   const opts=memberFunctions().map(f=>`<option ${k.funktion===f?'selected':''}>${esc(f)}</option>`).join('');
+  const lists=listVerteiler();
+  const myMail=String(k.email||'').toLowerCase().trim();
+  const vBlock = lists.length ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
+     <div class="vw-vpick">${lists.map(v=>{ const inIt = myMail && _normEmails(v.emails).some(e=>e.toLowerCase()===myMail);
+        return `<label><input type="checkbox" class="crm-mf-vt" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
+     <div class="small" style="color:var(--muted);margin-top:3px">Wirkt nur mit hinterlegter E-Mail.</div></div>` : '';
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
    <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
    <div class="crm-modal-field"><label>E-Mail</label><input id="crm-mf-email" value="${esc(k.email||'')}"></div>
    <div class="crm-modal-field"><label>Telefon</label><input id="crm-mf-tel" value="${esc(k.tel||'')}"></div>
-   <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>`;
+   <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>
+   ${vBlock}`;
 }
 function crmAddMember(){
   crmOpenModalShell();
@@ -980,12 +987,27 @@ function crmEditMember(mid){
 function crmSaveMember(mid){
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const rec={ name, funktion:val('crm-mf-fn'), email:val('crm-mf-email'), tel:val('crm-mf-tel'), note:val('crm-mf-note') };
+  // Verteiler-Auswahl AUS DEM DOM lesen, BEVOR das Modal geschlossen wird
+  const email=String(rec.email||'').trim();
+  const want=new Set(Array.from(document.querySelectorAll('.crm-mf-vt:checked')).map(x=>x.value));
+  const allBoxes=Array.from(document.querySelectorAll('.crm-mf-vt')).map(x=>x.value);
   mutateEntity(e=>{
     if(!Array.isArray(e.kontakte)) e.kontakte=[];
     if(mid){ const k=e.kontakte.find(x=>x.id===mid); if(k) Object.assign(k,rec); }
     else { rec.id=newId(); e.kontakte.push(rec); }
   });
+  // Verteiler-Mitgliedschaft setzen (nur mit E-Mail)
+  let added=0;
+  if(email && /@/.test(email)){
+    allBoxes.forEach(vid=>{
+      const v=getVerteiler(vid); if(!v) return;
+      const cur=_normEmails(v.emails); const has=cur.some(e=>e.toLowerCase()===email.toLowerCase());
+      if(want.has(vid) && !has){ v.emails=_normEmails([...cur, email]); saveVerteiler(v); added++; }
+      else if(!want.has(vid) && has){ v.emails=cur.filter(e=>e.toLowerCase()!==email.toLowerCase()); saveVerteiler(v); }
+    });
+  }
   crmCloseModal(); paintDetail();
+  toast(added?`Kontakt gespeichert · zu ${added} Verteiler${added===1?'':'n'} hinzugefügt ✓`:'Kontakt gespeichert ✓','ok');
 }
 function crmDeleteMember(mid){
   mutateEntity(e=>{ e.kontakte=(e.kontakte||[]).filter(x=>x.id!==mid); });
