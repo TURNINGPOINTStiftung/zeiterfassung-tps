@@ -26,9 +26,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .mb-menu-wrap{position:relative}
 .mb-menu{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:none;color:#fff;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:600;letter-spacing:.3px;padding:8px 14px;border-radius:8px;cursor:pointer;transition:background .15s}
 .mb-menu:hover{background:rgba(255,255,255,.22)}
-.mb-dropdown{position:absolute;top:calc(100% + 8px);left:0;background:#fff;border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.22);overflow:hidden;min-width:210px;z-index:200}
-.mb-dropdown button{display:block;width:100%;text-align:left;background:none;border:none;padding:12px 16px;font-size:14px;font-weight:600;color:var(--primary);cursor:pointer;border-bottom:1px solid var(--border)}
-.mb-dropdown button:last-child{border-bottom:none}
+.mb-dropdown{position:absolute;top:calc(100% + 8px);left:0;background:#fff;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,55,.25);overflow:hidden;min-width:214px;z-index:200;padding:6px;animation:modalPop .16s cubic-bezier(.2,.8,.25,1)}
+.mb-dropdown button{display:block;width:100%;text-align:left;background:none;border:none;padding:11px 14px;border-radius:8px;font-size:14px;font-weight:600;color:var(--primary);cursor:pointer;transition:background .12s,color .12s}
 .mb-dropdown button:hover{background:#eef2fa}
 .mb-dropdown button.active{background:var(--primary);color:#fff}
 .module-bar.nonze .ze-only{display:none!important}
@@ -269,11 +268,13 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .sig-line .loc{position:absolute;bottom:-18px;font-size:10px;color:var(--muted)}
 
 /* ── Modal ── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
-.modal-bg.show{display:flex}
-.modal{background:#fff;border-radius:10px;padding:26px;max-width:500px;width:93%;max-height:85vh;overflow-y:auto}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(20,30,55,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:200;align-items:center;justify-content:center}
+.modal-bg.show{display:flex;animation:modalFade .18s ease}
+.modal{background:#fff;border-radius:16px;padding:26px 28px;max-width:520px;width:93%;max-height:88vh;overflow-y:auto;box-shadow:0 24px 60px rgba(20,30,55,.35);animation:modalPop .2s cubic-bezier(.2,.8,.25,1)}
 .modal.modal-wide{max-width:880px}
-.modal h3{font-size:17px;font-weight:700;margin-bottom:16px;color:var(--primary)}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:18px;color:var(--primary)}
+@keyframes modalFade{from{opacity:0}to{opacity:1}}
+@keyframes modalPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 
 /* ── Toast ── */
