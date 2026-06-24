@@ -298,6 +298,11 @@ function injectStyles(){
   .crm-projhist{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
   .crm-projhist>summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
   .vt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .crm-hist-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+  .crm-hist-sum::-webkit-details-marker{display:none}
+  .crm-hist-sum::before{content:'▸';color:var(--muted);font-size:13px;transition:transform .15s}
+  details[open]>.crm-hist-sum::before{transform:rotate(90deg)}
+  .crm-hist-sum .ttl{font-size:15px;font-weight:700;color:var(--primary)}
   .vw-vpick{display:flex;flex-direction:column;gap:2px;margin-top:6px;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px}
   .vw-vpick label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}
   .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
@@ -2357,21 +2362,29 @@ function histRowsHtml(rows){
 function paintVerwHistory(){
   const host=document.getElementById('verw-history'); if(!host) return;
   const winH=window._histWinH||168;  // Stunden: 48 oder 168 (7 Tage)
-  host.innerHTML=`<div class="crm-sec">
-    <h4><span class="ttl">🕘 Änderungs-Verlauf & Wiederherstellung</span>
-      <span class="hbtns">
+  const open=!!window._histOpen;
+  host.innerHTML=`<details class="crm-sec crm-hist" ${open?'open':''} ontoggle="crmHistToggle(this)">
+    <summary class="crm-hist-sum"><span class="ttl">🕘 Änderungs-Verlauf & Wiederherstellung</span><span class="small" style="color:var(--muted);font-weight:400">(aufklappen)</span></summary>
+    <div style="margin-top:12px">
+      <div class="hbtns" style="margin-bottom:8px">
         <button class="btn-sm-crm${winH===48?' primary':''}" onclick="crmHistWindow(48)">48 Std.</button>
         <button class="btn-sm-crm${winH===168?' primary':''}" onclick="crmHistWindow(168)">7 Tage</button>
         <button class="btn-sm-crm" title="Neu laden" onclick="crmHistReload()">↻</button>
-      </span>
-    </h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">Jede inhaltliche Änderung (anlegen / ändern / löschen) der letzten ${winH===48?'48 Stunden':'7 Tage'} – mit Person und Zeit. <b>Wiederherstellen</b> spielt diesen Stand wieder ein (bei Gelöschtem wird der Eintrag neu angelegt; bei Geändertem auf diese Version zurückgesetzt). Verlauf wird nach 7 Tagen automatisch bereinigt.</div>
-    <div id="hist-list" class="small" style="color:var(--muted)">Lade …</div>
-  </div>`;
-  listHistory(winH*36e5).then(rows=>{ window._histRows=rows; const el=document.getElementById('hist-list'); if(el) el.innerHTML=histRowsHtml(rows); });
+      </div>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">Jede inhaltliche Änderung (anlegen / ändern / löschen) der letzten ${winH===48?'48 Stunden':'7 Tage'} – mit Person und Zeit. <b>Wiederherstellen</b> spielt diesen Stand wieder ein (bei Gelöschtem wird der Eintrag neu angelegt; bei Geändertem auf diese Version zurückgesetzt). Verlauf wird nach 7 Tagen automatisch bereinigt.</div>
+      <div id="hist-list" class="small" style="color:var(--muted)">${open?'Lade …':''}</div>
+    </div>
+  </details>`;
+  if(open) crmHistLoad();
 }
-function crmHistWindow(h){ window._histWinH=h; paintVerwHistory(); }
-function crmHistReload(){ paintVerwHistory(); }
+function crmHistToggle(el){ window._histOpen=!!(el&&el.open); if(window._histOpen) crmHistLoad(); }
+function crmHistLoad(){
+  const winH=window._histWinH||168;
+  const el=document.getElementById('hist-list'); if(el) el.innerHTML='Lade …';
+  listHistory(winH*36e5).then(rows=>{ window._histRows=rows; const e2=document.getElementById('hist-list'); if(e2) e2.innerHTML=histRowsHtml(rows); });
+}
+function crmHistWindow(h){ window._histWinH=h; window._histOpen=true; paintVerwHistory(); }
+function crmHistReload(){ crmHistLoad(); }
 function crmHistRestore(key){
   const r=(window._histRows||[]).find(x=>x._key===key); if(!r){ toast('Eintrag nicht gefunden.','err'); return; }
   const what=r.name||_histCollLabel(r.coll);
@@ -2588,7 +2601,7 @@ function crmCfgFuncsSave(){
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
-  crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore,
+  crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
