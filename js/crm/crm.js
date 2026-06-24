@@ -183,7 +183,19 @@ function crmSetupModuleBar(){
 function injectStyles(){
   if(document.getElementById('crm-styles')) return;
   const css = `
-  #crm-root{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+  #crm-root{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--bg);position:relative}
+  .crm-search-panel{position:absolute;left:0;right:0;bottom:0;background:var(--bg);overflow-y:auto;z-index:25;padding:14px 22px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  .crm-sr-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px}
+  .crm-sr-grp{margin-bottom:16px}
+  .crm-sr-h{font-size:13px;font-weight:700;color:var(--primary);margin:0 0 6px}
+  .crm-sr{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;margin-bottom:6px}
+  .crm-sr:hover{border-color:var(--primary-l);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .crm-sr-i{font-size:18px;flex:none}
+  .crm-sr-t{min-width:0}
+  .crm-sr-n{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-sr-s{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-sr-more{font-size:12px;color:var(--muted);padding:4px 2px}
+  .crm-sr-empty{color:var(--muted);padding:10px 2px}
   .crm-bar{display:flex;align-items:center;gap:10px;padding:10px 22px;background:#fff;border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:20}
   .crm-trees{display:flex;gap:4px;flex-wrap:wrap}
   .crm-tree-tab{background:none;border:1.5px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s}
@@ -424,9 +436,9 @@ function barHtml(){
       tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
   }
   let right = '';
-  if(view && mode==='kontakte'){
-    right = `<input class="crm-search" type="search" placeholder="Suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearch(this.value)">
-      ${full?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
+  if(view){
+    right = `<input class="crm-search" type="search" placeholder="Im ganzen CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">
+      ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
   } else {
     right = `<span style="margin-left:auto"></span>`;
   }
@@ -798,6 +810,73 @@ function paintDetail(){
 
     ${statsSec}
   </div>`;
+}
+
+// ── Globale CRM-Suche (über ALLE Bäume/Einträge/Kontakte/Projekte/Aufgaben) ──
+// Wichtig: tippt der Nutzer, wird NUR das Ergebnis-Overlay aktualisiert – die Bar
+// (und damit das Suchfeld) wird NICHT neu gezeichnet → Cursor/Fokus bleiben erhalten.
+function crmSearchAll(q){
+  q=String(q||'').toLowerCase().trim();
+  const res={ entries:[], contacts:[], projects:[], tasks:[] };
+  if(!q) return res;
+  const hit=(...vals)=>vals.map(x=>String(x==null?'':x).toLowerCase()).join(' ').includes(q);
+  getTrees().forEach(tr=>{
+    listEntities(tr.key).forEach(e=>{
+      const s=e.stamm||{};
+      if(hit(s.name,s.adresse,s.sitz,s.tags,s.email,s.web,s.tel))
+        res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
+      (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,k.email,k.tel))
+        res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
+      migEntityProjekte(e);
+      e.projekte.forEach(p=>{
+        if(hit(p.name)) res.projects.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:p.name||'Projekt', sub:s.name||'', closed:!!p.closed});
+        flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
+          res.tasks.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:x.text||'(Aufgabe)', sub:(s.name||'')+' · '+(p.name||'Projekt')}); });
+      });
+    });
+  });
+  listTeamProjekte().forEach(p=>{
+    const me=(window.cu&&window.cu.id)||'';
+    const sub=p.owner?(p.owner===me?'Mein Projekt':'Eigenes Projekt'):(p.team||'Team-Projekt');
+    if(hit(p.name,p.beschreibung)) res.projects.push({kind:'teamprojekt', id:p.id, name:p.name||'Projekt', sub, closed:!!p.closed});
+    flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
+      res.tasks.push({kind:'teamprojekt', id:p.id, name:x.text||'(Aufgabe)', sub:p.name||'Projekt'}); });
+  });
+  return res;
+}
+function crmSearchPanelHtml(q){
+  const r=crmSearchAll(q);
+  const total=r.entries.length+r.contacts.length+r.projects.length+r.tasks.length;
+  if(!total) return `<div class="crm-sr-empty">Keine Treffer für „${esc(q)}".</div>`;
+  const row=(onclick,icon,name,sub,closed)=>`<div class="crm-sr" onclick="${onclick}"><span class="crm-sr-i">${icon}</span><div class="crm-sr-t"><div class="crm-sr-n">${esc(name)}${closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</div>${sub?`<div class="crm-sr-s">${esc(sub)}</div>`:''}</div></div>`;
+  const grp=(title,arr,fn)=> arr.length?`<div class="crm-sr-grp"><div class="crm-sr-h">${title} (${arr.length})</div>${arr.slice(0,20).map(fn).join('')}${arr.length>20?`<div class="crm-sr-more">… ${arr.length-20} weitere – Suche verfeinern</div>`:''}</div>`:'';
+  return `<div class="crm-sr-head">${total} Treffer für „${esc(q)}"</div>`
+    + grp('📇 Einträge', r.entries, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'📇',x.name,x.sub))
+    + grp('👤 Kontakte', r.contacts, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'👤',x.name,x.sub))
+    + grp('📂 Projekte', r.projects, x=> x.kind==='entity'
+        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
+        : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
+    + grp('✅ Aufgaben', r.tasks, x=> x.kind==='entity'
+        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
+        : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub));
+}
+function crmSearchInput(v){
+  window._crmSearch=v;
+  const root=document.getElementById('crm-root'); if(!root) return;
+  let panel=document.getElementById('crm-search-panel');
+  if(!String(v||'').trim()){ if(panel) panel.remove(); return; }
+  if(!panel){ panel=document.createElement('div'); panel.id='crm-search-panel'; panel.className='crm-search-panel'; root.appendChild(panel); }
+  const bar=root.querySelector('.crm-bar'); panel.style.top=(bar?bar.offsetHeight:56)+'px';
+  panel.innerHTML=crmSearchPanelHtml(v);
+}
+function crmGoEntry(tree,eid){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel=''; paintDetail(); }
+function crmGoEntityProj(tree,eid,pid){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel=pid; paintDetail(); }
+function crmGoTeamProj(id){
+  window._crmSearch=''; const p=getTeamProjekt(id); if(!p) return;
+  window._crmTeamProjSel=id;
+  if(p.owner && p.owner===(window.cu&&window.cu.id)){ window._crmMode='meine'; window._crmProjReturn='meine'; }
+  else { window._crmMode='teams'; window._crmTeamSel=p.team||null; window._crmProjReturn='team'; }
+  paintTeamProjektDetail();
 }
 
 // ── Navigation ─────────────────────────────────────────────────────
@@ -2517,6 +2596,7 @@ Object.assign(window, {
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal,
+  crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
