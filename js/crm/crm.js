@@ -14,6 +14,7 @@ import {
   saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
   saveAccess, getAccess, getCrmConfig, saveCrmConfig,
   saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
+  saveVeranstaltung, deleteVeranstaltung, getVeranstaltung, listVeranstaltungen,
   listHistory, restoreHistory
 } from './crm-data.js';
 import {
@@ -78,9 +79,11 @@ function mutateEntity(fn){
 // ctx = { kind:'entity', tree, eid }  ODER  { kind:'teamprojekt', id }
 // _crmAfterTask steuert, welche Ansicht nach einer Aufgaben-Aktion neu rendert.
 function isTPCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='teamprojekt'); }
+function isEntityCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='entity'); }
 function curContainer(){
   const ctx=window._crmTaskCtx; if(!ctx) return null;
   if(ctx.kind==='teamprojekt'){ const c=getTeamProjekt(ctx.id); if(c) normTasks(c); return c; }
+  if(ctx.kind==='veranstaltung'){ const c=getVeranstaltung(ctx.id); if(c) normTasks(c); return c; }
   // Eintrag: der Container ist das AUSGEWÄHLTE Projekt (ctx.pid)
   const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return null; migEntityProjekte(ent);
   const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return null;
@@ -93,6 +96,11 @@ function mutateContainer(fn){
     try{ fn(p); }catch(e){ console.error('CRM mutateContainer:',e); return; }
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
+  } else if(ctx.kind==='veranstaltung'){
+    const v=getVeranstaltung(ctx.id); if(!v) return; normTasks(v);
+    try{ fn(v); }catch(e){ console.error('CRM mutateContainer:',e); return; }
+    v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
+    saveVeranstaltung(v);
   } else {
     const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return; migEntityProjekte(ent);
     const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return; normTasks(p);
@@ -106,6 +114,7 @@ function repaintContainer(){
     case 'projektdetail': paintTeamProjektDetail(); break;
     case 'teamdetail':    paintTeamDetail(); break;
     case 'meine':         paintMeine(); break;
+    case 'veranstaltung': paintVeranstaltungDetail(); break;
     default:              paintDetail();
   }
 }
@@ -415,6 +424,10 @@ function paint(){
   window._crmModalOpen = false;
   const mode = window._crmMode || 'kontakte';
   if(mode==='verteiler' && crmCanView()){ paintVerteiler(); return; }
+  if(mode==='veranstaltungen' && crmCanView()){
+    if(window._crmVaSel && getVeranstaltung(window._crmVaSel)) paintVeranstaltungDetail(); else paintVeranstaltungen();
+    return;
+  }
   if(mode==='meine'){
     if(window._crmTeamProjSel && getTeamProjekt(window._crmTeamProjSel)) paintTeamProjektDetail();
     else paintMeine();
@@ -446,6 +459,7 @@ function barHtml(){
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(view){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
+    tabs.push(`<button class="crm-tree-tab${mode==='veranstaltungen'?' active':''}" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
   } else if(lvl==='verein'){
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
@@ -765,6 +779,20 @@ function paintDetail(){
   const termine = (upcoming.map(terminRow).join('') || `<div class="small" style="color:var(--muted)">Keine anstehenden Termine.</div>`)
     + (past.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene Termine (${past.length})</summary><div style="margin-top:6px">${past.map(terminRow).join('')}</div></details>`:'');
 
+  // Übergreifende Veranstaltungen, an denen dieser Eintrag beteiligt ist
+  const vaList=veranstaltungenForEntity(window._crmTree, e.id);
+  const vaRow=v=>`<div class="crm-row" style="cursor:pointer" onclick="crmOpenVeranstaltung('${v.id}')">
+      <div class="grow"><span class="name">${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</span>
+        <div class="small">${vaDateLabel(v)||'—'}${(v.teilnehmer||[]).length>1?` · mit ${(v.teilnehmer||[]).length-1} weiteren`:''}</div></div>
+      <span class="btn-sm-crm">öffnen ↗</span>
+    </div>`;
+  const vaUpc=vaList.filter(v=>!vaIsPast(v)&&!v.closed), vaPast=vaList.filter(v=>vaIsPast(v)||v.closed);
+  const vaSection = !crmCanView() ? '' : `<div class="crm-sec">
+    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm" onclick="crmNewVeranstaltungFor()">＋ Veranstaltung</button>`:''}</h4>
+    ${vaUpc.length?vaUpc.map(vaRow).join(''):`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen mit diesem Eintrag.</div>`}
+    ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div style="margin-top:6px">${vaPast.map(vaRow).join('')}</div></details>`:''}
+  </div>`;
+
   const angebote=(e.angebote||[]).map(a=>`
     <div class="crm-row">
       <div class="grow"><span class="name">${esc(a.titel)}</span>${a.note?`<div class="small">${linkify(a.note)}</div>`:''}</div>
@@ -806,6 +834,8 @@ function paintDetail(){
       ${termine}
     </div>
 
+    ${vaSection}
+
     <div class="crm-sec">
       <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
       ${angebote}
@@ -833,7 +863,7 @@ function paintDetail(){
 // (und damit das Suchfeld) wird NICHT neu gezeichnet → Cursor/Fokus bleiben erhalten.
 function crmSearchAll(q){
   q=String(q||'').toLowerCase().trim();
-  const res={ entries:[], contacts:[], projects:[], tasks:[] };
+  const res={ entries:[], contacts:[], projects:[], tasks:[], events:[] };
   if(!q) return res;
   const hit=(...vals)=>vals.map(x=>String(x==null?'':x).toLowerCase()).join(' ').includes(q);
   getTrees().forEach(tr=>{
@@ -858,11 +888,16 @@ function crmSearchAll(q){
     flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
       res.tasks.push({kind:'teamprojekt', id:p.id, name:x.text||'(Aufgabe)', sub:p.name||'Projekt'}); });
   });
+  listVeranstaltungen().forEach(v=>{
+    if(hit(v.titel,v.beschreibung,v.ortOderLink)) res.events.push({id:v.id, name:v.titel||'(Veranstaltung)', sub:vaDateLabel(v)||'Veranstaltung'});
+    flatNodes(v.todos).forEach(x=>{ if(hit(x.text,x.note))
+      res.tasks.push({kind:'veranstaltung', id:v.id, name:x.text||'(Aufgabe)', sub:v.titel||'Veranstaltung'}); });
+  });
   return res;
 }
 function crmSearchPanelHtml(q){
   const r=crmSearchAll(q);
-  const total=r.entries.length+r.contacts.length+r.projects.length+r.tasks.length;
+  const total=r.entries.length+r.contacts.length+r.projects.length+r.tasks.length+r.events.length;
   if(!total) return `<div class="crm-sr-empty">Keine Treffer für „${esc(q)}".</div>`;
   const row=(onclick,icon,name,sub,closed)=>`<div class="crm-sr" onclick="${onclick}"><span class="crm-sr-i">${icon}</span><div class="crm-sr-t"><div class="crm-sr-n">${esc(name)}${closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</div>${sub?`<div class="crm-sr-s">${esc(sub)}</div>`:''}</div></div>`;
   const grp=(title,arr,fn)=> arr.length?`<div class="crm-sr-grp"><div class="crm-sr-h">${title} (${arr.length})</div>${arr.slice(0,20).map(fn).join('')}${arr.length>20?`<div class="crm-sr-more">… ${arr.length-20} weitere – Suche verfeinern</div>`:''}</div>`:'';
@@ -872,9 +907,12 @@ function crmSearchPanelHtml(q){
     + grp('📂 Projekte', r.projects, x=> x.kind==='entity'
         ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
         : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
+    + grp('📅 Veranstaltungen', r.events, x=>row(`crmOpenVeranstaltung('${esc(x.id)}')`,'📅',x.name,x.sub))
     + grp('✅ Aufgaben', r.tasks, x=> x.kind==='entity'
         ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
-        : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub));
+        : (x.kind==='veranstaltung'
+            ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
+            : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub)));
 }
 function crmSearchInput(v){
   window._crmSearch=v;
@@ -1334,7 +1372,7 @@ function enforceBlock(e, deps, status){
 // isTop=true → Team-Feld (außer im Team-Projekt). Sonst Team geerbt.
 function nodeModal(o){
   const e=curContainer(); if(!e) return;
-  const n=o.node||{}; const tp=isTPCtx();
+  const n=o.node||{}; const tp=!isEntityCtx();
   crmOpenModalShell();
   const statusOpts=getTaskStatus().map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
   let teamRow;
@@ -1375,7 +1413,7 @@ function crmAddChild(parentId){
   const e=curContainer(); if(!e) return;
   const f=findNode(e, parentId); if(!f) return;
   nodeModal({ titel:'＋ Unterpunkt zu „'+(f.node.text||'')+'"', node:{}, isTop:false,
-    inheritTeam:isTPCtx()?(e.team?[e.team]:[]):effectiveTeams(e, parentId),
+    inheritTeam:isEntityCtx()?effectiveTeams(e, parentId):(e.team?[e.team]:[]),
     saveOnclick:`crmSaveChild('${parentId}')` });
 }
 function crmTaskTeamChange(){
@@ -1389,7 +1427,7 @@ function _readNodeForm(e, isTop){
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
-  if(isTop && !isTPCtx()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe
+  if(isTop && isEntityCtx()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe
   return rec;
 }
 function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
@@ -1399,7 +1437,7 @@ function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
   mutateContainer(en=>{
     if(!Array.isArray(en.todos)) en.todos=[];
     if(tid){ const f=findNode(en, tid); if(f){ Object.assign(f.node, rec); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
-    else { en.todos.push({ id:newId(), children:[], teams: isTPCtx()?[]:(rec.teams||[]), ...rec }); }
+    else { en.todos.push({ id:newId(), children:[], teams: isEntityCtx()?(rec.teams||[]):[], ...rec }); }
   });
   crmCloseModal(); repaintContainer();
 }
@@ -1462,7 +1500,7 @@ function _applyVorlageCore(id){
     const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
-    if(depth===0) node.teams = isTPCtx()?[]:(n.team?[n.team]:[]);
+    if(depth===0) node.teams = isEntityCtx()?(n.team?[n.team]:[]):[];
     return node;
   };
   const mains=(v.items||[]).map(n=>build(n,0));
@@ -1840,6 +1878,163 @@ function crmSaveMeinProjekt(){
   saveTeamProjekt(p);
   window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id;
   crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VERANSTALTUNGEN  (übergreifend; referenzieren 0..n Einträge)
+// ══════════════════════════════════════════════════════════════════
+function _vaTodayISO(){ return new Date().toISOString().slice(0,10); }
+function vaIsPast(v){ const end=v.ende||v.start||''; return end && end < _vaTodayISO(); }
+function vaDateLabel(v){
+  const s=v.start?fmtDate(Date.parse(v.start)):'';
+  const e=(v.ende&&v.ende!==v.start)?(' – '+fmtDate(Date.parse(v.ende))):'';
+  return (s+e)+(v.uhrzeit?(' · '+esc(v.uhrzeit)):'');
+}
+function vaEntityName(t){ const e=getEntity(t.tree,t.eid); return e?((e.stamm&&e.stamm.name)||'(ohne Name)'):'(gelöscht)'; }
+function vaTeilnChip(t,i,removable){
+  const tr=getTrees().find(x=>x.key===t.tree);
+  return `<span class="crm-chip" style="font-size:12px">${esc((tr&&tr.icon)||'')} ${esc(vaEntityName(t))}${removable?` <span style="cursor:pointer;color:#c0392b;font-weight:700" onclick="crmVaRemoveTeiln(${i})">✕</span>`:''}</span>`;
+}
+function crmShowVeranstaltungen(){ window._crmMode='veranstaltungen'; window._crmVaSel=null; window._crmSearch=''; paint(); }
+function paintVeranstaltungen(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  window._crmTaskCtx=null;
+  const all=listVeranstaltungen();
+  const card=v=>{ const op=flatNodes(v.todos).filter(t=>t.status!=='erledigt').length;
+    return `<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
+      <h3>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
+      <div class="sub">${vaDateLabel(v)||'—'}${v.online?' · Online':(v.ortOderLink?' · '+esc(v.ortOderLink):'')}</div>
+      <div class="meta">${(v.teilnehmer||[]).length?`<span class="crm-chip">👥 ${(v.teilnehmer||[]).length} beteiligt</span>`:`<span class="crm-chip">übergeordnet</span>`}${op?`<span class="crm-chip warn">${op} offen</span>`:''}</div>
+    </div>`; };
+  const upcoming=all.filter(v=>!vaIsPast(v)&&!v.closed);
+  const past=all.filter(v=>vaIsPast(v)||v.closed);
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    <div class="crm-sec">
+      <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltung()">＋ Veranstaltung</button>`:''}</h4>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">Übergreifende Termine & Online-Treffen – mit beliebig vielen beteiligten Einträgen (Vereine, Sozialakteure …) oder ganz ohne (übergeordnet).</div>
+      ${upcoming.length?`<div class="crm-list">${upcoming.map(card).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen.</div>`}
+      ${past.length?`<details style="margin-top:14px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${past.length})</summary><div class="crm-list" style="margin-top:10px">${past.map(card).join('')}</div></details>`:''}
+    </div>
+  </div>`;
+}
+function crmOpenVeranstaltung(id){ window._crmSearch=''; window._crmMode='veranstaltungen'; window._crmVaSel=id; paintVeranstaltungDetail(); }
+function paintVeranstaltungDetail(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const v=getVeranstaltung(window._crmVaSel);
+  if(!v){ window._crmVaSel=null; paintVeranstaltungen(); return; }
+  normTasks(v);
+  window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
+  const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry('${esc(t.tree)}','${esc(t.eid)}')">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
+  const ortLine = v.online
+    ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
+    : (v.ortOderLink?('📍 '+esc(v.ortOderLink)):'');
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    <div class="crm-detail-head">
+      <button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Veranstaltungen</button>
+      <h2>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
+      ${crmFull()?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
+      <button class="btn-sm-crm" onclick="crmEditVeranstaltung()">✎ Bearbeiten</button>
+      <button class="btn-sm-crm danger" onclick="crmDeleteVeranstaltungC()">Löschen</button>`:''}
+    </div>
+    <div class="crm-sec">
+      <div class="crm-fields">
+        <div class="crm-field"><label>Wann</label><div class="v">${vaDateLabel(v)||'—'}</div></div>
+        ${ortLine?`<div class="crm-field"><label>Wo</label><div class="v">${ortLine}</div></div>`:''}
+        ${v.team?`<div class="crm-field"><label>Team</label><div class="v">${esc(v.team)}</div></div>`:''}
+      </div>
+      <div style="margin-top:12px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">Beteiligte Einträge</label><div style="display:flex;gap:6px;flex-wrap:wrap">${teiln}</div></div>
+      ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
+    </div>
+    <div class="crm-sec">
+      <h4><span class="ttl">✅ Aufgaben</span>
+        <span class="hbtns">
+          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
+          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
+        </span>
+      </h4>
+      ${taskBoardHtml(v)}
+    </div>
+  </div>`;
+}
+function crmBackToVeranstaltungen(){ window._crmVaSel=null; paintVeranstaltungen(); }
+// ── Teilnehmer-Auswahl im Formular (window._vaTeiln = Arbeitskopie) ──
+function vaTeilnEditHtml(){ return (window._vaTeiln||[]).map((t,i)=>vaTeilnChip(t,i,true)).join('')||'<span class="small" style="color:var(--muted)">Keine – übergeordnete Veranstaltung.</span>'; }
+function crmVaAddTeiln(){
+  const sel=document.getElementById('crm-va-add'); const raw=sel?sel.value:''; if(sel) sel.value='';
+  if(!raw||raw.indexOf('::')<0) return;
+  const i=raw.indexOf('::'); const t={tree:raw.slice(0,i), eid:raw.slice(i+2)};
+  if(!Array.isArray(window._vaTeiln)) window._vaTeiln=[];
+  if(!window._vaTeiln.some(x=>x.tree===t.tree&&x.eid===t.eid)) window._vaTeiln.push(t);
+  const box=document.getElementById('crm-va-teiln'); if(box) box.innerHTML=vaTeilnEditHtml();
+}
+function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTeiln.splice(idx,1); const box=document.getElementById('crm-va-teiln'); if(box) box.innerHTML=vaTeilnEditHtml(); }
+function veranstaltungFormHtml(v,isNew){
+  const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${v.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Veranstaltung':'✎ Veranstaltung'}</h3>
+   <div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von *</label><input id="crm-va-start" type="date" value="${esc(v.start||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-va-ende" type="date" value="${esc(v.ende||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:120px"><label>Uhrzeit</label><input id="crm-va-uhrzeit" value="${esc(v.uhrzeit||'')}" placeholder="14:00–16:00"></div>
+   </div>
+   <div class="crm-modal-field"><label style="display:inline-flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:var(--text)"><input type="checkbox" id="crm-va-online" ${v.online?'checked':''} style="width:auto"> 💻 Online-Treffen</label></div>
+   <div class="crm-modal-field"><label>Ort / Link</label><input id="crm-va-ort" value="${esc(v.ortOderLink||'')}" placeholder="Adresse oder Meeting-Link"></div>
+   <div class="crm-modal-field"><label>Team</label><select id="crm-va-team">${teamOpts}</select></div>
+   <div class="crm-modal-field"><label>Beteiligte Einträge <span style="font-size:11px;color:var(--muted)">(beliebig viele, aus allen Bäumen)</span></label>
+     <div id="crm-va-teiln" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${vaTeilnEditHtml()}</div>
+     <select id="crm-va-add" onchange="crmVaAddTeiln()">${entityLinkOptions('')}</select>
+   </div>
+   <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
+}
+function crmNewVeranstaltung(){ window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
+function crmEditVeranstaltung(){
+  const v=getVeranstaltung(window._crmVaSel); if(!v) return;
+  window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
+  crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false));
+}
+function crmSaveVeranstaltung(isNew){
+  const titel=val('crm-va-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
+  const start=val('crm-va-start'); if(!start){ toast('Bitte ein Startdatum wählen.','err'); return; }
+  const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:val('crm-va-uhrzeit'),
+    online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
+    ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'),
+    teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
+  if(isNew){
+    const id=newId();
+    saveVeranstaltung({ id, ...rec, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
+    window._crmVaSel=id; crmCloseModal(); paintVeranstaltungDetail(); toast('Veranstaltung angelegt ✓','ok');
+  } else {
+    const v=getVeranstaltung(window._crmVaSel); if(!v) return;
+    Object.assign(v, rec); v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
+    saveVeranstaltung(v); crmCloseModal(); paintVeranstaltungDetail(); toast('Gespeichert ✓','ok');
+  }
+}
+function crmDeleteVeranstaltungC(){
+  const v=getVeranstaltung(window._crmVaSel); if(!v) return;
+  if(!window.confirm(`Veranstaltung „${v.titel||''}" wirklich löschen?`)) return;
+  deleteVeranstaltung(v.id); window._crmVaSel=null; paintVeranstaltungen(); toast('Gelöscht.','');
+}
+function crmCloseVeranstaltung(){
+  const v=getVeranstaltung(window._crmVaSel); if(!v) return;
+  v.closed=true; v.closedAt=Date.now(); v.closedByKuerzel=curKuerzel(); v.updatedByKuerzel=curKuerzel();
+  saveVeranstaltung(v); paintVeranstaltungDetail(); toast('Veranstaltung abgeschlossen ✓','ok');
+}
+function crmReopenVeranstaltung(){
+  const v=getVeranstaltung(window._crmVaSel); if(!v) return;
+  v.closed=false; v.updatedByKuerzel=curKuerzel(); saveVeranstaltung(v); paintVeranstaltungDetail(); toast('Wieder geöffnet ✓','ok');
+}
+// Veranstaltungen, an denen ein Eintrag beteiligt ist (für den Abschnitt am Eintrag)
+function veranstaltungenForEntity(tree,eid){
+  return listVeranstaltungen().filter(v=>(v.teilnehmer||[]).some(t=>t.tree===tree&&t.eid===eid));
+}
+// Neue Veranstaltung direkt vom Eintrag aus – mit diesem Eintrag als Teilnehmer
+function crmNewVeranstaltungFor(){
+  const e=curEntity(); if(!e) return;
+  window._vaTeiln=[{tree:window._crmTree, eid:e.id}];
+  crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true));
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2654,6 +2849,10 @@ Object.assign(window, {
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
   crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  // Veranstaltungen
+  crmShowVeranstaltungen, crmOpenVeranstaltung, crmBackToVeranstaltungen,
+  crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
+  crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
