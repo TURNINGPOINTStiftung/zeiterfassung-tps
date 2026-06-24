@@ -17,7 +17,7 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -77,13 +77,14 @@ export function restoreHistory(entry){
   const coll=entry.coll, data=entry.data;
   if(coll==='config')       return saveCrmConfig(data);
   if(coll==='teamprojekte') return saveTeamProjekt(data);
+  if(coll==='veranstaltungen') return saveVeranstaltung(data);
   if(coll==='vorlagen')     return saveVorlage(data);
   if(coll==='verteiler')    return saveVerteiler(data);
   return saveEntity(coll, data);  // sonst: Baum-Eintrag
 }
 
 function freshCrm(){
-  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, config:null };
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, config:null };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }
@@ -349,6 +350,47 @@ export function listVerteiler(){
   const d = getCrm();
   return Object.values(d.verteiler || {}).sort((a,b)=>
     String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'})
+  );
+}
+
+// ── Veranstaltungen (übergreifend, referenzieren 0..n Einträge) ────
+// Liegen unter crm/veranstaltungen/<id> = { id, titel, start, ende, online,
+// ortOderLink, teilnehmer:[{tree,eid}], team, beschreibung, todos:[], closed }.
+export function saveVeranstaltung(v){
+  if(!v || !v.id) return Promise.resolve();
+  v.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.veranstaltungen) d.veranstaltungen = {};
+  d.veranstaltungen[v.id] = v;
+  _cache = d;
+  _persistLocal();
+  _logHistory('veranstaltungen', v.id, 'save', v, v.titel||'');
+  try{
+    if(_ref) return _ref.child('veranstaltungen').child(v.id).set(v).catch(e=>{
+      console.warn('CRM saveVeranstaltung Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveVeranstaltung:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteVeranstaltung(id){
+  const d = getCrm();
+  const prev = d.veranstaltungen && d.veranstaltungen[id];
+  if(prev) _logHistory('veranstaltungen', id, 'delete', prev, prev.titel||'');
+  if(d.veranstaltungen) delete d.veranstaltungen[id];
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('veranstaltungen').child(id).remove().catch(e=>{
+      console.warn('CRM deleteVeranstaltung Firebase-Fehler:', e && e.message);
+    });
+  }catch(e){ console.warn('CRM deleteVeranstaltung:', e && e.message); }
+  return Promise.resolve();
+}
+export function getVeranstaltung(id){ const d=getCrm(); return (d.veranstaltungen && d.veranstaltungen[id]) || null; }
+export function listVeranstaltungen(){
+  const d = getCrm();
+  return Object.values(d.veranstaltungen || {}).sort((a,b)=>
+    String(a.start||'').localeCompare(String(b.start||''))
   );
 }
 
