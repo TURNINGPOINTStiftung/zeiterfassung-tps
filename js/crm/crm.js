@@ -2180,24 +2180,100 @@ function _histCollLabel(coll){
   try{ const t=getTrees().find(x=>x.key===coll); if(t) return t.single||t.label; }catch(e){}
   return coll;
 }
+function _statusLabel(k){ try{ const s=getTaskStatus().find(x=>x.key===k); return s?s.label:k; }catch(e){ return k; } }
+function _flatTaskMap(todos){ const m={}; try{ flatNodes(todos||[]).forEach(x=>{ m[x.id]={text:x.text,status:x.status}; }); }catch(e){} return m; }
+function _diffTasks(prevTodos, curTodos, parts){
+  const pm=_flatTaskMap(prevTodos), cm=_flatTaskMap(curTodos);
+  Object.keys(cm).forEach(id=>{ const c=cm[id], p=pm[id];
+    if(!p) parts.push(`Aufgabe „${c.text||''}" hinzugefügt`);
+    else if(p.status!==c.status) parts.push(`Aufgabe „${c.text||''}" → ${_statusLabel(c.status)}`);
+    else if(p.text!==c.text) parts.push(`Aufgabe umbenannt → „${c.text||''}"`);
+  });
+  Object.keys(pm).forEach(id=>{ if(!cm[id]) parts.push(`Aufgabe „${pm[id].text||''}" entfernt`); });
+}
+function _diffById(prevArr, curArr, label, nameFn, parts){
+  const p=Array.isArray(prevArr)?prevArr:[], c=Array.isArray(curArr)?curArr:[];
+  const pm={}, cm={}; p.forEach(x=>{ if(x&&x.id) pm[x.id]=x; }); c.forEach(x=>{ if(x&&x.id) cm[x.id]=x; });
+  c.forEach(x=>{ if(!pm[x.id]) parts.push(`${label} „${nameFn(x)||''}" hinzugefügt`);
+    else if(JSON.stringify(pm[x.id])!==JSON.stringify(x)) parts.push(`${label} „${nameFn(x)||''}" geändert`); });
+  p.forEach(x=>{ if(!cm[x.id]) parts.push(`${label} „${nameFn(x)||''}" entfernt`); });
+}
+function _diffProjekte(prevP, curP, parts){
+  const p=Array.isArray(prevP)?prevP:[], c=Array.isArray(curP)?curP:[];
+  const pm={}, cm={}; p.forEach(x=>pm[x.id]=x); c.forEach(x=>cm[x.id]=x);
+  c.forEach(x=>{ const o=pm[x.id];
+    if(!o){ parts.push(`Projekt „${x.name||''}" angelegt`); return; }
+    if((o.name||'')!==(x.name||'')) parts.push(`Projekt umbenannt → „${x.name||''}"`);
+    if(!!o.closed!==!!x.closed) parts.push(`Projekt „${x.name||''}" ${x.closed?'abgeschlossen':'wieder geöffnet'}`);
+    _diffTasks(o.todos, x.todos, parts);
+  });
+  p.forEach(x=>{ if(!cm[x.id]) parts.push(`Projekt „${x.name||''}" gelöscht`); });
+}
+// Kurze Beschreibung WAS sich geändert hat (cur ggü. prev). '' = nichts Inhaltliches.
+function _histDescribe(prev, cur, coll){
+  if(!cur) return '';
+  const parts=[];
+  if(coll==='config') return 'Konfiguration angepasst';
+  if(coll==='verteiler'){
+    if(!prev) return 'angelegt';
+    if((prev.name||'')!==(cur.name||'')) parts.push(`umbenannt → „${cur.name||''}"`);
+    const pe=(prev.emails||[]).length, ce=(cur.emails||[]).length;
+    if(pe!==ce) parts.push(`Adressen ${ce>pe?'+':'−'}${Math.abs(ce-pe)} (jetzt ${ce})`);
+    return parts.join('; ');
+  }
+  if(coll==='vorlagen'){
+    if(!prev) return 'angelegt';
+    if((prev.name||'')!==(cur.name||'')) parts.push(`umbenannt → „${cur.name||''}"`);
+    _diffTasks((prev.items||[]),(cur.items||[]),parts);
+    return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4})`:'');
+  }
+  if(coll==='teamprojekte'){
+    if(!prev) return 'Projekt angelegt';
+    if((prev.name||'')!==(cur.name||'')) parts.push(`umbenannt → „${cur.name||''}"`);
+    if(!!prev.closed!==!!cur.closed) parts.push(cur.closed?'abgeschlossen':'wieder geöffnet');
+    _diffTasks(prev.todos, cur.todos, parts);
+    return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4})`:'');
+  }
+  // Baum-Eintrag (Verein etc.)
+  if(!prev) return 'angelegt';
+  const ps=prev.stamm||{}, cs=cur.stamm||{};
+  const stCh=Object.keys(Object.assign({},ps,cs)).filter(k=>String(ps[k]==null?'':ps[k])!==String(cs[k]==null?'':cs[k]));
+  if(stCh.length) parts.push('Stammdaten geändert');
+  _diffById(prev.kontakte, cur.kontakte, 'Kontakt', k=>k.name, parts);
+  _diffById(prev.termine, cur.termine, 'Termin', t=>t.titel, parts);
+  _diffById(prev.angebote, cur.angebote, 'Angebot', a=>a.titel, parts);
+  _diffById(prev.stats, cur.stats, 'Statistik', s=>{ try{return fmtDate(Date.parse(s.date));}catch(e){return '';} }, parts);
+  if((prev.statusQuo||'')!==(cur.statusQuo||'')) parts.push('Status quo geändert');
+  _diffProjekte(prev.projekte, cur.projekte, parts);
+  return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4} weitere)`:'');
+}
 function histRowsHtml(rows){
-  if(!rows || !rows.length) return `<div class="small" style="color:var(--muted)">Keine Änderungen im gewählten Zeitraum.${' '}<br>Falls hier nie etwas erscheint, fehlt evtl. die Firebase-Regel für <code>crm_history</code> (siehe Hinweis vom Entwickler).</div>`;
-  const r=rows.map(h=>{
+  if(!rows || !rows.length) return `<div class="small" style="color:var(--muted)">Keine Änderungen im gewählten Zeitraum.<br>Falls hier nie etwas erscheint, fehlt evtl. die Firebase-Regel für <code>crm_history</code>.</div>`;
+  // Vorgänger-Schnappschuss je Datensatz (rows neueste-zuerst → nächster älterer mit gleicher coll+recId)
+  const out=[];
+  rows.forEach((h,i)=>{
     const del=h.action==='delete';
+    let desc='', prev=null;
+    if(del){ desc='komplett gelöscht'; }
+    else {
+      for(let j=i+1;j<rows.length;j++){ if(rows[j].coll===h.coll && rows[j].recId===h.recId){ prev=rows[j]; break; } }
+      desc=_histDescribe(prev?prev.data:null, h.data, h.coll);
+      if(!desc && prev) return;            // reiner Speicher ohne Inhalt → ausblenden
+      if(!desc) desc='(Stand erfasst)';
+    }
     const icon=del?'🗑':'✎';
-    const who=esc(h.byName||h.byKuerzel||'?');
-    const when=esc(fmtDateTime(h.ts));
-    return `<tr>
-      <td style="white-space:nowrap">${when}</td>
-      <td>${who}</td>
+    out.push(`<tr>
+      <td style="white-space:nowrap">${esc(fmtDateTime(h.ts))}</td>
+      <td>${esc(h.byName||h.byKuerzel||'?')}</td>
       <td><span class="vw-team" style="${del?'background:#fde8e8;color:#9b2c2c':''}">${icon} ${del?'gelöscht':'geändert'}</span></td>
-      <td>${esc(_histCollLabel(h.coll))}: <b>${esc(h.name||h.recId||'')}</b></td>
+      <td><b>${esc(_histCollLabel(h.coll))}: ${esc(h.name||h.recId||'')}</b><div class="small" style="color:var(--muted)">${esc(desc)}</div></td>
       <td style="text-align:right"><button class="btn-sm-crm${del?' primary':''}" onclick="crmHistRestore('${h._key}')">↩ Wiederherstellen</button></td>
-    </tr>`;
-  }).join('');
+    </tr>`);
+  });
+  if(!out.length) return `<div class="small" style="color:var(--muted)">Keine inhaltlichen Änderungen im gewählten Zeitraum (nur automatische Speicherungen).</div>`;
   return `<div style="overflow-x:auto"><table class="vw-table">
-    <thead><tr><th>Wann</th><th>Wer</th><th>Aktion</th><th>Betrifft</th><th></th></tr></thead>
-    <tbody>${r}</tbody></table></div>`;
+    <thead><tr><th>Wann</th><th>Wer</th><th>Aktion</th><th>Was</th><th></th></tr></thead>
+    <tbody>${out.join('')}</tbody></table></div>`;
 }
 function paintVerwHistory(){
   const host=document.getElementById('verw-history'); if(!host) return;
