@@ -799,8 +799,6 @@ function paintDetail(){
       <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
 
-  const projekteHtml = entityProjekteSectionHtml(e);
-
   const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
     <div class="crm-logitem">
       <div class="lh"><span>${esc(l.autor||'')}${l.kuerzel?` <strong>[${esc(l.kuerzel)}]</strong>`:''}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmDeleteNote('${l.id}')">✕</button></span></div>
@@ -840,8 +838,6 @@ function paintDetail(){
       <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
       ${angebote}
     </div>
-
-    ${projekteHtml}
 
     <div class="crm-sec">
       <h4><span class="ttl">🧭 Status quo</span></h4>
@@ -1534,13 +1530,14 @@ function teamMainTasks(team){
   });
   return out;
 }
-// Zählung (alle Ebenen) für die Team-Kacheln
+// Veranstaltungen eines Teams (Ohne Team = ohne team-Zuordnung / übergeordnet)
+function teamVeranstaltungen(team){
+  return listVeranstaltungen().filter(v=> team==='Ohne Team' ? !v.team : (v.team===team));
+}
+// Zählung für die Team-Kacheln: Veranstaltungen (gesamt / anstehend)
 function teamCounts(team){
-  let total=0, open=0;
-  teamMainTasks(team).forEach(x=>{
-    flatTasks({ todos:[x.main] }).forEach(t=>{ total++; if(t.status!=='erledigt') open++; });
-  });
-  return { total, open };
+  const vs=teamVeranstaltungen(team);
+  return { total:vs.length, open:vs.filter(v=>!v.closed && !vaIsPast(v)).length };
 }
 // Beliebigen Knoten (jede Ebene) in einem Eintrag ändern – sucht über alle Projekte
 function updateAnyTask(tree, eid, id, fn){
@@ -1565,7 +1562,7 @@ function crmBackToTeamProjekte(){
 function teamCardHtml(tm, total, open){
   return `<div class="crm-card" onclick="crmOpenTeam('${encodeURIComponent(tm)}')">
     <h3>👥 ${esc(tm)}</h3>
-    <div class="meta"><span class="crm-chip">${total} Aufgabe${total===1?'':'n'}</span>${open?`<span class="crm-chip warn">${open} offen</span>`:''}</div>
+    <div class="meta"><span class="crm-chip">${total} Veranstaltung${total===1?'':'en'}</span>${open?`<span class="crm-chip warn">${open} anstehend</span>`:''}</div>
   </div>`;
 }
 function paintTeamsList(){
@@ -1583,7 +1580,7 @@ function paintTeamsList(){
     teamsBlock = `<div class="crm-sec">
       <h4><span class="ttl">👥 Teams</span></h4>
       <div class="crm-list">${cards.join('')}</div>
-      <div class="small" style="color:var(--muted);margin-top:10px">Aufgaben werden an den Einträgen angelegt und hier nach Team gesammelt.</div>
+      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte.</div>
     </div>`;
   }
   root.innerHTML = barHtml() + `<div class="crm-body">${meine}${teamsBlock}</div>`;
@@ -1591,58 +1588,21 @@ function paintTeamsList(){
 function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const team=window._crmTeamSel;
-  const rel=teamMainTasks(team);
-  const groups=[];
-  rel.forEach(x=>{
-    let g=groups.find(y=>y.tree===x.tree && y.eid===x.eid);
-    if(!g){ g={tree:x.tree, eid:x.eid, ename:x.ename, mains:[]}; groups.push(g); }
-    g.mains.push(x.main);
-  });
-  // Team-Aufgaben als Board: Spalte = Eintrag, Karte = team-zugeordnete Hauptaufgabe
-  const teamKbCard=(g,n)=>{
-    const st=taskStatusByKey(n.status);
-    const kids=n.children||[];
-    const done=kids.filter(k=>k.status==='erledigt').length;
-    const cdone=n.status==='erledigt';
-    const visKids=_hideDone()?kids.filter(k=>k.status!=='erledigt'):kids;
-    const checklist=visKids.map(k=>{
-      const kd=k.status==='erledigt';
-      return `<div class="kb-check${kd?' done':''}" onclick="event.stopPropagation()">
-        <input type="checkbox" ${kd?'checked':''} onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${k.id}')">
-        <span class="kb-check-tx" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${k.id}')">${esc(k.text)}</span>
-        ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
-      </div>`;
-    }).join('');
-    return `<div class="kb-card${cdone?' done':''}">
-      <div class="kb-card-top">
-        <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmTeamToggleDone('${g.tree}','${g.eid}','${n.id}')">
-        <span class="kb-card-title" onclick="crmTeamEditNode('${g.tree}','${g.eid}','${n.id}')">${esc(n.text)}</span>
-      </div>
-      ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
-      ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
-        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-        ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
-        ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
-        ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
-      </div>`:''}
-      ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-      ${attachChips(n)}
-      <div class="kb-cardbtns">
-        <button class="kb-additem" onclick="event.stopPropagation();crmTeamAddChild('${g.tree}','${g.eid}','${n.id}')">＋ Schritt</button>
-        <button class="kb-additem" onclick="event.stopPropagation();crmTeamAtt('${g.tree}','${g.eid}','${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
-      </div>
+  window._crmTaskCtx=null;
+  // Veranstaltungen des Teams
+  const vs=teamVeranstaltungen(team);
+  const vaCard=v=>`<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
+      <h3>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
+      <div class="sub">${vaDateLabel(v)||'—'}${v.online?' · Online':''}</div>
+      <div class="meta">${(v.teilnehmer||[]).length?`<span class="crm-chip">👥 ${(v.teilnehmer||[]).length} beteiligt</span>`:`<span class="crm-chip">übergeordnet</span>`}</div>
     </div>`;
-  };
-  const blocks=`<div class="kb-board">${groups.map(g=>{
-    const tr=treeByKey(g.tree);
-    const mains=_hideDone()?g.mains.filter(m=>m.status!=='erledigt'):g.mains;
-    const cards=mains.map(m=>teamKbCard(g,m)).join('');
-    return `<div class="kb-col">
-      <div class="kb-col-head"><span class="kb-col-title" onclick="crmOpenEntryFromTeam('${g.tree}','${g.eid}')">${tr.icon} ${esc(g.ename)}</span></div>
-      <div class="kb-cards">${cards}</div>
-    </div>`;
-  }).join('')}</div>`;
-  // Eigenständige Team-Projekte (persönliche ausschließen), offen + abgeschlossen getrennt
+  const vaUpc=vs.filter(v=>!vaIsPast(v)&&!v.closed), vaPast=vs.filter(v=>vaIsPast(v)||v.closed);
+  const vaSec=`<div class="crm-sec">
+    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam('${esc(team)}')">＋ Veranstaltung</button>`:''}</h4>
+    ${vaUpc.length?`<div class="crm-list">${vaUpc.map(vaCard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen für dieses Team.</div>`}
+    ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div class="crm-list" style="margin-top:8px">${vaPast.map(vaCard).join('')}</div></details>`:''}
+  </div>`;
+  // Eigenständige Team-Projekte (persönliche ausschließen)
   const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
   const projCardHtml=p=>{ const all=flatTasks(p); const openN=all.filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenTeamProjekt('${p.id}')">
@@ -1660,13 +1620,14 @@ function paintTeamDetail(){
       <button class="btn-sm-crm" onclick="crmBackToTeams()">← Teams</button>
       <h2>👥 ${esc(team)}</h2>
     </div>
+    ${vaSec}
     ${projektSec}
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0 10px">
-      <span style="font-size:13px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px">📋 Aufgaben aus Einträgen</span>
-      <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
-    </div>
-    ${ rel.length ? blocks : `<div class="small" style="color:var(--muted)">Diesem Team sind noch keine Aufgaben aus Einträgen zugeordnet.</div>` }
   </div>`;
+}
+// Neue Veranstaltung direkt aus einer Team-Ansicht (Team vorbelegt)
+function crmNewVeranstaltungForTeam(team){
+  window._vaTeiln=[];
+  crmOpenModalShell(); openModal(veranstaltungFormHtml({ team:(team==='Ohne Team'?'':team) }, true));
 }
 function crmTeamSetStatus(tree,eid,id,value){
   const e=getEntity(tree,eid); if(!e) return; migEntityProjekte(e);
@@ -1817,15 +1778,15 @@ function crmReopenProjekt(){
 function paintMeine(){ window._crmMode='teams'; window._crmTeamSel=null; paintTeamsList(); }
 function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
-  // 1) Mir zugewiesene Aufgaben (über alle Einträge und Projekte)
+  // 1) Mir zugewiesene Aufgaben (aus Veranstaltungen und Projekten)
   const assigned=[];
-  getTrees().forEach(tr=>{ listEntities(tr.key).forEach(e=>{ migEntityProjekte(e); e.projekte.forEach(p=>{ if(p.closed) return; flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'entity',tree:tr.key,id:e.id,name:(e.stamm&&e.stamm.name)||'(ohne Name)',node:x.ref}); }); }); }); });
+  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref}); }); });
   listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';
-    const meta=[(a.kind==='teamprojekt'?'📂 ':'📇 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
-    const idArg=a.kind==='entity'?a.tree:''; const cArg=a.id;
+    const meta=[(a.kind==='veranstaltung'?'📅 ':'📂 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
+    const idArg=''; const cArg=a.id;
     return `<div class="crm-task${done?' done':''}">
       <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','${idArg}','${cArg}','${t.id}')">
       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
@@ -1850,6 +1811,7 @@ function meineSectionsHtml(){
 }
 function _meSetCtx(kind,tree,id,tid){
   if(kind==='teamprojekt'){ window._crmTaskCtx={kind:'teamprojekt',id}; }
+  else if(kind==='veranstaltung'){ window._crmTaskCtx={kind:'veranstaltung',id}; }
   else {
     const e=getEntity(tree,id); let pid='';
     if(e){ migEntityProjekte(e); const p=_projForNode(e,tid); if(p) pid=p.id; }
@@ -2850,7 +2812,7 @@ Object.assign(window, {
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
   crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
-  crmShowVeranstaltungen, crmOpenVeranstaltung, crmBackToVeranstaltungen,
+  crmShowVeranstaltungen, crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,

@@ -198,7 +198,17 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
     seenAt:null,
     employeeIds:empIds
   };
-  mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]=report; });
+  mutate(function(d){
+    if(!d.teamReports) d.teamReports={};
+    // Vorherige Berichte für genau dieses Team + diesen Monat entfernen → der neue
+    // überschreibt sie (keine Dubletten bei der Geschäftsführung).
+    Object.keys(d.teamReports).forEach(function(k){
+      var r=d.teamReports[k]; if(!r||r.year!==y||r.month!==m) return;
+      var single = r.teamName===teamName || (Array.isArray(r.managedTeams)&&r.managedTeams.length===1&&r.managedTeams[0]===teamName);
+      if(single) delete d.teamReports[k];
+    });
+    d.teamReports[rKey]=report;
+  });
   toast('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
   notifyGF({
     art: 'Teambericht',
