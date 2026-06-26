@@ -348,7 +348,8 @@ export async function saveVacRequest(){
   // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
   // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
   // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
-  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich'||wd<5;
+  // GF genehmigt niemandem gegenüber → eigener Urlaub läuft immer automatisch durch.
+  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich'||targetUser.role==='geschaeftsfuehrer'||wd<5;
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
   if(old){
