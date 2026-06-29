@@ -862,6 +862,8 @@ function paintDetail(){
 
     ${fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:''}
 
+    ${entityProjekteSectionHtml(e)}
+
     <div class="crm-sec">
       <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
       ${kontakte}
@@ -3222,8 +3224,11 @@ function wfApply(ent, trigger){
           if(!Array.isArray(ent.log)) ent.log=[];
           ent.log.push({ id:newId(), ts:Date.now(), autor:'Workflow: '+(w.name||''), kuerzel:'WF', text:wfFill(s.text||'', ent), summary:'' }); changed=true;
         } else if(s.kind==='aktion'){
-          if(!Array.isArray(ent.todos)) ent.todos=[];
-          ent.todos.push({ id:newId(), children:[], teams:s.team?[s.team]:[], text:wfFill(s.titel||'Aufgabe', ent), note:'(automatisch durch Workflow „'+(w.name||'')+'")', assigneeId:'', assigneeName:'', due:wfDueDate(s.dueDays), status:'offen', deps:[] }); changed=true;
+          migEntityProjekte(ent);
+          if(!ent.projekte.length) ent.projekte.push({ id:newId(), name:'Aufgaben', todos:[], closed:false, createdAt:Date.now() });
+          const proj = ent.projekte.find(p=>!p.closed) || ent.projekte[0];
+          if(!Array.isArray(proj.todos)) proj.todos=[];
+          proj.todos.push({ id:newId(), children:[], teams:s.team?[s.team]:[], text:wfFill(s.titel||'Aufgabe', ent), note:'(automatisch durch Workflow „'+(w.name||'')+'")', assigneeId:'', assigneeName:'', due:wfDueDate(s.dueDays), status:'offen', deps:[] }); changed=true;
         } else if(s.kind==='benachrichtigung' || s.kind==='pause' || s.kind==='log'){
           if(!Array.isArray(ent.log)) ent.log=[];
           const desc = s.kind==='benachrichtigung' ? ((s.kanal==='chat'?'Chat':'E-Mail')+' an '+(s.an||'')+(s.betreff?(': '+s.betreff):''))
