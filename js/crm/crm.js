@@ -15,6 +15,7 @@ import {
   saveAccess, getAccess, getCrmConfig, saveCrmConfig,
   saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
   saveVeranstaltung, deleteVeranstaltung, getVeranstaltung, listVeranstaltungen,
+  saveWorkflow, deleteWorkflow, getWorkflow, listWorkflows,
   listHistory, restoreHistory
 } from './crm-data.js';
 import {
@@ -393,6 +394,36 @@ function injectStyles(){
     .vw-table td{border:none;padding:3px 0}
     .vw-table td .crm-tsel{margin:3px 6px 3px 0}
   }
+  /* ── Workflows (Automatisierung) ── */
+  .wf-list{display:flex;flex-direction:column;gap:10px;max-width:760px}
+  .wf-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer}
+  .wf-item:hover{box-shadow:0 2px 10px rgba(0,0,0,.08)}
+  .wf-item h3{margin:0;font-size:15px}
+  .wf-item .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .wf-badge{font-size:11px;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap}
+  .wf-badge.pub{background:#e3f3e3;color:#2f7a33;border:1px solid #bfe0bf}
+  .wf-badge.draft{background:#eef2f8;color:#5a6b85;border:1px solid #dbe2ee}
+  .wf-canvas{display:flex;flex-direction:column;align-items:center;padding:6px 0 40px}
+  .wf-step{width:min(440px,94%);background:#fff;border:1px solid #e3e7ee;border-radius:10px;box-shadow:0 1px 5px rgba(0,0,0,.07);overflow:hidden}
+  .wf-step-hd{color:#fff;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
+  .wf-step-bd{padding:10px 13px}
+  .wf-step-bd .t{font-weight:600;margin-bottom:2px}
+  .wf-step-bd .d{font-size:12.5px;color:#5a6b85;white-space:pre-line}
+  .wf-step-num{background:rgba(255,255,255,.28);border-radius:5px;padding:0 6px;margin-right:7px}
+  .wf-conn{width:2px;height:22px;background:#c7cedd}
+  .wf-acts{display:flex;gap:5px}
+  .wf-acts button{background:rgba(255,255,255,.25);border:0;color:#fff;border-radius:5px;cursor:pointer;font-size:12px;line-height:1.6;padding:0 7px}
+  .wf-acts button:hover{background:rgba(255,255,255,.45)}
+  .wf-add{margin-top:8px;border:1.5px dashed #c7cedd;background:#fff;color:#2d6099;border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:600;font-size:13px}
+  .wf-add:hover{background:#f4f7fc}
+  .wf-end{margin-top:8px;background:#eef2f8;color:#5a6b85;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600}
+  .wf-ed-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .wf-name{font-size:18px;font-weight:700;border:0;border-bottom:1px solid transparent;background:transparent;padding:4px 2px;min-width:200px;flex:1;color:var(--text)}
+  .wf-name:focus{outline:none;border-bottom-color:var(--primary)}
+  .wf-kindpick{display:flex;flex-direction:column;gap:8px}
+  .wf-kindpick button{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--border);background:#fff;border-radius:9px;padding:10px 12px;cursor:pointer;font-size:14px}
+  .wf-kindpick button:hover{border-color:var(--primary);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .wf-kindpick .dot{width:12px;height:12px;border-radius:3px;flex:none}
   `;
   const st=document.createElement('style'); st.id='crm-styles'; st.textContent=css;
   document.head.appendChild(st);
@@ -428,6 +459,10 @@ function paint(){
   window._crmModalOpen = false;
   const mode = window._crmMode || 'kontakte';
   if(mode==='verteiler' && crmCanView()){ paintVerteiler(); return; }
+  if(mode==='workflows' && crmFull()){
+    if(window._wfSel && getWorkflow(window._wfSel)) paintWorkflowEditor(); else paintWorkflows();
+    return;
+  }
   if(mode==='veranstaltungen' && crmCanView()){
     if(window._crmVaSel && getVeranstaltung(window._crmVaSel)) paintVeranstaltungDetail(); else paintVeranstaltungen();
     return;
@@ -465,6 +500,7 @@ function barHtml(){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
     tabs.push(`<button class="crm-tree-tab${mode==='veranstaltungen'?' active':''}" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
+    if(full) tabs.push(`<button class="crm-tree-tab${mode==='workflows'?' active':''}" onclick="crmShowWorkflows()">⚡ Workflows</button>`);
   } else if(lvl==='verein'){
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
       tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
@@ -988,6 +1024,7 @@ function crmSaveStamm(isNew){
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
       kontakte:[], termine:[], angebote:[], statusQuo:'', todos:[], log:[] };
     saveEntity(window._crmTree, ent);
+    try{ wfApply(ent, 'entryCreated'); }catch(e){ console.warn('Workflow entryCreated:', e&&e.message); }
     window._crmSelId=id;
     crmCloseModal(); paintDetail(); toast('Angelegt ✓','ok');
   } else {
@@ -2972,6 +3009,257 @@ async function crmImportXlsx(input){
   }catch(e){ console.error('CRM-Import:',e); _ieStatus(''); toast('Import fehlgeschlagen: '+((e&&e.message)||e),'err'); }
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  Workflows – visueller Automatisierungs-Builder (im CAS-Stil)
+// ══════════════════════════════════════════════════════════════════
+//  Entwurf/Veröffentlichen + Versionierung. Ausgeführt werden derzeit
+//  veröffentlichte Workflows mit Auslöser „Eintrag angelegt": Bedingung,
+//  Aufgabe erstellen, Notiz/Log am Eintrag. Benachrichtigung/Pause/Webhook
+//  werden als Log-Eintrag protokolliert (echte Zustellung braucht Backend).
+const WF_KIND={
+  aktion:{label:'AKTION', color:'#e8833a'},
+  bedingung:{label:'STEUERUNG', color:'#2d6099'},
+  pause:{label:'PAUSE', color:'#e3b53b'},
+  benachrichtigung:{label:'BENACHRICHTIGUNG', color:'#2d6099'},
+  log:{label:'LOG', color:'#7f8c8d'}
+};
+const WF_TRIGGERS=[['entryCreated','Eintrag angelegt'],['entryUpdated','Eintrag geändert'],['manual','Manuell / Testlauf'],['webhook','Webhook (extern)']];
+const WF_OPS=[['enthaelt','enthält'],['gleich','ist gleich'],['nichtleer','ist ausgefüllt'],['leer','ist leer']];
+function wfTriggerLabel(t){ const x=WF_TRIGGERS.find(z=>z[0]===t); return x?x[1]:t; }
+function wfOpLabel(o){ const x=WF_OPS.find(z=>z[0]===o); return x?x[1]:o; }
+function wfFieldOptions(tree, sel){
+  const fs=[{key:'name',label:'Name'}].concat(stammFields(tree||'vereine').filter(f=>f.key!=='name'));
+  return fs.map(f=>`<option value="${esc(f.key)}" ${sel===f.key?'selected':''}>${esc(f.label)}</option>`).join('');
+}
+function wfFieldLabel(tree, key){
+  if(key==='name'||!key) return 'Name';
+  const f=stammFields(tree||'vereine').find(x=>x.key===key); return f?f.label:key;
+}
+function wfStepSummary(w,s){
+  if(s.kind==='aktion'){ if(s.action==='addNote') return 'Notiz/Log: '+(s.text||'(leer)'); return 'Aufgabe erstellen: '+(s.titel||'(ohne Titel)')+(s.team?(' · Team '+s.team):''); }
+  if(s.kind==='bedingung'){ const f=wfFieldLabel(w.trigger&&w.trigger.tree, s.feld); return 'Wenn '+f+' '+wfOpLabel(s.op||'enthaelt')+(['nichtleer','leer'].includes(s.op)?'':' „'+(s.wert||'')+'"'); }
+  if(s.kind==='pause') return (s.stunden||0)+' Stunden warten';
+  if(s.kind==='benachrichtigung') return (s.kanal==='chat'?'Chat-Nachricht':'E-Mail')+' an '+(s.an||'?')+(s.betreff?(' · '+s.betreff):'');
+  if(s.kind==='log') return s.text||'';
+  return '';
+}
+// — Liste —
+function paintWorkflows(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const wfs=listWorkflows();
+  const cards=wfs.map(w=>{
+    const pub=w.status==='published';
+    const n=(w.steps||[]).length;
+    return `<div class="wf-item" onclick="crmWfOpen('${w.id}')">
+      <div style="min-width:0">
+        <h3>⚡ ${esc(w.name||'(ohne Name)')}</h3>
+        <div class="sub">Auslöser: ${esc(wfTriggerLabel((w.trigger&&w.trigger.type)||'manual'))} · ${n} Schritt${n===1?'':'e'} · v${w.version||1}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="wf-badge ${pub?'pub':'draft'}">${pub?'Veröffentlicht':'Entwurf'}</span>
+        <button class="crm-x" title="Löschen" onclick="event.stopPropagation();crmWfDelete('${w.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="crm-empty" style="text-align:left">Noch keine Workflows.</div>';
+  root.innerHTML = barHtml() + `<div class="crm-body"><div class="crm-sec">
+    <h4><span class="ttl">⚡ Workflows – Automatisierung</span><button class="btn-sm-crm primary" onclick="crmWfNew()">＋ Neuer Workflow</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:12px">Automatisierte Abläufe nach dem Auslöser-/Aktions-Prinzip. <b>Veröffentlichte</b> Workflows mit Auslöser „Eintrag angelegt" laufen automatisch beim Anlegen eines Eintrags (Bedingung, Aufgabe erstellen, Notiz). Benachrichtigung/Pause/Webhook werden protokolliert.</div>
+    <div class="wf-list">${cards}</div>
+  </div></div>`;
+}
+function crmShowWorkflows(){ window._crmMode='workflows'; window._wfSel=null; window._crmSearch=''; paint(); }
+function crmWfNew(){
+  const w={ id:newId(), name:'Neuer Workflow', status:'draft', version:1,
+    trigger:{ type:'entryCreated', tree:getTrees()[0].key }, steps:[], createdAt:Date.now() };
+  saveWorkflow(w); window._wfSel=w.id; paint();
+}
+function crmWfOpen(id){ window._wfSel=id; paint(); }
+function crmWfBack(){ window._wfSel=null; paint(); }
+function crmWfDelete(id){ const w=getWorkflow(id); if(!w) return; if(!confirm(`Workflow „${w.name||''}" löschen?`)) return; deleteWorkflow(id); if(window._wfSel===id) window._wfSel=null; paint(); toast('Workflow gelöscht.',''); }
+// — Editor —
+function paintWorkflowEditor(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const w=getWorkflow(window._wfSel); if(!w){ window._wfSel=null; paint(); return; }
+  const tr=w.trigger||{};
+  const isEntry=(tr.type==='entryCreated'||tr.type==='entryUpdated');
+  const treeOpts=getTrees().map(t=>`<option value="${t.key}" ${tr.tree===t.key?'selected':''}>${esc(t.label)}</option>`).join('');
+  const trigCard=`<div class="wf-step"><div class="wf-step-hd" style="background:#2d6099"><span><span class="wf-step-num">1</span>AUSLÖSER</span></div>
+    <div class="wf-step-bd">
+      <select class="crm-tsel" style="width:100%;margin-bottom:6px" onchange="crmWfSetTrigger('${w.id}',this.value)">${WF_TRIGGERS.map(([v,l])=>`<option value="${v}" ${tr.type===v?'selected':''}>${l}</option>`).join('')}</select>
+      ${isEntry?`<select class="crm-tsel" style="width:100%" onchange="crmWfSetTriggerTree('${w.id}',this.value)">${treeOpts}</select>`:''}
+      ${tr.type==='webhook'?`<div class="d">Externer Aufruf – die Webhook-URL wird beim Veröffentlichen bereitgestellt (Backend erforderlich).</div>`:''}
+    </div></div>`;
+  const stepCards=(w.steps||[]).map((s,i)=>{
+    const meta=WF_KIND[s.kind]||WF_KIND.log;
+    return `<div class="wf-conn"></div><div class="wf-step"><div class="wf-step-hd" style="background:${meta.color}">
+      <span><span class="wf-step-num">${i+2}</span>${meta.label}</span>
+      <span class="wf-acts">
+        <button title="nach oben" onclick="crmWfMove('${w.id}','${s.id}',-1)">▲</button>
+        <button title="nach unten" onclick="crmWfMove('${w.id}','${s.id}',1)">▼</button>
+        <button title="bearbeiten" onclick="crmWfEditStep('${w.id}','${s.id}')">✎</button>
+        <button title="löschen" onclick="crmWfDelStep('${w.id}','${s.id}')">✕</button>
+      </span></div>
+      <div class="wf-step-bd"><div class="d">${esc(wfStepSummary(w,s))}</div></div></div>`;
+  }).join('');
+  const pub=w.status==='published';
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    <div class="wf-ed-top">
+      <button class="btn-sm-crm" onclick="crmWfBack()">‹ Zurück</button>
+      <input class="wf-name" value="${esc(w.name||'')}" onchange="crmWfRename('${w.id}',this.value)">
+      <span class="wf-badge ${pub?'pub':'draft'}">${pub?'Veröffentlicht':'Entwurf'} · v${w.version||1}</span>
+      <button class="btn-sm-crm" onclick="crmWfRun('${w.id}')">▶ Testlauf</button>
+      <button class="btn-sm-crm" onclick="crmWfSaveDraft('${w.id}')">Als Entwurf speichern</button>
+      <button class="btn-sm-crm primary" onclick="crmWfPublish('${w.id}')">Veröffentlichen</button>
+    </div>
+    <div class="wf-canvas">
+      ${trigCard}
+      ${stepCards}
+      <div class="wf-conn"></div>
+      <button class="wf-add" onclick="crmWfAddStep('${w.id}')">＋ Schritt hinzufügen</button>
+      <div class="wf-end">Abschlusselement</div>
+    </div>
+  </div>`;
+}
+function crmWfRename(id,v){ const w=getWorkflow(id); if(!w) return; w.name=String(v||'').trim()||'Workflow'; saveWorkflow(w); }
+function crmWfSetTrigger(id,type){ const w=getWorkflow(id); if(!w) return; w.trigger=Object.assign({},w.trigger,{type}); if(!w.trigger.tree) w.trigger.tree=getTrees()[0].key; saveWorkflow(w); paint(); }
+function crmWfSetTriggerTree(id,tree){ const w=getWorkflow(id); if(!w) return; w.trigger=Object.assign({},w.trigger,{tree}); saveWorkflow(w); }
+function crmWfSaveDraft(id){ const w=getWorkflow(id); if(!w) return; w.status='draft'; saveWorkflow(w); paint(); toast('Als Entwurf gespeichert ✓','ok'); }
+function crmWfPublish(id){ const w=getWorkflow(id); if(!w) return;
+  if(!(w.steps||[]).length){ toast('Bitte zuerst mindestens einen Schritt hinzufügen.','err'); return; }
+  w.status='published'; w.version=(w.version||1)+1;
+  saveWorkflow(w); paint(); toast(`Veröffentlicht ✓ (v${w.version})`,'ok'); }
+function crmWfMove(id,sid,dir){ const w=getWorkflow(id); if(!w) return; const a=w.steps||[]; const i=a.findIndex(s=>s.id===sid); if(i<0) return; const j=i+dir; if(j<0||j>=a.length) return; const t=a[i]; a[i]=a[j]; a[j]=t; saveWorkflow(w); paint(); }
+function crmWfDelStep(id,sid){ const w=getWorkflow(id); if(!w) return; w.steps=(w.steps||[]).filter(s=>s.id!==sid); saveWorkflow(w); paint(); }
+// Schritt-Typ wählen
+function crmWfAddStep(id){
+  crmOpenModalShell();
+  const rows=Object.keys(WF_KIND).map(k=>{ const m=WF_KIND[k];
+    return `<button onclick="crmWfAddKind('${id}','${k}')"><span class="dot" style="background:${m.color}"></span>${esc(wfKindNice(k))}</button>`; }).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">Schritt hinzufügen</h3><div class="wf-kindpick">${rows}</div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button></div>`);
+}
+function wfKindNice(k){ return ({aktion:'Aktion (Aufgabe/Notiz)',bedingung:'Bedingung (Steuerung)',pause:'Pause',benachrichtigung:'Benachrichtigung (E-Mail/Chat)',log:'Log-Nachricht'})[k]||k; }
+function crmWfAddKind(id,kind){
+  const w=getWorkflow(id); if(!w) return; if(!Array.isArray(w.steps)) w.steps=[];
+  const base={ id:newId(), kind };
+  if(kind==='aktion'){ base.action='createTask'; base.titel=''; base.team=''; base.text=''; }
+  else if(kind==='bedingung'){ base.feld='name'; base.op='enthaelt'; base.wert=''; }
+  else if(kind==='pause'){ base.stunden=2; }
+  else if(kind==='benachrichtigung'){ base.kanal='email'; base.an=''; base.betreff=''; base.text=''; }
+  else if(kind==='log'){ base.text=''; }
+  w.steps.push(base); saveWorkflow(w); crmCloseModal(); crmWfEditStep(id, base.id);
+}
+function crmWfEditStep(id,sid){
+  const w=getWorkflow(id); if(!w) return; const s=(w.steps||[]).find(x=>x.id===sid); if(!s) return;
+  const tree=(w.trigger&&w.trigger.tree)||'vereine';
+  let body='';
+  if(s.kind==='aktion'){
+    const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(t=>`<option ${s.team===t?'selected':''}>${esc(t)}</option>`)).join('');
+    body=`<div class="crm-modal-field"><label>Aktion</label><select id="wf-action" onchange="crmWfActionToggle()">
+        <option value="createTask" ${s.action!=='addNote'?'selected':''}>Aufgabe am Eintrag erstellen</option>
+        <option value="addNote" ${s.action==='addNote'?'selected':''}>Notiz / Log am Eintrag</option></select></div>
+      <div id="wf-ct" style="display:${s.action==='addNote'?'none':'block'}">
+        <div class="crm-modal-field"><label>Aufgaben-Titel <span style="font-size:11px;color:var(--muted)">[name] = Eintragsname</span></label><input id="wf-titel" value="${esc(s.titel||'')}" placeholder="z. B. Erstkontakt zu [name]"></div>
+        <div class="crm-modal-field"><label>Team</label><select id="wf-team">${teamOpts}</select></div>
+        <div class="crm-modal-field"><label>Fällig in (Tagen, optional)</label><input id="wf-due" type="number" min="0" value="${esc(s.dueDays||'')}"></div>
+      </div>
+      <div id="wf-an" style="display:${s.action==='addNote'?'block':'none'}">
+        <div class="crm-modal-field"><label>Notiztext</label><textarea id="wf-text" rows="3">${esc(s.text||'')}</textarea></div>
+      </div>`;
+  } else if(s.kind==='bedingung'){
+    body=`<div class="crm-modal-field"><label>Feld</label><select id="wf-feld">${wfFieldOptions(tree, s.feld)}</select></div>
+      <div class="crm-modal-field"><label>Vergleich</label><select id="wf-op">${WF_OPS.map(([v,l])=>`<option value="${v}" ${s.op===v?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="crm-modal-field"><label>Wert</label><input id="wf-wert" value="${esc(s.wert||'')}"></div>
+      <div class="small" style="color:var(--muted)">Trifft die Bedingung nicht zu, werden die folgenden Schritte übersprungen.</div>`;
+  } else if(s.kind==='pause'){
+    body=`<div class="crm-modal-field"><label>Pause (Stunden)</label><input id="wf-stunden" type="number" min="0" value="${esc(s.stunden||0)}"></div>
+      <div class="small" style="color:var(--muted)">Wird derzeit protokolliert (echtes zeitgesteuertes Warten benötigt ein Backend).</div>`;
+  } else if(s.kind==='benachrichtigung'){
+    body=`<div class="crm-modal-field"><label>Kanal</label><select id="wf-kanal"><option value="email" ${s.kanal!=='chat'?'selected':''}>E-Mail</option><option value="chat" ${s.kanal==='chat'?'selected':''}>Chat-Nachricht</option></select></div>
+      <div class="crm-modal-field"><label>An (E-Mail/Empfänger)</label><input id="wf-an" value="${esc(s.an||'')}"></div>
+      <div class="crm-modal-field"><label>Betreff</label><input id="wf-betreff" value="${esc(s.betreff||'')}"></div>
+      <div class="crm-modal-field"><label>Text</label><textarea id="wf-text" rows="3">${esc(s.text||'')}</textarea></div>
+      <div class="small" style="color:var(--muted)">Wird beim automatischen Lauf protokolliert; echte Zustellung benötigt ein Backend.</div>`;
+  } else if(s.kind==='log'){
+    body=`<div class="crm-modal-field"><label>Log-Text</label><textarea id="wf-text" rows="3">${esc(s.text||'')}</textarea></div>`;
+  }
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(WF_KIND[s.kind].label)} bearbeiten</h3>${body}
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmWfSaveStep('${id}','${sid}')">Übernehmen</button></div>`);
+}
+function crmWfActionToggle(){ const a=val('wf-action'); const ct=document.getElementById('wf-ct'), an=document.getElementById('wf-an');
+  if(ct) ct.style.display=(a==='addNote')?'none':'block'; if(an) an.style.display=(a==='addNote')?'block':'none'; }
+function crmWfSaveStep(id,sid){
+  const w=getWorkflow(id); if(!w) return; const s=(w.steps||[]).find(x=>x.id===sid); if(!s) return;
+  if(s.kind==='aktion'){ s.action=val('wf-action')||'createTask';
+    if(s.action==='addNote'){ s.text=val('wf-text'); }
+    else { s.titel=val('wf-titel'); s.team=val('wf-team'); s.dueDays=val('wf-due'); } }
+  else if(s.kind==='bedingung'){ s.feld=val('wf-feld')||'name'; s.op=val('wf-op')||'enthaelt'; s.wert=val('wf-wert'); }
+  else if(s.kind==='pause'){ s.stunden=val('wf-stunden'); }
+  else if(s.kind==='benachrichtigung'){ s.kanal=val('wf-kanal')||'email'; s.an=val('wf-an'); s.betreff=val('wf-betreff'); s.text=val('wf-text'); }
+  else if(s.kind==='log'){ s.text=val('wf-text'); }
+  saveWorkflow(w); crmCloseModal(); paint();
+}
+// — Ausführung —
+function wfFieldVal(ent, field){ if(field==='name'||!field) return (ent.stamm&&ent.stamm.name)||''; return (ent.stamm&&ent.stamm[field])||''; }
+function wfCond(s, ent){ const v=String(wfFieldVal(ent, s.feld)).toLowerCase().trim(); const x=String(s.wert||'').toLowerCase().trim();
+  switch(s.op||'enthaelt'){ case 'enthaelt': return v.includes(x); case 'gleich': return v===x; case 'nichtleer': return v!==''; case 'leer': return v===''; default: return true; } }
+function wfFill(t, ent){ return String(t==null?'':t).replace(/\[name\]/gi, (ent.stamm&&ent.stamm.name)||''); }
+function wfDueDate(days){ const n=parseInt(days,10); if(isNaN(n)||n<=0) return ''; const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+// Echte Ausführung (Seiteneffekte) für Auslöser „Eintrag angelegt/geändert".
+function wfApply(ent, trigger){
+  try{
+    const wfs=listWorkflows().filter(w=>w.status==='published' && ((w.trigger&&w.trigger.type)||'')===trigger);
+    if(!wfs.length) return;
+    let changed=false;
+    wfs.forEach(w=>{
+      const tr=w.trigger||{};
+      if(tr.tree && tr.tree!==ent.tree) return;
+      for(const s of (w.steps||[])){
+        if(s.kind==='bedingung'){ if(!wfCond(s, ent)) break; continue; }
+        if(s.kind==='aktion' && s.action==='addNote'){
+          if(!Array.isArray(ent.log)) ent.log=[];
+          ent.log.push({ id:newId(), ts:Date.now(), autor:'Workflow: '+(w.name||''), kuerzel:'WF', text:wfFill(s.text||'', ent), summary:'' }); changed=true;
+        } else if(s.kind==='aktion'){
+          if(!Array.isArray(ent.todos)) ent.todos=[];
+          ent.todos.push({ id:newId(), children:[], teams:s.team?[s.team]:[], text:wfFill(s.titel||'Aufgabe', ent), note:'(automatisch durch Workflow „'+(w.name||'')+'")', assigneeId:'', assigneeName:'', due:wfDueDate(s.dueDays), status:'offen', deps:[] }); changed=true;
+        } else if(s.kind==='benachrichtigung' || s.kind==='pause' || s.kind==='log'){
+          if(!Array.isArray(ent.log)) ent.log=[];
+          const desc = s.kind==='benachrichtigung' ? ((s.kanal==='chat'?'Chat':'E-Mail')+' an '+(s.an||'')+(s.betreff?(': '+s.betreff):''))
+                     : (s.kind==='pause' ? ('Pause '+(s.stunden||0)+' h') : (s.text||''));
+          ent.log.push({ id:newId(), ts:Date.now(), autor:'Workflow: '+(w.name||''), kuerzel:'WF', text:'⚡ '+desc, summary:'' }); changed=true;
+        }
+      }
+    });
+    if(changed) saveEntity(ent.tree, ent);
+  }catch(e){ console.warn('Workflow-Ausführung (ignoriert):', e&&e.message); }
+}
+// Testlauf (Trockenlauf, ohne Seiteneffekte) – zeigt den Ablaufplan.
+function crmWfRun(id){
+  const w=getWorkflow(id); if(!w) return;
+  const tree=(w.trigger&&w.trigger.tree)||'';
+  const sample=listEntities(tree)[0]||{ stamm:{name:'(Beispiel)'} , tree};
+  const out=[]; out.push('Auslöser: '+wfTriggerLabel((w.trigger&&w.trigger.type)||'manual')+(tree?(' · Baum '+(treeByKey(tree).label)):''));
+  out.push('Beispiel-Eintrag: '+((sample.stamm&&sample.stamm.name)||'(keiner vorhanden)'));
+  out.push('────────────');
+  let stopped=false;
+  (w.steps||[]).forEach((s,i)=>{
+    if(stopped){ out.push((i+1)+'. übersprungen'); return; }
+    if(s.kind==='bedingung'){ const ok=wfCond(s, sample); out.push((i+1)+'. Bedingung: '+wfStepSummary(w,s)+' → '+(ok?'erfüllt':'NICHT erfüllt – Abbruch')); if(!ok) stopped=true; }
+    else if(s.kind==='aktion' && s.action==='addNote') out.push((i+1)+'. würde Notiz schreiben: „'+wfFill(s.text||'',sample)+'"');
+    else if(s.kind==='aktion') out.push((i+1)+'. würde Aufgabe anlegen: „'+wfFill(s.titel||'',sample)+'"'+(s.team?(' (Team '+s.team+')'):''));
+    else if(s.kind==='pause') out.push((i+1)+'. Pause '+(s.stunden||0)+' h (protokolliert)');
+    else if(s.kind==='benachrichtigung') out.push((i+1)+'. '+(s.kanal==='chat'?'Chat':'E-Mail')+' an '+(s.an||'?')+' (protokolliert)');
+    else if(s.kind==='log') out.push((i+1)+'. Log: '+(s.text||''));
+  });
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">▶ Testlauf (Trockenlauf)</h3>
+    <div style="font-family:monospace;font-size:12.5px;white-space:pre-wrap;line-height:1.6;background:#f6f8fb;border:1px solid var(--border);border-radius:8px;padding:12px">${esc(out.join('\n'))}</div>
+    <div class="small" style="color:var(--muted);margin-top:8px">Trockenlauf ohne Seiteneffekte. Im Echtbetrieb laufen veröffentlichte Workflows automatisch beim Anlegen eines Eintrags.</div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmCloseModal()">Schließen</button></div>`);
+}
+
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
@@ -2979,6 +3267,10 @@ Object.assign(window, {
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
   crmIeSelectAll, crmExportXlsx, crmImportXlsx,
+  // Workflows (Automatisierung)
+  crmShowWorkflows, crmWfNew, crmWfOpen, crmWfBack, crmWfDelete, crmWfRename,
+  crmWfSetTrigger, crmWfSetTriggerTree, crmWfSaveDraft, crmWfPublish, crmWfMove,
+  crmWfDelStep, crmWfAddStep, crmWfAddKind, crmWfEditStep, crmWfActionToggle, crmWfSaveStep, crmWfRun,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
