@@ -325,6 +325,10 @@ function injectStyles(){
   .crm-hist-sum .ttl{font-size:15px;font-weight:700;color:var(--primary)}
   .vw-vpick{display:flex;flex-direction:column;gap:2px;margin-top:6px;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px}
   .vw-vpick label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap}
+  .vw-ie-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 14px;margin-bottom:12px}
+  .vw-ie-item{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .vw-ie-item:hover{border-color:var(--primary-l)}
+  .vw-ie-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .kb-att{font-size:11px;background:#eef2fa;border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kb-att:hover{background:#e2e9f6}
@@ -2372,6 +2376,7 @@ function ensureVerwMounted(){
    <div class="crm-body">
      <div id="verw-users"></div>
      <div id="verw-crmcfg"></div>
+     <div id="verw-impexp"></div>
      <div id="verw-history"></div>
      <div id="verw-config"></div>
    </div>`;
@@ -2387,6 +2392,7 @@ function renderVerwaltung(){
       try{
         ensureVerwMounted();
         paintVerwUsers();
+        paintVerwImpExp();
         paintVerwConfig();
         paintVerwHistory();
         if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
@@ -2788,11 +2794,191 @@ function crmCfgFuncsSave(){
   toast('Funktionen gespeichert ✓','ok');
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  Import / Export  –  alle CRM-Daten einzeln auswählbar als Excel
+// ══════════════════════════════════════════════════════════════════
+//  Erzeugt eine .xlsx mit je einem Tabellenblatt pro Datenart. Komplexe,
+//  verschachtelte Felder (Aufgaben, Kontakte, Teilnehmer …) liegen als
+//  JSON in der Spalte "_rest" → verlustfrei importierbar (Upsert per id).
+//  SheetJS wird nur bei Bedarf (Admin öffnet Verwaltung & klickt) vom CDN
+//  geladen. Komplett isoliert; Fehler können die Zeiterfassung nie treffen.
+let _xlsxP=null;
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(_xlsxP) return _xlsxP;
+  _xlsxP=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=()=>res(window.XLSX);
+    s.onerror=()=>{ _xlsxP=null; rej(new Error('Excel-Bibliothek konnte nicht geladen werden (Internetverbindung nötig).')); };
+    document.head.appendChild(s);
+  });
+  return _xlsxP;
+}
+// Primär-Spalten (menschenlesbar) je Datenart; alles Übrige wandert nach _rest.
+const IE_PRIMARY={
+  vorlagen:['id','name'],
+  teamprojekte:['id','name','team','beschreibung'],
+  veranstaltungen:['id','titel','start','ende','ortOderLink','team','beschreibung'],
+  verteiler:['id','name','emails','note'],
+};
+function impexpColls(){
+  const out=getTrees().map(t=>({type:'entity', key:t.key, label:t.label, single:t.single}));
+  out.push({type:'vorlagen',        key:'vorlagen',        label:'Vorlagen'});
+  out.push({type:'teamprojekte',    key:'teamprojekte',    label:'Team-Projekte'});
+  out.push({type:'veranstaltungen', key:'veranstaltungen', label:'Veranstaltungen'});
+  out.push({type:'verteiler',       key:'verteiler',       label:'E-Mail-Verteiler'});
+  return out;
+}
+function ieCount(c){
+  try{
+    if(c.type==='entity') return listEntities(c.key).length;
+    if(c.type==='vorlagen') return listVorlagen().length;
+    if(c.type==='teamprojekte') return listTeamProjekte().length;
+    if(c.type==='veranstaltungen') return listVeranstaltungen().length;
+    return listVerteiler().length;
+  }catch(e){ return 0; }
+}
+function ieList(c){
+  if(c.type==='vorlagen') return listVorlagen();
+  if(c.type==='teamprojekte') return listTeamProjekte();
+  if(c.type==='veranstaltungen') return listVeranstaltungen();
+  return listVerteiler();
+}
+function ieSheetName(key){ return String(key).replace(/[\[\]\:\*\?\/\\]/g,'_').slice(0,31); }
+// Tabellenblatt-Inhalt (Kopf + Zeilen) je Datenart bauen
+function ieBuildRows(c){
+  if(c.type==='entity'){
+    const fields=stammFields(c.key).map(f=>f.key);
+    const header=['id',...fields,'_rest'];
+    const rows=listEntities(c.key).map(e=>{
+      const row={id:e.id};
+      fields.forEach(k=>{ row[k]=(e.stamm&&e.stamm[k]!=null)?e.stamm[k]:''; });
+      const rest=Object.assign({}, e); delete rest.id; delete rest.stamm;
+      row._rest=JSON.stringify(rest);
+      return row;
+    });
+    return {header, rows};
+  }
+  const prim=IE_PRIMARY[c.type];
+  const header=[...prim,'_rest'];
+  const rows=ieList(c).map(rec=>{
+    const row={};
+    prim.forEach(k=>{
+      let v;
+      if(k==='emails') v=_normEmails(rec.emails).join('; ');
+      else v=rec[k];
+      if(v==null) v='';
+      else if(typeof v==='object') v=JSON.stringify(v);
+      row[k]=v;
+    });
+    const rest={}; Object.keys(rec).forEach(k=>{ if(!prim.includes(k)) rest[k]=rec[k]; });
+    row._rest=JSON.stringify(rest);
+    return row;
+  });
+  return {header, rows};
+}
+// Eine eingelesene Zeile in einen Datensatz zurückführen (Upsert per id)
+function ieImportRow(c, row){
+  let rest={}; if(row._rest){ try{ rest=JSON.parse(row._rest)||{}; }catch(e){} }
+  const id=String(row.id||'').trim()||newId();
+  if(c.type==='entity'){
+    const ex=getEntity(c.key,id)||{};
+    const stamm=Object.assign({}, ex.stamm||{});
+    stammFields(c.key).forEach(f=>{ const v=row[f.key]; if(v!=null && String(v).trim()!=='') stamm[f.key]=String(v); });
+    if(!stamm.name) return false; // Eintrag ohne Name überspringen
+    const ent=Object.assign({}, ex, rest, {id, tree:c.key, stamm});
+    if(!ent.createdAt) ent.createdAt=Date.now();
+    saveEntity(c.key, ent);
+    return true;
+  }
+  const prim=IE_PRIMARY[c.type];
+  const ex = c.type==='vorlagen'?getVorlage(id) : c.type==='teamprojekte'?getTeamProjekt(id)
+           : c.type==='veranstaltungen'?getVeranstaltung(id) : getVerteiler(id);
+  const rec=Object.assign({}, ex||{}, rest);
+  prim.forEach(k=>{ if(k==='id') return; const v=row[k]; if(v==null||String(v).trim()==='') return;
+    if(k==='emails') rec.emails=String(v).split(/[;,\n]+/).map(s=>s.trim()).filter(Boolean);
+    else rec[k]=v;
+  });
+  rec.id=id;
+  if(c.type==='vorlagen'){ if(!rec.name) return false; saveVorlage(rec); }
+  else if(c.type==='teamprojekte'){ if(!rec.name) return false; saveTeamProjekt(rec); }
+  else if(c.type==='veranstaltungen'){ if(!rec.titel) return false; saveVeranstaltung(rec); }
+  else { if(!rec.name) return false; saveVerteiler(rec); }
+  return true;
+}
+function paintVerwImpExp(){
+  const host=document.getElementById('verw-impexp'); if(!host) return;
+  const colls=impexpColls();
+  const boxes=colls.map(c=>`<label class="vw-ie-item"><input type="checkbox" class="crm-ie-col" value="${esc(c.key)}" checked> ${esc(c.label)} <span class="small" style="color:var(--muted)">(${ieCount(c)})</span></label>`).join('');
+  host.innerHTML=`<div class="crm-sec">
+    <h4><span class="ttl">📊 Import / Export (Excel)</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Wähle die CRM-Daten, die exportiert oder importiert werden sollen. Der <b>Export</b> erzeugt eine Excel-Datei mit je einem Tabellenblatt pro Datenart. Beim <b>Import</b> werden Zeilen anhand der Spalte <b>id</b> aktualisiert; Zeilen ohne id werden neu angelegt. Die Spalte <b>_rest</b> enthält verschachtelte Daten (Aufgaben, Kontakte, Teilnehmer …) – am besten unverändert lassen.</div>
+    <div class="vw-ie-grid">${boxes}</div>
+    <div class="vw-ie-actions">
+      <button class="btn-sm-crm" onclick="crmIeSelectAll(true)">Alle</button>
+      <button class="btn-sm-crm" onclick="crmIeSelectAll(false)">Keine</button>
+      <button class="btn-sm-crm primary" onclick="crmExportXlsx()">⬇️ Export als Excel</button>
+      <label class="btn-sm-crm" style="cursor:pointer">⬆️ Import aus Excel<input id="crm-ie-file" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="crmImportXlsx(this)"></label>
+    </div>
+    <div id="crm-ie-status" class="small" style="color:var(--muted);margin-top:8px"></div>
+  </div>`;
+}
+function crmIeSelectAll(v){ document.querySelectorAll('.crm-ie-col').forEach(x=>{ x.checked=!!v; }); }
+function _ieStatus(t){ const el=document.getElementById('crm-ie-status'); if(el) el.textContent=t||''; }
+async function crmExportXlsx(){
+  const keys=Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value);
+  if(!keys.length){ toast('Bitte mindestens eine Datenart auswählen.','err'); return; }
+  _ieStatus('Excel-Datei wird erstellt …');
+  try{
+    const XLSX=await loadXLSX();
+    const colls=impexpColls();
+    const wb=XLSX.utils.book_new();
+    keys.forEach(key=>{
+      const c=colls.find(x=>x.key===key); if(!c) return;
+      const {header,rows}=ieBuildRows(c);
+      const ws = rows.length ? XLSX.utils.json_to_sheet(rows,{header}) : XLSX.utils.aoa_to_sheet([header]);
+      XLSX.utils.book_append_sheet(wb, ws, ieSheetName(c.key));
+    });
+    const d=new Date(), p=n=>String(n).padStart(2,'0');
+    XLSX.writeFile(wb, `CRM-Export-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.xlsx`);
+    _ieStatus(`Export erstellt: ${keys.length} Datenart(en).`);
+    toast('Excel-Export erstellt ✓','ok');
+  }catch(e){ console.error('CRM-Export:',e); _ieStatus(''); toast('Export fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+}
+async function crmImportXlsx(input){
+  const file=input && input.files && input.files[0]; if(!file){ return; }
+  if(!confirm('Import jetzt starten?\n\nVorhandene Einträge mit derselben id werden überschrieben, neue Zeilen (ohne id) angelegt. Nur die oben angehakten Datenarten werden importiert.')){ input.value=''; return; }
+  const allowed=new Set(Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value));
+  _ieStatus('Datei wird gelesen …');
+  try{
+    const XLSX=await loadXLSX();
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const colls=impexpColls();
+    let total=0, sheets=0; const skipped=[];
+    wb.SheetNames.forEach(sn=>{
+      const c=colls.find(x=>ieSheetName(x.key)===sn || x.key===sn);
+      if(!c){ skipped.push(sn); return; }
+      if(!allowed.has(c.key)) return;
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});
+      let n=0; rows.forEach(r=>{ try{ if(ieImportRow(c,r)) n++; }catch(e){ console.warn('Import-Zeile übersprungen:',e); } });
+      total+=n; sheets++;
+    });
+    input.value='';
+    _ieStatus(`Import abgeschlossen: ${total} Datensätze aus ${sheets} Tabellenblatt/-blättern.${skipped.length?' Ignorierte Blätter: '+skipped.join(', '):''}`);
+    toast(`Import: ${total} Datensätze übernommen ✓`,'ok');
+    try{ paintVerwImpExp(); }catch(e){}
+  }catch(e){ console.error('CRM-Import:',e); _ieStatus(''); toast('Import fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+}
+
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
+  // Import / Export (Excel)
+  crmIeSelectAll, crmExportXlsx, crmImportXlsx,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
