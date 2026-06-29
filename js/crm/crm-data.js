@@ -17,7 +17,7 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -80,11 +80,12 @@ export function restoreHistory(entry){
   if(coll==='veranstaltungen') return saveVeranstaltung(data);
   if(coll==='vorlagen')     return saveVorlage(data);
   if(coll==='verteiler')    return saveVerteiler(data);
+  if(coll==='workflows')    return saveWorkflow(data);
   return saveEntity(coll, data);  // sonst: Baum-Eintrag
 }
 
 function freshCrm(){
-  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, config:null };
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }
@@ -391,6 +392,47 @@ export function listVeranstaltungen(){
   const d = getCrm();
   return Object.values(d.veranstaltungen || {}).sort((a,b)=>
     String(a.start||'').localeCompare(String(b.start||''))
+  );
+}
+
+// ── Workflows (Automatisierung, isoliert unter crm/workflows) ──────
+// { id, name, status:'draft'|'published', version, trigger:{type,tree},
+//   steps:[{id,kind,...}], updatedAt, createdAt }
+export function saveWorkflow(w){
+  if(!w || !w.id) return Promise.resolve();
+  w.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.workflows) d.workflows = {};
+  d.workflows[w.id] = w;
+  _cache = d;
+  _persistLocal();
+  _logHistory('workflows', w.id, 'save', w, w.name||'');
+  try{
+    if(_ref) return _ref.child('workflows').child(w.id).set(w).catch(e=>{
+      console.warn('CRM saveWorkflow Firebase-Fehler (lokal gespeichert):', e && e.message);
+    });
+  }catch(e){ console.warn('CRM saveWorkflow:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteWorkflow(id){
+  const d = getCrm();
+  const prev = d.workflows && d.workflows[id];
+  if(prev) _logHistory('workflows', id, 'delete', prev, prev.name||'');
+  if(d.workflows) delete d.workflows[id];
+  _cache = d;
+  _persistLocal();
+  try{
+    if(_ref) return _ref.child('workflows').child(id).remove().catch(e=>{
+      console.warn('CRM deleteWorkflow Firebase-Fehler:', e && e.message);
+    });
+  }catch(e){ console.warn('CRM deleteWorkflow:', e && e.message); }
+  return Promise.resolve();
+}
+export function getWorkflow(id){ const d=getCrm(); return (d.workflows && d.workflows[id]) || null; }
+export function listWorkflows(){
+  const d = getCrm();
+  return Object.values(d.workflows || {}).sort((a,b)=>
+    String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'})
   );
 }
 
