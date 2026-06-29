@@ -497,14 +497,13 @@ function barHtml(){
   const full = crmFull();
   const view = crmCanView();
   const lvl  = accessLevel();
-  const homeActive = (mode==='teams'||mode==='meine');
+  const homeActive = (mode==='teams'||mode==='meine'||mode==='veranstaltungen'||mode==='workflows');
   const homeLabel  = view ? '👥 Teams' : '🙋 Meine Aufgaben';
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(view){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
-    tabs.push(`<button class="crm-tree-tab${mode==='veranstaltungen'?' active':''}" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
+    // Veranstaltungen & Workflows sind unter „Teams" integriert (kein eigener Top-Reiter mehr)
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
-    if(full) tabs.push(`<button class="crm-tree-tab${mode==='workflows'?' active':''}" onclick="crmShowWorkflows()">⚡ Workflows</button>`);
   } else if(lvl==='verein'){
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
       tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
@@ -1636,9 +1635,12 @@ function paintTeamsList(){
     const cNo=teamCounts('Ohne Team');
     if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
     teamsBlock = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Teams</span></h4>
+      <h4><span class="ttl">👥 Teams</span><span class="hbtns">
+        <button class="btn-sm-crm" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>
+        ${crmFull()?`<button class="btn-sm-crm" onclick="crmShowWorkflows()">⚡ Workflows</button>`:''}
+      </span></h4>
       <div class="crm-list">${cards.join('')}</div>
-      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte.</div>
+      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte. Veranstaltungen &amp; Workflows oben rechts.</div>
     </div>`;
   }
   root.innerHTML = barHtml() + `<div class="crm-body">${meine}${teamsBlock}</div>`;
