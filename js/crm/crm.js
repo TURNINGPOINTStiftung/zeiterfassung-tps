@@ -1627,6 +1627,14 @@ function paintTeamsList(){
   window._crmTaskCtx=null;
   // „Meine Aufgaben" oben – für alle
   const meine = meineSectionsHtml();
+  // Veranstaltungen & Workflows: deutlich sichtbare Buttons GANZ OBEN in der Teams-Ansicht
+  const actions=[];
+  if(crmCanView()) actions.push(`<button class="btn-sm-crm primary" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
+  if(crmFull()) actions.push(`<button class="btn-sm-crm" onclick="crmShowWorkflows()">⚡ Workflows</button>`);
+  const topBar = actions.length ? `<div class="crm-sec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span style="font-weight:700;color:var(--primary);font-size:13px;text-transform:uppercase;letter-spacing:.6px">CRM-Bereiche</span>
+      ${actions.join('')}
+    </div>` : '';
   // Teams-Kacheln für alle, die alles sehen dürfen (voll + erweitert)
   let teamsBlock='';
   if(crmCanView()){
@@ -1635,15 +1643,12 @@ function paintTeamsList(){
     const cNo=teamCounts('Ohne Team');
     if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
     teamsBlock = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Teams</span><span class="hbtns">
-        <button class="btn-sm-crm" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>
-        ${crmFull()?`<button class="btn-sm-crm" onclick="crmShowWorkflows()">⚡ Workflows</button>`:''}
-      </span></h4>
+      <h4><span class="ttl">👥 Teams</span></h4>
       <div class="crm-list">${cards.join('')}</div>
-      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte. Veranstaltungen &amp; Workflows oben rechts.</div>
+      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte.</div>
     </div>`;
   }
-  root.innerHTML = barHtml() + `<div class="crm-body">${meine}${teamsBlock}</div>`;
+  root.innerHTML = barHtml() + `<div class="crm-body">${topBar}${meine}${teamsBlock}</div>`;
 }
 function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
