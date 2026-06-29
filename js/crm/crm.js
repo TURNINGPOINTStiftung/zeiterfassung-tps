@@ -226,6 +226,10 @@ function injectStyles(){
   .crm-empty{text-align:center;color:var(--muted);padding:60px 20px}
   .crm-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .crm-detail-head h2{font-size:22px;font-weight:700;color:var(--primary);margin:0;flex:1;min-width:200px}
+  .crm-subtabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap}
+  .crm-subtab{background:none;border:none;border-bottom:2.5px solid transparent;padding:9px 15px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-1px;transition:color .15s,border-color .15s}
+  .crm-subtab:hover{color:var(--primary)}
+  .crm-subtab.active{color:var(--primary);border-bottom-color:var(--primary)}
   .crm-sec{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(32,56,105,.04)}
   .crm-sec h4{font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.6px;margin:0 0 14px;display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
   .crm-sec h4 .ttl{display:flex;align-items:center;gap:8px}
@@ -849,6 +853,48 @@ function paintDetail(){
   // Statistik (nur bei Vereinen)
   const statsSec = (window._crmTree==='vereine') ? statsSecHtml(e) : '';
 
+  // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
+  const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
+  const aufgabenSec = entityProjekteSectionHtml(e);
+  const kontakteSec = `<div class="crm-sec">
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
+      ${kontakte}
+    </div>`;
+  const termineSec = `<div class="crm-sec">
+      <h4><span class="ttl">📅 Termine</span><button class="btn-sm-crm" onclick="crmAddTermin()">＋ Termin</button></h4>
+      ${termine}
+    </div>`;
+  const angeboteSec = `<div class="crm-sec">
+      <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
+      ${angebote}
+    </div>`;
+  const statusSec = `<div class="crm-sec">
+      <h4><span class="ttl">🧭 Status quo</span></h4>
+      <textarea class="crm-ta" id="crm-statusquo" rows="3" placeholder="Wo stehen wir aktuell mit ${esc(s.name||'')}?">${esc(e.statusQuo||'')}</textarea>
+      <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmSaveStatusQuo()">Speichern</button></div>
+    </div>`;
+  const kommSec = `<div class="crm-sec">
+      <h4><span class="ttl">💬 Interne Kommunikation</span><button class="btn-sm-crm primary" onclick="crmOpenNote()">🎤 Neue Notiz</button></h4>
+      ${log}
+    </div>`;
+
+  // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
+  const openTasks=entityOpenTaskCount(e);
+  const kCount=(e.kontakte||[]).length;
+  const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['kontakte','Kontakte'+(kCount?` (${kCount})`:'')],['termine','Termine']];
+  tabs.push(['kommunikation','Kommunikation']);
+  if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
+  let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
+  const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
+  const bodyByTab={
+    allgemeines: stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`,
+    aufgaben: aufgabenSec,
+    kontakte: kontakteSec,
+    termine: termineSec + vaSection + angeboteSec,
+    kommunikation: statusSec + kommSec,
+    statistik: statsSec
+  };
+
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?esc(tree.label):'Meine Aufgaben'}</button>
@@ -856,45 +902,14 @@ function paintDetail(){
       ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
     </div>
-    ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${
+    ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 12px">${
         e.createdAt?`angelegt ${e.createdByKuerzel?'von '+esc(e.createdByKuerzel)+' ':''}am ${esc(fmtDate(e.createdAt))}`:''
       }${e.updatedByKuerzel?` · zuletzt geändert von ${esc(e.updatedByKuerzel)}${e.updatedAt?' am '+esc(fmtDateTime(e.updatedAt)):''}`:''}</div>`:''}
-
-    ${fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:''}
-
-    ${entityProjekteSectionHtml(e)}
-
-    <div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
-      ${kontakte}
-    </div>
-
-    <div class="crm-sec">
-      <h4><span class="ttl">📅 Termine</span><button class="btn-sm-crm" onclick="crmAddTermin()">＋ Termin</button></h4>
-      ${termine}
-    </div>
-
-    ${vaSection}
-
-    <div class="crm-sec">
-      <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
-      ${angebote}
-    </div>
-
-    <div class="crm-sec">
-      <h4><span class="ttl">🧭 Status quo</span></h4>
-      <textarea class="crm-ta" id="crm-statusquo" rows="3" placeholder="Wo stehen wir aktuell mit ${esc(s.name||'')}?">${esc(e.statusQuo||'')}</textarea>
-      <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmSaveStatusQuo()">Speichern</button></div>
-    </div>
-
-    <div class="crm-sec">
-      <h4><span class="ttl">💬 Interne Kommunikation</span><button class="btn-sm-crm primary" onclick="crmOpenNote()">🎤 Neue Notiz</button></h4>
-      ${log}
-    </div>
-
-    ${statsSec}
+    ${subbar}
+    ${bodyByTab[dt]||''}
   </div>`;
 }
+function crmDetailTab(t){ window._crmDetailTab=t; paintDetail(); }
 
 // ── Globale CRM-Suche (über ALLE Bäume/Einträge/Kontakte/Projekte/Aufgaben) ──
 // Wichtig: tippt der Nutzer, wird NUR das Ergebnis-Overlay aktualisiert – die Bar
@@ -3281,7 +3296,7 @@ Object.assign(window, {
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave,
-  crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal,
+  crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
