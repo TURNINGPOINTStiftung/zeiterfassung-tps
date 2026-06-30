@@ -517,6 +517,7 @@ function barHtml(){
   }
   const adminBtns = full
     ? `<button class="btn-sm-crm" title="Aufgaben-Vorlagen verwalten" onclick="crmOpenVorlagen()">📋<span class="btn-lbl"> Vorlagen</span></button>
+       <button class="btn-sm-crm" title="Kontakte/Daten als Excel exportieren & importieren" onclick="crmImpExpModal()">⇅<span class="btn-lbl"> Excel</span></button>
        <button class="btn-sm-crm" title="KI-Proxy für Zusammenfassungen" onclick="crmConfigAi()">⚙️<span class="btn-lbl"> KI ${getAiEndpoint()?'✓':'–'}</span></button>`
     : '';
   return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div>${right}${adminBtns}</div>`;
@@ -3015,6 +3016,23 @@ function paintVerwImpExp(){
   </div>`;
 }
 function crmIeSelectAll(v){ document.querySelectorAll('.crm-ie-col').forEach(x=>{ x.checked=!!v; }); }
+// Import/Export direkt im CRM – für ALLE mit Vollzugriff (nicht nur Admin/Verwaltung)
+function crmImpExpModal(){
+  if(!crmFull()){ toast('Nur mit Voll-Zugriff.','err'); return; }
+  crmOpenModalShell();
+  const boxes=impexpColls().map(c=>`<label class="vw-ie-item"><input type="checkbox" class="crm-ie-col" value="${esc(c.key)}" checked> ${esc(c.label)} <span class="small" style="color:var(--muted)">(${ieCount(c)})</span></label>`).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📊 Import / Export (Excel)</h3>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Wähle die Datenart(en). <b>Kontakte / E-Mail-Liste</b> = flache Liste aller Ansprechpartner (Name, E-Mail, Telefon) – ideal für Serienmails. Beim Import werden vorhandene Zeilen aktualisiert (Kontakte per baum+eid+kid/Name), neue angelegt.</div>
+    <div class="vw-ie-grid">${boxes}</div>
+    <div class="vw-ie-actions">
+      <button class="btn-sm-crm" onclick="crmIeSelectAll(true)">Alle</button>
+      <button class="btn-sm-crm" onclick="crmIeSelectAll(false)">Keine</button>
+      <button class="btn-sm-crm primary" onclick="crmExportXlsx()">⬇️ Export als Excel</button>
+      <label class="btn-sm-crm" style="cursor:pointer">⬆️ Import aus Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="crmImportXlsx(this)"></label>
+    </div>
+    <div id="crm-ie-status" class="small" style="color:var(--muted);margin-top:8px"></div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button></div>`);
+}
 function _ieStatus(t){ const el=document.getElementById('crm-ie-status'); if(el) el.textContent=t||''; }
 async function crmExportXlsx(){
   const keys=Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value);
@@ -3322,7 +3340,7 @@ Object.assign(window, {
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
-  crmIeSelectAll, crmExportXlsx, crmImportXlsx,
+  crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmImpExpModal,
   // Workflows (Automatisierung)
   crmShowWorkflows, crmWfNew, crmWfOpen, crmWfBack, crmWfDelete, crmWfRename,
   crmWfSetTrigger, crmWfSetTriggerTree, crmWfSaveDraft, crmWfPublish, crmWfMove,
