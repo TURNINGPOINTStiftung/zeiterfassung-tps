@@ -2884,15 +2884,27 @@ const IE_PRIMARY={
   verteiler:['id','name','emails','note'],
 };
 function impexpColls(){
-  const out=getTrees().map(t=>({type:'entity', key:t.key, label:t.label, single:t.single}));
+  const out=[{type:'kontakte', key:'kontakte', label:'Kontakte / E-Mail-Liste'}];
+  getTrees().forEach(t=>out.push({type:'entity', key:t.key, label:t.label, single:t.single}));
   out.push({type:'vorlagen',        key:'vorlagen',        label:'Vorlagen'});
   out.push({type:'teamprojekte',    key:'teamprojekte',    label:'Team-Projekte'});
   out.push({type:'veranstaltungen', key:'veranstaltungen', label:'Veranstaltungen'});
   out.push({type:'verteiler',       key:'verteiler',       label:'E-Mail-Verteiler'});
   return out;
 }
+function allContactRows(){
+  const rows=[];
+  getTrees().forEach(t=>{ listEntities(t.key).forEach(e=>{
+    (e.kontakte||[]).forEach(k=>{
+      rows.push({ baum:t.key, eid:e.id, eintrag:(e.stamm&&e.stamm.name)||'', kid:k.id||'',
+        name:k.name||'', funktion:k.funktion||'', email:k.email||'', tel:k.tel||'', note:k.note||'' });
+    });
+  }); });
+  return rows;
+}
 function ieCount(c){
   try{
+    if(c.type==='kontakte') return allContactRows().length;
     if(c.type==='entity') return listEntities(c.key).length;
     if(c.type==='vorlagen') return listVorlagen().length;
     if(c.type==='teamprojekte') return listTeamProjekte().length;
@@ -2909,6 +2921,9 @@ function ieList(c){
 function ieSheetName(key){ return String(key).replace(/[\[\]\:\*\?\/\\]/g,'_').slice(0,31); }
 // Tabellenblatt-Inhalt (Kopf + Zeilen) je Datenart bauen
 function ieBuildRows(c){
+  if(c.type==='kontakte'){
+    return { header:['baum','eid','eintrag','kid','name','funktion','email','tel','note'], rows:allContactRows() };
+  }
   if(c.type==='entity'){
     const fields=stammFields(c.key).map(f=>f.key);
     const header=['id',...fields,'_rest'];
@@ -2941,6 +2956,20 @@ function ieBuildRows(c){
 }
 // Eine eingelesene Zeile in einen Datensatz zurückführen (Upsert per id)
 function ieImportRow(c, row){
+  if(c.type==='kontakte'){
+    const baum=String(row.baum||'').trim(), eid=String(row.eid||'').trim();
+    if(!baum||!eid) return false;
+    const e=getEntity(baum, eid); if(!e) return false;           // Eintrag muss existieren
+    const ent=Object.assign({}, e); ent.kontakte=(e.kontakte||[]).map(k=>Object.assign({},k));
+    const kid=String(row.kid||'').trim();
+    let k = kid ? ent.kontakte.find(x=>x.id===kid) : null;
+    if(!k && String(row.name||'').trim()) k = ent.kontakte.find(x=>String(x.name||'').toLowerCase().trim()===String(row.name).toLowerCase().trim());
+    const set=o=>{ ['name','funktion','email','tel','note'].forEach(f=>{ const v=row[f]; if(v!=null && String(v).trim()!=='') o[f]=String(v).trim(); }); };
+    if(k){ set(k); }
+    else { if(!String(row.name||'').trim()) return false; const nk={ id:newId() }; set(nk); ent.kontakte.push(nk); }
+    saveEntity(baum, ent);
+    return true;
+  }
   let rest={}; if(row._rest){ try{ rest=JSON.parse(row._rest)||{}; }catch(e){} }
   const id=String(row.id||'').trim()||newId();
   if(c.type==='entity'){
@@ -2974,7 +3003,7 @@ function paintVerwImpExp(){
   const boxes=colls.map(c=>`<label class="vw-ie-item"><input type="checkbox" class="crm-ie-col" value="${esc(c.key)}" checked> ${esc(c.label)} <span class="small" style="color:var(--muted)">(${ieCount(c)})</span></label>`).join('');
   host.innerHTML=`<div class="crm-sec">
     <h4><span class="ttl">📊 Import / Export (Excel)</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">Wähle die CRM-Daten, die exportiert oder importiert werden sollen. Der <b>Export</b> erzeugt eine Excel-Datei mit je einem Tabellenblatt pro Datenart. Beim <b>Import</b> werden Zeilen anhand der Spalte <b>id</b> aktualisiert; Zeilen ohne id werden neu angelegt. Die Spalte <b>_rest</b> enthält verschachtelte Daten (Aufgaben, Kontakte, Teilnehmer …) – am besten unverändert lassen.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Wähle die CRM-Daten, die exportiert oder importiert werden sollen. Der <b>Export</b> erzeugt eine Excel-Datei mit je einem Tabellenblatt pro Datenart. <b>Kontakte / E-Mail-Liste</b> ist eine flache Liste aller Ansprechpartner (Name, E-Mail, Telefon, Funktion) – ideal für Serienmails/Adresslisten. Beim <b>Import</b> werden Zeilen anhand der <b>id</b> (bei Kontakten: <b>baum + eid + kid/Name</b>) aktualisiert; neue Zeilen werden angelegt. Die Spalte <b>_rest</b> enthält verschachtelte Daten – am besten unverändert lassen.</div>
     <div class="vw-ie-grid">${boxes}</div>
     <div class="vw-ie-actions">
       <button class="btn-sm-crm" onclick="crmIeSelectAll(true)">Alle</button>
