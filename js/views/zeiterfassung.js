@@ -173,19 +173,19 @@ export function renderZeiterfassung(){
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
-      <td><input type="text" id="ti_${ds}_b1von" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
-      <td><select id="sel_${ds}_b1zuord" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
-      <td class="bem-col"><input id="bem_${ds}_b1" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
+      <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
+      <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
+      <td class="bem-col"><input id="bem_${ds}_b1" aria-label="${dateFmt} Bemerkung Block 1" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" class="t-inp zt-nav" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" class="t-inp zt-nav" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td class="b2-col"><select id="sel_${ds}_b2zuord" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
-      <td class="bem-col b2-col"><input id="bem_${ds}_b2" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" aria-label="${dateFmt} Beginn Block 2" class="t-inp zt-nav" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" aria-label="${dateFmt} Ende Block 2" class="t-inp zt-nav" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
+      <td class="b2-col"><select id="sel_${ds}_b2zuord" aria-label="${dateFmt} Zuordnung Block 2" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
+      <td class="bem-col b2-col"><input id="bem_${ds}_b2" aria-label="${dateFmt} Bemerkung Block 2" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="sep-c sep-col2"></td>
-      <td class="kt-col"><input id="kt_${ds}" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td class="kt-col"><input id="kt_${ds}" aria-label="${dateFmt} Kleinteilig (Minuten)" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
       <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}</td>
