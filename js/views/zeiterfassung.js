@@ -711,26 +711,23 @@ export function td_b1bis_change(ds,val){
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
   const normVal=_normTime(val);
-  // Erneutes Auslösen mit dem bereits angezeigten (pausen-behafteten) Wert = keine echte
-  // Änderung → NICHT erneut verarbeiten, sonst würde die Pause doppelt aufgeschlagen.
-  if(normVal===(day.b1bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
-  if(!normVal){
-    setDay(uid,window.year,window.mon,ds,'b1bis','');
-  } else {
+  // Netto-Endzeit ggf. auf 15-Min-Raster runden (nur wenn Start vorhanden, keine Abwesenheit).
+  let roundedNet=normVal;
+  if(normVal){
     const von=day.b1von||'';
     const zuord=day.b1zuord||'';
     const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
-    const hasB2=!!(day.b2von&&day.b2bis);
-    // Eingabe = Netto-Ende → auf 15-Min. runden
-    let roundedNet=normVal;
     if(von&&!isAbsence){
       const rawMin=diffMin(von,normVal);
       if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
     }
-    // Eingegebene (Netto-)Endzeit speichern; die Pflichtpause wird zentral
-    // & idempotent aufgeschlagen (keine Mehrfach-Aufschläge beim Nachbearbeiten).
-    setDay(uid,window.year,window.mon,ds,'b1bis',roundedNet);
   }
+  // Keine echte Netto-Änderung: die (gerundete) Eingabe entspricht bereits dem angezeigten
+  // Endwert (der die Pflichtpause schon enthält) → NICHT erneut aufschlagen. Fängt auch den
+  // Fall ab, dass eine leicht abweichende Eingabe auf den angezeigten Wert rundet
+  // (Anzeige 15:30, Eingabe 15:28 → sonst faelschlich 16:00 statt 15:30).
+  if(roundedNet===(day.b1bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
+  setDay(uid,window.year,window.mon,ds,'b1bis',roundedNet);
   // Frisch getippter Wert = Netto-Ende → altes Pausen-Tracking auf b1bis verwerfen,
   // damit _applyDayPause die nicht mehr enthaltene Pause nicht abzieht (sonst zu wenig).
   mutate(d=>{ const dd=d.entries?.[entryKey(uid,window.year,window.mon)]?.days?.[ds]; if(dd&&dd._pausedF==='b1bis'){ dd._paused=0; dd._pausedF=''; } });
@@ -841,7 +838,11 @@ export function td_tchange(ds,field,val){
   // neu verarbeiten (sonst Doppel-Aufschlag der Pause, analog b1bis).
   if(field==='b2bis'){
     const _cur=getEntry(uid,window.year,window.mon).days?.[ds]||{};
-    if(normVal===(_cur.b2bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
+    const _von=_cur.b2von||'';
+    let _rb=normVal;
+    if(_von&&normVal){ const rm=diffMin(_von,normVal); if(rm>0){ const r=Math.round(rm/15)*15; if(r!==rm&&r>0) _rb=addMin(_von,r); } }
+    // Keine echte Netto-Änderung (auch wenn Eingabe auf angezeigten Wert rundet) → nicht erneut aufschlagen.
+    if(_rb===(_cur.b2bis||'')){ if(_fid) setTimeout(()=>{ const el=document.getElementById(_fid); if(el) el.focus(); },0); return; }
   }
   setDay(uid,window.year,window.mon,ds,field,normVal);
   const block=field.startsWith('b2')?'2':'1';
