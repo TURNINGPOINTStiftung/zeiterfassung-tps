@@ -338,14 +338,18 @@ function renderActionBar(uid,user,entry,isLeiter){
   }
   if(isLeiter&&cu.role!=='admin'&&cu.id!==uid){ btns.innerHTML=extraBtns; return; }
   if(cu.id===uid||cu.role==='admin'){
-    const isNoReport=cu.id===uid&&!!getUser(uid)?.noReport;
+    // Leitung reicht den EIGENEN Monat ein → privat vom GF, aber Einreichen möglich
+    // (geht als Buchhaltungsversion an die GF). noReport gilt für Leitung nicht mehr.
+    const isLeitungSelf=cu.id===uid&&cu.role==='leitung';
+    const isNoReport=cu.id===uid&&!!getUser(uid)?.noReport&&!isLeitungSelf;
     if(entry.status==='draft'){
       info.textContent=cu.id===uid
-        ?(isNoReport?'Zeiten erfassen – keine Einreichung erforderlich.':'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.')
+        ?(isLeitungSelf?'Bitte Zeiten erfassen und einreichen – geht als Buchhaltungsversion an die Geschäftsführung.'
+          :(isNoReport?'Zeiten erfassen – keine Einreichung erforderlich.':'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.'))
         :'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
-      btns.innerHTML=extraBtns+(isNoReport?'': `<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen</button>`);
+      btns.innerHTML=extraBtns+(isNoReport?'': `<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen${isLeitungSelf?' (an GF)':''}</button>`);
     } else if(entry.status==='submitted'){
-      info.textContent='Monat eingereicht – wartet auf Prüfung durch die Leitung.';
+      info.textContent=isLeitungSelf?'✓ Eingereicht – als Buchhaltungsversion an die Geschäftsführung übermittelt.':'Monat eingereicht – wartet auf Prüfung durch die Leitung.';
       btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
     } else if(entry.status==='approved'){
       info.textContent='✓ Dieser Monat wurde genehmigt.';
@@ -1038,10 +1042,23 @@ export function syncVeranstaltungToTimesheets(uid,dayTimes,note){
 export function doSubmit(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
-  if(!confirm('Monat einreichen? Danach keine Änderungen bis zur Freigabe.')) return;
+  const tuser=getUser(tuid);
+  const leitungSelf=tuser&&tuser.role==='leitung'&&tuid===cu.id;
+  const q=leitungSelf?'Monat einreichen und als Buchhaltungsversion an die Geschäftsführung senden? Danach gesperrt (bis Zurückziehen).'
+                     :'Monat einreichen? Danach keine Änderungen bis zur Freigabe.';
+  if(!confirm(q)) return;
   setEntryField(tuid,year,mon,'status','submitted');
   setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
-  toast('Monat erfolgreich eingereicht.');
+  // Leitung: eingereichter Monat automatisch als Buchhaltungsversion in den GF-Berichten.
+  if(leitungSelf){
+    const rKey='LEIT_'+tuid+'_'+year+'_'+String(mon).padStart(2,'0');
+    mutate(d=>{ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]={
+      id:rKey, teamName:'Leitung (Buchhaltung)', year, month:mon,
+      employeeIds:[tuid], leitungId:tuid, leitungName:tuser.name,
+      submittedAt:new Date().toISOString(), seenAt:null
+    }; });
+  }
+  toast(leitungSelf?'Eingereicht – als Buchhaltungsversion an die GF gesendet ✓':'Monat erfolgreich eingereicht.');
   renderZeiterfassung();
 }
 
@@ -1049,6 +1066,9 @@ export function doRecall(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
   setEntryField(tuid,year,mon,'status','draft');
+  // War es ein Leitungs-Buchhaltungsbericht → beim GF wieder entfernen.
+  const rKey='LEIT_'+tuid+'_'+year+'_'+String(mon).padStart(2,'0');
+  mutate(d=>{ if(d.teamReports&&d.teamReports[rKey]) delete d.teamReports[rKey]; });
   toast('Monatserfassung zurückgezogen.');
   renderZeiterfassung();
 }

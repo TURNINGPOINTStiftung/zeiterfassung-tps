@@ -73,12 +73,16 @@ export function canSeeEmployee(mgr,emp,dateStr){
   if(mgr.role==='geschaeftsfuehrer'){
     // Mitarbeiter mit noReport (private ZE, nicht reportpflichtig) sind für GF unsichtbar
     if(emp.noReport) return false;
-    if(emp.role==='leitung'||emp.role==='berater') return true;
+    // Leitung-ZE ist grundsätzlich privat: der GF sieht sie NICHT live, sondern nur als
+    // eingereichte Buchhaltungsversion in den GF-Berichten (nach dem Einreichen).
+    if(emp.role==='leitung') return false;
+    if(emp.role==='berater') return true;
     if(emp.role==='admin'||emp.role==='geschaeftsfuehrer') return false;
     return !teamHasLeitung(emp.team);
   }
   if(mgr.role==='leitung'){
-    if(isBerater(emp)) return false;
+    // Andere Leitung ist ebenfalls privat (nicht durch Kolleg:innen einsehbar).
+    if(isBerater(emp)||emp.role==='leitung') return false;
     const t=getLeitungTeams(mgr);
     if(t.length===0) return true;
     // History-aware: für ein bestimmtes Datum das damals gültige Team prüfen
