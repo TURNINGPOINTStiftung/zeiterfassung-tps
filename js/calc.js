@@ -47,6 +47,16 @@ export function monthIST(entry,user){
 }
 export function dailyMinutes(user){ return Math.round((user.wh||0)/((user.dpw||5))*60); }
 export function isVollzeit(user){ return !isFreelancer(user)&&(user.wh||0)>=39; }
+// Stunden pro Urlaubstag (in Minuten):
+//  - expliziter Admin-Wert (vacHoursPerDay) hat Vorrang;
+//  - Vollzeit ODER Leitung: wie gewohnt (Tagessoll aus wh/dpw);
+//  - alle anderen (Teilzeit): pauschal 8h – Arbeitstage/Woche (dpw) spielen für Urlaub keine Rolle.
+export function vacDailyMin(user){
+  if(!user) return 480;
+  if(user.vacHoursPerDay) return Math.round(user.vacHoursPerDay*60);
+  if(isVollzeit(user)||user.role==='leitung') return dailyMinutes(user)||480;
+  return 480;
+}
 export function _isAZADay(dd){ return !!(dd&&(dd.b1zuord==='Arbeitszeitausgleich'||dd.b1bem==='Arbeitszeitausgleich')); }
 
 export function monthSOLL(user,y,m){

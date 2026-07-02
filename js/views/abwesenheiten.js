@@ -2,6 +2,7 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
+import { vacDailyMin } from '../calc.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
@@ -80,7 +81,6 @@ export function showVacRequestForm(editId){
   const to=editing?editing.endDate:today;
   const type=editing?editing.type:'Urlaub';
   const note=editing?.note||'';
-  const vrMode=editing?(editing.hoursMode==='auto'?'auto':'manual'):'manual';
   window._vrManualTouched=!!editing;
   openModal(`
     <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">${editing?'Abwesenheit bearbeiten':'Abwesenheit eintragen'}</h3>
@@ -121,21 +121,13 @@ export function showVacRequestForm(editId){
       </label>
     </div>
     <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
-      <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Urlaubstage berechnen:</div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-manual" value="manual" ${vrMode==='manual'?'checked':''} onchange="calcVrDays()">
-          Anzahl selbst eingeben:
-          <input type="number" id="vr-manual-days" min="0.5" max="25" step="0.5" value="${vrMode==='manual'?(editing?editing.workDays:1):1}"
-            style="width:70px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
-            oninput="onVrManualDaysInput()">
-          <span id="vr-mode-manual-hint" style="font-size:11px;color:var(--muted)">(max 5/Woche)</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-          <input type="radio" name="vr-mode" id="vr-mode-auto" value="auto" ${vrMode==='auto'?'checked':''} onchange="calcVrDays()">
-          Automatisch nach Stunden/Woche <span id="vr-mode-auto-hint" style="font-size:11px;color:var(--muted)"></span>
-        </label>
-      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--primary)">Urlaubstage:</span>
+        <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${editing?editing.workDays:1}"
+          style="width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
+          oninput="onVrManualDaysInput()">
+        <span id="vr-mode-manual-hint" style="font-size:11px;color:var(--muted)"></span>
+      </label>
     </div>
     <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
     <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:#fffbf5;border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:#856404">
@@ -229,32 +221,18 @@ export function calcVrDays(){
   const empId=document.getElementById('vr-emp')?.value||'';
   const vrUser=empId?d2.users.find(u=>u.id===empId)||window.cu:window.cu;
   const weekdays=countWorkDays(f,t,vrUser); // Mo-Fr (mit Feiertagscheck)
-  const dpw=Math.max(1,Math.min(7,vrUser?.dpw||5));
-  const wh=vrUser?.wh||40;
-  const profileHoursPerDay=Math.round((wh/dpw)*10)/10; // Stunden pro Urlaubstag nach Stunden/Woche
-  const vhpdHoursPerDay=vrUser?.vacHoursPerDay||Math.round(wh/(dpw||5))||8; // Stunden pro Urlaubstag aus Einstellung
-  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'manual';
-  // Auto-Wert nach Profil (Werktage pro Woche auf dpw gedeckelt)
+  // Stunden pro Urlaubstag: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin).
+  const hoursPerDay=Math.round(vacDailyMin(vrUser)/60*10)/10;
+  // Vorschlag nach Profil (Werktage/Woche, ggf. dpw-gedeckelt) – frei überschreibbar.
   const autoDays=countVacationDays(f,t,vrUser);
   const manualHint=document.getElementById('vr-mode-manual-hint');
-  if(manualHint) manualHint.textContent=`(max 5/Woche · ${vhpdHoursPerDay}h pro Urlaubstag)`;
-  const autoHint=document.getElementById('vr-mode-auto-hint');
-  if(autoHint) autoHint.textContent=`(${wh}h / ${dpw} Tage → ${profileHoursPerDay}h pro Urlaubstag)`;
-  const hoursPerDay=mode==='auto'?profileHoursPerDay:vhpdHoursPerDay;
+  if(manualHint) manualHint.textContent=`à ${hoursPerDay}h · frei änderbar`;
   let effective;
-  if(type==='Urlaub'&&mode==='manual'){
+  if(type==='Urlaub'){
     const manualEl=document.getElementById('vr-manual-days');
-    // Solange der/die Nutzer:in den Wert noch nicht selbst angepasst hat,
-    // bei Datumswechsel den nach Profil berechneten Vorschlag übernehmen.
+    // Solange nicht selbst angepasst: bei Datumswechsel den Vorschlag übernehmen.
     if(manualEl&&!window._vrManualTouched) manualEl.value=(halfDay&&singleDay?0.5:autoDays);
-    effective=parseFloat(manualEl?.value)||1;
-    // Deckel: max 5 Urlaubstage pro Kalenderwoche (z.B. zum Minus-Ausgleich)
-    const weeks=Math.max(1,Math.ceil(weekdays/5));
-    effective=Math.min(effective,weeks*5);
-  } else if(type==='Urlaub'){
-    effective=halfDay&&singleDay?0.5:autoDays;
-    const manualEl=document.getElementById('vr-manual-days');
-    if(manualEl) manualEl.value=effective;
+    effective=parseFloat(manualEl?.value)||(halfDay&&singleDay?0.5:autoDays);
   } else {
     effective=halfDay&&singleDay?0.5:weekdays;
   }
@@ -328,23 +306,16 @@ export async function saveVacRequest(){
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
   const weekdays=countWorkDays(from,to,targetUser);
-  const dpw=Math.max(1,Math.min(7,targetUser?.dpw||5));
-  const mode=document.querySelector('input[name="vr-mode"]:checked')?.value||'manual';
   let wd;
   if(halfDay){ wd=0.5; }
-  else if(type==='Urlaub'&&mode==='manual'){
-    const weeks=Math.max(1,Math.ceil(weekdays/5));
-    wd=Math.min(parseFloat(document.getElementById('vr-manual-days')?.value)||1,weeks*5);
-  } else if(type==='Urlaub'){
-    wd=countVacationDays(from,to,targetUser); // nach Profil (Werktage/Woche gedeckelt auf dpw)
+  else if(type==='Urlaub'){
+    // Frei eingegebene Anzahl Urlaubstage (Vorschlag war countVacationDays).
+    wd=parseFloat(document.getElementById('vr-manual-days')?.value)||countVacationDays(from,to,targetUser);
   } else {
     wd=weekdays;
   }
-  // Stunden pro Urlaubstag: aus Einstellung (vacHoursPerDay) oder nach Stunden/Woche (wh/dpw)
-  const whU=targetUser?.wh||40;
-  const profileHoursPerDay=Math.round((whU/dpw)*10)/10;
-  const vhpdHoursPerDay=targetUser?.vacHoursPerDay||Math.round(whU/(dpw||5))||8;
-  const hoursPerDay=type==='Urlaub'?(mode==='auto'?profileHoursPerDay:vhpdHoursPerDay):null;
+  // Stunden pro Urlaubstag zentral (Teilzeit=8h, Vollzeit/Leitung=Tagessoll).
+  const hoursPerDay=type==='Urlaub'?Math.round(vacDailyMin(targetUser)/60*10)/10:null;
   // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
   // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
   // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
@@ -361,7 +332,7 @@ export async function saveVacRequest(){
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
-    hoursMode:type==='Urlaub'?mode:null, hoursPerDay,
+    hoursPerDay,
     status:autoApprove?'approved':'pending',
     submittedAt:old?old.submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,

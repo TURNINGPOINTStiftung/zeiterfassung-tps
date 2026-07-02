@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
+import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
@@ -662,7 +662,9 @@ export function td_zuord(ds,field,val,wh,dpw){
   if((val==='Urlaub'||val==='AU/Krank')&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
     const u=getUser(uid)||cu;
     const dailyMin=Math.round(wh*60/(dpw||5))||480;
-    const dMin=val==='Urlaub'?((u?.vacHoursPerDay||Math.round(wh/(dpw||5))||8)*60):dailyMin;
+    // Urlaub: Teilzeit = 8h, Vollzeit/Leitung = Tagessoll (zentral in vacDailyMin).
+    // AU/Krank: weiterhin Tagessoll aus wh/dpw.
+    const dMin=val==='Urlaub'?vacDailyMin(u):dailyMin;
     setDay(uid,window.year,window.mon,ds,'b1von','08:00');
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
     setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
@@ -925,8 +927,9 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
   // Freiberufler (alles), Sonstiges, Arbeitszeitausgleich → nur Bemerkung.
   const hoursType=!isFree&&(type==='Urlaub'||type==='AU/Krank');
-  // Urlaub: Stunden/Tag aus der gewählten Berechnung (Einstellung oder Stunden/Woche), sonst Profil-Default.
-  const dailyMin=(type==='Urlaub'&&hoursPerDay)?Math.round(hoursPerDay*60):(dailyMinutes(user)||480);
+  // Urlaub: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin); expliziter
+  // hoursPerDay-Wert vom Antrag hat Vorrang. AU/Krank: Tagessoll aus wh/dpw.
+  const dailyMin=type==='Urlaub'?(hoursPerDay?Math.round(hoursPerDay*60):vacDailyMin(user)):(dailyMinutes(user)||480);
   mutate(d=>{
     const perWeek={}; // KW → bereits eingetragene Tage (Deckel dpw)
     let cur=new Date(from+'T12:00:00');
