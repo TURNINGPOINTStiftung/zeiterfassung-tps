@@ -18,7 +18,7 @@ export function renderSettings(){
     const zeToggle=isGFUser
       ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
       :isLeitungUser
-        ?`<button class="btn btn-sm btn-${reportAktiv?'warn':'ok'}" onclick="toggleLeitungReport('${u.id}')" style="font-size:11px;padding:4px 9px">${reportAktiv?'Privat (kein GF-Zugriff)':'GF-Zugriff aktivieren'}</button>`
+        ?`<span style="font-size:11px;color:var(--muted)" title="Leitungs-Zeiterfassung ist immer privat; eingereichte Monate gehen als Buchhaltungsversion an die GF">🔒 ZE privat · Buchhaltung an GF</span>`
         :'';
     return `<div class="user-row">
       <div>
