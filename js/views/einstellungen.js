@@ -4,6 +4,7 @@ import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLab
 import { esc, toast, openModal, closeModal } from '../utils.js';
 import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
+import { vacDailyMin } from '../calc.js';
 
 export function renderSettings(){
   const cu=window.cu;
@@ -433,8 +434,8 @@ function userForm(u={}){
       </div>
       <div class="uf-grid2">
         <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${u.al||24}"></div>
-        <div class="form-group"><label>Stunden / Urlaubstag</label>
-          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round((u.wh||20)/(u.dpw||5))||8}">
+        <div class="form-group"><label>Stunden / Urlaubstag <span style="font-size:11px;color:var(--muted)">(Teilzeit i.d.R. 8)</span></label>
+          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}">
         </div>
       </div>
       <div class="uf-grid2">
@@ -558,7 +559,7 @@ function collectUserForm(){
     wh,
     dpw,
     al:isFree?0:parseFloat(document.getElementById('uf-al').value)||24,
-    vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(wh/dpw)||8),
+    vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(vacDailyMin({wh,dpw,role})/60*10)/10),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
