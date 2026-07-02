@@ -129,7 +129,7 @@
         <button class="btn btn-outline btn-sm" onclick="changeMonth(1)">▶</button>
         <span id="month-status-badge" class="status-badge s-draft">Entwurf</span>
         <span id="emp-select-wrap" style="display:none">
-          <select id="emp-select" onchange="onEmpSelect()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+          <select id="emp-select" aria-label="Mitarbeiter auswählen" onchange="onEmpSelect()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
         </span>
         <span id="viewing-other-banner" style="display:none;background:#e8f0fe;color:var(--primary);font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1.5px solid var(--primary-l)">
           👁 Ansicht: <span id="viewing-other-name"></span>
@@ -228,9 +228,9 @@
     <div class="view" id="view-uebersicht">
       <div class="flex" style="margin-bottom:18px;flex-wrap:wrap;gap:10px;align-items:center">
         <h2 style="font-size:19px;font-weight:700;color:var(--primary)">Mitarbeiterübersicht</h2>
-        <select id="ueber-year" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
-        <select id="ueber-mon" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
-        <select id="ueber-team" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+        <select id="ueber-year" aria-label="Jahr" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        <select id="ueber-mon" aria-label="Monat" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></select>
+        <select id="ueber-team" aria-label="Team" onchange="renderOverview()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
           <option value="">Alle Teams</option>
         </select>
         <button class="btn btn-outline btn-sm no-print" id="btn-reminders" style="display:none;margin-left:auto"
@@ -302,7 +302,7 @@
           <div id="custom-role-list"></div>
           <div class="flex mt-14" style="gap:6px;flex-wrap:wrap">
             <input class="tag-input" id="new-role-label" placeholder="Bezeichnung…" style="flex:2;min-width:120px" onkeydown="if(event.key==='Enter')addCustomRole()">
-            <select id="new-role-base" style="flex:1;min-width:120px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+            <select id="new-role-base" aria-label="Basis-Rolle" style="flex:1;min-width:120px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
               <option value="mitarbeiter">Mitarbeiter/in</option>
               <option value="freiberuflich">Freiberuflich</option>
               <option value="berater">Berater/in</option>
