@@ -1,6 +1,32 @@
 import { STORAGE_KEY } from './config.js';
 import { getData, getUser, mutate, saveRaw } from './data.js';
+import { computeAutoCarry } from './calc.js';
 import { openModal, closeModal, toast, diffMin, addMin } from './utils.js';
+
+// Manuelle Überträge, die vom automatischen (minutengenauen) Wert abweichen, auf
+// Automatik zurücksetzen. Behebt z.B. alte, versehentlich auf ganze Stunden
+// gerundete Überträge (40:30 → faelschlich manuell 40). Reine Zeitdaten bleiben unberührt.
+export function fixManualCarryovers(){
+  const d=getData();
+  const _f=h=>{ const min=Math.round((h||0)*60), neg=min<0, a=Math.abs(min); return (neg?'-':'')+Math.floor(a/60)+':'+String(a%60).padStart(2,'0'); };
+  const MO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const list=[];
+  Object.keys(d.entries||{}).forEach(k=>{
+    const e=d.entries[k]; if(!e||!e.carryoverManual) return;
+    const parts=k.split('_'); const m=+parts.pop(); const y=+parts.pop(); const uid=parts.join('_');
+    const u=getUser(uid); if(!u) return;
+    const stored=Number(e.carryover||0);
+    const auto=computeAutoCarry(uid,u,y,m);
+    if(Math.abs(stored-auto)>0.001) list.push({k,name:u.name,y,m,stored,auto});
+  });
+  if(!list.length){ toast('Keine abweichenden manuellen Überträge gefunden – alles automatisch/korrekt.','ok'); return; }
+  list.sort((a,b)=>a.name.localeCompare(b.name,'de')||a.y-b.y||a.m-b.m);
+  const preview=list.slice(0,15).map(r=>`• ${r.name} ${MO[r.m-1]} ${r.y}: manuell ${_f(r.stored)} → auto ${_f(r.auto)}`).join('\n');
+  if(!confirm(`${list.length} manuelle Überträge weichen vom automatischen Wert ab und werden auf Automatik zurückgesetzt:\n\n${preview}${list.length>15?`\n… und ${list.length-15} weitere`:''}\n\nZurücksetzen?`)) return;
+  mutate(dd=>{ list.forEach(r=>{ const e=dd.entries[r.k]; if(e){ e.carryoverManual=false; e.carryover=0; } }); });
+  toast(`${list.length} Übertrag/Überträge auf Automatik zurückgesetzt ✓`,'ok');
+  try{ window.renderZeiterfassung?.(); window.renderOverview?.(); }catch(e){}
+}
 
 export function exportData(){
   const blob=new Blob([JSON.stringify(getData(),null,2)],{type:'application/json'});
