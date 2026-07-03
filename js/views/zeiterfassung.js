@@ -925,18 +925,23 @@ function _isoWeekKey(d){
   return t.getUTCFullYear()+'-'+week;
 }
 
-export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null){
+export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null,hourDays=null){
   const isFree=isFreelancer(user);
   const holFree=user.holidaysLikeSunday!==false;
   const dpw=Math.max(1,Math.min(7,user.dpw||5));
+  const isUrlaub=type==='Urlaub';
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
   // Freiberufler (alles), Sonstiges, Arbeitszeitausgleich → nur Bemerkung.
-  const hoursType=!isFree&&(type==='Urlaub'||type==='AU/Krank');
+  const hoursType=!isFree&&(isUrlaub||type==='AU/Krank');
   // Urlaub: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin); expliziter
   // hoursPerDay-Wert vom Antrag hat Vorrang. AU/Krank: Tagessoll aus wh/dpw.
-  const dailyMin=type==='Urlaub'?(hoursPerDay?Math.round(hoursPerDay*60):vacDailyMin(user)):(dailyMinutes(user)||480);
+  const dailyMin=isUrlaub?(hoursPerDay?Math.round(hoursPerDay*60):vacDailyMin(user)):(dailyMinutes(user)||480);
+  // Urlaub: nur die ersten <hourDays> Werktage bekommen echte Stunden (zählen als Urlaub),
+  // der Rest des Zeitraums nur die Bemerkung „Urlaub" (wie Arbeitszeitausgleich, ohne Stunden).
+  const urlaubCap=(isUrlaub&&hourDays!=null)?Number(hourDays):Infinity;
   mutate(d=>{
-    const perWeek={}; // KW → bereits eingetragene Tage (Deckel dpw)
+    const perWeek={}; // KW → bereits eingetragene Tage (Deckel dpw) – nur AU/Krank
+    let urlaubUsed=0;  // bereits mit Stunden befüllte Urlaubstage
     let cur=new Date(from+'T12:00:00');
     const endD=new Date(to+'T12:00:00');
     while(cur<=endD){
@@ -953,16 +958,26 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
           if(!d.entries[k].days) d.entries[k].days={};
           if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
           const dayObj=d.entries[k].days[ds];
-          if(hoursType){
+          if(hoursType&&isUrlaub){
+            const step=halfDay?0.5:1;
+            if(urlaubUsed<urlaubCap){
+              const mins=halfDay?Math.round(dailyMin/2):dailyMin;
+              // Echter Urlaubstag: Stunden + Zuordnung „Urlaub" (zählt als Urlaubstag).
+              Object.assign(dayObj,{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:'Urlaub',b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!halfDay});
+              urlaubUsed+=step;
+            } else {
+              // Restliche Urlaubszeit: nur Bemerkung, KEINE Stunden (zählt nicht als Urlaubstag).
+              Object.assign(dayObj,{b1von:'',b1bis:'',b1zuord:'',b1bem:'Urlaub',b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:false});
+            }
+          } else if(hoursType){
+            // AU/Krank: wie bisher, Deckel dpw pro Woche.
             const wk=_isoWeekKey(cur);
             const used=perWeek[wk]||0;
             if(used<dpw){
-              const mins=halfDay&&type==='Urlaub'?Math.round(dailyMin/2):dailyMin;
-              // Stunden + Zuordnung = der Abwesenheitstyp (Urlaub / AU/Krank)
-              Object.assign(dayObj,{b1von:'08:00',b1bis:addMin('08:00',mins),b1zuord:type,b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:!!(halfDay&&type==='Urlaub')});
-              perWeek[wk]=used+(halfDay&&type==='Urlaub'?0.5:1);
+              Object.assign(dayObj,{b1von:'08:00',b1bis:addMin('08:00',dailyMin),b1zuord:type,b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:false});
+              perWeek[wk]=used+1;
             } else {
-              dayObj.b1bem=type; // über dpw hinaus → nur Bemerkung
+              dayObj.b1bem=type;
             }
           } else {
             // Freiberufler / Sonstiges / Arbeitszeitausgleich → nur Bemerkung

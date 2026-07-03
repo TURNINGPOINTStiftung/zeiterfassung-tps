@@ -236,7 +236,14 @@ export function calcVrDays(){
   } else {
     effective=halfDay&&singleDay?0.5:weekdays;
   }
-  if(info) info.textContent=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
+  if(info){
+    let txt=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
+    if(type==='Urlaub'&&(weekdays-effective)>=1){
+      const rest=weekdays-effective;
+      txt+=` · übrige ${rest} Tag${rest!==1?'e':''} im Zeitraum nur als Vermerk „Urlaub" (ohne Stunden)`;
+    }
+    info.textContent=txt;
+  }
   if(hint) hint.style.display=weekdays>5?'block':'none';
 }
 
@@ -340,7 +347,7 @@ export async function saveVacRequest(){
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay);
+  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay,wd);
   closeModal(); renderAbwesenheiten();
   if(old){
     toast(autoApprove?'Abwesenheit aktualisiert. ✓':'Abwesenheit aktualisiert – wartet erneut auf Genehmigung der Leitung. ✓','ok');
@@ -371,7 +378,7 @@ export function approveVacRequest(id){
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
-  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay);
+  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay,r.workDays);
   renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 
