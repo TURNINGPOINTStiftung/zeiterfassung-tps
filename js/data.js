@@ -192,6 +192,16 @@ export function _migrate(d){
       }
     }
   }
+  // Leitung-Buchhaltungsberichte: alten Fixnamen „Leitung (Buchhaltung)" auf das
+  // Team der jeweiligen Leitung umstellen (z.B. „Leitung Akademie"). Idempotent.
+  if(d.teamReports){
+    Object.values(d.teamReports).forEach(r=>{
+      if(!r||r.teamName!=='Leitung (Buchhaltung)') return;
+      const lu=(d.users||[]).find(u=>u.id===r.leitungId);
+      const lt=lu?((Array.isArray(lu.teams)&&lu.teams.length)?lu.teams:(lu.team?[lu.team]:[])):[];
+      r.teamName='Leitung'+(lt.length?' '+lt.join(', '):'');
+    });
+  }
   const adminUser=d.users.find(u=>u.id==='admin');
   if(adminUser){ adminUser.role='admin'; }
   else{ d.users.unshift({id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',teams:[]}); }
