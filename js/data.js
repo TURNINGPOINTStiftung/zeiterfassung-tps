@@ -169,7 +169,13 @@ export function _migrate(d){
     if(d.teamCats[_oldSlash]){ if(!d.teamCats[_newKey]) d.teamCats[_newKey]=d.teamCats[_oldSlash]; delete d.teamCats[_oldSlash]; }
     if(d.teamCats[_newKey]) _renameÖ(d.teamCats[_newKey],'Öffentlichkeitsarbeit','Marketing & Öffentlichkeitsarbeit');
   }
-  d.users.forEach(u=>{ if(u.team==='Öffentlichkeitsarbeit') u.team='Marketing & Öffentlichkeitsarbeit'; });
+  d.users.forEach(u=>{
+    if(u.team==='Öffentlichkeitsarbeit') u.team='Marketing & Öffentlichkeitsarbeit';
+    // Auch im teams-Array und im teamHistory umbenennen (sonst findet teamHasLeitung
+    // die Leitung nicht und der GF sieht Team-Mitglieder faelschlich).
+    if(Array.isArray(u.teams)) u.teams=u.teams.map(t=>t==='Öffentlichkeitsarbeit'?'Marketing & Öffentlichkeitsarbeit':t);
+    if(Array.isArray(u.teamHistory)) u.teamHistory.forEach(h=>{ if(h&&h.team==='Öffentlichkeitsarbeit') h.team='Marketing & Öffentlichkeitsarbeit'; });
+  });
   for(const [k,entry] of Object.entries(d.entries||{})){
     if(!entry||!entry.days) continue;
     const uid2=k.slice(0,k.length-8);

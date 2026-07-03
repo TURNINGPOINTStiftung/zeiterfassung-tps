@@ -200,12 +200,15 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   };
   mutate(function(d){
     if(!d.teamReports) d.teamReports={};
-    // Vorherige Berichte für genau dieses Team + diesen Monat entfernen → der neue
-    // überschreibt sie (keine Dubletten bei der Geschäftsführung).
+    // Ein neu eingereichter Bericht ÜBERSCHREIBT alte für denselben Monat: gleiches Team
+    // ODER überlappende Mitarbeiter. Mitarbeiter-IDs sind stabil – so werden auch alte
+    // Berichte unter dem früheren Teamnamen (z.B. „Öffentlichkeitsarbeit") ersetzt.
+    var newSet={}; empIds.forEach(function(id){ newSet[id]=1; });
     Object.keys(d.teamReports).forEach(function(k){
       var r=d.teamReports[k]; if(!r||r.year!==y||r.month!==m) return;
-      var single = r.teamName===teamName || (Array.isArray(r.managedTeams)&&r.managedTeams.length===1&&r.managedTeams[0]===teamName);
-      if(single) delete d.teamReports[k];
+      var sameTeam = r.teamName===teamName || (Array.isArray(r.managedTeams)&&r.managedTeams.includes(teamName));
+      var overlap = Array.isArray(r.employeeIds)&&r.employeeIds.some(function(id){ return newSet[id]; });
+      if(sameTeam||overlap) delete d.teamReports[k];
     });
     d.teamReports[rKey]=report;
   });
