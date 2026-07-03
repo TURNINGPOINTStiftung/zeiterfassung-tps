@@ -304,8 +304,11 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     +sumCards
     +'<div class="bh-sig">'
     +'<div class="bh-sig-col"><h4>Ort / Datum</h4><div class="bh-sig-line"><span style="font-size:11px;font-weight:600">'+esc(ortDat)+'</span></div></div>'
-    +'<div class="bh-sig-col"><h4>Unterschrift Mitarbeiter / in</h4><div class="bh-sig-line">'+empSigHtml+'</div></div>'
-    +'<div class="bh-sig-col"><h4>Geprüft – Unterschrift Leitung</h4><div class="bh-sig-line">'+mgSigHtml+'</div></div>'
+    // Leitung zertifiziert selbst → nur EINE Unterschrift, kein „geprüft"-Block.
+    +(u.role==='leitung'
+      ? '<div class="bh-sig-col"><h4>Unterschrift Leitung</h4><div class="bh-sig-line">'+empSigHtml+'</div></div>'
+      : '<div class="bh-sig-col"><h4>Unterschrift Mitarbeiter / in</h4><div class="bh-sig-line">'+empSigHtml+'</div></div>'
+        +'<div class="bh-sig-col"><h4>Geprüft – Unterschrift Leitung</h4><div class="bh-sig-line">'+mgSigHtml+'</div></div>')
     +'</div>'
     +'</div>';
 }
