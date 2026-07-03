@@ -1068,10 +1068,13 @@ export function doSubmit(){
   setEntryField(tuid,year,mon,'status','submitted');
   setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
   // Leitung: eingereichter Monat automatisch als Buchhaltungsversion in den GF-Berichten.
+  // Gruppenname = „Leitung <Team>" (das Team, für das die Leitung verantwortlich ist).
   if(leitungSelf){
+    const _lt=(Array.isArray(tuser.teams)&&tuser.teams.length)?tuser.teams:(tuser.team?[tuser.team]:[]);
+    const _teamLabel='Leitung'+(_lt.length?' '+_lt.join(', '):'');
     const rKey='LEIT_'+tuid+'_'+year+'_'+String(mon).padStart(2,'0');
     mutate(d=>{ if(!d.teamReports) d.teamReports={}; d.teamReports[rKey]={
-      id:rKey, teamName:'Leitung (Buchhaltung)', year, month:mon,
+      id:rKey, teamName:_teamLabel, year, month:mon,
       employeeIds:[tuid], leitungId:tuid, leitungName:tuser.name,
       submittedAt:new Date().toISOString(), seenAt:null
     }; });
