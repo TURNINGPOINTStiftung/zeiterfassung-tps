@@ -64,7 +64,11 @@ export function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'
 
 export function teamHasLeitung(teamName){
   if(!teamName) return false;
-  return getData().users.some(u=>u.role==='leitung'&&Array.isArray(u.teams)&&u.teams.includes(teamName));
+  return getData().users.some(u=>{
+    if(u.role!=='leitung') return false;
+    const lt=(Array.isArray(u.teams)&&u.teams.length)?u.teams:(u.team?[u.team]:[]);
+    return lt.includes(teamName);
+  });
 }
 
 export function canSeeEmployee(mgr,emp,dateStr){
@@ -78,7 +82,10 @@ export function canSeeEmployee(mgr,emp,dateStr){
     if(emp.role==='leitung') return false;
     if(emp.role==='berater') return true;
     if(emp.role==='admin'||emp.role==='geschaeftsfuehrer') return false;
-    return !teamHasLeitung(emp.team);
+    // GF sieht einen Mitarbeiter nur, wenn KEINES seiner Teams eine Leitung hat
+    // (sonst reportet ihn die Leitung). Alle Teams prüfen, nicht nur das primäre.
+    const empTeams=(Array.isArray(emp.teams)&&emp.teams.length)?emp.teams:(emp.team?[emp.team]:[]);
+    return !empTeams.some(t=>teamHasLeitung(t));
   }
   if(mgr.role==='leitung'){
     // Andere Leitung ist ebenfalls privat (nicht durch Kolleg:innen einsehbar).
