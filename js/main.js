@@ -53,7 +53,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
 import { importHistorical, importHistForUser } from './import-data.js';
 import { exportData, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,
-         showPauseMigration, runPauseMigration } from './data-mgmt.js';
+         showPauseMigration, runPauseMigration, fixManualCarryovers } from './data-mgmt.js';
 import { openProfileModal, saveProfile, shareApp, _downloadHtml } from './profile.js';
 import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
          catOptionsForUser } from './cats.js';
@@ -228,6 +228,7 @@ window.resetData             = resetData;
 window.showCarryoverCleanup  = showCarryoverCleanup;
 window.fixApproverToLeitung  = fixApproverToLeitung;
 window.runCarryoverCleanup   = runCarryoverCleanup;
+window.fixManualCarryovers   = fixManualCarryovers;
 window.showPauseMigration    = showPauseMigration;
 window.runPauseMigration     = runPauseMigration;
 
