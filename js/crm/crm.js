@@ -793,18 +793,17 @@ function paintDetail(){
     .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
-  const kontakte=(e.kontakte||[]).map(k=>`
-    <div class="crm-row">
-      <div class="grow"><span class="name">${esc(k.name)}</span>${k.funktion?` <span class="fn"${canEditK?` ondblclick="crmQuickRenameFunktion('${k.id}')" title="Doppelklick: Rolle ändern" style="cursor:pointer"`:''}>${esc(k.funktion)}</span>`:''}
-        ${(k.email||k.tel)?`<div class="small crm-contact">${[
-            k.email?`<a href="${mailHref(k.email)}" class="crm-mail">✉️ ${esc(k.email)}</a>`:'',
-            k.tel?`<a href="${telHref(k.tel)}" class="crm-tel">📞 ${esc(k.tel)}</a>`:''
-          ].filter(Boolean).join('<span class="sep">·</span>')}</div>`:''}
-        ${k.note?`<div class="small">${linkify(k.note)}</div>`:''}
-      </div>
-      <button class="btn-sm-crm" onclick="crmEditMember('${k.id}')">Bearbeiten</button>
-      <button class="crm-x" title="Entfernen" onclick="crmDeleteMember('${k.id}')">✕</button>
-    </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Kontakte.</div>`;
+  // Kontakte als klickbare Karten (wie im Gartenverein-CRM) → Detail-Ansicht beim Klick.
+  const kCards=(e.kontakte||[]).map(k=>`
+    <div class="crm-card" onclick="crmMemberDetail('${k.id}')">
+      <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
+      ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
+      ${(k.email||k.tel)?`<div class="meta" onclick="event.stopPropagation()">
+        ${k.email?`<a href="${mailHref(k.email)}" class="crm-chip">✉️ ${esc(k.email)}</a>`:''}
+        ${k.tel?`<a href="${telHref(k.tel)}" class="crm-chip">📞 ${esc(k.tel)}</a>`:''}
+      </div>`:''}
+    </div>`).join('');
+  const kontakte = kCards ? `<div class="crm-list">${kCards}</div>` : `<div class="small" style="color:var(--muted)">Noch keine Kontakte.</div>`;
 
   const _today=new Date().toISOString().slice(0,10);
   const terminRow=t=>{
@@ -1119,6 +1118,31 @@ function crmSaveMember(mid){
 function crmDeleteMember(mid){
   mutateEntity(e=>{ e.kontakte=(e.kontakte||[]).filter(x=>x.id!==mid); });
   paintDetail();
+}
+function crmDeleteMemberConfirm(mid){
+  const e=curEntity(); if(!e) return;
+  const k=(e.kontakte||[]).find(x=>x.id===mid); if(!k) return;
+  if(!confirm('Kontakt „'+(k.name||'')+'" wirklich entfernen?')) return;
+  crmCloseModal();
+  crmDeleteMember(mid);
+}
+// Detail-Ansicht eines Kontakts (wie im Gartenverein): Anzeige + Bearbeiten/Löschen.
+function crmMemberDetail(mid){
+  const e=curEntity(); if(!e) return;
+  const k=(e.kontakte||[]).find(x=>x.id===mid); if(!k) return;
+  const canEdit=crmFull()||crmRestricted();
+  const det=(label,inner)=>inner?`<div class="crm-field" style="margin-bottom:10px"><label>${esc(label)}</label><div class="v">${inner}</div></div>`:'';
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">👤 ${esc(k.name||'(Kontakt)')}</h3>
+    ${det('Rolle / Funktion', k.funktion?esc(k.funktion):'')}
+    ${det('E-Mail', k.email?`<a href="${mailHref(k.email)}">${esc(k.email)}</a>`:'')}
+    ${det('Telefon', k.tel?`<a href="${telHref(k.tel)}">${esc(k.tel)}</a>`:'')}
+    ${det('Notiz', k.note?`<span style="white-space:pre-line">${linkify(k.note)}</span>`:'')}
+    <div class="crm-modal-actions" style="margin-top:16px">
+      ${canEdit?`<button class="btn-sm-crm danger" style="margin-right:auto" onclick="crmDeleteMemberConfirm('${k.id}')">🗑 Löschen</button>`:''}
+      <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+      ${canEdit?`<button class="btn-sm-crm primary" onclick="crmEditMember('${k.id}')">✎ Bearbeiten</button>`:''}
+    </div>`);
 }
 
 // ── Termine ────────────────────────────────────────────────────────
@@ -3396,7 +3420,7 @@ Object.assign(window, {
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
-  crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember,
+  crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmCloseBoard, crmReopenBoard,
