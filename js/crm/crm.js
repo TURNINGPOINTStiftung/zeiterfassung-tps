@@ -884,15 +884,14 @@ function paintDetail(){
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
   const openTasks=entityOpenTaskCount(e);
   const kCount=(e.kontakte||[]).length;
-  const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['kontakte','Kontakte'+(kCount?` (${kCount})`:'')],['termine','Termine']];
+  const tabs=[['allgemeines','Allgemeines'+(kCount?` · ${kCount} Kontakt${kCount!==1?'e':''}`:'')],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
   tabs.push(['kommunikation','Kommunikation']);
   if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
   const bodyByTab={
-    allgemeines: stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`,
+    allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
     aufgaben: aufgabenSec,
-    kontakte: kontakteSec,
     termine: termineSec + vaSection + angeboteSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec
