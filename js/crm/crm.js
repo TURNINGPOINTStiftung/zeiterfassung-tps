@@ -784,12 +784,13 @@ function paintDetail(){
   window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
-  const canCfg=crmFull();                      // Feld-Bezeichnung per Doppelklick umbenennen
+  const canCfg=crmFull()||crmRestricted();     // Feld-Bezeichnung (pro Eintrag) per Doppelklick umbenennen
   const canEditK=crmFull()||crmRestricted();   // Kontakt-Rolle per Doppelklick ändern
+  const flbls=e.fieldLabels||{};               // pro-Eintrag umbenannte Feld-Bezeichnungen
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(f.label)}</label>`:`<label>${esc(f.label)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   const kontakte=(e.kontakte||[]).map(k=>`
@@ -1002,7 +1003,8 @@ function crmOpenModalShell(){ window._crmModalOpen=true; }
 function crmCloseModal(){ window._crmModalOpen=false; closeModal(); }
 
 // ── Neu anlegen / Stammdaten bearbeiten ────────────────────────────
-function stammFormHtml(s){
+function stammFormHtml(s, flbls){
+  flbls=flbls||{};
   return stammFields(window._crmTree).map(f=>{
     const v=esc(s[f.key]||'');
     const inp = f.type==='textarea'
@@ -1010,7 +1012,8 @@ function stammFormHtml(s){
       : f.type==='date'
         ? `<input type="date" id="crm-sf-${f.key}" value="${v}">`
         : `<input id="crm-sf-${f.key}" value="${v}">`;
-    return `<div class="crm-modal-field"><label>${esc(f.label)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
+    const flabel=flbls[f.key]||f.label;
+    return `<div class="crm-modal-field"><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
   }).join('');
 }
 function crmOpenNew(){
@@ -1027,7 +1030,7 @@ function crmEditStamm(){
   const e=curEntity(); if(!e) return;
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Stammdaten</h3>
-    ${stammFormHtml(e.stamm||{})}
+    ${stammFormHtml(e.stamm||{}, e.fieldLabels||{})}
     <div class="crm-modal-actions">
       <button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
       <button class="btn-sm-crm primary" onclick="crmSaveStamm(false)">Speichern</button>
@@ -2830,21 +2833,22 @@ function crmCfgFieldSave(origKey){
   saveCrmConfig(work); crmCloseModal(); paintVerwConfig();
   toast('Feld gespeichert ✓','ok');
 }
-// Doppelklick direkt am Eintrag: Stammfeld-Bezeichnung umbenennen (baum-scoped, nur voller Zugriff).
-// Der interne Schlüssel bleibt unverändert → bestehende Werte bleiben erhalten.
+// Doppelklick direkt am Eintrag: Stammfeld-Bezeichnung NUR für DIESEN Eintrag umbenennen
+// (pro Verein/Sozialakteur individuell, gespeichert an e.fieldLabels). Interner Schlüssel
+// bleibt unverändert → bestehende Werte bleiben erhalten. Andere Einträge sind nicht betroffen.
 function crmQuickRenameField(key){
-  if(!crmFull()){ toast('Zum Umbenennen ist voller CRM-Zugriff nötig.','err'); return; }
-  const sel=window._crmTree;
-  const work=_cfgWork();
-  const cur=(_cfgFields(work, sel).find(f=>f.key===key)||{}).label||key;
-  const tl=(treeByKey(sel)||{}).label||sel;
-  const nl=window.prompt('Feld-Bezeichnung ändern (gilt für „'+tl+'"):', cur);
+  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung zum Ändern.','err'); return; }
+  const e=curEntity(); if(!e) return;
+  const def=(stammFields(window._crmTree).find(x=>x.key===key)||{}).label||key;
+  const cur=(e.fieldLabels&&e.fieldLabels[key])||def;
+  const nl=window.prompt('Feld-Bezeichnung für diesen Eintrag ändern:', cur);
   if(nl==null) return;
   const label=String(nl).trim(); if(!label){ toast('Bezeichnung darf nicht leer sein.','err'); return; }
-  const arr=_cfgEnsureArr(work, sel);
-  const f=arr.find(x=>x.key===key); if(!f){ toast('Feld nicht gefunden.','err'); return; }
-  f.label=label;
-  saveCrmConfig(work);
+  mutateEntity(ent=>{
+    if(!ent.fieldLabels) ent.fieldLabels={};
+    if(label===def) delete ent.fieldLabels[key]; // gleich wie Standard → Override entfernen
+    else ent.fieldLabels[key]=label;
+  });
   paintDetail();
   toast('Feld umbenannt ✓','ok');
 }
