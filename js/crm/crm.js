@@ -223,12 +223,12 @@ function injectStyles(){
   .crm-card .meta{display:flex;gap:8px;flex-wrap:wrap}
   .crm-chip{font-size:11px;font-weight:600;background:#eef2f8;border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
   .crm-chip.warn{background:#fff4e5;border-color:#ffd9a0;color:#b56a00}
-  /* Kontakt-Karten etwas größer – Rolle, Mail und Telefon gut lesbar */
-  .crm-kontakt{padding:17px 19px}
-  .crm-kontakt h3{font-size:18px}
-  .crm-kontakt .sub{font-size:15px;color:var(--text);font-weight:600;margin-bottom:11px}
-  .crm-kontakt .meta{gap:10px}
-  .crm-kontakt .meta .crm-chip{font-size:14px;padding:6px 13px}
+  /* Kontakt-Karten: harmonisch – Rolle & Mail/Telefon gleich groß, Name nur wenig größer */
+  .crm-kontakt{padding:16px 18px}
+  .crm-kontakt h3{font-size:17px;margin-bottom:6px}
+  .crm-kontakt .sub{font-size:15px;color:var(--text);font-weight:500;margin-bottom:11px}
+  .crm-kontakt .meta{gap:9px}
+  .crm-kontakt .meta .crm-chip{font-size:15px;font-weight:500;padding:6px 14px}
   .crm-empty{text-align:center;color:var(--muted);padding:60px 20px}
   .crm-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .crm-detail-head h2{font-size:22px;font-weight:700;color:var(--primary);margin:0;flex:1;min-width:200px}
@@ -864,8 +864,9 @@ function paintDetail(){
   // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
   const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
   const aufgabenSec = entityProjekteSectionHtml(e);
+  const _kEdit=crmFull()||crmRestricted();
   const kontakteSec = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
       ${kontakte}
     </div>`;
   const termineSec = `<div class="crm-sec">
@@ -1149,6 +1150,108 @@ function crmMemberDetail(mid){
       <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
       ${canEdit?`<button class="btn-sm-crm primary" onclick="crmEditMember('${k.id}')">✎ Bearbeiten</button>`:''}
     </div>`);
+}
+
+// ── Outlook-Austausch der Kontakte (vCard / CSV) ────────────────────
+function _vcEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
+function crmContactsToVCard(list){
+  return (list||[]).map(k=>{
+    const nm=String(k.name||'').trim(); const sp=nm.lastIndexOf(' ');
+    const last=sp>0?nm.slice(sp+1):nm, first=sp>0?nm.slice(0,sp):'';
+    const L=['BEGIN:VCARD','VERSION:3.0','FN:'+_vcEsc(k.name||''),'N:'+_vcEsc(last)+';'+_vcEsc(first)+';;;'];
+    if(k.funktion) L.push('TITLE:'+_vcEsc(k.funktion));
+    if(k.email) L.push('EMAIL;TYPE=INTERNET:'+_vcEsc(k.email));
+    if(k.tel) L.push('TEL;TYPE=CELL:'+_vcEsc(k.tel));
+    if(k.note) L.push('NOTE:'+_vcEsc(k.note));
+    L.push('END:VCARD');
+    return L.join('\r\n');
+  }).join('\r\n');
+}
+function crmExportContactsVcf(){
+  const e=curEntity(); if(!e) return;
+  const list=e.kontakte||[]; if(!list.length){ toast('Keine Kontakte zum Exportieren.','err'); return; }
+  const vcf=crmContactsToVCard(list);
+  const nm=((e.stamm&&e.stamm.name)||'Kontakte').replace(/[^\wäöüÄÖÜß\-]+/g,'_');
+  const blob=new Blob([vcf],{type:'text/vcard;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Kontakte_'+nm+'.vcf';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast(list.length+' Kontakt'+(list.length!==1?'e':'')+' als vCard exportiert ✓','ok');
+}
+function _parseVCard(txt){
+  const raw=String(txt).replace(/\r\n/g,'\n').replace(/\n[ \t]/g,''); // Zeilenfaltung auflösen
+  const out=[]; let cur=null;
+  raw.split('\n').forEach(line=>{
+    const t=line.trim();
+    if(/^BEGIN:VCARD/i.test(t)){ cur={}; return; }
+    if(/^END:VCARD/i.test(t)){ if(cur) out.push(cur); cur=null; return; }
+    if(!cur) return;
+    const ci=t.indexOf(':'); if(ci<0) return;
+    const prop=t.slice(0,ci).split(';')[0].split('.').pop().toUpperCase();
+    const val=t.slice(ci+1).replace(/\\n/gi,'\n').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\').trim();
+    if(prop==='FN'&&!cur.name) cur.name=val;
+    else if(prop==='N'&&!cur.name){ const p=val.split(';'); const nm=((p[1]||'')+' '+(p[0]||'')).trim(); if(nm) cur.name=nm; }
+    else if(prop==='TITLE'&&!cur.funktion) cur.funktion=val;
+    else if(prop==='EMAIL'&&!cur.email) cur.email=val;
+    else if(prop==='TEL'&&!cur.tel) cur.tel=val;
+    else if(prop==='NOTE'&&!cur.note) cur.note=val;
+  });
+  return out.filter(c=>c.name||c.email);
+}
+function _csvRows(txt){
+  txt=String(txt).replace(/^﻿/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const first=(txt.split('\n')[0]||''); const delim=(first.split(';').length>first.split(',').length)?';':',';
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<txt.length;i++){ const ch=txt[i];
+    if(q){ if(ch==='"'){ if(txt[i+1]==='"'){ cell+='"'; i++; } else q=false; } else cell+=ch; }
+    else { if(ch==='"') q=true; else if(ch===delim){ row.push(cell); cell=''; } else if(ch==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; } else cell+=ch; } }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(c=>String(c||'').trim()!==''));
+}
+function _parseContactsCsv(txt){
+  const rows=_csvRows(txt); if(rows.length<2) return [];
+  const head=rows[0].map(h=>String(h||'').trim().toLowerCase());
+  const find=(...cands)=>{ for(const c of cands){ const i=head.indexOf(c); if(i>=0) return i; } for(const c of cands){ const i=head.findIndex(h=>h.includes(c)); if(i>=0) return i; } return -1; };
+  const iFirst=find('vorname','first name','given name'), iLast=find('nachname','last name','surname');
+  const iName=find('anzeigename','display name','vollständiger name'), iMail=find('e-mail-adresse','email address','e-mail','email');
+  const iTel=find('mobiltelefon','telefon (geschäftlich)','telefon (privat)','mobile phone','business phone','telefon','phone');
+  const iRole=find('position','beruf','job title','funktion','rolle','title'), iNote=find('notizen','notes','bemerkung','note');
+  const out=[];
+  for(let r=1;r<rows.length;r++){ const row=rows[r]; const g=i=>i>=0?String(row[i]||'').trim():'';
+    let name=g(iName); if(!name) name=((g(iFirst))+' '+(g(iLast))).trim();
+    const email=g(iMail); if(!name&&!email) continue;
+    out.push({name:name||email, funktion:g(iRole), email, tel:g(iTel), note:g(iNote)});
+  }
+  return out;
+}
+function crmImportContactsFile(inp){
+  const file=inp&&inp.files&&inp.files[0]; if(!file) return;
+  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung.','err'); inp.value=''; return; }
+  if(!curEntity()){ inp.value=''; return; }
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const txt=String(ev.target.result||'');
+      const isVcf=/BEGIN:VCARD/i.test(txt)||/\.vcf$/i.test(file.name);
+      const parsed=isVcf?_parseVCard(txt):_parseContactsCsv(txt);
+      if(!parsed.length){ toast('Keine Kontakte in der Datei gefunden.','err'); inp.value=''; return; }
+      let added=0;
+      mutateEntity(ent=>{
+        if(!Array.isArray(ent.kontakte)) ent.kontakte=[];
+        const seen=new Set(ent.kontakte.map(k=>String(k.email||'').toLowerCase()).filter(Boolean));
+        parsed.forEach(c=>{
+          const mail=String(c.email||'').toLowerCase();
+          if(mail&&seen.has(mail)) return; // Dublette per E-Mail überspringen
+          ent.kontakte.push({ id:newId(), name:c.name||'', funktion:c.funktion||'', email:c.email||'', tel:c.tel||'', note:c.note||'' });
+          if(mail) seen.add(mail); added++;
+        });
+      });
+      paintDetail();
+      toast(added?(added+' Kontakt'+(added!==1?'e':'')+' importiert ✓'):'Keine neuen Kontakte (bereits vorhanden).', added?'ok':'');
+    }catch(err){ toast('Import fehlgeschlagen: '+((err&&err.message)||''),'err'); }
+    inp.value='';
+  };
+  reader.readAsText(file,'utf-8');
 }
 
 // ── Termine ────────────────────────────────────────────────────────
@@ -3427,6 +3530,7 @@ Object.assign(window, {
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
+  crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmCloseBoard, crmReopenBoard,
