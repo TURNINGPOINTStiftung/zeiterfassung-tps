@@ -784,15 +784,17 @@ function paintDetail(){
   window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
+  const canCfg=crmFull();                      // Feld-Bezeichnung per Doppelklick umbenennen
+  const canEditK=crmFull()||crmRestricted();   // Kontakt-Rolle per Doppelklick ändern
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); return `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${disp}</div></div>`; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(f.label)}</label>`:`<label>${esc(f.label)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   const kontakte=(e.kontakte||[]).map(k=>`
     <div class="crm-row">
-      <div class="grow"><span class="name">${esc(k.name)}</span>${k.funktion?` <span class="fn">${esc(k.funktion)}</span>`:''}
+      <div class="grow"><span class="name">${esc(k.name)}</span>${k.funktion?` <span class="fn"${canEditK?` ondblclick="crmQuickRenameFunktion('${k.id}')" title="Doppelklick: Rolle ändern" style="cursor:pointer"`:''}>${esc(k.funktion)}</span>`:''}
         ${(k.email||k.tel)?`<div class="small crm-contact">${[
             k.email?`<a href="${mailHref(k.email)}" class="crm-mail">✉️ ${esc(k.email)}</a>`:'',
             k.tel?`<a href="${telHref(k.tel)}" class="crm-tel">📞 ${esc(k.tel)}</a>`:''
@@ -2828,6 +2830,35 @@ function crmCfgFieldSave(origKey){
   saveCrmConfig(work); crmCloseModal(); paintVerwConfig();
   toast('Feld gespeichert ✓','ok');
 }
+// Doppelklick direkt am Eintrag: Stammfeld-Bezeichnung umbenennen (baum-scoped, nur voller Zugriff).
+// Der interne Schlüssel bleibt unverändert → bestehende Werte bleiben erhalten.
+function crmQuickRenameField(key){
+  if(!crmFull()){ toast('Zum Umbenennen ist voller CRM-Zugriff nötig.','err'); return; }
+  const sel=window._crmTree;
+  const work=_cfgWork();
+  const cur=(_cfgFields(work, sel).find(f=>f.key===key)||{}).label||key;
+  const tl=(treeByKey(sel)||{}).label||sel;
+  const nl=window.prompt('Feld-Bezeichnung ändern (gilt für „'+tl+'"):', cur);
+  if(nl==null) return;
+  const label=String(nl).trim(); if(!label){ toast('Bezeichnung darf nicht leer sein.','err'); return; }
+  const arr=_cfgEnsureArr(work, sel);
+  const f=arr.find(x=>x.key===key); if(!f){ toast('Feld nicht gefunden.','err'); return; }
+  f.label=label;
+  saveCrmConfig(work);
+  paintDetail();
+  toast('Feld umbenannt ✓','ok');
+}
+// Doppelklick auf die Rolle eines Kontakts: frei umbenennen (pro Kontakt).
+function crmQuickRenameFunktion(mid){
+  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung zum Ändern.','err'); return; }
+  const e=curEntity(); if(!e) return;
+  const k=(e.kontakte||[]).find(x=>x.id===mid); if(!k) return;
+  const nf=window.prompt('Rolle / Funktion ändern:', k.funktion||'');
+  if(nf==null) return;
+  mutateEntity(ent=>{ const kk=(ent.kontakte||[]).find(x=>x.id===mid); if(kk) kk.funktion=String(nf).trim(); });
+  paintDetail();
+  toast('Rolle geändert ✓','ok');
+}
 function crmCfgFieldMove(idx, dir){
   const sel=window._cfgFieldTree||'__default';
   const work=_cfgWork(); const arr=_cfgEnsureArr(work, sel);
@@ -3356,7 +3387,7 @@ Object.assign(window, {
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
-  crmCfgFuncsSave,
+  crmCfgFuncsSave, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
