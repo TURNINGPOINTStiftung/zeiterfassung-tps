@@ -884,7 +884,7 @@ function paintDetail(){
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
   const openTasks=entityOpenTaskCount(e);
   const kCount=(e.kontakte||[]).length;
-  const tabs=[['allgemeines','Allgemeines'+(kCount?` · ${kCount} Kontakt${kCount!==1?'e':''}`:'')],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
+  const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
   tabs.push(['kommunikation','Kommunikation']);
   if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
