@@ -223,6 +223,12 @@ function injectStyles(){
   .crm-card .meta{display:flex;gap:8px;flex-wrap:wrap}
   .crm-chip{font-size:11px;font-weight:600;background:#eef2f8;border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
   .crm-chip.warn{background:#fff4e5;border-color:#ffd9a0;color:#b56a00}
+  /* Kontakt-Karten etwas größer – Rolle, Mail und Telefon gut lesbar */
+  .crm-kontakt{padding:17px 19px}
+  .crm-kontakt h3{font-size:18px}
+  .crm-kontakt .sub{font-size:15px;color:var(--text);font-weight:600;margin-bottom:11px}
+  .crm-kontakt .meta{gap:10px}
+  .crm-kontakt .meta .crm-chip{font-size:14px;padding:6px 13px}
   .crm-empty{text-align:center;color:var(--muted);padding:60px 20px}
   .crm-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .crm-detail-head h2{font-size:22px;font-weight:700;color:var(--primary);margin:0;flex:1;min-width:200px}
@@ -795,7 +801,7 @@ function paintDetail(){
 
   // Kontakte als klickbare Karten (wie im Gartenverein-CRM) → Detail-Ansicht beim Klick.
   const kCards=(e.kontakte||[]).map(k=>`
-    <div class="crm-card" onclick="crmMemberDetail('${k.id}')">
+    <div class="crm-card crm-kontakt" onclick="crmMemberDetail('${k.id}')">
       <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
       ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
       ${(k.email||k.tel)?`<div class="meta" onclick="event.stopPropagation()">
