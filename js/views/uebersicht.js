@@ -47,21 +47,47 @@ function _currentizePivot(yearMap,user){
   return {yearMap:out,allCats};
 }
 
+// Standard-Monat der Mitarbeiterübersicht: der zuletzt EINGEREICHTE Monat über
+// alle sichtbaren Mitarbeiter. Beispiel: Anfang Juli haben alle den Juni
+// eingereicht → die Übersicht startet im Juni (der Monat, der Prüfung braucht),
+// nicht im leeren Juli. Berücksichtigt werden Monate mit Einreichungs-Aktivität
+// (submitted/approved/rejected). Fallback: aktueller Kalendermonat.
+export function _ueberDefaultMonth(){
+  const cu=window.cu; const d=getData();
+  const fallback={y:window.year,m:window.mon};
+  if(!cu) return fallback;
+  const SUBMITTED=new Set(['submitted','approved','rejected']);
+  let best=null;
+  Object.entries(d.entries||{}).forEach(([k,e])=>{
+    if(!e||!SUBMITTED.has(e.status)) return;
+    // Key: uid_YYYY_MM (uid kann selbst Unterstriche enthalten → gieriges Präfix)
+    const mm=k.match(/^(.*)_(\d{4})_(\d{2})$/); if(!mm) return;
+    const uid=mm[1], y=+mm[2], mo=+mm[3];
+    const emp=getUser(uid); if(!emp) return;
+    if(!canSeeEmployee(cu,emp,monthStartDate(y,mo))) return;
+    const rank=y*12+mo;
+    if(!best||rank>best.rank) best={y,m:mo,rank};
+  });
+  return best?{y:best.y,m:best.m}:fallback;
+}
+
 export function populateUeberYear(){
   const sel=document.getElementById('ueber-year');
   sel.innerHTML='';
+  const def=_ueberDefaultMonth();
   for(let y=2024;y<=2028;y++){
     const o=document.createElement('option'); o.value=y; o.textContent=y;
-    if(y===window.year) o.selected=true; sel.appendChild(o);
+    if(y===def.y) o.selected=true; sel.appendChild(o);
   }
 }
 
 export function populateUeberMon(){
   const sel=document.getElementById('ueber-mon');
   sel.innerHTML='';
+  const def=_ueberDefaultMonth();
   MONTHS.forEach((mn,i)=>{
     const o=document.createElement('option'); o.value=i+1; o.textContent=mn;
-    if(i+1===window.mon) o.selected=true; sel.appendChild(o);
+    if(i+1===def.m) o.selected=true; sel.appendChild(o);
   });
 }
 
@@ -290,6 +316,13 @@ export function buildZuordSummary(employees,oy,om,d){
 
 export function openEmpMonth(uid){
   window.viewEmpId=uid;
+  // Den in der Übersicht gewählten Monat mitnehmen, damit die Zeiterfassung im
+  // SELBEN Monat öffnet (Übersicht auf Juni → Klick auf MA → Zeiterfassung Juni),
+  // nicht im aktuellen Kalendermonat.
+  const oy=parseInt(document.getElementById('ueber-year')?.value);
+  const om=parseInt(document.getElementById('ueber-mon')?.value);
+  if(oy) window.year=oy;
+  if(om) window.mon=om;
   window.switchView?.('zeiterfassung');
 }
 
