@@ -124,6 +124,9 @@ export function renderOverview(){
     employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u,mDateFilter));
     if(filterTeam) employees=employees.filter(u=>getTeamForDate(u,mDateFilter)===filterTeam);
   }
+  // CRM-only-Nutzer haben keine Zeiterfassung → nie in der Mitarbeiterübersicht
+  // anzeigen (galt bisher nur für die eigene Sicht, nicht beim Admin/GF).
+  employees=employees.filter(u=>!u.crmOnly);
 
   // Team für den gewählten Monat ermitteln (History-aware)
   const mDate=monthStartDate(oy,om);
