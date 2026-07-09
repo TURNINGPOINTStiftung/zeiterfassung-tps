@@ -24,8 +24,17 @@ function _workMinInWindow(dd,lo,hi){
 
 // v2026-06-fix
 export function renderZeiterfassung(){
-  const uid=window.viewEmpId||window.cu.id;
-  const user=getUser(uid);
+  let uid=window.viewEmpId||window.cu?.id;
+  let user=getUser(uid);
+  // Selbstheilung: zeigt viewEmpId auf einen (nicht mehr) auffindbaren Mitarbeiter
+  // – etwa nach einem Sync, der die Nutzerliste ersetzt hat – auf die EIGENE
+  // Zeiterfassung zurückfallen, statt in einem leeren "Kein Mitarbeiter"-Zustand
+  // hängenzubleiben (die Kopfdaten/Summe der vorherigen Ansicht blieben sonst stehen).
+  if(!user&&window.cu&&uid!==window.cu.id){
+    window.viewEmpId=window.cu.id;
+    uid=window.cu.id;
+    user=getUser(uid);
+  }
   if(!user){ document.getElementById('zt-body').innerHTML='<tr><td colspan="18" style="padding:20px;text-align:center;color:var(--muted)">Kein Mitarbeiter ausgewählt.</td></tr>'; return; }
 
   const year=window.year, mon=window.mon, cu=window.cu;
