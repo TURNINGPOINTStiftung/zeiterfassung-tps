@@ -124,9 +124,10 @@ export function renderOverview(){
     employees=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u,mDateFilter));
     if(filterTeam) employees=employees.filter(u=>getTeamForDate(u,mDateFilter)===filterTeam);
   }
-  // CRM-only-Nutzer haben keine Zeiterfassung → nie in der Mitarbeiterübersicht
-  // anzeigen (galt bisher nur für die eigene Sicht, nicht beim Admin/GF).
-  employees=employees.filter(u=>!u.crmOnly);
+  // Nutzer ohne eigene Zeiterfassung nie in der Mitarbeiterübersicht listen:
+  // CRM-only, die Geschäftsführung (GF-Konzept) sowie explizit ZE-lose Nutzer
+  // (noTimesheet). Galt bisher nicht im Admin-Zweig, der alle Nicht-Admins zeigte.
+  employees=employees.filter(u=>!u.crmOnly&&u.role!=='geschaeftsfuehrer'&&!u.noTimesheet);
 
   // Team für den gewählten Monat ermitteln (History-aware)
   const mDate=monthStartDate(oy,om);
