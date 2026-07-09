@@ -199,35 +199,48 @@ export function renderOverview(){
     if(!canSend) return '';
     const total=users.length;
     if(total===0) return '';
-    const approved=users.filter(u=>{
+    // Nur GENEHMIGTE Zeiterfassungen können an den GF gehen. Es müssen NICHT alle
+    // fertig sein: bereits genehmigte werden gesendet, fehlende reicht man später
+    // nach (Beispiel: 6 von 7 jetzt, die letzte danach).
+    const approvedUsers=users.filter(u=>{
       const e=d.entries[entryKey(u.id,oy,om)];
       return e&&e.status==='approved';
-    }).length;
+    });
+    const approved=approvedUsers.length;
     const allApproved=approved===total;
     const monthLabel=MONTHS[om-1]+' '+oy;
     const rKey='team_'+team.replace(/\W/g,'_')+'_'+oy+'_'+String(om).padStart(2,'0');
     const sent=d.teamReports&&d.teamReports[rKey];
-    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')}${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
-    const empIds=JSON.stringify(users.map(u=>u.id));
+    const sentSet=new Set((sent&&sent.employeeIds)||[]);
+    const notYetSent=approvedUsers.filter(u=>!sentSet.has(u.id)).length; // genehmigt, aber noch nicht gesendet
+    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
+    const approvedIds=JSON.stringify(approvedUsers.map(u=>u.id));
     // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
     // geführten) Teams heißt die Aktion "Bericht einreichen", geht aber genauso
     // in die Buchhaltungsversion (erscheint bei ihm in den GF-Berichten).
-    const btnLabel=cu.role==='geschaeftsfuehrer'?'📨 Bericht einreichen':'📨 An GF weiterleiten';
-    if(allApproved){
+    const verb=cu.role==='geschaeftsfuehrer'?'einreichen':'an GF senden';
+    // Noch nichts genehmigt → Senden nicht möglich.
+    if(approved===0){
       return `<div class="team-send-bar">
-        <span style="color:var(--ok);font-weight:600;font-size:13px">✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt</span>
+        <span style="color:var(--muted);font-size:13px">${monthLabel}: <strong>0/${total}</strong> genehmigt – bitte zuerst mindestens eine freigeben</span>
         ${sentInfo}
-        <button class="btn btn-ok btn-sm" onclick='sendTeamReportForTeam(${JSON.stringify(team)},${empIds},${oy},${om})'>
+        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">📨 ${cu.role==='geschaeftsfuehrer'?'Bericht einreichen':'An GF weiterleiten'}</button>
+      </div>`;
+    }
+    // Status-Text + Button-Beschriftung je nach Vollständigkeit / Nachreichung.
+    const statusText=allApproved
+      ? `✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt`
+      : `${monthLabel}: <strong>${approved}/${total}</strong> genehmigt${notYetSent>0&&sent?` · ${notYetSent} noch nicht gesendet`:''} – Rest später nachreichbar`;
+    const btnLabel=notYetSent>0&&sent
+      ? `📨 ${notYetSent} nachreichen`
+      : (allApproved?`📨 Alle ${total} ${verb}`:`📨 ${approved} von ${total} ${verb}`);
+    return `<div class="team-send-bar">
+        <span style="color:${allApproved?'var(--ok)':'var(--warn)'};font-weight:600;font-size:13px">${statusText}</span>
+        ${sentInfo}
+        <button class="btn btn-ok btn-sm" onclick='sendTeamReportForTeam(${JSON.stringify(team)},${approvedIds},${oy},${om})'>
           ${btnLabel}
         </button>
       </div>`;
-    } else {
-      return `<div class="team-send-bar">
-        <span style="color:var(--muted);font-size:13px">${monthLabel}: <strong>${approved}/${total}</strong> genehmigt – bitte zuerst alle freigeben</span>
-        ${sentInfo}
-        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">${btnLabel}</button>
-      </div>`;
-    }
   };
 
   // Erinnerungs-Button: nur für Leitung und Admin, nicht für GF

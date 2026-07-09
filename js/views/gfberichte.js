@@ -190,9 +190,10 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   // GF sendet nicht "an sich selbst" – für seine eigenen Teams heißt es Einreichen
   // in die Buchhaltungsversion, nicht Weiterleiten.
   const isGfSelf=cu.role==='geschaeftsfuehrer';
+  const _n=emps.length, _ze=_n===1?'Zeiterfassung':'Zeiterfassungen';
   const confirmMsg=isGfSelf
-    ? `Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) als Bericht einreichen (Buchhaltungsversion)?`
-    : `Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?`;
+    ? `${_n} ${_ze} für ${MONTHS[m-1]} ${y} (Team: ${teamName}) als Bericht einreichen (Buchhaltungsversion)?\nFehlende können später nachgereicht werden.`
+    : `${_n} ${_ze} für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?\nFehlende können später nachgereicht werden.`;
   if(!confirm(confirmMsg)) return;
   const rKey='team_'+teamName.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0');
   const report={
