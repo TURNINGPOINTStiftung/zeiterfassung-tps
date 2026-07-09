@@ -78,8 +78,10 @@ export function renderOverview(){
   const filterTeam=document.getElementById('ueber-team').value;
   const d=getData();
   const bCls={draft:'s-draft',submitted:'s-submitted',approved:'s-approved',rejected:'s-rejected'};
-  // Senden an GF aus der Mitarbeiterübersicht: Leitung & Admin (unabhängig vom ZE-Header-Button)
-  const canSend=cu.role==='leitung'||cu.role==='admin';
+  // Senden an GF aus der Mitarbeiterübersicht: Leitung, Admin & GF selbst (für
+  // Mitarbeiter/Teams, die der GF direkt führt, ohne zwischengeschaltete Leitung –
+  // deren Monate landen genauso als Bericht in der Buchhaltungsversion).
+  const canSend=cu.role==='leitung'||cu.role==='admin'||cu.role==='geschaeftsfuehrer';
 
   const mDateFilter=monthStartDate(oy,om);
   let employees;
@@ -177,19 +179,23 @@ export function renderOverview(){
     const sent=d.teamReports&&d.teamReports[rKey];
     const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')}${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
     const empIds=JSON.stringify(users.map(u=>u.id));
+    // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
+    // geführten) Teams heißt die Aktion "Bericht einreichen", geht aber genauso
+    // in die Buchhaltungsversion (erscheint bei ihm in den GF-Berichten).
+    const btnLabel=cu.role==='geschaeftsfuehrer'?'📨 Bericht einreichen':'📨 An GF weiterleiten';
     if(allApproved){
       return `<div class="team-send-bar">
         <span style="color:var(--ok);font-weight:600;font-size:13px">✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt</span>
         ${sentInfo}
         <button class="btn btn-ok btn-sm" onclick='sendTeamReportForTeam(${JSON.stringify(team)},${empIds},${oy},${om})'>
-          📨 An GF weiterleiten
+          ${btnLabel}
         </button>
       </div>`;
     } else {
       return `<div class="team-send-bar">
         <span style="color:var(--muted);font-size:13px">${monthLabel}: <strong>${approved}/${total}</strong> genehmigt – bitte zuerst alle freigeben</span>
         ${sentInfo}
-        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">📨 An GF weiterleiten</button>
+        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">${btnLabel}</button>
       </div>`;
     }
   };

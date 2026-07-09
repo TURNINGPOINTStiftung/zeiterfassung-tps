@@ -169,12 +169,20 @@ export function _migrate(d){
     if(d.teamCats[_oldSlash]){ if(!d.teamCats[_newKey]) d.teamCats[_newKey]=d.teamCats[_oldSlash]; delete d.teamCats[_oldSlash]; }
     if(d.teamCats[_newKey]) _renameÖ(d.teamCats[_newKey],'Öffentlichkeitsarbeit','Marketing & Öffentlichkeitsarbeit');
   }
+  // Team-Felder der User (team / teams[] / teamHistory[].team) auf ALLE
+  // historischen Schreibweisen prüfen, nicht nur das reine "Öffentlichkeitsarbeit"
+  // von oben. Der Teamname durchlief mehrere Zwischenstufen (Slash- und
+  // URL-encodierte Variante, siehe normZuord in calc.js für Kategorien) – blieb
+  // z.B. bei einer Leitung eine alte Schreibweise im teams-Array stehen, matcht
+  // teamHasLeitung() nicht mehr und der GF sieht deren Team-Mitglieder faelschlich
+  // direkt (statt sie der Leitung zu reporten).
+  const _MKT_RE=/^(Ö-Arbeit|Öffentlichkeitsarbeit|Marketing\s*[\/&]\s*Öffentlichkeitsarbeit|Marketing\s*%2F\s*Öffentlichkeitsarbeit)$/i;
+  const _MKT='Marketing & Öffentlichkeitsarbeit';
+  const _normÖ=t=>_MKT_RE.test(t||'')?_MKT:t;
   d.users.forEach(u=>{
-    if(u.team==='Öffentlichkeitsarbeit') u.team='Marketing & Öffentlichkeitsarbeit';
-    // Auch im teams-Array und im teamHistory umbenennen (sonst findet teamHasLeitung
-    // die Leitung nicht und der GF sieht Team-Mitglieder faelschlich).
-    if(Array.isArray(u.teams)) u.teams=u.teams.map(t=>t==='Öffentlichkeitsarbeit'?'Marketing & Öffentlichkeitsarbeit':t);
-    if(Array.isArray(u.teamHistory)) u.teamHistory.forEach(h=>{ if(h&&h.team==='Öffentlichkeitsarbeit') h.team='Marketing & Öffentlichkeitsarbeit'; });
+    if(_MKT_RE.test(u.team||'')) u.team=_MKT;
+    if(Array.isArray(u.teams)) u.teams=[...new Set(u.teams.map(_normÖ))];
+    if(Array.isArray(u.teamHistory)) u.teamHistory.forEach(h=>{ if(h&&_MKT_RE.test(h.team||'')) h.team=_MKT; });
   });
   for(const [k,entry] of Object.entries(d.entries||{})){
     if(!entry||!entry.days) continue;

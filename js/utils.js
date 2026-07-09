@@ -15,7 +15,11 @@ export function dayFmt(min){
   const num=(whole>0?whole:'')+fracStr||'0';
   return num+' '+(d===1&&!frac?'Tag':'Tage');
 }
-export function diffMin(v,b){ const d=tMin(b)-tMin(v); return d>0?d:0; }
+// Fehlt eine der beiden Zeiten (leer/undefined), ist der Block unvollständig ->
+// 0 Minuten. Sonst würde diffMin('','14:30') die fehlende Zeit als 00:00 lesen
+// und eine absurd lange (Fast-Tages-)Dauer liefern (Bug: Pflichtpause faelschlich
+// aufgeschlagen/abgezogen, wenn Start noch fehlt während Ende schon gesetzt ist).
+export function diffMin(v,b){ if(!v||!b) return 0; const d=tMin(b)-tMin(v); return d>0?d:0; }
 export function addMin(t,m){ const tot=tMin(t)+m; return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`; }
 export function roundToQuarter(val){
   if(!val||!val.includes(':')) return val;

@@ -187,7 +187,13 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   const d=getData();
   const emps=empIds.map(id=>d.users.find(u=>u.id===id)).filter(Boolean);
   if(!emps.length){ toast('Keine Mitarbeiterdaten vorhanden.','err'); return; }
-  if(!confirm(`Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?`)) return;
+  // GF sendet nicht "an sich selbst" – für seine eigenen Teams heißt es Einreichen
+  // in die Buchhaltungsversion, nicht Weiterleiten.
+  const isGfSelf=cu.role==='geschaeftsfuehrer';
+  const confirmMsg=isGfSelf
+    ? `Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) als Bericht einreichen (Buchhaltungsversion)?`
+    : `Alle ${emps.length} Zeiterfassungen für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?`;
+  if(!confirm(confirmMsg)) return;
   const rKey='team_'+teamName.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0');
   const report={
     id:rKey, leitungId:cu.id, leitungName:cu.name,
@@ -212,7 +218,9 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
     });
     d.teamReports[rKey]=report;
   });
-  toast('Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
+  toast(isGfSelf
+    ? 'Bericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' eingereicht ✓'
+    : 'Teambericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' an GF gesendet ✓','ok');
   notifyGF({
     art: 'Teambericht',
     von: cu.name,
