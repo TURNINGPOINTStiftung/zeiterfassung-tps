@@ -77,11 +77,11 @@ export function canSeeEmployee(mgr,emp,dateStr){
   if(mgr.role==='geschaeftsfuehrer'){
     // Mitarbeiter mit noReport (private ZE, nicht reportpflichtig) sind für GF unsichtbar
     if(emp.noReport) return false;
-    // Leitung meldet an den GF: der GF sieht die Leitung in der Übersicht und kann ihre
-    // EINGEREICHTEN Monate gegenzeichnen (Entwürfe bleiben in der Übersicht nicht
-    // anklickbar → die Live-Erfassung bleibt privat). Die Buchhaltungsversion in den
-    // GF-Berichten bleibt zusätzlich erhalten.
-    if(emp.role==='leitung') return true;
+    // Leitung ist für den GF grundsätzlich privat. NUR wenn ausdrücklich „vom GF
+    // gegenzeichnen lassen" (gfCountersign) gesetzt ist, sieht der GF die Leitung in
+    // der Übersicht und kann ihre EINGEREICHTEN Monate gegenzeichnen (Entwürfe bleiben
+    // über die Klick-Logik gesperrt → Live-Erfassung privat). Buchhaltungsversion bleibt.
+    if(emp.role==='leitung') return !!emp.gfCountersign;
     if(emp.role==='berater') return true;
     if(emp.role==='admin'||emp.role==='geschaeftsfuehrer') return false;
     // GF sieht einen Mitarbeiter nur, wenn KEINES seiner Teams eine Leitung hat
