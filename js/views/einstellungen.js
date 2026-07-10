@@ -98,48 +98,61 @@ export function fixApproverToLeitung(){
   if(!cu||cu.role!=='admin'){ toast('Nur als Admin möglich.','err'); return; }
   const d=getData();
   const users=d.users||[];
-  const norm=s=>(s||'').toLowerCase().replace(/\s+/g,' ').trim();
-
-  // Ziel: das Leitungs-Konto „Moritz Kriese" (nicht das Admin-Konto).
-  const target=users.find(u=>u.role==='leitung'&&norm(u.name)==='moritz kriese')
-            || users.find(u=>u.role!=='admin'&&norm(u.name)==='moritz kriese')
-            || users.find(u=>u.role==='leitung'&&norm(u.name).indexOf('moritz')>=0);
-  if(!target){
-    alert('Kein Leitungs-Konto „Moritz Kriese" gefunden.\n\nBitte zuerst ein Konto mit Rolle „Leitung" und Namen „Moritz Kriese" anlegen (oder die Rolle des bestehenden Kontos prüfen) und dann erneut ausführen.');
-    return;
-  }
   const isAdminId=id=>{ const u=id?getUser(id):null; return !!u&&u.role==='admin'; };
+  const uidOf=k=>{ const p=k.split('_'); return p.slice(0,-2).join('_'); };
+  const monthStart=(y,m)=>y+'-'+String(m).padStart(2,'0')+'-01';
+  const leiters=users.filter(u=>u.role==='leitung'&&getLeitungTeams(u).length>0);
+  // Zuständige Team-Leitung eines Mitarbeiters zu einem Datum (History-aware).
+  const respLeit=(emp,dateStr)=> emp?(leiters.find(l=>canSeeEmployee(l,emp,dateStr))||null):null;
+  // Team-Leitung anhand des Teamnamens (auch „Leitung <Team>"-Label).
+  const leitForTeam=(team)=>{ if(!team) return null; const t=String(team).replace(/^Leitung\s+/i,''); return leiters.find(l=>getLeitungTeams(l).includes(t))||null; };
 
-  // 1) Zeiterfassungen: genehmigt, aktuell vom Admin-Konto genehmigt.
-  const tsHits=[];
+  const tsPlan=[], yrPlan=[], tmPlan=[], skipped=[];
+
+  // 1) Genehmigte Zeiterfassungen → Prüfer = zuständige TEAM-Leitung (nicht Admin/„Moritz").
   Object.entries(d.entries||{}).forEach(([k,e])=>{
-    if(e&&e.status==='approved'&&isAdminId(e.reviewedBy)) tsHits.push(k);
+    if(!(e&&e.status==='approved')) return;
+    const emp=getUser(uidOf(k)); if(!emp||emp.role==='leitung') return; // Leitungs-eigene ZE unangetastet
+    const p=k.split('_'); const y=+p[p.length-2], m=+p[p.length-1];
+    const leit=respLeit(emp, monthStart(y,m));
+    if(!leit){ if(isAdminId(e.reviewedBy)) skipped.push('ZE '+emp.name+' '+m+'/'+y); return; }
+    if(e.reviewedBy===leit.id) return; // schon korrekt
+    tsPlan.push({k, leitId:leit.id, leitName:leit.name});
   });
-  // 2) Jahresberichte an die GF: aktuell vom Admin-Konto gesendet.
-  const yrHits=[];
-  Object.entries(d.yearReports||{}).forEach(([id,r])=>{ if(r&&isAdminId(r.sentBy)) yrHits.push(id); });
-  // 3) Teamberichte an die GF: aktuell vom Admin-Konto gesendet.
-  const tmHits=[];
-  Object.entries(d.teamReports||{}).forEach(([id,r])=>{ if(r&&isAdminId(r.leitungId)) tmHits.push(id); });
+  // 2) Jahresberichte → Absender = zuständige Leitung des jeweiligen Mitarbeiters.
+  Object.entries(d.yearReports||{}).forEach(([id,r])=>{
+    if(!r) return; const emp=getUser(r.userId); const leit=emp?respLeit(emp, (r.year||new Date().getFullYear())+'-06-01'):null;
+    if(!leit||r.sentBy===leit.id) return; yrPlan.push({id, leitId:leit.id, leitName:leit.name});
+  });
+  // 3) Teamberichte → Leitung = Leitung des Team-Berichts (eigene „LEIT_"-Berichte auslassen).
+  Object.entries(d.teamReports||{}).forEach(([id,r])=>{
+    if(!r||String(id).startsWith('LEIT_')) return;
+    const leit=leitForTeam(r.teamName||(Array.isArray(r.managedTeams)&&r.managedTeams[0]));
+    if(!leit||r.leitungId===leit.id) return; tmPlan.push({id, leitId:leit.id, leitName:leit.name});
+  });
 
-  const total=tsHits.length+yrHits.length+tmHits.length;
+  const total=tsPlan.length+yrPlan.length+tmPlan.length;
   if(!total){
-    alert('Nichts zu korrigieren ✓\n\nEs laufen keine genehmigten Zeiterfassungen oder GF-Berichte mehr über das Admin-Konto.');
+    alert('Nichts zu korrigieren ✓\n\nAlle Genehmiger/Absender sind bereits die jeweilige Team-Leitung.'
+      +(skipped.length?'\n\n⚠ '+skipped.length+' Eintrag/Einträge haben keine zuständige Team-Leitung (bleiben unverändert).':''));
     return;
   }
-  const msg='Folgende Einträge werden der Leitung „'+target.name+'" zugeordnet:\n\n'
-    +'• '+tsHits.length+' genehmigte Zeiterfassung(en)\n'
-    +'• '+yrHits.length+' Jahresbericht(e) an die GF\n'
-    +'• '+tmHits.length+' Teambericht(e) an die GF\n\n'
-    +'Zeiten und Inhalte bleiben unverändert – es wird nur der/die Genehmiger/Absender gesetzt.\n\nFortfahren?';
+  const byLeit={}; tsPlan.forEach(x=>{ byLeit[x.leitName]=(byLeit[x.leitName]||0)+1; });
+  let msg='Genehmiger/Absender werden auf die jeweilige TEAM-LEITUNG gesetzt:\n\n'
+    +'• '+tsPlan.length+' genehmigte Zeiterfassung(en)\n'
+    +'• '+yrPlan.length+' Jahresbericht(e)\n'
+    +'• '+tmPlan.length+' Teambericht(e)\n';
+  if(Object.keys(byLeit).length) msg+='\nZeiterfassungen je Leitung:\n'+Object.entries(byLeit).map(([n,c])=>'  • '+n+': '+c).join('\n')+'\n';
+  if(skipped.length) msg+='\n⚠ '+skipped.length+' ohne zuständige Team-Leitung (bleiben unverändert).\n';
+  msg+='\nZeiten und Inhalte bleiben unverändert – es wird nur der/die Genehmiger/Absender gesetzt.\n\nFortfahren?';
   if(!confirm(msg)) return;
 
   mutate(dd=>{
-    tsHits.forEach(k=>{ if(dd.entries&&dd.entries[k]) dd.entries[k].reviewedBy=target.id; });
-    yrHits.forEach(id=>{ if(dd.yearReports&&dd.yearReports[id]){ dd.yearReports[id].sentBy=target.id; dd.yearReports[id].sentByName=target.name; } });
-    tmHits.forEach(id=>{ if(dd.teamReports&&dd.teamReports[id]){ dd.teamReports[id].leitungId=target.id; dd.teamReports[id].leitungName=target.name; } });
+    tsPlan.forEach(x=>{ if(dd.entries&&dd.entries[x.k]) dd.entries[x.k].reviewedBy=x.leitId; });
+    yrPlan.forEach(x=>{ if(dd.yearReports&&dd.yearReports[x.id]){ dd.yearReports[x.id].sentBy=x.leitId; dd.yearReports[x.id].sentByName=x.leitName; } });
+    tmPlan.forEach(x=>{ if(dd.teamReports&&dd.teamReports[x.id]){ dd.teamReports[x.id].leitungId=x.leitId; dd.teamReports[x.id].leitungName=x.leitName; } });
   });
-  toast(total+' Eintrag/Einträge auf „'+target.name+'" gesetzt ✓','ok');
+  toast(total+' Eintrag/Einträge auf die jeweilige Team-Leitung gesetzt ✓','ok');
   renderSettings();
 }
 
