@@ -9,10 +9,20 @@ desktop.ini
 *.swp
 *.swo
 
-# Local backups
+# Local backups / Rettungs- und Hilfsdateien (nie veröffentlichen – enthalten ggf. Nutzerdaten)
 *.bak
 *.backup
 *_backup.*
+RETTUNG_tps.json
+rettung*.json
+firebase_*.json
+REKONSTRUKTION_*.json
+GOLDEN_BACKUP_*.json
+_serve_persist.ps1
+_restore*.html
+_recover*.html
+_guardtest.html
+_pausetest.html
 
 # Logs
 *.log
