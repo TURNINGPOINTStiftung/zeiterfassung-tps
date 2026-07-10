@@ -77,9 +77,11 @@ export function canSeeEmployee(mgr,emp,dateStr){
   if(mgr.role==='geschaeftsfuehrer'){
     // Mitarbeiter mit noReport (private ZE, nicht reportpflichtig) sind für GF unsichtbar
     if(emp.noReport) return false;
-    // Leitung-ZE ist grundsätzlich privat: der GF sieht sie NICHT live, sondern nur als
-    // eingereichte Buchhaltungsversion in den GF-Berichten (nach dem Einreichen).
-    if(emp.role==='leitung') return false;
+    // Leitung meldet an den GF: der GF sieht die Leitung in der Übersicht und kann ihre
+    // EINGEREICHTEN Monate gegenzeichnen (Entwürfe bleiben in der Übersicht nicht
+    // anklickbar → die Live-Erfassung bleibt privat). Die Buchhaltungsversion in den
+    // GF-Berichten bleibt zusätzlich erhalten.
+    if(emp.role==='leitung') return true;
     if(emp.role==='berater') return true;
     if(emp.role==='admin'||emp.role==='geschaeftsfuehrer') return false;
     // GF sieht einen Mitarbeiter nur, wenn KEINES seiner Teams eine Leitung hat

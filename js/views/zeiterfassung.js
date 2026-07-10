@@ -411,13 +411,19 @@ export function renderSignature(user,entry){
   } else {
     mgSig=`<span class="dig-sig"><span class="pending">Ausstehend</span></span>`;
   }
-  // Leitung zertifiziert selbst (geht direkt als Buchhaltungsversion an den GF) →
-  // nur EINE Unterschrift, kein separater „geprüft"-Block.
   const _leit=user.role==='leitung';
+  const _reviewed=entry.status==='approved'||entry.status==='rejected';
+  // Zweiter Unterschriften-Block:
+  //  - Mitarbeiter/Berater: „Geprüft – Unterschrift Leitung" (immer sichtbar).
+  //  - Leitung: „Gegengezeichnet – Geschäftsführung" – NUR wenn der GF bereits
+  //    gegengezeichnet hat (sonst zeigt die Leitung nur ihre eigene Unterschrift).
+  const _secondBlock = _leit
+    ? (_reviewed ? `<div class="sig-block"><div class="lbl">Gegengezeichnet – Geschäftsführung</div><div class="sig-line">${mgSig}</div></div>` : '')
+    : `<div class="sig-block"><div class="lbl">Geprüft – Unterschrift Leitung</div><div class="sig-line">${mgSig}</div></div>`;
   area.innerHTML=`
     <div class="sig-block"><div class="lbl">Ort / Datum</div><div class="sig-line"><span style="font-size:12px;font-weight:600">${ortDat}</span></div></div>
     <div class="sig-block"><div class="lbl">${_leit?'Unterschrift Leitung':'Unterschrift Mitarbeiter/in'}</div><div class="sig-line">${empSig}</div></div>
-    ${_leit?'':`<div class="sig-block"><div class="lbl">Geprüft – Unterschrift Leitung</div><div class="sig-line">${mgSig}</div></div>`}`;
+    ${_secondBlock}`;
 }
 
 export function td_change(ds,field,val){
