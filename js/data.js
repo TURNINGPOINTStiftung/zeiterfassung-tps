@@ -1,5 +1,8 @@
 import { STORAGE_KEY, _STAMP_KEY, DEFAULT_CATS, DEFAULT_TEAMS, DEFAULT_USERS } from './config.js';
-import { addMin, diffMin, getHolidays } from './utils.js';
+import { addMin, diffMin, tMin, getHolidays } from './utils.js';
+
+// Deckelt eine Uhrzeit auf 24:00 (Mitternacht) – verhindert ungültige Zeiten wie 25:30.
+function _clamp24(t){ if(!t||!t.includes(':')) return t; const p=t.split(':'); const h=+p[0], m=+p[1]; return (h>24||(h===24&&m>0))?'24:00':t; }
 
 // ── Internal state ────────────────────────────────────────────────
 let _dataCache = null;
@@ -49,7 +52,8 @@ export function _migrate(d){
         const gross=diffMin(day.b1von,day.b1bis)+Number(day.ktmin||0);
         const autoPause=gross>=540?45:gross>=360?30:0;
         if(autoPause>0){
-          day.b1bis=addMin(day.b1bis,autoPause);
+          const add=Math.min(autoPause, Math.max(0, 1440 - tMin(day.b1bis))); // 24:00-Deckelung
+          if(add>0) day.b1bis=addMin(day.b1bis,add);
           day._pauseMigratedV2=true;
         }
       });
@@ -74,12 +78,25 @@ export function _migrate(d){
         const required=grossNet>=540?45:grossNet>=360?30:0;
         let gap=0; const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g;
         const missing=Math.max(0,required-gap);
-        if(missing>0) day.b2bis=addMin(day.b2bis,missing);
+        if(missing>0){ const add=Math.min(missing, Math.max(0, 1440 - tMin(day.b2bis))); if(add>0) day.b2bis=addMin(day.b2bis,add); } // 24:00-Deckelung
         day._b2PauseMig=true; // markieren (auch wenn 0, damit idempotent)
       });
     });
     d._fixes.b2PauseMigrationV1=true;
   }catch(e){ console.error('B2-Pause-Migration Fehler (ignoriert):',e); }
+
+  // ── Sicherheits-Deckelung: keine Uhrzeit über 24:00 ─────────────
+  // Fängt ungültige Endzeiten wie 25:30 ab (entstanden durch früheren, gestapelten
+  // Pausen-Aufschlag). Läuft bei jedem Load, ist idempotent.
+  try{
+    Object.values(d.entries||{}).forEach(entry=>{
+      if(!entry||!entry.days) return;
+      Object.values(entry.days).forEach(day=>{
+        if(!day) return;
+        ['b1von','b1bis','b2von','b2bis'].forEach(f=>{ if(day[f]) day[f]=_clamp24(day[f]); });
+      });
+    });
+  }catch(e){ console.error('24:00-Deckelung Fehler (ignoriert):',e); }
 
   // ── Freiberufler-Pause-Rücknahme (einmalig) ─────────────────────
   // Frühere Migrationen haben bei Freiberuflern Pause auf b1bis addiert.

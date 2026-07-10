@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
-import { diffMin, addMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
+import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
@@ -653,7 +653,13 @@ function _applyDayPause(uid,ds,editedField){
     // (Soll minus Lücke) wird hinten aufgeschlagen; die Tagessumme bleibt = Nettoarbeit.
     const _gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
     const pause=Math.max(0,required-_gap);
-    if(pause>0){ day[lastF]=addMin(day[lastF],pause); day._paused=pause; day._pausedF=lastF; }
+    if(pause>0){
+      // 24:00-Deckelung: die Abfahrtszeit darf NIE über Mitternacht hinausgehen
+      // (sonst entstehen ungültige Zeiten wie 25:30). Passt die Pflichtpause nicht
+      // mehr vor Mitternacht, wird auf 24:00 gedeckelt.
+      const add=Math.min(pause, Math.max(0, 1440 - tMin(day[lastF])));
+      if(add>0){ day[lastF]=addMin(day[lastF],add); day._paused=add; day._pausedF=lastF; }
+    }
   });
 }
 
