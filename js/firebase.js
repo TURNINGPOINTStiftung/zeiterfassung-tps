@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -147,6 +147,7 @@ export async function initFirebase(){
       if(!isPwHashed(u.pw)){ u.pw=await makePwRecord(u.pw); needsSave=true; }
     }
     setDataCache(migrated);
+    noteGoodData(migrated); // Datenverlust-Schutz: vertrauenswürdigen Stand merken
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
@@ -170,6 +171,7 @@ function _applyFirebaseSnap(val){
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
   setDataCache(migrated);
+  noteGoodData(migrated); // Datenverlust-Schutz: vertrauenswürdigen Stand merken
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated)); }catch(e){}
   // Migration-Flags nach Firebase schreiben damit sie nicht wiederholt laufen
   if((!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1)||
