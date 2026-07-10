@@ -394,6 +394,13 @@ function userForm(u={}){
       </label>
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Für externe/zusätzliche Personen, die nur das CRM nutzen. Der Zeiterfassungs-Bereich wird für sie ausgeblendet; den CRM-Zugriff stellst du unten in der Tabelle ein.</div>
     </div>`}
+    ${u.id==='admin'?'':`<div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="uf-gfcountersign" ${u.gfCountersign?'checked':''} style="width:auto;cursor:pointer">
+        ✍ Zeiterfassung vom GF gegenzeichnen lassen <span style="font-weight:400;color:var(--muted)">(nur für Leitung)</span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Wenn aktiv, sieht die Geschäftsführung die <b>eingereichten</b> Monate dieser Leitung in der Mitarbeiterübersicht und zeichnet sie gegen. Ohne Haken bleibt die Leitung für den GF privat.</div>
+    </div>`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
           const crs=getCustomRoles();
@@ -555,9 +562,11 @@ function collectUserForm(){
   const perms={};
   PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
   const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
+  const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
   return {
     perms,
     crmOnly,
+    gfCountersign,
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     email:document.getElementById('uf-email')?.value.trim()||'',
