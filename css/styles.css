@@ -212,6 +212,9 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
 .zt td input.t-inp:focus{border-color:var(--primary-l);outline:none}
 .zt td select.zuord{padding:3px 3px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:120px;background:#fff;max-width:140px}
 .zt td input.bem{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:100%;min-width:70px;background:#fff}
+/* Gesperrte (eingereichte) Bemerkung: Klicks/Hover gehen an die Zelle durch,
+   damit der Tooltip (title) mit dem vollen Text erscheint. */
+.zt td.bem-col input.bem:disabled{pointer-events:none}
 .zt td input.kt-min{padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:54px;text-align:center;background:#fff}
 .zt tr.readonly td input,.zt tr.readonly td select{background:#f0f2f5;pointer-events:none;border-color:transparent}
 .zt tfoot td{background:#1a3a5c;color:#fff;font-weight:700;font-size:12px;padding:8px 5px;text-align:center}
