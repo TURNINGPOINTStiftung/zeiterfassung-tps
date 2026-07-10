@@ -44,7 +44,11 @@ export function importData(e){
       const d=JSON.parse(ev.target.result);
       if(!d.users||!d.entries) throw new Error();
       if(!confirm('Alle aktuellen Daten ersetzen?')) return;
-      saveRaw(d); toast('Import erfolgreich – Seite wird neu geladen…','ok');
+      // Beabsichtigte Vollersetzung: Datenverlust-Schutz für DIESEN Schreibvorgang
+      // erlauben (ein Import/Backup darf kleiner sein als der aktuelle Stand).
+      window._allowDataShrink=true;
+      Promise.resolve(saveRaw(d)).finally(()=>{ window._allowDataShrink=false; });
+      toast('Import erfolgreich – Seite wird neu geladen…','ok');
       setTimeout(()=>location.reload(),1200);
     }catch(e){ toast('Ungültige Datei.','err'); }
   };

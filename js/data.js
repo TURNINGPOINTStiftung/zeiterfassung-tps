@@ -221,9 +221,41 @@ export function getData(){ return _dataCache||freshData(); }
 export function setDataCache(d){ _dataCache=d; }
 export function getDataCache(){ return _dataCache; }
 
+// ── Datenverlust-Schutz ("bulletproof") ───────────────────────────
+// Merkt sich den höchsten je gesehenen vertrauenswürdigen Datenbestand
+// (Nutzeranzahl + erfasste Tage). Ein Schreibvorgang, der diesen drastisch
+// unterschreiten würde (z.B. versehentliches Überschreiben der ganzen DB mit
+// Test-/Leerdaten), wird BLOCKIERT – nur mit explizitem Opt-in erlaubt.
+let _lastGoodUsers=0, _lastGoodDayCount=0;
+function _dayCount(d){ let n=0; for(const e of Object.values(d?.entries||{})) n+=Object.keys((e&&e.days)||{}).length; return n; }
+export function noteGoodData(d){
+  if(!d||!Array.isArray(d.users)) return;
+  _lastGoodUsers=Math.max(_lastGoodUsers, d.users.length);
+  _lastGoodDayCount=Math.max(_lastGoodDayCount, _dayCount(d));
+}
 export function saveRaw(d){
+  // Sanity-Guard gegen Massen-Datenverlust. Greift nur bei DRASTISCHER Reduktion
+  // (< Hälfte) gegenüber dem bisher bekannten guten Stand. Legitime Vollersetzungen
+  // (Import/Wiederherstellung) setzen window._allowDataShrink=true.
+  const nu=(d&&Array.isArray(d.users))?d.users.length:0;
+  const nd=_dayCount(d);
+  const drasticUsers=_lastGoodUsers>=4 && nu < Math.ceil(_lastGoodUsers/2);
+  const drasticDays =_lastGoodDayCount>=20 && nd < Math.floor(_lastGoodDayCount/2);
+  if((drasticUsers||drasticDays) && !window._allowDataShrink){
+    const msg=`[Datenschutz] Schreibvorgang BLOCKIERT – würde den Bestand drastisch reduzieren `+
+      `(Nutzer ${_lastGoodUsers}→${nu}, erfasste Tage ${_lastGoodDayCount}→${nd}). `+
+      `Nichts gespeichert. Falls wirklich gewollt: window._allowDataShrink=true setzen.`;
+    console.error(msg);
+    try{ window.toast?.('⛔ Schreibvorgang blockiert (Schutz vor Datenverlust) – nichts gespeichert.','err'); }catch(e){}
+    return Promise.reject(new Error('data-shrink-guard'));
+  }
+  // Geräte-lokale 1-Schritt-Sicherung: den bisherigen guten Stand aufheben, BEVOR
+  // überschrieben wird. Erlaubt lokales Zurückholen, falls doch mal etwas schiefgeht
+  // (unabhängig von Firebase, ohne Regel-Änderung).
+  try{ const prev=localStorage.getItem(STORAGE_KEY); if(prev) localStorage.setItem(STORAGE_KEY+'_prev', prev); }catch(e){}
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
+  noteGoodData(d);
   if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
   return window._fbRef?.set(d).catch(e=>{
     console.warn('Firebase sync error:',e);
