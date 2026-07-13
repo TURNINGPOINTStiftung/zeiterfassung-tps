@@ -174,7 +174,8 @@ function crmSetupModuleBar(){
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
       // CRM für ALLE (jede Person hat „Meine Aufgaben"); Tiefe der Sicht regelt das CRM selbst.
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, verwaltung:isAdmin };
+      const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:isAdmin };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');

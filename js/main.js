@@ -62,6 +62,7 @@ import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
 // Nur als Seiteneffekt importiert. Komplett unabhängig von der
 // Zeiterfassung (eigener Firebase-Ref, eigener Cache, Lazy-Init).
 import './crm/crm.js';
+import './crm/auswertung.js';
 
 // ══════════════════════════════════════════════════════════════════
 // Expose everything to window (for inline onclick handlers in HTML)
