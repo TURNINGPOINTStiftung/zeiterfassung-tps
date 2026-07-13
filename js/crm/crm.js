@@ -860,6 +860,8 @@ function paintDetail(){
 
   // Statistik (nur bei Vereinen)
   const statsSec = (window._crmTree==='vereine') ? statsSecHtml(e) : '';
+  // Förderungen (für alle Baum-Typen)
+  const foerderungenSec = foerderungenSecHtml(e);
 
   // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
   const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
@@ -893,6 +895,7 @@ function paintDetail(){
   const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
   tabs.push(['kommunikation','Kommunikation']);
   if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
+  tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
   const bodyByTab={
@@ -900,7 +903,8 @@ function paintDetail(){
     aufgaben: aufgabenSec,
     termine: termineSec + vaSection + angeboteSec,
     kommunikation: statusSec + kommSec,
-    statistik: statsSec
+    statistik: statsSec,
+    foerderungen: foerderungenSec
   };
 
   root.innerHTML = barHtml() + `<div class="crm-body">
@@ -1534,6 +1538,77 @@ function crmSaveStat(){
 }
 function crmDeleteStat(id){
   mutateEntity(e=>{ e.stats=(e.stats||[]).filter(x=>x.id!==id); });
+  paintDetail();
+}
+
+// ── Förderungen (Fördermittel-Tracking je Eintrag) ─────────────────
+const FOERDER_STATUS=[
+  ['beantragt','Beantragt'],
+  ['genehmigt','Genehmigt'],
+  ['abgelehnt','Abgelehnt'],
+  ['abgeschlossen','Abgeschlossen'],
+];
+function foerderStatusLabel(s){ const f=FOERDER_STATUS.find(x=>x[0]===s); return f?f[1]:(s||'–'); }
+function foerderBadge(s){
+  const col={beantragt:['#8a5a00','#fff7e6'],genehmigt:['#1a7f37','#e9f8ee'],abgelehnt:['#b3261e','#fdecea'],abgeschlossen:['#3a4a5c','#eef1f5']}[s]||['#555','#eee'];
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${col[0]};background:${col[1]}">${esc(foerderStatusLabel(s))}</span>`;
+}
+function fmtEuro(n){ n=Number(n||0); return n.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
+function foerderungenSecHtml(e){
+  const canEdit=crmFull()||crmRestricted();
+  const list=(e.foerderungen||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const rows=list.map(f=>`<tr>
+      <td>${f.date?esc(fmtDate(Date.parse(f.date))):'–'}</td>
+      <td style="text-align:right;white-space:nowrap">${fmtEuro(f.betrag)}</td>
+      <td>${esc(f.was||'')}</td>
+      <td>${foerderBadge(f.status)}</td>
+      <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung('${f.id}')">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung('${f.id}')">✕</button>`:''}</td>
+    </tr>`).join('');
+  const sum=pred=>list.filter(pred).reduce((s,f)=>s+Number(f.betrag||0),0);
+  const bewilligt=sum(f=>f.status==='genehmigt'||f.status==='abgeschlossen');
+  const beantragt=sum(f=>f.status==='beantragt');
+  return `<div class="crm-sec">
+    <h4><span class="ttl">💶 Förderungen</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddFoerderung()">＋ Förderung</button>`:''}</h4>
+    ${list.length
+      ? `<div style="overflow-x:auto"><table class="crm-stats"><tr><th>Wann</th><th style="text-align:right">Fördersumme</th><th>Was</th><th>Status</th><th></th></tr>${rows}</table></div>
+         <div class="small" style="color:var(--muted);margin-top:8px">Bewilligt (genehmigt/abgeschlossen): <b>${fmtEuro(bewilligt)}</b> &nbsp;·&nbsp; offen beantragt: <b>${fmtEuro(beantragt)}</b> &nbsp;·&nbsp; ${list.length} Eintrag/Einträge</div>`
+      : `<div class="small" style="color:var(--muted)">Noch keine Förderungen erfasst.</div>`}
+  </div>`;
+}
+function crmFoerderModal(f){
+  crmOpenModalShell();
+  const isEdit=!!f;
+  const statusOpts=FOERDER_STATUS.map(([k,l])=>`<option value="${k}"${f&&f.status===k?' selected':''}>${esc(l)}</option>`).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎ Förderung bearbeiten':'＋ Förderung'}</h3>
+   <input type="hidden" id="crm-foerder-id" value="${isEdit?esc(f.id):''}">
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Wann?</label><input id="crm-foerder-date" type="date" value="${isEdit&&f.date?esc(f.date):new Date().toISOString().slice(0,10)}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fördersumme (€)</label><input id="crm-foerder-betrag" type="number" min="0" step="0.01" inputmode="decimal" value="${isEdit&&f.betrag!=null?esc(String(f.betrag)):''}"></div>
+   </div>
+   <div class="crm-modal-field"><label>Was? (Zweck / Programm)</label><input id="crm-foerder-was" type="text" value="${isEdit?esc(f.was||''):''}" placeholder="z. B. Vereinsheim-Sanierung, Landesprogramm …"></div>
+   <div class="crm-modal-field"><label>Status</label><select id="crm-foerder-status">${statusOpts}</select></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveFoerderung()">Speichern</button></div>`);
+}
+function crmAddFoerderung(){ if(!curEntity()) return; crmFoerderModal(null); }
+function crmEditFoerderung(id){ const e=curEntity(); if(!e) return; const f=(e.foerderungen||[]).find(x=>x.id===id); if(f) crmFoerderModal(f); }
+function crmSaveFoerderung(){
+  const date=val('crm-foerder-date');
+  const betrag=Math.max(0, Number(document.getElementById('crm-foerder-betrag')?.value)||0);
+  const was=(val('crm-foerder-was')||'').trim();
+  const status=val('crm-foerder-status')||'beantragt';
+  const id=val('crm-foerder-id');
+  if(!date&&!was){ toast('Bitte Datum oder Zweck angeben.','err'); return; }
+  mutateEntity(e=>{
+    if(!Array.isArray(e.foerderungen)) e.foerderungen=[];
+    if(id){ const f=e.foerderungen.find(x=>x.id===id); if(f){ f.date=date; f.betrag=betrag; f.was=was; f.status=status; } }
+    else { e.foerderungen.push({ id:newId(), date, betrag, was, status }); }
+  });
+  crmCloseModal(); paintDetail(); toast('Förderung gespeichert ✓','ok');
+}
+function crmDeleteFoerderung(id){
+  if(!confirm('Diese Förderung wirklich löschen?')) return;
+  mutateEntity(e=>{ e.foerderungen=(e.foerderungen||[]).filter(x=>x.id!==id); });
   paintDetail();
 }
 
@@ -2722,6 +2797,7 @@ function _histDescribe(prev, cur, coll){
   _diffById(prev.termine, cur.termine, 'Termin', t=>t.titel, parts);
   _diffById(prev.angebote, cur.angebote, 'Angebot', a=>a.titel, parts);
   _diffById(prev.stats, cur.stats, 'Statistik', s=>{ try{return fmtDate(Date.parse(s.date));}catch(e){return '';} }, parts);
+  _diffById(prev.foerderungen, cur.foerderungen, 'Förderung', f=>f.was||foerderStatusLabel(f.status), parts);
   if((prev.statusQuo||'')!==(cur.statusQuo||'')) parts.push('Status quo geändert');
   _diffProjekte(prev.projekte, cur.projekte, parts);
   return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4} weitere)`:'');
@@ -3544,6 +3620,7 @@ Object.assign(window, {
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
   crmAddStat, crmSaveStat, crmDeleteStat,
+  crmAddFoerderung, crmEditFoerderung, crmSaveFoerderung, crmDeleteFoerderung,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
   crmDeleteNode, crmToggleDone,
