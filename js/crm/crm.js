@@ -893,7 +893,7 @@ function paintDetail(){
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
   const openTasks=entityOpenTaskCount(e);
   const kCount=(e.kontakte||[]).length;
-  const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
+  const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben & Veranstaltungen'+(openTasks?` (${openTasks})`:'')],['termine','Termine']];
   tabs.push(['kommunikation','Kommunikation']);
   if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
   tabs.push(['foerderungen','Förderungen']);
@@ -901,8 +901,8 @@ function paintDetail(){
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
   const bodyByTab={
     allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
-    aufgaben: aufgabenSec,
-    termine: termineSec + vaSection + angeboteSec,
+    aufgaben: aufgabenSec + vaSection,
+    termine: termineSec + angeboteSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
