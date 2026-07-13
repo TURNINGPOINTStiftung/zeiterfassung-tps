@@ -224,12 +224,12 @@ function injectStyles(){
   .crm-card .meta{display:flex;gap:8px;flex-wrap:wrap}
   .crm-chip{font-size:11px;font-weight:600;background:#eef2f8;border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
   .crm-chip.warn{background:#fff4e5;border-color:#ffd9a0;color:#b56a00}
-  /* Kontakt-Karten: harmonisch – Rolle & Mail/Telefon gleich groß, Name nur wenig größer */
-  .crm-kontakt{padding:16px 18px}
-  .crm-kontakt h3{font-size:17px;margin-bottom:6px}
-  .crm-kontakt .sub{font-size:15px;color:var(--text);font-weight:500;margin-bottom:11px}
-  .crm-kontakt .meta{gap:9px}
-  .crm-kontakt .meta .crm-chip{font-size:15px;font-weight:500;padding:6px 14px}
+  /* Kontakt-Karten: kompakt, proportional zum Rest (nicht größer als normale Karten) */
+  .crm-kontakt{padding:13px 15px}
+  .crm-kontakt h3{font-size:14px;margin-bottom:3px}
+  .crm-kontakt .sub{font-size:12px;color:var(--text);font-weight:500;margin-bottom:7px}
+  .crm-kontakt .meta{gap:7px}
+  .crm-kontakt .meta .crm-chip{font-size:11px;font-weight:600;padding:3px 10px}
   .crm-empty{text-align:center;color:var(--muted);padding:60px 20px}
   .crm-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .crm-detail-head h2{font-size:22px;font-weight:700;color:var(--primary);margin:0;flex:1;min-width:200px}
