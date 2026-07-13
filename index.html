@@ -88,6 +88,7 @@
         <button class="mb-mod" data-mod="website" onclick="switchModule('website')">Website</button>
         <button class="mb-mod" data-mod="forum" onclick="switchModule('forum')">Forum</button>
         <button class="mb-mod" data-mod="crm" onclick="switchModule('crm')">CRM</button>
+        <button class="mb-mod" data-mod="auswertung" onclick="switchModule('auswertung')" style="display:none">Auswertung</button>
         <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
       </div>
     </div>
@@ -364,6 +365,10 @@
     <div id="crm-root"></div>
   </div>
 
+  <div id="mod-auswertung" class="mod-frame" style="display:none">
+    <div id="aus-root"></div>
+  </div>
+
   <div id="mod-verwaltung" class="mod-frame" style="display:none">
     <div id="verw-root"></div>
   </div>
@@ -407,6 +412,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=97"></script>
+<script type="module" src="js/main.js?v=98"></script>
 </body>
 </html>
