@@ -23,6 +23,7 @@ _restore*.html
 _recover*.html
 _guardtest.html
 _pausetest.html
+_t.html
 
 # Logs
 *.log

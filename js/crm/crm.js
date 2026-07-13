@@ -303,6 +303,23 @@ function injectStyles(){
   .crm-tmeta{font-size:11px;color:var(--muted);margin-top:2px}
   .crm-tnote{font-size:13px;color:var(--text);margin-top:4px;white-space:pre-line;background:rgba(0,0,0,.035);border-radius:6px;padding:5px 9px}
   .crm-prog{font-size:11px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 9px;white-space:nowrap;flex-shrink:0}
+  /* Einheitliche flache Items (Termin/Aufgabe/Veranstaltung) */
+  .crm-itnew{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 12px}
+  .crm-itgrp{margin-bottom:14px}
+  .crm-itgrp-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 6px}
+  .crm-item{border:1px solid var(--border);border-radius:8px;background:#fff;padding:9px 11px;margin-bottom:7px}
+  .crm-item.done{opacity:.6}
+  .crm-item.done .crm-item-head .tx{text-decoration:line-through}
+  .crm-item-head{display:flex;align-items:flex-start;gap:9px}
+  .crm-item-head .tx{font-weight:600;color:var(--text)}
+  .crm-item-head .grow{min-width:0;flex:1}
+  .crm-item-ic{font-size:16px;flex:none;line-height:1.3}
+  .crm-item-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .crm-itchecks{margin:6px 0 0 30px;display:flex;flex-direction:column;gap:3px}
+  .crm-itcheck{display:flex;align-items:center;gap:7px;font-size:13px}
+  .crm-itcheck.done .tx{text-decoration:line-through;color:var(--muted)}
+  .crm-itcheck .tx{flex:1;min-width:0}
+  .crm-itcheck-add{display:flex;align-items:center;gap:8px;margin-top:3px}
   .crm-stats{width:100%;border-collapse:collapse;font-size:13px}
   .crm-stats th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -614,6 +631,208 @@ function migEntityProjekte(e){
   e.projekte.forEach(p=>{ if(!Array.isArray(p.todos)) p.todos=[]; p.todos.forEach(normNode); });
   return e;
 }
+// ── Einheitliche flache Items je Eintrag: Termin · Aufgabe · Veranstaltung ──
+// Termin/Aufgabe leben flach in e.items[] (Aufgabe optional mit flacher Checkliste).
+// Veranstaltungen bleiben globale Events (mehrere Teilnehmer möglich) und werden in
+// DERSELBEN Liste angezeigt/erstellt. Lazy, verlustfreie Übernahme der alten
+// e.projekte / e.termine (einmalig via Flag _itemsMig; Altfelder bleiben inaktiv liegen).
+function migEntityItems(e){
+  if(!e) return e;
+  if(!Array.isArray(e.items)) e.items=[];
+  if(e._itemsMig) return e;
+  try{
+    if(Array.isArray(e.projekte)) e.projekte.forEach(p=>{
+      (p.todos||[]).forEach(top=>{
+        const cl=[]; const walk=n=>{ (n.children||[]).forEach(ch=>{ cl.push({id:ch.id||newId(),text:ch.text||'',done:ch.status==='erledigt'}); walk(ch); }); }; walk(top);
+        const prefix=(p.name&&!/^(projekt|aufgaben)$/i.test(p.name))?p.name+': ':'';
+        e.items.push({ id:top.id||newId(), kind:'aufgabe', text:prefix+(top.text||''), done:top.status==='erledigt',
+          frist:top.due||'', assigneeId:top.assigneeId||'', assigneeName:top.assigneeName||'',
+          team:(Array.isArray(top.teams)&&top.teams[0])||'', note:top.note||'', checklist:cl,
+          closed:!!p.closed, createdAt:p.createdAt||Date.now() });
+      });
+    });
+    if(Array.isArray(e.termine)) e.termine.forEach(t=>{
+      e.items.push({ id:t.id||newId(), kind:'termin', text:t.titel||'', date:t.datum||'', ende:t.bis||'', ort:t.ort||'', note:t.note||'', createdAt:Date.now() });
+    });
+  }catch(err){ console.error('migEntityItems:',err); }
+  e._itemsMig=true;
+  return e;
+}
+function entityItemsOpenCount(e){ migEntityItems(e); return (e.items||[]).filter(it=>it.kind==='aufgabe'&&!it.done&&!it.closed).length; }
+function _itMeta(it){
+  const p=[];
+  if(it.date){ p.push('📅 '+esc(fmtDate(Date.parse(it.date)))+(it.ende&&it.ende!==it.date?'–'+esc(fmtDate(Date.parse(it.ende))):'')); }
+  if(it.frist){ p.push('⏳ bis '+esc(fmtDate(Date.parse(it.frist)))); }
+  if(it.ort) p.push('📍 '+esc(it.ort));
+  if(it.assigneeName) p.push('👤 '+esc(it.assigneeName));
+  return p.join(' · ');
+}
+function _itChecklist(it, canEdit){
+  const cl=it.checklist||[];
+  const rows=cl.map(c=>`<div class="crm-itcheck${c.done?' done':''}">
+      <input type="checkbox" ${c.done?'checked':''} ${canEdit?'':'disabled'} onchange="crmItemToggleCheck('${it.id}','${c.id}')">
+      <span class="tx">${esc(c.text)}</span>
+      ${canEdit?`<button class="crm-x" title="Löschen" onclick="crmItemDelCheck('${it.id}','${c.id}')">✕</button>`:''}
+    </div>`).join('');
+  const done=cl.filter(c=>c.done).length;
+  return `<div class="crm-itchecks">${rows}${(cl.length||canEdit)?`<div class="crm-itcheck-add">${cl.length?`<span class="crm-prog">✓ ${done}/${cl.length}</span>`:''}${canEdit?`<button class="btn-sm-crm" onclick="crmItemAddCheck('${it.id}')">＋ Punkt</button>`:''}</div>`:''}</div>`;
+}
+// Gemeinsame Aufgaben-Zeile (Eintrag UND Veranstaltung) – flach, mit optionaler Checkliste
+function _itAufgRow(it, canEdit){
+  return `<div class="crm-item${it.done?' done':''}">
+      <div class="crm-item-head">
+        <input type="checkbox" class="crm-check" ${it.done?'checked':''} ${canEdit?'':'disabled'} title="Erledigt" onchange="crmItemToggle('${it.id}')">
+        <div class="grow"><span class="tx">${esc(it.text||'(ohne Text)')}</span>${_itMeta(it)?`<div class="crm-item-meta">${_itMeta(it)}</div>`:''}${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
+        ${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmItemEdit('${it.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmItemDelete('${it.id}')">✕</button>`:''}
+      </div>
+      ${_itChecklist(it,canEdit)}
+    </div>`;
+}
+function entityItemsSectionHtml(e){
+  migEntityItems(e);
+  const canEdit=crmFull()||crmRestricted();
+  const items=(e.items||[]).filter(i=>!i.closed);
+  const aufg=items.filter(i=>i.kind==='aufgabe');
+  const term=items.filter(i=>i.kind==='termin').sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  const vas=(veranstaltungenForEntity(window._crmTree,e.id)||[]).slice().sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
+  const aufgRow=it=>_itAufgRow(it,canEdit);
+  const terminRow=it=>`<div class="crm-item">
+      <div class="crm-item-head">
+        <span class="crm-item-ic">📅</span>
+        <div class="grow"><span class="tx">${esc(it.text||'(Termin)')}</span><div class="crm-item-meta">${_itMeta(it)||'(kein Datum)'}</div>${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
+        ${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmItemEdit('${it.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmItemDelete('${it.id}')">✕</button>`:''}
+      </div></div>`;
+  const vaRow=v=>`<div class="crm-item" style="cursor:pointer" onclick="crmOpenVeranstaltung('${v.id}')">
+      <div class="crm-item-head">
+        <span class="crm-item-ic">${v.online?'💻':'🎪'}</span>
+        <div class="grow"><span class="tx">${esc(v.titel||'(Veranstaltung)')}${v.closed?' <span class="crm-chip">abgeschlossen</span>':''}</span>
+          <div class="crm-item-meta">${v.start?'📅 '+esc(fmtDate(Date.parse(v.start))):''}${v.ortOderLink?' · 📍 '+esc(v.ortOderLink):''}${(v.teilnehmer&&v.teilnehmer.length>1)?' · 👥 '+v.teilnehmer.length:''}</div></div>
+        <span class="btn-sm-crm">öffnen ›</span>
+      </div></div>`;
+  const grp=(title,html,empty)=>`<div class="crm-itgrp"><div class="crm-itgrp-h">${title}</div>${html||`<div class="small" style="color:var(--muted)">${empty}</div>`}</div>`;
+  const newBtn=canEdit?`<div class="crm-itnew">
+      <span class="small" style="color:var(--muted);margin-right:4px">Neu:</span>
+      <button class="btn-sm-crm primary" onclick="crmItemNew('aufgabe')">✓ Aufgabe</button>
+      <button class="btn-sm-crm primary" onclick="crmItemNew('termin')">📅 Termin</button>
+      <button class="btn-sm-crm primary" onclick="crmItemNew('veranstaltung')">🎪 Veranstaltung</button>
+    </div>`:'';
+  return `<div class="crm-sec">
+    <h4><span class="ttl">🗂 Aufgaben &amp; Termine</span></h4>
+    ${newBtn}
+    ${grp('✓ Aufgaben', aufg.map(aufgRow).join(''), 'Keine Aufgaben.')}
+    ${grp('📅 Termine', term.map(terminRow).join(''), 'Keine Termine.')}
+    ${grp('🎪 Veranstaltungen', vas.map(vaRow).join(''), 'Keine Veranstaltungen.')}
+  </div>`;
+}
+// ── Veranstaltung: flaches Item-Modell (verlustfrei aus altem Board) ──
+// Wandelt das alte verschachtelte Kanban (Spalte→Karte→Häkchen) in flache
+// Aufgaben-Items mit optionaler Checkliste. v.todos bleibt als Sicherung.
+function migVaItems(v){
+  if(!v) return v;
+  if(!Array.isArray(v.items)) v.items=[];
+  if(v._itemsMig) return v;
+  try{
+    (v.todos||[]).forEach(col=>{
+      const cards=col.children||[];
+      const prefix=(col.text&&!/^(aufgaben|todo|todos|offen)$/i.test(col.text))?col.text+': ':'';
+      if(cards.length){
+        cards.forEach(card=>{
+          const cl=[]; const walk=n=>{ (n.children||[]).forEach(ch=>{ cl.push({id:ch.id||newId(),text:ch.text||'',done:ch.status==='erledigt'}); walk(ch); }); }; walk(card);
+          v.items.push({ id:card.id||newId(), kind:'aufgabe', text:prefix+(card.text||''), done:card.status==='erledigt',
+            frist:card.due||'', assigneeId:card.assigneeId||'', assigneeName:card.assigneeName||'',
+            note:card.note||'', checklist:cl, createdAt:card.createdAt||Date.now() });
+        });
+      } else {
+        // Spalte ohne Karten → selbst als Aufgabe übernehmen (nichts verlieren)
+        v.items.push({ id:col.id||newId(), kind:'aufgabe', text:(col.text||''), done:col.status==='erledigt',
+          frist:col.due||'', assigneeId:col.assigneeId||'', assigneeName:col.assigneeName||'',
+          note:col.note||'', checklist:[], createdAt:col.createdAt||Date.now() });
+      }
+    });
+  }catch(err){ console.error('migVaItems:',err); }
+  v._itemsMig=true;
+  return v;
+}
+// ── Item-Kontext: Eintrag ODER Veranstaltung ──────────────────────
+// _crmItemCtx = {kind:'entity'} (Standard) | {kind:'veranstaltung', id}
+function _itemContainer(){
+  const ctx=window._crmItemCtx;
+  if(ctx&&ctx.kind==='veranstaltung'){ const v=getVeranstaltung(ctx.id); return v?migVaItems(v):null; }
+  const e=curEntity(); return e?migEntityItems(e):null;
+}
+function _itemMutate(fn){
+  const ctx=window._crmItemCtx;
+  if(ctx&&ctx.kind==='veranstaltung'){
+    const v=getVeranstaltung(ctx.id); if(!v) return; migVaItems(v);
+    try{ fn(v); }catch(e){ console.error('CRM item mutate (VA):',e); return; }
+    v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName(); saveVeranstaltung(v);
+  } else {
+    mutateEntity(e=>{ migEntityItems(e); fn(e); });
+  }
+}
+function _itemRepaint(){
+  const ctx=window._crmItemCtx;
+  if(ctx&&ctx.kind==='veranstaltung') paintVeranstaltungDetail(); else paintDetail();
+}
+// Flache Aufgaben-Sektion einer Veranstaltung (gleiche Optik wie am Eintrag)
+function vaItemsSectionHtml(v){
+  migVaItems(v);
+  const canEdit=crmFull()||crmRestricted();
+  const aufg=(v.items||[]).filter(i=>i.kind==='aufgabe');
+  const list=aufg.length?aufg.map(it=>_itAufgRow(it,canEdit)).join(''):'<div class="small" style="color:var(--muted)">Noch keine Aufgaben.</div>';
+  const newBtn=canEdit?`<div class="crm-itnew"><span class="small" style="color:var(--muted);margin-right:4px">Neu:</span><button class="btn-sm-crm primary" onclick="crmItemNew('aufgabe')">✓ Aufgabe</button></div>`:'';
+  return newBtn+`<div class="crm-itgrp">${list}</div>`;
+}
+// ── Item-CRUD ──────────────────────────────────────────────────────
+function _itAssigneeOpts(sel){
+  let us=[]; try{ us=(window.getData?window.getData().users:[])||[]; }catch(e){}
+  return '<option value="">– niemand –</option>'+us.filter(u=>u&&u.name).map(u=>`<option value="${esc(u.id)}"${sel===u.id?' selected':''}>${esc(u.name)}</option>`).join('');
+}
+function crmItemNew(kind){
+  if(kind==='veranstaltung'){ if(window.crmNewVeranstaltungFor) window.crmNewVeranstaltungFor(); return; } // globales Event
+  crmItemModal(kind, null);
+}
+function crmItemEdit(id){ const c=_itemContainer(); if(!c) return; const it=(c.items||[]).find(x=>x.id===id); if(it) crmItemModal(it.kind, it); }
+function crmItemModal(kind, it){
+  crmOpenModalShell();
+  const isEdit=!!it; const k=kind||(it&&it.kind)||'aufgabe';
+  const title=(k==='termin'?'📅 Termin':'✓ Aufgabe')+(isEdit?' bearbeiten':'');
+  const dateF=`<div class="crm-modal-field" style="flex:1;min-width:150px"><label>${k==='termin'?'Datum':'Datum (optional)'}</label><input id="crm-it-date" type="date" value="${isEdit&&it.date?esc(it.date):''}"></div>`;
+  const fields = k==='termin'
+    ? `<div class="crm-modal-field"><label>Titel</label><input id="crm-it-text" type="text" value="${isEdit?esc(it.text||''):''}" placeholder="z. B. Vorstandssitzung"></div>
+       <div style="display:flex;gap:10px;flex-wrap:wrap">${dateF}<div class="crm-modal-field" style="flex:1;min-width:150px"><label>Ort (optional)</label><input id="crm-it-ort" type="text" value="${isEdit?esc(it.ort||''):''}"></div></div>`
+    : `<div class="crm-modal-field"><label>Aufgabe</label><input id="crm-it-text" type="text" value="${isEdit?esc(it.text||''):''}" placeholder="Was ist zu tun?"></div>
+       <div style="display:flex;gap:10px;flex-wrap:wrap">
+         <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Frist „bis wann" (optional)</label><input id="crm-it-frist" type="date" value="${isEdit&&it.frist?esc(it.frist):''}"></div>
+         <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig (optional)</label><select id="crm-it-assignee">${_itAssigneeOpts(isEdit?it.assigneeId:'')}</select></div>
+       </div>`;
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${title}</h3>
+    <input type="hidden" id="crm-it-id" value="${isEdit?esc(it.id):''}"><input type="hidden" id="crm-it-kind" value="${esc(k)}">
+    ${fields}
+    <div class="crm-modal-field"><label>Notiz (optional)</label><input id="crm-it-note" type="text" value="${isEdit?esc(it.note||''):''}"></div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmItemSave()">Speichern</button></div>`);
+}
+function crmItemSave(){
+  const id=val('crm-it-id'), kind=val('crm-it-kind')||'aufgabe';
+  const text=(val('crm-it-text')||'').trim();
+  const rec={ text, note:(val('crm-it-note')||'').trim() };
+  if(kind==='termin'){ rec.date=val('crm-it-date'); rec.ort=(val('crm-it-ort')||'').trim(); }
+  else { rec.frist=val('crm-it-frist'); const a=val('crm-it-assignee'); rec.assigneeId=a||''; rec.assigneeName=a?_userName(a):''; }
+  if(!text && !(kind==='termin'&&rec.date)){ toast('Bitte Text (oder beim Termin ein Datum) angeben.','err'); return; }
+  _itemMutate(c=>{ if(!Array.isArray(c.items)) c.items=[];
+    if(id){ const it=c.items.find(x=>x.id===id); if(it) Object.assign(it, rec); }
+    else { c.items.push({ id:newId(), kind, done:false, checklist:[], createdAt:Date.now(), ...rec }); }
+  });
+  crmCloseModal(); _itemRepaint(); toast('Gespeichert ✓','ok');
+}
+function _userName(uid){ try{ const u=(window.getData?window.getData().users:[]).find(x=>x.id===uid); return u?u.name:''; }catch(e){ return ''; } }
+function crmItemToggle(id){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===id); if(it) it.done=!it.done; }); _itemRepaint(); }
+function crmItemDelete(id){ if(!confirm('Diesen Eintrag löschen?')) return; _itemMutate(c=>{ c.items=(c.items||[]).filter(x=>x.id!==id); }); _itemRepaint(); }
+function crmItemAddCheck(id){ const t=prompt('Neuer Checklisten-Punkt:'); if(!t||!t.trim()) return; _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===id); if(it){ if(!Array.isArray(it.checklist)) it.checklist=[]; it.checklist.push({id:newId(),text:t.trim(),done:false}); } }); _itemRepaint(); }
+function crmItemToggleCheck(itemId, checkId){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===itemId); const ch=it&&(it.checklist||[]).find(x=>x.id===checkId); if(ch) ch.done=!ch.done; }); _itemRepaint(); }
+function crmItemDelCheck(itemId, checkId){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===itemId); if(it) it.checklist=(it.checklist||[]).filter(x=>x.id!==checkId); }); _itemRepaint(); }
+
 // Projekt eines Eintrags finden, das einen bestimmten Aufgaben-Knoten enthält
 function _projForNode(e, nodeId){
   if(!e || !Array.isArray(e.projekte)) return null;
@@ -788,6 +1007,7 @@ function paintDetail(){
   const _openProj=e.projekte.filter(p=>!p.closed);
   if(!e.projekte.some(p=>p.id===window._crmProjSel)) window._crmProjSel = _openProj.length?_openProj[0].id:'';
   window._crmTaskCtx={ kind:'entity', tree:window._crmTree, eid:e.id, pid:window._crmProjSel };  // Engine zielt aufs ausgewählte Projekt
+  window._crmItemCtx={ kind:'entity' };  // Item-Engine (Aufgaben/Termine) zielt auf den Eintrag
   window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
@@ -866,7 +1086,7 @@ function paintDetail(){
 
   // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
   const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
-  const aufgabenSec = entityProjekteSectionHtml(e);
+  const aufgabenSec = entityItemsSectionHtml(e);
   const _kEdit=crmFull()||crmRestricted();
   const kontakteSec = `<div class="crm-sec">
       <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
@@ -891,7 +1111,7 @@ function paintDetail(){
     </div>`;
 
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
-  const openTasks=entityOpenTaskCount(e);
+  const openTasks=entityItemsOpenCount(e);
   const kCount=(e.kontakte||[]).length;
   const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben & Termine'+(openTasks?` (${openTasks})`:'')]];
   tabs.push(['kommunikation','Kommunikation']);
@@ -901,7 +1121,7 @@ function paintDetail(){
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
   const bodyByTab={
     allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
-    aufgaben: aufgabenSec + vaSection + termineSec + angeboteSec,
+    aufgaben: aufgabenSec + angeboteSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
@@ -938,11 +1158,10 @@ function crmSearchAll(q){
         res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
       (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,k.email,k.tel))
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
-      migEntityProjekte(e);
-      e.projekte.forEach(p=>{
-        if(hit(p.name)) res.projects.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:p.name||'Projekt', sub:s.name||'', closed:!!p.closed});
-        flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
-          res.tasks.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:x.text||'(Aufgabe)', sub:(s.name||'')+' · '+(p.name||'Projekt')}); });
+      migEntityItems(e);
+      (e.items||[]).forEach(it=>{
+        if(hit(it.text,it.note)) res.tasks.push({kind:'item', tree:tr.key, eid:e.id, name:it.text||(it.kind==='termin'?'(Termin)':'(Aufgabe)'), sub:(s.name||'')+' · '+(it.kind==='termin'?'Termin':'Aufgabe')});
+        (it.checklist||[]).forEach(c=>{ if(hit(c.text)) res.tasks.push({kind:'item', tree:tr.key, eid:e.id, name:c.text||'(Punkt)', sub:(s.name||'')+' · '+(it.text||'')}); });
       });
     });
   });
@@ -973,11 +1192,13 @@ function crmSearchPanelHtml(q){
         ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
         : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
     + grp('📅 Veranstaltungen', r.events, x=>row(`crmOpenVeranstaltung('${esc(x.id)}')`,'📅',x.name,x.sub))
-    + grp('✅ Aufgaben', r.tasks, x=> x.kind==='entity'
-        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
-        : (x.kind==='veranstaltung'
-            ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
-            : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub)));
+    + grp('✅ Aufgaben', r.tasks, x=> x.kind==='item'
+        ? row(`crmMeineItemOpen('${esc(x.tree)}','${esc(x.eid)}')`,'✅',x.name,x.sub)
+        : (x.kind==='entity'
+            ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
+            : (x.kind==='veranstaltung'
+                ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
+                : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub))));
 }
 function crmSearchInput(v){
   window._crmSearch=v;
@@ -2058,18 +2279,28 @@ function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (aus Veranstaltungen und Projekten)
   const assigned=[];
-  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref}); }); });
-  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
-  assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
+  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref,due:x.ref.due||''}); }); });
+  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref,due:x.ref.due||''}); }); });
+  // NEU: Eintrags-Aufgaben (flaches Item-Modell) mit Zuständigkeit
+  try{ (getTrees()||[]).forEach(t=>{ (listEntities(t.key)||[]).forEach(en=>{ if(!en) return; migEntityItems(en); (en.items||[]).forEach(it=>{ if(it.kind==='aufgabe'&&!it.closed&&it.assigneeId===me) assigned.push({kind:'item',tree:t.key,id:en.id,name:(en.stamm&&en.stamm.name)||'(Eintrag)',item:it,due:it.frist||''}); }); }); }); }catch(err){ console.error('Meine (Items):',err); }
+  assigned.sort((a,b)=> String(a.due||'9999').localeCompare(String(b.due||'9999')) );
   const arows = assigned.map(a=>{
+    if(a.kind==='item'){
+      const it=a.item; const done=!!it.done;
+      const meta=['📂 '+a.name, it.frist?('⏳ '+fmtDate(Date.parse(it.frist))):''].filter(Boolean).map(esc).join(' · ');
+      return `<div class="crm-task${done?' done':''}">
+        <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineItemToggle('${a.tree}','${a.id}','${it.id}')">
+        <div class="grow"><span class="tx">${esc(it.text)}</span><div class="crm-tmeta">${meta}</div>${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
+        <button class="btn-sm-crm" onclick="crmMeineItemOpen('${a.tree}','${a.id}')">Öffnen</button>
+      </div>`;
+    }
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';
     const meta=[(a.kind==='veranstaltung'?'📅 ':'📂 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
-    const idArg=''; const cArg=a.id;
     return `<div class="crm-task${done?' done':''}">
-      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','${idArg}','${cArg}','${t.id}')">
+      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','','${a.id}','${t.id}')">
       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
       <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div>${t.note?`<div class="crm-tnote">${nl2br(t.note)}</div>`:''}</div>
-      <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','${idArg}','${cArg}','${t.id}')">Öffnen</button>
+      <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','','${a.id}','${t.id}')">Öffnen</button>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
@@ -2099,6 +2330,9 @@ function _meSetCtx(kind,tree,id,tid){
 }
 function crmMeineToggle(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmToggleDone(tid); }
 function crmMeineOpen(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
+// „Meine": Eintrags-Aufgabe (Item) direkt am jeweiligen Eintrag umschalten/öffnen
+function crmMeineItemToggle(tree,eid,id){ const en=getEntity(tree,eid); if(!en) return; migEntityItems(en); const it=(en.items||[]).find(x=>x.id===id); if(it){ it.done=!it.done; en.updatedByKuerzel=curKuerzel(); en.updatedByName=curName(); saveEntity(tree,en); } paintMeine(); }
+function crmMeineItemOpen(tree,eid){ window._crmDetailTab='aufgaben'; crmGoEntry(tree,eid); }
 function crmOpenMeinProjekt(id){ window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id; paintTeamProjektDetail(); }
 function crmNewMeinProjekt(){
   crmOpenModalShell();
@@ -2163,7 +2397,7 @@ function paintVeranstaltungDetail(){
   const v=getVeranstaltung(window._crmVaSel);
   if(!v){ window._crmVaSel=null; paintVeranstaltungen(); return; }
   normTasks(v);
-  window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
+  window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmItemCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
   const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry('${esc(t.tree)}','${esc(t.eid)}')">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
   const ortLine = v.online
     ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
@@ -2186,14 +2420,8 @@ function paintVeranstaltungDetail(){
       ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
     </div>
     <div class="crm-sec">
-      <h4><span class="ttl">✅ Aufgaben</span>
-        <span class="hbtns">
-          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
-          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
-        </span>
-      </h4>
-      ${taskBoardHtml(v)}
+      <h4><span class="ttl">✅ Aufgaben &amp; Checkliste</span></h4>
+      ${vaItemsSectionHtml(v)}
     </div>
   </div>`;
 }
@@ -2798,6 +3026,7 @@ function _histDescribe(prev, cur, coll){
   _diffById(prev.angebote, cur.angebote, 'Angebot', a=>a.titel, parts);
   _diffById(prev.stats, cur.stats, 'Statistik', s=>{ try{return fmtDate(Date.parse(s.date));}catch(e){return '';} }, parts);
   _diffById(prev.foerderungen, cur.foerderungen, 'Förderung', f=>f.was||foerderStatusLabel(f.status), parts);
+  _diffById(prev.items, cur.items, 'Eintrag', it=>it.text||(it.kind||''), parts);
   if((prev.statusQuo||'')!==(cur.statusQuo||'')) parts.push('Status quo geändert');
   _diffProjekte(prev.projekte, cur.projekte, parts);
   return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4} weitere)`:'');
@@ -3543,11 +3772,9 @@ function wfApply(ent, trigger){
           if(!Array.isArray(ent.log)) ent.log=[];
           ent.log.push({ id:newId(), ts:Date.now(), autor:'Workflow: '+(w.name||''), kuerzel:'WF', text:wfFill(s.text||'', ent), summary:'' }); changed=true;
         } else if(s.kind==='aktion'){
-          migEntityProjekte(ent);
-          if(!ent.projekte.length) ent.projekte.push({ id:newId(), name:'Aufgaben', todos:[], closed:false, createdAt:Date.now() });
-          const proj = ent.projekte.find(p=>!p.closed) || ent.projekte[0];
-          if(!Array.isArray(proj.todos)) proj.todos=[];
-          proj.todos.push({ id:newId(), children:[], teams:s.team?[s.team]:[], text:wfFill(s.titel||'Aufgabe', ent), note:'(automatisch durch Workflow „'+(w.name||'')+'")', assigneeId:'', assigneeName:'', due:wfDueDate(s.dueDays), status:'offen', deps:[] }); changed=true;
+          migEntityItems(ent);
+          if(!Array.isArray(ent.items)) ent.items=[];
+          ent.items.push({ id:newId(), kind:'aufgabe', text:wfFill(s.titel||'Aufgabe', ent), done:false, frist:wfDueDate(s.dueDays), assigneeId:'', assigneeName:'', team:s.team||'', note:'(automatisch durch Workflow „'+(w.name||'')+'")', checklist:[], createdAt:Date.now() }); changed=true;
         } else if(s.kind==='benachrichtigung' || s.kind==='pause' || s.kind==='log'){
           if(!Array.isArray(ent.log)) ent.log=[];
           const desc = s.kind==='benachrichtigung' ? ((s.kanal==='chat'?'Chat':'E-Mail')+' an '+(s.an||'')+(s.betreff?(': '+s.betreff):''))
@@ -3602,12 +3829,13 @@ Object.assign(window, {
   crmCfgFuncsSave, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
-  crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
+  crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen, crmMeineItemToggle, crmMeineItemOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
+  crmItemNew, crmItemEdit, crmItemSave, crmItemToggle, crmItemDelete, crmItemAddCheck, crmItemToggleCheck, crmItemDelCheck,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmSaveStatusQuo, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
