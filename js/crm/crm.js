@@ -84,7 +84,7 @@ function isEntityCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind=
 function curContainer(){
   const ctx=window._crmTaskCtx; if(!ctx) return null;
   if(ctx.kind==='teamprojekt'){ const c=getTeamProjekt(ctx.id); if(c) normTasks(c); return c; }
-  if(ctx.kind==='veranstaltung'){ const c=getVeranstaltung(ctx.id); if(c) normTasks(c); return c; }
+  if(ctx.kind==='veranstaltung'){ const c=getVeranstaltung(ctx.id); if(c){ normTasks(c); recoverV187VaItems(c); } return c; }
   // Eintrag: der Container ist das AUSGEWÄHLTE Projekt (ctx.pid)
   const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return null; migEntityProjekte(ent);
   const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return null;
@@ -98,7 +98,7 @@ function mutateContainer(fn){
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
   } else if(ctx.kind==='veranstaltung'){
-    const v=getVeranstaltung(ctx.id); if(!v) return; normTasks(v);
+    const v=getVeranstaltung(ctx.id); if(!v) return; normTasks(v); recoverV187VaItems(v);
     try{ fn(v); }catch(e){ console.error('CRM mutateContainer:',e); return; }
     v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
     saveVeranstaltung(v);
@@ -118,6 +118,9 @@ function repaintContainer(){
     case 'veranstaltung': paintVeranstaltungDetail(); break;
     default:              paintDetail();
   }
+  // Nach der Schnellerfassung den Fokus zurück ins Eingabefeld (flüssiges Tippen)
+  const fa=window._crmFocusAfter; window._crmFocusAfter=null;
+  if(fa){ const el=document.getElementById(fa); if(el){ try{ el.focus(); }catch(e){} } }
 }
 
 // ── Read-only aus der Zeiterfassung (Teams & Nutzer) ───────────────
@@ -303,23 +306,6 @@ function injectStyles(){
   .crm-tmeta{font-size:11px;color:var(--muted);margin-top:2px}
   .crm-tnote{font-size:13px;color:var(--text);margin-top:4px;white-space:pre-line;background:rgba(0,0,0,.035);border-radius:6px;padding:5px 9px}
   .crm-prog{font-size:11px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 9px;white-space:nowrap;flex-shrink:0}
-  /* Einheitliche flache Items (Termin/Aufgabe/Veranstaltung) */
-  .crm-itnew{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 12px}
-  .crm-itgrp{margin-bottom:14px}
-  .crm-itgrp-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 0 6px}
-  .crm-item{border:1px solid var(--border);border-radius:8px;background:#fff;padding:9px 11px;margin-bottom:7px}
-  .crm-item.done{opacity:.6}
-  .crm-item.done .crm-item-head .tx{text-decoration:line-through}
-  .crm-item-head{display:flex;align-items:flex-start;gap:9px}
-  .crm-item-head .tx{font-weight:600;color:var(--text)}
-  .crm-item-head .grow{min-width:0;flex:1}
-  .crm-item-ic{font-size:16px;flex:none;line-height:1.3}
-  .crm-item-meta{font-size:12px;color:var(--muted);margin-top:2px}
-  .crm-itchecks{margin:6px 0 0 30px;display:flex;flex-direction:column;gap:3px}
-  .crm-itcheck{display:flex;align-items:center;gap:7px;font-size:13px}
-  .crm-itcheck.done .tx{text-decoration:line-through;color:var(--muted)}
-  .crm-itcheck .tx{flex:1;min-width:0}
-  .crm-itcheck-add{display:flex;align-items:center;gap:8px;margin-top:3px}
   .crm-stats{width:100%;border-collapse:collapse;font-size:13px}
   .crm-stats th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -394,6 +380,25 @@ function injectStyles(){
   .kb-check-tx{cursor:pointer;flex:1}
   .kb-add,.kb-additem{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-align:left;padding:4px 2px}
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
+  /* Inline-Schnellerfassung: Aufgabe/Spalte/Schritt direkt tippen + Enter (kein Dialog nötig) */
+  .kb-qadd{width:100%;box-sizing:border-box;border:1px dashed var(--border);background:rgba(0,0,0,.02);border-radius:7px;padding:6px 9px;font-size:12.5px;color:var(--text);margin-top:6px;transition:border-color .12s,background .12s}
+  .kb-qadd::placeholder{color:var(--muted)}
+  .kb-qadd:focus{outline:none;border-style:solid;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(45,96,153,.12)}
+  .kb-qadd-step{font-size:12px;padding:4px 8px;margin-top:6px}
+  .kb-qadd-col{margin-top:0}
+  /* Mehrfach-Eingabe (E-Mails/Telefon) im Kontaktformular */
+  .crm-mf-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .crm-mf-row input{flex:1;min-width:0}
+  .crm-mf-row .crm-x{flex-shrink:0}
+  /* Kontaktnotizen mit History */
+  .crm-kn-item{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#fff}
+  .crm-kn-latest .crm-kn-item{border-color:var(--primary);background:rgba(45,96,153,.05)}
+  .crm-kn-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .crm-kn-meta .crm-x{margin-left:auto}
+  .crm-kn-text{white-space:pre-line;font-size:13.5px;line-height:1.5;word-break:break-word}
+  .crm-kn-hist{margin-top:8px}
+  .crm-kn-hist summary{cursor:pointer;font-size:12.5px;color:var(--primary);font-weight:600;padding:4px 0}
+  .crm-kn-hist[open] summary{margin-bottom:6px}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){
     /* Ganze CRM-Seite scrollt (kein interner Scroll) → Header + Leiste verschwinden beim Scrollen */
@@ -629,210 +634,50 @@ function migEntityProjekte(e){
   if('boardClosedAt' in e) delete e.boardClosedAt;
   if('boardClosedByKuerzel' in e) delete e.boardClosedByKuerzel;
   e.projekte.forEach(p=>{ if(!Array.isArray(p.todos)) p.todos=[]; p.todos.forEach(normNode); });
+  recoverV187EntityItems(e);
   return e;
 }
-// ── Einheitliche flache Items je Eintrag: Termin · Aufgabe · Veranstaltung ──
-// Termin/Aufgabe leben flach in e.items[] (Aufgabe optional mit flacher Checkliste).
-// Veranstaltungen bleiben globale Events (mehrere Teilnehmer möglich) und werden in
-// DERSELBEN Liste angezeigt/erstellt. Lazy, verlustfreie Übernahme der alten
-// e.projekte / e.termine (einmalig via Flag _itemsMig; Altfelder bleiben inaktiv liegen).
-function migEntityItems(e){
-  if(!e) return e;
-  if(!Array.isArray(e.items)) e.items=[];
-  if(e._itemsMig) return e;
-  try{
-    if(Array.isArray(e.projekte)) e.projekte.forEach(p=>{
-      (p.todos||[]).forEach(top=>{
-        const cl=[]; const walk=n=>{ (n.children||[]).forEach(ch=>{ cl.push({id:ch.id||newId(),text:ch.text||'',done:ch.status==='erledigt'}); walk(ch); }); }; walk(top);
-        const prefix=(p.name&&!/^(projekt|aufgaben)$/i.test(p.name))?p.name+': ':'';
-        e.items.push({ id:top.id||newId(), kind:'aufgabe', text:prefix+(top.text||''), done:top.status==='erledigt',
-          frist:top.due||'', assigneeId:top.assigneeId||'', assigneeName:top.assigneeName||'',
-          team:(Array.isArray(top.teams)&&top.teams[0])||'', note:top.note||'', checklist:cl,
-          closed:!!p.closed, createdAt:p.createdAt||Date.now() });
-      });
-    });
-    if(Array.isArray(e.termine)) e.termine.forEach(t=>{
-      e.items.push({ id:t.id||newId(), kind:'termin', text:t.titel||'', date:t.datum||'', ende:t.bis||'', ort:t.ort||'', note:t.note||'', createdAt:Date.now() });
-    });
-  }catch(err){ console.error('migEntityItems:',err); }
-  e._itemsMig=true;
-  return e;
+// ── Sicherheits-Rückführung nach v187 ──────────────────────────────
+// v187 hatte kurzzeitig ein flaches Modell `e.items` / `v.items`. Falls in
+// diesem Fenster etwas NEU angelegt wurde (id noch nicht im Board), holen wir
+// es verlustfrei zurück ins Board bzw. in die Termine. Idempotent (nutzt die
+// Item-id als Knoten-id + eine stabile „Wiederhergestellt"-Spalte); die Quelle
+// `.items` bleibt als Sicherung erhalten.
+function _v187ItemToNode(it){
+  const children=(it.checklist||[]).map(c=>({ id:c.id||newId(), text:c.text||'', status:c.done?'erledigt':'offen', children:[] }));
+  return { id:it.id||newId(), text:it.text||'', status:it.done?'erledigt':'offen',
+    due:it.frist||'', assigneeId:it.assigneeId||'', assigneeName:it.assigneeName||'', note:it.note||'', children };
 }
-function entityItemsOpenCount(e){ migEntityItems(e); return (e.items||[]).filter(it=>it.kind==='aufgabe'&&!it.done&&!it.closed).length; }
-function _itMeta(it){
-  const p=[];
-  if(it.date){ p.push('📅 '+esc(fmtDate(Date.parse(it.date)))+(it.ende&&it.ende!==it.date?'–'+esc(fmtDate(Date.parse(it.ende))):'')); }
-  if(it.frist){ p.push('⏳ bis '+esc(fmtDate(Date.parse(it.frist)))); }
-  if(it.ort) p.push('📍 '+esc(it.ort));
-  if(it.assigneeName) p.push('👤 '+esc(it.assigneeName));
-  return p.join(' · ');
+function _recoverInto(todosOwner, colOwnerId, items, boardIds){
+  const tasks=(items||[]).filter(it=>(it.kind==='aufgabe'||!it.kind) && !boardIds.has(it.id)).map(_v187ItemToNode);
+  if(!tasks.length) return false;
+  if(!Array.isArray(todosOwner.todos)) todosOwner.todos=[];
+  let col=todosOwner.todos.find(t=>t.id==='recov-'+colOwnerId);
+  if(!col){ col={ id:'recov-'+colOwnerId, text:'Wiederhergestellt', status:'offen', children:[] }; todosOwner.todos.push(col); }
+  if(!Array.isArray(col.children)) col.children=[];
+  const have=new Set(col.children.map(c=>c.id));
+  tasks.forEach(n=>{ if(!have.has(n.id)) col.children.push(n); });
+  return true;
 }
-function _itChecklist(it, canEdit){
-  const cl=it.checklist||[];
-  const rows=cl.map(c=>`<div class="crm-itcheck${c.done?' done':''}">
-      <input type="checkbox" ${c.done?'checked':''} ${canEdit?'':'disabled'} onchange="crmItemToggleCheck('${it.id}','${c.id}')">
-      <span class="tx">${esc(c.text)}</span>
-      ${canEdit?`<button class="crm-x" title="Löschen" onclick="crmItemDelCheck('${it.id}','${c.id}')">✕</button>`:''}
-    </div>`).join('');
-  const done=cl.filter(c=>c.done).length;
-  return `<div class="crm-itchecks">${rows}${(cl.length||canEdit)?`<div class="crm-itcheck-add">${cl.length?`<span class="crm-prog">✓ ${done}/${cl.length}</span>`:''}${canEdit?`<button class="btn-sm-crm" onclick="crmItemAddCheck('${it.id}')">＋ Punkt</button>`:''}</div>`:''}</div>`;
+function recoverV187EntityItems(e){
+  if(!e || !Array.isArray(e.items) || !e.items.length) return;
+  const boardIds=new Set(); (e.projekte||[]).forEach(p=>flatNodes(p.todos||[]).forEach(n=>boardIds.add(n.id)));
+  // Aufgaben zurück ins Board (erstes offenes Projekt, sonst neues Projekt „Aufgaben")
+  if(!Array.isArray(e.projekte)) e.projekte=[];
+  let p=e.projekte.find(x=>!x.closed)||e.projekte[0];
+  if(!p && e.items.some(it=>(it.kind==='aufgabe'||!it.kind)&&!boardIds.has(it.id))){ p={ id:'pl-'+e.id, name:'Aufgaben', todos:[], closed:false, createdAt:Date.now() }; e.projekte.push(p); }
+  if(p) _recoverInto(p, e.id, e.items, boardIds);
+  // Termine zurück in e.termine
+  const terminIds=new Set((e.termine||[]).map(t=>t.id));
+  const newTerm=e.items.filter(it=>it.kind==='termin' && !terminIds.has(it.id))
+    .map(it=>({ id:it.id||newId(), titel:it.text||'', datum:it.date||'', bis:it.ende||'', ort:it.ort||'', note:it.note||'' }));
+  if(newTerm.length){ if(!Array.isArray(e.termine)) e.termine=[]; e.termine.push(...newTerm); }
 }
-// Gemeinsame Aufgaben-Zeile (Eintrag UND Veranstaltung) – flach, mit optionaler Checkliste
-function _itAufgRow(it, canEdit){
-  return `<div class="crm-item${it.done?' done':''}">
-      <div class="crm-item-head">
-        <input type="checkbox" class="crm-check" ${it.done?'checked':''} ${canEdit?'':'disabled'} title="Erledigt" onchange="crmItemToggle('${it.id}')">
-        <div class="grow"><span class="tx">${esc(it.text||'(ohne Text)')}</span>${_itMeta(it)?`<div class="crm-item-meta">${_itMeta(it)}</div>`:''}${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
-        ${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmItemEdit('${it.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmItemDelete('${it.id}')">✕</button>`:''}
-      </div>
-      ${_itChecklist(it,canEdit)}
-    </div>`;
+function recoverV187VaItems(v){
+  if(!v || !Array.isArray(v.items) || !v.items.length) return;
+  const boardIds=new Set(); flatNodes(v.todos||[]).forEach(n=>boardIds.add(n.id));
+  _recoverInto(v, v.id, v.items, boardIds);
 }
-function entityItemsSectionHtml(e){
-  migEntityItems(e);
-  const canEdit=crmFull()||crmRestricted();
-  const items=(e.items||[]).filter(i=>!i.closed);
-  const aufg=items.filter(i=>i.kind==='aufgabe');
-  const term=items.filter(i=>i.kind==='termin').sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-  const vas=(veranstaltungenForEntity(window._crmTree,e.id)||[]).slice().sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
-  const aufgRow=it=>_itAufgRow(it,canEdit);
-  const terminRow=it=>`<div class="crm-item">
-      <div class="crm-item-head">
-        <span class="crm-item-ic">📅</span>
-        <div class="grow"><span class="tx">${esc(it.text||'(Termin)')}</span><div class="crm-item-meta">${_itMeta(it)||'(kein Datum)'}</div>${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
-        ${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmItemEdit('${it.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmItemDelete('${it.id}')">✕</button>`:''}
-      </div></div>`;
-  const vaRow=v=>`<div class="crm-item" style="cursor:pointer" onclick="crmOpenVeranstaltung('${v.id}')">
-      <div class="crm-item-head">
-        <span class="crm-item-ic">${v.online?'💻':'🎪'}</span>
-        <div class="grow"><span class="tx">${esc(v.titel||'(Veranstaltung)')}${v.closed?' <span class="crm-chip">abgeschlossen</span>':''}</span>
-          <div class="crm-item-meta">${v.start?'📅 '+esc(fmtDate(Date.parse(v.start))):''}${v.ortOderLink?' · 📍 '+esc(v.ortOderLink):''}${(v.teilnehmer&&v.teilnehmer.length>1)?' · 👥 '+v.teilnehmer.length:''}</div></div>
-        <span class="btn-sm-crm">öffnen ›</span>
-      </div></div>`;
-  const grp=(title,html,empty)=>`<div class="crm-itgrp"><div class="crm-itgrp-h">${title}</div>${html||`<div class="small" style="color:var(--muted)">${empty}</div>`}</div>`;
-  const newBtn=canEdit?`<div class="crm-itnew">
-      <span class="small" style="color:var(--muted);margin-right:4px">Neu:</span>
-      <button class="btn-sm-crm primary" onclick="crmItemNew('aufgabe')">✓ Aufgabe</button>
-      <button class="btn-sm-crm primary" onclick="crmItemNew('termin')">📅 Termin</button>
-      <button class="btn-sm-crm primary" onclick="crmItemNew('veranstaltung')">🎪 Veranstaltung</button>
-    </div>`:'';
-  return `<div class="crm-sec">
-    <h4><span class="ttl">🗂 Aufgaben &amp; Termine</span></h4>
-    ${newBtn}
-    ${grp('✓ Aufgaben', aufg.map(aufgRow).join(''), 'Keine Aufgaben.')}
-    ${grp('📅 Termine', term.map(terminRow).join(''), 'Keine Termine.')}
-    ${grp('🎪 Veranstaltungen', vas.map(vaRow).join(''), 'Keine Veranstaltungen.')}
-  </div>`;
-}
-// ── Veranstaltung: flaches Item-Modell (verlustfrei aus altem Board) ──
-// Wandelt das alte verschachtelte Kanban (Spalte→Karte→Häkchen) in flache
-// Aufgaben-Items mit optionaler Checkliste. v.todos bleibt als Sicherung.
-function migVaItems(v){
-  if(!v) return v;
-  if(!Array.isArray(v.items)) v.items=[];
-  if(v._itemsMig) return v;
-  try{
-    (v.todos||[]).forEach(col=>{
-      const cards=col.children||[];
-      const prefix=(col.text&&!/^(aufgaben|todo|todos|offen)$/i.test(col.text))?col.text+': ':'';
-      if(cards.length){
-        cards.forEach(card=>{
-          const cl=[]; const walk=n=>{ (n.children||[]).forEach(ch=>{ cl.push({id:ch.id||newId(),text:ch.text||'',done:ch.status==='erledigt'}); walk(ch); }); }; walk(card);
-          v.items.push({ id:card.id||newId(), kind:'aufgabe', text:prefix+(card.text||''), done:card.status==='erledigt',
-            frist:card.due||'', assigneeId:card.assigneeId||'', assigneeName:card.assigneeName||'',
-            note:card.note||'', checklist:cl, createdAt:card.createdAt||Date.now() });
-        });
-      } else {
-        // Spalte ohne Karten → selbst als Aufgabe übernehmen (nichts verlieren)
-        v.items.push({ id:col.id||newId(), kind:'aufgabe', text:(col.text||''), done:col.status==='erledigt',
-          frist:col.due||'', assigneeId:col.assigneeId||'', assigneeName:col.assigneeName||'',
-          note:col.note||'', checklist:[], createdAt:col.createdAt||Date.now() });
-      }
-    });
-  }catch(err){ console.error('migVaItems:',err); }
-  v._itemsMig=true;
-  return v;
-}
-// ── Item-Kontext: Eintrag ODER Veranstaltung ──────────────────────
-// _crmItemCtx = {kind:'entity'} (Standard) | {kind:'veranstaltung', id}
-function _itemContainer(){
-  const ctx=window._crmItemCtx;
-  if(ctx&&ctx.kind==='veranstaltung'){ const v=getVeranstaltung(ctx.id); return v?migVaItems(v):null; }
-  const e=curEntity(); return e?migEntityItems(e):null;
-}
-function _itemMutate(fn){
-  const ctx=window._crmItemCtx;
-  if(ctx&&ctx.kind==='veranstaltung'){
-    const v=getVeranstaltung(ctx.id); if(!v) return; migVaItems(v);
-    try{ fn(v); }catch(e){ console.error('CRM item mutate (VA):',e); return; }
-    v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName(); saveVeranstaltung(v);
-  } else {
-    mutateEntity(e=>{ migEntityItems(e); fn(e); });
-  }
-}
-function _itemRepaint(){
-  const ctx=window._crmItemCtx;
-  if(ctx&&ctx.kind==='veranstaltung') paintVeranstaltungDetail(); else paintDetail();
-}
-// Flache Aufgaben-Sektion einer Veranstaltung (gleiche Optik wie am Eintrag)
-function vaItemsSectionHtml(v){
-  migVaItems(v);
-  const canEdit=crmFull()||crmRestricted();
-  const aufg=(v.items||[]).filter(i=>i.kind==='aufgabe');
-  const list=aufg.length?aufg.map(it=>_itAufgRow(it,canEdit)).join(''):'<div class="small" style="color:var(--muted)">Noch keine Aufgaben.</div>';
-  const newBtn=canEdit?`<div class="crm-itnew"><span class="small" style="color:var(--muted);margin-right:4px">Neu:</span><button class="btn-sm-crm primary" onclick="crmItemNew('aufgabe')">✓ Aufgabe</button></div>`:'';
-  return newBtn+`<div class="crm-itgrp">${list}</div>`;
-}
-// ── Item-CRUD ──────────────────────────────────────────────────────
-function _itAssigneeOpts(sel){
-  let us=[]; try{ us=(window.getData?window.getData().users:[])||[]; }catch(e){}
-  return '<option value="">– niemand –</option>'+us.filter(u=>u&&u.name).map(u=>`<option value="${esc(u.id)}"${sel===u.id?' selected':''}>${esc(u.name)}</option>`).join('');
-}
-function crmItemNew(kind){
-  if(kind==='veranstaltung'){ if(window.crmNewVeranstaltungFor) window.crmNewVeranstaltungFor(); return; } // globales Event
-  crmItemModal(kind, null);
-}
-function crmItemEdit(id){ const c=_itemContainer(); if(!c) return; const it=(c.items||[]).find(x=>x.id===id); if(it) crmItemModal(it.kind, it); }
-function crmItemModal(kind, it){
-  crmOpenModalShell();
-  const isEdit=!!it; const k=kind||(it&&it.kind)||'aufgabe';
-  const title=(k==='termin'?'📅 Termin':'✓ Aufgabe')+(isEdit?' bearbeiten':'');
-  const dateF=`<div class="crm-modal-field" style="flex:1;min-width:150px"><label>${k==='termin'?'Datum':'Datum (optional)'}</label><input id="crm-it-date" type="date" value="${isEdit&&it.date?esc(it.date):''}"></div>`;
-  const fields = k==='termin'
-    ? `<div class="crm-modal-field"><label>Titel</label><input id="crm-it-text" type="text" value="${isEdit?esc(it.text||''):''}" placeholder="z. B. Vorstandssitzung"></div>
-       <div style="display:flex;gap:10px;flex-wrap:wrap">${dateF}<div class="crm-modal-field" style="flex:1;min-width:150px"><label>Ort (optional)</label><input id="crm-it-ort" type="text" value="${isEdit?esc(it.ort||''):''}"></div></div>`
-    : `<div class="crm-modal-field"><label>Aufgabe</label><input id="crm-it-text" type="text" value="${isEdit?esc(it.text||''):''}" placeholder="Was ist zu tun?"></div>
-       <div style="display:flex;gap:10px;flex-wrap:wrap">
-         <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Frist „bis wann" (optional)</label><input id="crm-it-frist" type="date" value="${isEdit&&it.frist?esc(it.frist):''}"></div>
-         <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig (optional)</label><select id="crm-it-assignee">${_itAssigneeOpts(isEdit?it.assigneeId:'')}</select></div>
-       </div>`;
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${title}</h3>
-    <input type="hidden" id="crm-it-id" value="${isEdit?esc(it.id):''}"><input type="hidden" id="crm-it-kind" value="${esc(k)}">
-    ${fields}
-    <div class="crm-modal-field"><label>Notiz (optional)</label><input id="crm-it-note" type="text" value="${isEdit?esc(it.note||''):''}"></div>
-    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-    <button class="btn-sm-crm primary" onclick="crmItemSave()">Speichern</button></div>`);
-}
-function crmItemSave(){
-  const id=val('crm-it-id'), kind=val('crm-it-kind')||'aufgabe';
-  const text=(val('crm-it-text')||'').trim();
-  const rec={ text, note:(val('crm-it-note')||'').trim() };
-  if(kind==='termin'){ rec.date=val('crm-it-date'); rec.ort=(val('crm-it-ort')||'').trim(); }
-  else { rec.frist=val('crm-it-frist'); const a=val('crm-it-assignee'); rec.assigneeId=a||''; rec.assigneeName=a?_userName(a):''; }
-  if(!text && !(kind==='termin'&&rec.date)){ toast('Bitte Text (oder beim Termin ein Datum) angeben.','err'); return; }
-  _itemMutate(c=>{ if(!Array.isArray(c.items)) c.items=[];
-    if(id){ const it=c.items.find(x=>x.id===id); if(it) Object.assign(it, rec); }
-    else { c.items.push({ id:newId(), kind, done:false, checklist:[], createdAt:Date.now(), ...rec }); }
-  });
-  crmCloseModal(); _itemRepaint(); toast('Gespeichert ✓','ok');
-}
-function _userName(uid){ try{ const u=(window.getData?window.getData().users:[]).find(x=>x.id===uid); return u?u.name:''; }catch(e){ return ''; } }
-function crmItemToggle(id){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===id); if(it) it.done=!it.done; }); _itemRepaint(); }
-function crmItemDelete(id){ if(!confirm('Diesen Eintrag löschen?')) return; _itemMutate(c=>{ c.items=(c.items||[]).filter(x=>x.id!==id); }); _itemRepaint(); }
-function crmItemAddCheck(id){ const t=prompt('Neuer Checklisten-Punkt:'); if(!t||!t.trim()) return; _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===id); if(it){ if(!Array.isArray(it.checklist)) it.checklist=[]; it.checklist.push({id:newId(),text:t.trim(),done:false}); } }); _itemRepaint(); }
-function crmItemToggleCheck(itemId, checkId){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===itemId); const ch=it&&(it.checklist||[]).find(x=>x.id===checkId); if(ch) ch.done=!ch.done; }); _itemRepaint(); }
-function crmItemDelCheck(itemId, checkId){ _itemMutate(c=>{ const it=(c.items||[]).find(x=>x.id===itemId); if(it) it.checklist=(it.checklist||[]).filter(x=>x.id!==checkId); }); _itemRepaint(); }
-
 // Projekt eines Eintrags finden, das einen bestimmten Aufgaben-Knoten enthält
 function _projForNode(e, nodeId){
   if(!e || !Array.isArray(e.projekte)) return null;
@@ -938,9 +783,9 @@ function kbCardHtml(c, n){
        ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
      </div>`:''}
     ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
+    <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step','${n.id}')">
     ${attachChips(n)}
     <div class="kb-cardbtns">
-      <button class="kb-additem" onclick="event.stopPropagation();crmAddChild('${n.id}')">＋ Schritt</button>
       <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen('${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
     </div>
   </div>`;
@@ -958,11 +803,11 @@ function taskBoardHtml(c){
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
       <div class="kb-cards">${cards}</div>
-      <button class="kb-add" onclick="crmAddChild('${top.id}')">＋ Aufgabe</button>
+      <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card','${top.id}')">
     </div>`;
   }).join('');
   return `<div class="kb-board">${cols}
-    <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><button class="kb-add" onclick="crmOpenTask('')">＋ Spalte</button></div>
+    <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><input class="kb-qadd kb-qadd-col" id="kb-qa-col" placeholder="＋ Spalte (Enter)" onkeydown="crmQaKey(event,'col','')"></div>
   </div>`;
 }
 function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
@@ -1007,7 +852,6 @@ function paintDetail(){
   const _openProj=e.projekte.filter(p=>!p.closed);
   if(!e.projekte.some(p=>p.id===window._crmProjSel)) window._crmProjSel = _openProj.length?_openProj[0].id:'';
   window._crmTaskCtx={ kind:'entity', tree:window._crmTree, eid:e.id, pid:window._crmProjSel };  // Engine zielt aufs ausgewählte Projekt
-  window._crmItemCtx={ kind:'entity' };  // Item-Engine (Aufgaben/Termine) zielt auf den Eintrag
   window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
@@ -1025,9 +869,9 @@ function paintDetail(){
     <div class="crm-card crm-kontakt" onclick="crmMemberDetail('${k.id}')">
       <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
       ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
-      ${(k.email||k.tel)?`<div class="meta" onclick="event.stopPropagation()">
-        ${k.email?`<a href="${mailHref(k.email)}" class="crm-chip">✉️ ${esc(k.email)}</a>`:''}
-        ${k.tel?`<a href="${telHref(k.tel)}" class="crm-chip">📞 ${esc(k.tel)}</a>`:''}
+      ${(kEmails(k).length||kTels(k).length)?`<div class="meta" onclick="event.stopPropagation()">
+        ${kEmails(k).map(em=>`<a href="${mailHref(em)}" class="crm-chip">✉️ ${esc(em)}</a>`).join('')}
+        ${kTels(k).map(t=>`<a href="${telHref(t)}" class="crm-chip">📞 ${esc(t)}</a>`).join('')}
       </div>`:''}
     </div>`).join('');
   const kontakte = kCards ? `<div class="crm-list">${kCards}</div>` : `<div class="small" style="color:var(--muted)">Noch keine Kontakte.</div>`;
@@ -1086,10 +930,10 @@ function paintDetail(){
 
   // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
   const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
-  const aufgabenSec = entityItemsSectionHtml(e);
+  const aufgabenSec = entityProjekteSectionHtml(e);
   const _kEdit=crmFull()||crmRestricted();
   const kontakteSec = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>k.email)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>kEmails(k).length)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
       ${kontakte}
     </div>`;
   const termineSec = `<div class="crm-sec">
@@ -1100,18 +944,14 @@ function paintDetail(){
       <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
       ${angebote}
     </div>`;
-  const statusSec = `<div class="crm-sec">
-      <h4><span class="ttl">🧭 Status quo</span></h4>
-      <textarea class="crm-ta" id="crm-statusquo" rows="3" placeholder="Wo stehen wir aktuell mit ${esc(s.name||'')}?">${esc(e.statusQuo||'')}</textarea>
-      <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmSaveStatusQuo()">Speichern</button></div>
-    </div>`;
+  const statusSec = kontaktnotizenSecHtml(e);
   const kommSec = `<div class="crm-sec">
       <h4><span class="ttl">💬 Interne Kommunikation</span><button class="btn-sm-crm primary" onclick="crmOpenNote()">🎤 Neue Notiz</button></h4>
       ${log}
     </div>`;
 
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
-  const openTasks=entityItemsOpenCount(e);
+  const openTasks=entityOpenTaskCount(e);
   const kCount=(e.kontakte||[]).length;
   const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben & Termine'+(openTasks?` (${openTasks})`:'')]];
   tabs.push(['kommunikation','Kommunikation']);
@@ -1121,7 +961,7 @@ function paintDetail(){
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
   const bodyByTab={
     allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
-    aufgaben: aufgabenSec + angeboteSec,
+    aufgaben: aufgabenSec + vaSection + termineSec + angeboteSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
@@ -1156,12 +996,13 @@ function crmSearchAll(q){
       const s=e.stamm||{};
       if(hit(s.name,s.adresse,s.sitz,s.tags,s.email,s.web,s.tel))
         res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
-      (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,k.email,k.tel))
+      (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,kEmails(k).join(' '),kTels(k).join(' ')))
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
-      migEntityItems(e);
-      (e.items||[]).forEach(it=>{
-        if(hit(it.text,it.note)) res.tasks.push({kind:'item', tree:tr.key, eid:e.id, name:it.text||(it.kind==='termin'?'(Termin)':'(Aufgabe)'), sub:(s.name||'')+' · '+(it.kind==='termin'?'Termin':'Aufgabe')});
-        (it.checklist||[]).forEach(c=>{ if(hit(c.text)) res.tasks.push({kind:'item', tree:tr.key, eid:e.id, name:c.text||'(Punkt)', sub:(s.name||'')+' · '+(it.text||'')}); });
+      migEntityProjekte(e);
+      e.projekte.forEach(p=>{
+        if(hit(p.name)) res.projects.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:p.name||'Projekt', sub:s.name||'', closed:!!p.closed});
+        flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
+          res.tasks.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:x.text||'(Aufgabe)', sub:(s.name||'')+' · '+(p.name||'Projekt')}); });
       });
     });
   });
@@ -1192,13 +1033,11 @@ function crmSearchPanelHtml(q){
         ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
         : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
     + grp('📅 Veranstaltungen', r.events, x=>row(`crmOpenVeranstaltung('${esc(x.id)}')`,'📅',x.name,x.sub))
-    + grp('✅ Aufgaben', r.tasks, x=> x.kind==='item'
-        ? row(`crmMeineItemOpen('${esc(x.tree)}','${esc(x.eid)}')`,'✅',x.name,x.sub)
-        : (x.kind==='entity'
-            ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
-            : (x.kind==='veranstaltung'
-                ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
-                : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub))));
+    + grp('✅ Aufgaben', r.tasks, x=> x.kind==='entity'
+        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
+        : (x.kind==='veranstaltung'
+            ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
+            : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub)));
 }
 function crmSearchInput(v){
   window._crmSearch=v;
@@ -1274,7 +1113,7 @@ function crmSaveStamm(isNew){
     const id=newId();
     const ent={ id, tree:window._crmTree, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
-      kontakte:[], termine:[], angebote:[], statusQuo:'', todos:[], log:[] };
+      kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
     saveEntity(window._crmTree, ent);
     try{ wfApply(ent, 'entryCreated'); }catch(e){ console.warn('Workflow entryCreated:', e&&e.message); }
     window._crmSelId=id;
@@ -1292,10 +1131,18 @@ function crmDeleteEntity(){
 }
 
 // ── Kontakte / Mitglieder ──────────────────────────────────────────
+// Kontakt kann MEHRERE E-Mails/Telefonnummern haben (k.emails[]/k.tels[]).
+// Rückwärtskompatibel: alte Einzelfelder k.email/k.tel werden weiter gelesen.
+function kEmails(k){ if(k&&Array.isArray(k.emails)) return k.emails.filter(Boolean); const e=k&&k.email; return e?[e]:[]; }
+function kTels(k){ if(k&&Array.isArray(k.tels)) return k.tels.filter(Boolean); const t=k&&k.tel; return t?[t]:[]; }
+function _mfRow(kind,v){ return `<div class="crm-mf-row"><input class="crm-mf-${kind}" value="${esc(v||'')}" placeholder="${kind==='email'?'name@beispiel.de':'z. B. 0431 123456'}"><button type="button" class="crm-x" title="Entfernen" onclick="crmMfDelRow(this)">✕</button></div>`; }
+function crmMfAddRow(kind){ const box=document.getElementById('crm-mf-'+kind+'s'); if(!box) return; box.insertAdjacentHTML('beforeend', _mfRow(kind,'')); const ins=box.querySelectorAll('input'); if(ins.length) ins[ins.length-1].focus(); }
+function crmMfDelRow(btn){ const row=btn&&btn.closest('.crm-mf-row'); if(row) row.remove(); }
 function memberFormHtml(k){
   const opts=memberFunctions().map(f=>`<option ${k.funktion===f?'selected':''}>${esc(f)}</option>`).join('');
   const lists=listVerteiler();
-  const myMail=String(k.email||'').toLowerCase().trim();
+  const emails=kEmails(k), tels=kTels(k);
+  const myMail=String(emails[0]||'').toLowerCase().trim();
   const vBlock = lists.length ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
      <div class="vw-vpick">${lists.map(v=>{ const inIt = myMail && _normEmails(v.emails).some(e=>e.toLowerCase()===myMail);
         return `<label><input type="checkbox" class="crm-mf-vt" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
@@ -1303,8 +1150,12 @@ function memberFormHtml(k){
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
    <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
-   <div class="crm-modal-field"><label>E-Mail</label><input id="crm-mf-email" value="${esc(k.email||'')}"></div>
-   <div class="crm-modal-field"><label>Telefon</label><input id="crm-mf-tel" value="${esc(k.tel||'')}"></div>
+   <div class="crm-modal-field"><label>E-Mail-Adressen</label>
+     <div id="crm-mf-emails">${(emails.length?emails:['']).map(v=>_mfRow('email',v)).join('')}</div>
+     <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('email')">＋ E-Mail</button></div>
+   <div class="crm-modal-field"><label>Telefonnummern</label>
+     <div id="crm-mf-tels">${(tels.length?tels:['']).map(v=>_mfRow('tel',v)).join('')}</div>
+     <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>
    ${vBlock}`;
 }
@@ -1324,14 +1175,16 @@ function crmEditMember(mid){
 }
 function crmSaveMember(mid){
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
-  const rec={ name, funktion:val('crm-mf-fn'), email:val('crm-mf-email'), tel:val('crm-mf-tel'), note:val('crm-mf-note') };
-  // Verteiler-Auswahl AUS DEM DOM lesen, BEVOR das Modal geschlossen wird
-  const email=String(rec.email||'').trim();
+  const emails=Array.from(document.querySelectorAll('.crm-mf-email')).map(x=>x.value.trim()).filter(Boolean);
+  const tels=Array.from(document.querySelectorAll('.crm-mf-tel')).map(x=>x.value.trim()).filter(Boolean);
+  const rec={ name, funktion:val('crm-mf-fn'), emails, tels, note:val('crm-mf-note') };
+  // Verteiler-Auswahl AUS DEM DOM lesen, BEVOR das Modal geschlossen wird (primäre = erste E-Mail)
+  const email=String(emails[0]||'').trim();
   const want=new Set(Array.from(document.querySelectorAll('.crm-mf-vt:checked')).map(x=>x.value));
   const allBoxes=Array.from(document.querySelectorAll('.crm-mf-vt')).map(x=>x.value);
   mutateEntity(e=>{
     if(!Array.isArray(e.kontakte)) e.kontakte=[];
-    if(mid){ const k=e.kontakte.find(x=>x.id===mid); if(k) Object.assign(k,rec); }
+    if(mid){ const k=e.kontakte.find(x=>x.id===mid); if(k){ Object.assign(k,rec); delete k.email; delete k.tel; } }
     else { rec.id=newId(); e.kontakte.push(rec); }
   });
   // Verteiler-Mitgliedschaft setzen (nur mit E-Mail)
@@ -1367,8 +1220,8 @@ function crmMemberDetail(mid){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 12px">👤 ${esc(k.name||'(Kontakt)')}</h3>
     ${det('Rolle / Funktion', k.funktion?esc(k.funktion):'')}
-    ${det('E-Mail', k.email?`<a href="${mailHref(k.email)}">${esc(k.email)}</a>`:'')}
-    ${det('Telefon', k.tel?`<a href="${telHref(k.tel)}">${esc(k.tel)}</a>`:'')}
+    ${det('E-Mail', kEmails(k).map(em=>`<a href="${mailHref(em)}">${esc(em)}</a>`).join('<br>'))}
+    ${det('Telefon', kTels(k).map(t=>`<a href="${telHref(t)}">${esc(t)}</a>`).join('<br>'))}
     ${det('Notiz', k.note?`<span style="white-space:pre-line">${linkify(k.note)}</span>`:'')}
     <div class="crm-modal-actions" style="margin-top:16px">
       ${canEdit?`<button class="btn-sm-crm danger" style="margin-right:auto" onclick="crmDeleteMemberConfirm('${k.id}')">🗑 Löschen</button>`:''}
@@ -1385,8 +1238,8 @@ function crmContactsToVCard(list){
     const last=sp>0?nm.slice(sp+1):nm, first=sp>0?nm.slice(0,sp):'';
     const L=['BEGIN:VCARD','VERSION:3.0','FN:'+_vcEsc(k.name||''),'N:'+_vcEsc(last)+';'+_vcEsc(first)+';;;'];
     if(k.funktion) L.push('TITLE:'+_vcEsc(k.funktion));
-    if(k.email) L.push('EMAIL;TYPE=INTERNET:'+_vcEsc(k.email));
-    if(k.tel) L.push('TEL;TYPE=CELL:'+_vcEsc(k.tel));
+    kEmails(k).forEach(em=>L.push('EMAIL;TYPE=INTERNET:'+_vcEsc(em)));
+    kTels(k).forEach(t=>L.push('TEL;TYPE=CELL:'+_vcEsc(t)));
     if(k.note) L.push('NOTE:'+_vcEsc(k.note));
     L.push('END:VCARD');
     return L.join('\r\n');
@@ -1463,11 +1316,11 @@ function crmImportContactsFile(inp){
       let added=0;
       mutateEntity(ent=>{
         if(!Array.isArray(ent.kontakte)) ent.kontakte=[];
-        const seen=new Set(ent.kontakte.map(k=>String(k.email||'').toLowerCase()).filter(Boolean));
+        const seen=new Set(ent.kontakte.flatMap(k=>kEmails(k)).map(e=>String(e).toLowerCase()).filter(Boolean));
         parsed.forEach(c=>{
           const mail=String(c.email||'').toLowerCase();
           if(mail&&seen.has(mail)) return; // Dublette per E-Mail überspringen
-          ent.kontakte.push({ id:newId(), name:c.name||'', funktion:c.funktion||'', email:c.email||'', tel:c.tel||'', note:c.note||'' });
+          ent.kontakte.push({ id:newId(), name:c.name||'', funktion:c.funktion||'', emails:c.email?[c.email]:[], tels:c.tel?[c.tel]:[], note:c.note||'' });
           if(mail) seen.add(mail); added++;
         });
       });
@@ -1531,11 +1384,52 @@ function crmDeleteAngebot(aid){
   paintDetail();
 }
 
-// ── Status quo ─────────────────────────────────────────────────────
-function crmSaveStatusQuo(){
-  const v=val('crm-statusquo');
-  mutateEntity(e=>{ e.statusQuo=v; });
-  toast('Status gespeichert ✓','ok');
+// ── Kontaktnotizen (früher „Status quo") mit echter History ────────
+// Jede Notiz wird gespeichert (nicht überschrieben): {id,ts,text,byKuerzel,byName}.
+// Neueste immer oben; ältere in einer aufklappbaren History.
+function migKontaktnotizen(e){
+  if(!e) return e;
+  if(!Array.isArray(e.kontaktnotizen)) e.kontaktnotizen=[];
+  if(!e._knMig){
+    if(e.statusQuo && String(e.statusQuo).trim()){
+      e.kontaktnotizen.push({ id:newId(), ts:e.updatedAt||e.createdAt||Date.now(), text:String(e.statusQuo),
+        byKuerzel:e.updatedByKuerzel||'', byName:e.updatedByName||'' });
+    }
+    e._knMig=true;
+  }
+  return e;
+}
+function _knMeta(n){ return `${n.ts?esc(fmtDateTime(n.ts)):''}${n.byKuerzel?' · '+esc(n.byKuerzel):(n.byName?' · '+esc(n.byName):'')}`; }
+function kontaktnotizenSecHtml(e){
+  migKontaktnotizen(e);
+  const canEdit=crmFull()||crmRestricted();
+  const notes=(e.kontaktnotizen||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const noteHtml=n=>`<div class="crm-kn-item">
+      <div class="crm-kn-meta">${_knMeta(n)}${canEdit?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz('${n.id}')">✕</button>`:''}</div>
+      <div class="crm-kn-text">${linkify(n.text||'')}</div>
+    </div>`;
+  const latest=notes[0], older=notes.slice(1);
+  const input=canEdit?`<textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz …"></textarea>
+      <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>`:'';
+  const latestHtml = latest ? `<div class="crm-kn-latest">${noteHtml(latest)}</div>`
+    : `<div class="small" style="color:var(--muted)">Noch keine Kontaktnotizen.</div>`;
+  const history = older.length ? `<details class="crm-kn-hist"><summary>🕘 Frühere Kontaktnotizen (${older.length})</summary>${older.map(noteHtml).join('')}</details>` : '';
+  return `<div class="crm-sec">
+    <h4><span class="ttl">🗒 Kontaktnotizen</span></h4>
+    ${input}
+    ${latestHtml}
+    ${history}
+  </div>`;
+}
+function crmAddKontaktnotiz(){
+  const t=(val('crm-kn-new')||'').trim(); if(!t){ toast('Bitte eine Notiz eingeben.','err'); return; }
+  mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen.unshift({ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName() }); });
+  paintDetail(); toast('Kontaktnotiz gespeichert ✓','ok');
+}
+function crmDeleteKontaktnotiz(id){
+  if(!confirm('Diese Kontaktnotiz löschen?')) return;
+  mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen=(e.kontaktnotizen||[]).filter(x=>x.id!==id); });
+  paintDetail();
 }
 // ── Projekte-Bereich eines Eintrags (mehrere parallel + History) ───
 function entityProjekteSectionHtml(e){
@@ -1548,7 +1442,7 @@ function entityProjekteSectionHtml(e){
     return `<button class="crm-projtab${p.id===selPid?' active':''}" onclick="crmSelProjekt('${p.id}')">${esc(p.name||'Projekt')}${(!p.closed&&open)?` <span class="cnt">${open}</span>`:''}</button>`; };
   const openTabs = openP.length ? `<div class="crm-projtabs">${openP.map(tab).join('')}</div>` : '';
   const board = sel ? entityProjBoardHtml(sel)
-    : (openP.length ? '' : `<div class="small" style="color:var(--muted)">Noch keine Projekte. Lege das erste an${closedP.length?' – oder öffne unten ein abgeschlossenes':''}.</div>`);
+    : (openP.length ? '' : `<div class="small" style="color:var(--muted);margin-bottom:8px">Noch keine Aufgaben.${closedP.length?' (Unten gibt es abgeschlossene Projekte.)':''}</div>${(crmFull()||crmRestricted())?`<input class="kb-qadd" id="kb-qa-col" placeholder="Erste Spalte anlegen + Enter – z. B. „Vorbereitung"" onkeydown="crmQaKey(event,'col','')">`:''}`);
   const history = closedP.length ? `<details class="crm-projhist" ${(sel&&sel.closed)?'open':''}>
       <summary>🏁 Abgeschlossene Projekte (${closedP.length})</summary>
       <div class="crm-projtabs" style="margin-top:8px">${closedP.map(tab).join('')}</div>
@@ -1956,6 +1850,39 @@ function crmToggleDone(id){
   repaintContainer();
 }
 
+// ── Schnellerfassung (Inline, ohne Dialog) ─────────────────────────
+// Enter im Inline-Feld legt sofort an; Details später per Klick auf die Karte.
+function crmQaKey(ev, kind, parentId){
+  if(ev.key!=='Enter') return;
+  ev.preventDefault();
+  const inp=ev.target; const text=(inp.value||'').trim(); if(!text) return;
+  inp.value='';
+  if(kind==='col') crmQuickAddColumn(text, inp.id);
+  else crmQuickAddChildInline(parentId, text, inp.id);
+}
+function crmQuickAddColumn(text, focusId){
+  // Bei Einträgen: sicherstellen, dass ein offenes Projekt existiert (sonst automatisch anlegen),
+  // damit der Nutzer nie erst ein Projekt einrichten muss.
+  if(isEntityCtx()){
+    const e=curEntity();
+    if(e){ migEntityProjekte(e);
+      let p=e.projekte.find(x=>x.id===window._crmProjSel && !x.closed) || e.projekte.find(x=>!x.closed);
+      let pid = p ? p.id : ('pl-'+e.id);
+      if(!p){ mutateEntity(en=>{ migEntityProjekte(en); if(!en.projekte.some(x=>x.id===pid)) en.projekte.push({ id:pid, name:'Aufgaben', todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel() }); }); }
+      window._crmProjSel=pid;
+      window._crmTaskCtx={ kind:'entity', tree:window._crmTree, eid:e.id, pid };
+      window._crmAfterTask='detail';
+    }
+  }
+  mutateContainer(en=>{ if(!Array.isArray(en.todos)) en.todos=[]; en.todos.push({ id:newId(), text, status:'offen', children:[], teams:[] }); });
+  window._crmFocusAfter=focusId||'kb-qa-col';
+  repaintContainer();
+}
+function crmQuickAddChildInline(parentId, text, focusId){
+  mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; f.node.children.push({ id:newId(), text, status:'offen', children:[] }); });
+  window._crmFocusAfter=focusId;
+  repaintContainer();
+}
 // ── Vorlage auf den Eintrag anwenden ───────────────────────────────
 function crmApplyVorlagePick(){
   const vs=listVorlagen();
@@ -2279,28 +2206,18 @@ function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (aus Veranstaltungen und Projekten)
   const assigned=[];
-  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref,due:x.ref.due||''}); }); });
-  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref,due:x.ref.due||''}); }); });
-  // NEU: Eintrags-Aufgaben (flaches Item-Modell) mit Zuständigkeit
-  try{ (getTrees()||[]).forEach(t=>{ (listEntities(t.key)||[]).forEach(en=>{ if(!en) return; migEntityItems(en); (en.items||[]).forEach(it=>{ if(it.kind==='aufgabe'&&!it.closed&&it.assigneeId===me) assigned.push({kind:'item',tree:t.key,id:en.id,name:(en.stamm&&en.stamm.name)||'(Eintrag)',item:it,due:it.frist||''}); }); }); }); }catch(err){ console.error('Meine (Items):',err); }
-  assigned.sort((a,b)=> String(a.due||'9999').localeCompare(String(b.due||'9999')) );
+  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref}); }); });
+  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
+  assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
-    if(a.kind==='item'){
-      const it=a.item; const done=!!it.done;
-      const meta=['📂 '+a.name, it.frist?('⏳ '+fmtDate(Date.parse(it.frist))):''].filter(Boolean).map(esc).join(' · ');
-      return `<div class="crm-task${done?' done':''}">
-        <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineItemToggle('${a.tree}','${a.id}','${it.id}')">
-        <div class="grow"><span class="tx">${esc(it.text)}</span><div class="crm-tmeta">${meta}</div>${it.note?`<div class="crm-tnote">${nl2br(it.note)}</div>`:''}</div>
-        <button class="btn-sm-crm" onclick="crmMeineItemOpen('${a.tree}','${a.id}')">Öffnen</button>
-      </div>`;
-    }
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';
     const meta=[(a.kind==='veranstaltung'?'📅 ':'📂 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
+    const idArg=''; const cArg=a.id;
     return `<div class="crm-task${done?' done':''}">
-      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','','${a.id}','${t.id}')">
+      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','${idArg}','${cArg}','${t.id}')">
       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
       <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div>${t.note?`<div class="crm-tnote">${nl2br(t.note)}</div>`:''}</div>
-      <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','','${a.id}','${t.id}')">Öffnen</button>
+      <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','${idArg}','${cArg}','${t.id}')">Öffnen</button>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
@@ -2330,9 +2247,6 @@ function _meSetCtx(kind,tree,id,tid){
 }
 function crmMeineToggle(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmToggleDone(tid); }
 function crmMeineOpen(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
-// „Meine": Eintrags-Aufgabe (Item) direkt am jeweiligen Eintrag umschalten/öffnen
-function crmMeineItemToggle(tree,eid,id){ const en=getEntity(tree,eid); if(!en) return; migEntityItems(en); const it=(en.items||[]).find(x=>x.id===id); if(it){ it.done=!it.done; en.updatedByKuerzel=curKuerzel(); en.updatedByName=curName(); saveEntity(tree,en); } paintMeine(); }
-function crmMeineItemOpen(tree,eid){ window._crmDetailTab='aufgaben'; crmGoEntry(tree,eid); }
 function crmOpenMeinProjekt(id){ window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id; paintTeamProjektDetail(); }
 function crmNewMeinProjekt(){
   crmOpenModalShell();
@@ -2396,8 +2310,8 @@ function paintVeranstaltungDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const v=getVeranstaltung(window._crmVaSel);
   if(!v){ window._crmVaSel=null; paintVeranstaltungen(); return; }
-  normTasks(v);
-  window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmItemCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
+  normTasks(v); recoverV187VaItems(v);
+  window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
   const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry('${esc(t.tree)}','${esc(t.eid)}')">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
   const ortLine = v.online
     ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
@@ -2420,8 +2334,14 @@ function paintVeranstaltungDetail(){
       ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
     </div>
     <div class="crm-sec">
-      <h4><span class="ttl">✅ Aufgaben &amp; Checkliste</span></h4>
-      ${vaItemsSectionHtml(v)}
+      <h4><span class="ttl">✅ Aufgaben</span>
+        <span class="hbtns">
+          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
+          <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
+          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
+        </span>
+      </h4>
+      ${taskBoardHtml(v)}
     </div>
   </div>`;
 }
@@ -2598,7 +2518,7 @@ function crmVerteilerAddVerein(){
   const e=getEntity(tree,eid);
   if(sel) sel.value='';
   if(!e) return;
-  const emails=(e.kontakte||[]).map(k=>k.email).filter(Boolean);
+  const emails=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean);
   const stammMail=(e.stamm&&e.stamm.email)||''; if(stammMail) emails.push(stammMail);
   const ta=document.getElementById('crm-vt-emails');
   const before=_normEmails([ta?ta.value:'']).length;
@@ -2623,7 +2543,7 @@ function crmCopyVerteiler(id){ const v=getVerteiler(id); if(v) _copyEmails(v.ema
 // Schnellaktion am Eintrag: Mail an alle Kontakte (BCC)
 function crmMailKontakte(){
   const e=curEntity(); if(!e) return;
-  const emails=(e.kontakte||[]).map(k=>k.email).filter(Boolean);
+  const emails=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean);
   if(!emails.length){ toast('An diesem Eintrag sind keine Kontakt-E-Mails hinterlegt.','err'); return; }
   _openTo(emails);  // Kontakte eines Eintrags kennen sich → sichtbar im An-Feld
 }
@@ -3026,8 +2946,8 @@ function _histDescribe(prev, cur, coll){
   _diffById(prev.angebote, cur.angebote, 'Angebot', a=>a.titel, parts);
   _diffById(prev.stats, cur.stats, 'Statistik', s=>{ try{return fmtDate(Date.parse(s.date));}catch(e){return '';} }, parts);
   _diffById(prev.foerderungen, cur.foerderungen, 'Förderung', f=>f.was||foerderStatusLabel(f.status), parts);
-  _diffById(prev.items, cur.items, 'Eintrag', it=>it.text||(it.kind||''), parts);
-  if((prev.statusQuo||'')!==(cur.statusQuo||'')) parts.push('Status quo geändert');
+  _diffById(prev.kontaktnotizen, cur.kontaktnotizen, 'Kontaktnotiz', n=>String(n.text||'').slice(0,24), parts);
+  if((prev.statusQuo||'')!==(cur.statusQuo||'')) parts.push('Kontaktnotiz geändert');
   _diffProjekte(prev.projekte, cur.projekte, parts);
   return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4} weitere)`:'');
 }
@@ -3370,7 +3290,7 @@ function allContactRows(){
   getTrees().forEach(t=>{ listEntities(t.key).forEach(e=>{
     (e.kontakte||[]).forEach(k=>{
       rows.push({ baum:t.label, eintrag:(e.stamm&&e.stamm.name)||'',
-        name:k.name||'', funktion:k.funktion||'', email:k.email||'', tel:k.tel||'', note:k.note||'' });
+        name:k.name||'', funktion:k.funktion||'', email:kEmails(k).join('; '), tel:kTels(k).join('; '), note:k.note||'' });
     });
   }); });
   return rows;
@@ -3772,9 +3692,11 @@ function wfApply(ent, trigger){
           if(!Array.isArray(ent.log)) ent.log=[];
           ent.log.push({ id:newId(), ts:Date.now(), autor:'Workflow: '+(w.name||''), kuerzel:'WF', text:wfFill(s.text||'', ent), summary:'' }); changed=true;
         } else if(s.kind==='aktion'){
-          migEntityItems(ent);
-          if(!Array.isArray(ent.items)) ent.items=[];
-          ent.items.push({ id:newId(), kind:'aufgabe', text:wfFill(s.titel||'Aufgabe', ent), done:false, frist:wfDueDate(s.dueDays), assigneeId:'', assigneeName:'', team:s.team||'', note:'(automatisch durch Workflow „'+(w.name||'')+'")', checklist:[], createdAt:Date.now() }); changed=true;
+          migEntityProjekte(ent);
+          if(!ent.projekte.length) ent.projekte.push({ id:newId(), name:'Aufgaben', todos:[], closed:false, createdAt:Date.now() });
+          const proj = ent.projekte.find(p=>!p.closed) || ent.projekte[0];
+          if(!Array.isArray(proj.todos)) proj.todos=[];
+          proj.todos.push({ id:newId(), children:[], teams:s.team?[s.team]:[], text:wfFill(s.titel||'Aufgabe', ent), note:'(automatisch durch Workflow „'+(w.name||'')+'")', assigneeId:'', assigneeName:'', due:wfDueDate(s.dueDays), status:'offen', deps:[] }); changed=true;
         } else if(s.kind==='benachrichtigung' || s.kind==='pause' || s.kind==='log'){
           if(!Array.isArray(ent.log)) ent.log=[];
           const desc = s.kind==='benachrichtigung' ? ((s.kanal==='chat'?'Chat':'E-Mail')+' an '+(s.an||'')+(s.betreff?(': '+s.betreff):''))
@@ -3829,15 +3751,15 @@ Object.assign(window, {
   crmCfgFuncsSave, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
-  crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen, crmMeineItemToggle, crmMeineItemOpen,
+  crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
+  crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
-  crmItemNew, crmItemEdit, crmItemSave, crmItemToggle, crmItemDelete, crmItemAddCheck, crmItemToggleCheck, crmItemDelCheck,
   crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
-  crmSaveStatusQuo, crmCloseBoard, crmReopenBoard,
+  crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
@@ -3852,6 +3774,7 @@ Object.assign(window, {
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
   crmDeleteNode, crmToggleDone,
+  crmQaKey, crmQuickAddColumn, crmQuickAddChildInline,
   crmApplyVorlagePick, crmApplyVorlage,
   // Kanban-Board
   crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn, crmToggleHideDone,
