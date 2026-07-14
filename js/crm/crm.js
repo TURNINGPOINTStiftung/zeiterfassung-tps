@@ -149,12 +149,13 @@ function assigneeOptsHtml(team, selId){
 
 // ── Eintrags-Status (für Übersicht/Filter) ─────────────────────────
 const CRM_STATUS=[
-  { key:'ruhend',        label:'ruhend',            color:'#9aa4b2' },
-  { key:'beratung',      label:'aktive Beratung',   color:'#2e7d32' },
-  { key:'eigenstaendig', label:'läuft eigenständig', color:'#2d6099' },
-  { key:'foerderung',    label:'Förderung',         color:'#7b3fb3' },
-  { key:'klaerung',      label:'Klärung',           color:'#e58a00' },
-  { key:'sonstiges',     label:'Sonstiges',         color:'#6b7280' }
+  { key:'ruhend',        label:'Ruhend',             color:'#9aa4b2' },
+  { key:'aktiv',         label:'Aktiv',              color:'#2e7d32' },
+  { key:'beratung',      label:'Beratung',           color:'#0d8a8a' },
+  { key:'eigenstaendig', label:'Läuft eigenständig', color:'#2d6099' },
+  { key:'foerderung',    label:'Förderung',          color:'#7b3fb3' },
+  { key:'klaerung',      label:'Klärung',            color:'#e58a00' },
+  { key:'sonstiges',     label:'Sonstiges',          color:'#6b7280' }
 ];
 function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
 function crmStatusBadge(k){ const d=crmStatusDef(k); return d?`<span class="crm-statusbadge" style="background:${d.color}">${esc(d.label)}</span>`:''; }
@@ -431,12 +432,9 @@ function injectStyles(){
   .crm-statuslabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
   .crm-status-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;color:var(--text)}
   .crm-statusbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
-  .crm-statusfilter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-  .crm-sfbtn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--text)}
-  .crm-sfbtn:hover{border-color:var(--primary)}
-  .crm-sfbtn.active{border-color:var(--primary);background:var(--primary);color:#fff}
-  .crm-sfbtn .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-  .crm-sfbtn .n{opacity:.7;font-weight:700}
+  .crm-statusfilter{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .crm-sf-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .crm-sf-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;color:var(--text);cursor:pointer}
   /* Schlagwort-Vorschläge */
   .crm-tag-suggest{display:none;position:absolute;left:0;right:0;top:100%;z-index:25;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);margin-top:2px;max-height:210px;overflow:auto;padding:4px}
   .crm-tag-suggest button{display:block;width:100%;text-align:left;background:none;border:none;padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text)}
@@ -609,8 +607,11 @@ function paintList(){
   if(sf) items=items.filter(e=>(e.status||'')===sf);
   const countBy=k=>listEntities(window._crmTree).filter(e=>(e.status||'')===k).length;
   const filterBar=`<div class="crm-statusfilter">
-      <button class="crm-sfbtn${!sf?' active':''}" onclick="crmSetStatusFilter('')">Alle</button>
-      ${CRM_STATUS.map(s=>{ const n=countBy(s.key); return `<button class="crm-sfbtn${sf===s.key?' active':''}" onclick="crmSetStatusFilter('${s.key}')"><span class="dot" style="background:${s.color}"></span>${esc(s.label)}${n?` <span class="n">${n}</span>`:''}</button>`; }).join('')}
+      <label class="crm-sf-label">Status</label>
+      <select class="crm-sf-select" onchange="crmSetStatusFilter(this.value)">
+        <option value="">Alle (${listEntities(window._crmTree).length})</option>
+        ${CRM_STATUS.map(s=>{ const n=countBy(s.key); return `<option value="${s.key}"${sf===s.key?' selected':''}>${esc(s.label)}${n?` (${n})`:''}</option>`; }).join('')}
+      </select>
     </div>`;
   const cards = items.map(e=>{
     const s=e.stamm||{};
@@ -1024,7 +1025,7 @@ function paintDetail(){
                : (crmStatusBadge(e.status)||'<span class="small" style="color:var(--muted)">kein Status</span>') }</div>`;
   const bodyByTab={
     allgemeines: statusCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
-    aufgaben: neuBtn + aufgabenSec + vaSection + termineSec + angeboteSec,
+    aufgaben: neuBtn + termineSec + vaSection + angeboteSec + aufgabenSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
@@ -1202,7 +1203,7 @@ function stammFormHtml(s, flbls){
     let inp;
     if(f.key==='tags'){
       // Schlagworte mit Vorschlägen aus bereits vorhandenen Tags (verhindert Wildwuchs)
-      inp = `<input id="crm-sf-tags" value="${v}" autocomplete="off" placeholder="tippen für Vorschläge …" oninput="crmTagSuggest(this)" onfocus="crmTagSuggest(this)" onblur="setTimeout(crmTagHide,180)">
+      inp = `<input id="crm-sf-tags" value="${v}" autocomplete="off" placeholder="Tippen für Vorschläge …" oninput="crmTagSuggest(this)" onfocus="crmTagSuggest(this)" onblur="setTimeout(crmTagHide,180)">
         <div id="crm-tag-suggest" class="crm-tag-suggest"></div>`;
     } else if(f.type==='textarea'){
       inp = `<textarea id="crm-sf-${f.key}" rows="2">${v}</textarea>`;
