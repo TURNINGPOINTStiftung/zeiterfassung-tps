@@ -597,7 +597,7 @@ function paintList(){
   if(q){
     items = items.filter(e=>{
       const s=e.stamm||{};
-      const hay=[s.name,s.adresse,s.sitz,s.tags,s.email].map(x=>String(x||'').toLowerCase()).join(' ');
+      const hay=Object.values(s).map(x=>String(x==null?'':x).toLowerCase()).join(' ');  // ALLE Stammfelder (inkl. Vereinskürzel, Mentor, Vereinsentwickler …)
       const ctxt=(e.kontakte||[]).map(k=>k.name+' '+k.funktion).join(' ').toLowerCase();
       return (hay+' '+ctxt).includes(q);
     });
@@ -1118,7 +1118,7 @@ function crmSearchAll(q){
   getTrees().forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
       const s=e.stamm||{};
-      if(hit(s.name,s.adresse,s.sitz,s.tags,s.email,s.web,s.tel))
+      if(hit(...Object.values(s)))   // ALLE Stammfelder durchsuchen (nicht nur Name/Adresse/…)
         res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
       (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,kEmails(k).join(' '),kTels(k).join(' ')))
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
