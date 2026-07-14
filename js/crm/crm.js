@@ -147,6 +147,27 @@ function assigneeOptsHtml(team, selId){
   return opts.join('');
 }
 
+// ── Eintrags-Status (für Übersicht/Filter) ─────────────────────────
+const CRM_STATUS=[
+  { key:'ruhend',        label:'ruhend',            color:'#9aa4b2' },
+  { key:'beratung',      label:'aktive Beratung',   color:'#2e7d32' },
+  { key:'eigenstaendig', label:'läuft eigenständig', color:'#2d6099' },
+  { key:'foerderung',    label:'Förderung',         color:'#7b3fb3' },
+  { key:'klaerung',      label:'Klärung',           color:'#e58a00' },
+  { key:'sonstiges',     label:'Sonstiges',         color:'#6b7280' }
+];
+function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
+function crmStatusBadge(k){ const d=crmStatusDef(k); return d?`<span class="crm-statusbadge" style="background:${d.color}">${esc(d.label)}</span>`:''; }
+function crmStatusOpts(sel){ return ['<option value="">– kein Status –</option>'].concat(CRM_STATUS.map(s=>`<option value="${s.key}"${sel===s.key?' selected':''}>${esc(s.label)}</option>`)).join(''); }
+// Alle bereits vergebenen Schlagworte über ALLE Bäume (für Vorschläge)
+function allTags(){
+  const seen=new Map();
+  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{
+    String((e.stamm&&e.stamm.tags)||'').split(/[,;]+/).forEach(t=>{ const v=t.trim(); if(v){ const k=v.toLowerCase(); if(!seen.has(k)) seen.set(k,v); } });
+  })); }catch(err){}
+  return Array.from(seen.values()).sort((a,b)=>a.localeCompare(b,'de',{sensitivity:'base'}));
+}
+
 // ── CRM-Zugriff des angemeldeten Nutzers ───────────────────────────
 function accessLevel(){
   const cu=window.cu; if(!cu) return 'none';
@@ -399,6 +420,27 @@ function injectStyles(){
   .crm-kn-hist{margin-top:8px}
   .crm-kn-hist summary{cursor:pointer;font-size:12.5px;color:var(--primary);font-weight:600;padding:4px 0}
   .crm-kn-hist[open] summary{margin-bottom:6px}
+  /* Einheitlicher Anlege-Knopf mit Menü */
+  .crm-neu-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .crm-neu-wrap{position:relative}
+  .crm-neu-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:5px;min-width:190px}
+  .crm-neu-menu button{display:block;width:100%;text-align:left;background:none;border:none;padding:9px 12px;border-radius:7px;font-size:14px;cursor:pointer;color:var(--text)}
+  .crm-neu-menu button:hover{background:var(--hover,#eef3f9)}
+  /* Status */
+  .crm-statusrow{display:flex;align-items:center;gap:10px}
+  .crm-statuslabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .crm-status-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;color:var(--text)}
+  .crm-statusbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+  .crm-statusfilter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .crm-sfbtn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--text)}
+  .crm-sfbtn:hover{border-color:var(--primary)}
+  .crm-sfbtn.active{border-color:var(--primary);background:var(--primary);color:#fff}
+  .crm-sfbtn .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .crm-sfbtn .n{opacity:.7;font-weight:700}
+  /* Schlagwort-Vorschläge */
+  .crm-tag-suggest{display:none;position:absolute;left:0;right:0;top:100%;z-index:25;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);margin-top:2px;max-height:210px;overflow:auto;padding:4px}
+  .crm-tag-suggest button{display:block;width:100%;text-align:left;background:none;border:none;padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text)}
+  .crm-tag-suggest button:hover{background:var(--hover,#eef3f9)}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
   @media(max-width:640px){
     /* Ganze CRM-Seite scrollt (kein interner Scroll) → Header + Leiste verschwinden beim Scrollen */
@@ -566,6 +608,14 @@ function paintList(){
       return (hay+' '+ctxt).includes(q);
     });
   }
+  // Status-Filter (bessere Übersicht)
+  const sf=window._crmStatusFilter||'';
+  if(sf) items=items.filter(e=>(e.status||'')===sf);
+  const countBy=k=>listEntities(window._crmTree).filter(e=>(e.status||'')===k).length;
+  const filterBar=`<div class="crm-statusfilter">
+      <button class="crm-sfbtn${!sf?' active':''}" onclick="crmSetStatusFilter('')">Alle</button>
+      ${CRM_STATUS.map(s=>{ const n=countBy(s.key); return `<button class="crm-sfbtn${sf===s.key?' active':''}" onclick="crmSetStatusFilter('${s.key}')"><span class="dot" style="background:${s.color}"></span>${esc(s.label)}${n?` <span class="n">${n}</span>`:''}</button>`; }).join('')}
+    </div>`;
   const cards = items.map(e=>{
     const s=e.stamm||{};
     const openTodos=entityOpenTaskCount(e);
@@ -575,16 +625,19 @@ function paintList(){
       <h3>${esc(s.name||'(ohne Name)')}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
       <div class="meta">
+        ${crmStatusBadge(e.status)}
         <span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>
         ${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}
       </div>
     </div>`;
   }).join('');
-  root.innerHTML = barHtml() + `<div class="crm-body">${
-    items.length ? `<div class="crm-list">${cards}</div>`
-                 : `<div class="crm-empty">Noch keine ${esc(tree.label)}.<br><br><button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ ${esc(tree.single)} anlegen</button></div>`
+  root.innerHTML = barHtml() + `<div class="crm-body">
+    ${crmCanView()?filterBar:''}
+    ${ items.length ? `<div class="crm-list">${cards}</div>`
+                 : `<div class="crm-empty">${sf?'Keine Einträge mit diesem Status.':`Noch keine ${esc(tree.label)}.`}<br><br>${sf?`<button class="btn-sm-crm" onclick="crmSetStatusFilter('')">Filter zurücksetzen</button>`:`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ ${esc(tree.single)} anlegen</button>`}</div>`
   }</div>`;
 }
+function crmSetStatusFilter(v){ window._crmStatusFilter=v; paintList(); }
 
 // ── Aufgaben: hierarchisch (Hauptaufgabe + Unterpunkte) + Abhängigkeiten
 // Datenmodell je Eintrag:
@@ -905,7 +958,7 @@ function paintDetail(){
     </div>`;
   const vaUpc=vaList.filter(v=>!vaIsPast(v)&&!v.closed), vaPast=vaList.filter(v=>vaIsPast(v)||v.closed);
   const vaSection = !crmCanView() ? '' : `<div class="crm-sec">
-    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm" onclick="crmNewVeranstaltungFor()">＋ Veranstaltung</button>`:''}</h4>
+    <h4><span class="ttl">📅 Veranstaltungen</span></h4>
     ${vaUpc.length?vaUpc.map(vaRow).join(''):`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen mit diesem Eintrag.</div>`}
     ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div style="margin-top:6px">${vaPast.map(vaRow).join('')}</div></details>`:''}
   </div>`;
@@ -937,7 +990,7 @@ function paintDetail(){
       ${kontakte}
     </div>`;
   const termineSec = `<div class="crm-sec">
-      <h4><span class="ttl">📅 Termine</span><button class="btn-sm-crm" onclick="crmAddTermin()">＋ Termin</button></h4>
+      <h4><span class="ttl">📅 Termine</span></h4>
       ${termine}
     </div>`;
   const angeboteSec = `<div class="crm-sec">
@@ -959,9 +1012,23 @@ function paintDetail(){
   tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
+  const canCreate=crmFull()||crmRestricted();
+  // EIN Anlege-Knopf mit Auswahl (Aufgabe/Termin/Veranstaltung) – bündelt die Wege,
+  // ohne Funktionen zu entfernen (Board + Inline-Anlegen bleiben voll erhalten).
+  const neuBtn = canCreate ? `<div class="crm-neu-bar"><div class="crm-neu-wrap">
+      <button class="btn-sm-crm primary" onclick="crmNeuToggle(event)">＋ Neu ▾</button>
+      <div class="crm-neu-menu" id="crm-neu-menu">
+        <button type="button" onclick="crmNeuPick('aufgabe')">✓ Aufgabe</button>
+        <button type="button" onclick="crmNeuPick('termin')">📅 Termin</button>
+        ${crmFull()?`<button type="button" onclick="crmNeuPick('veranstaltung')">🎪 Veranstaltung</button>`:''}
+      </div>
+    </div><span class="small" style="color:var(--muted)">Aufgabe, Termin oder Veranstaltung – hier wählen.</span></div>` : '';
+  const statusCtrl = `<div class="crm-sec crm-statusrow"><span class="crm-statuslabel">Status</span>${
+     canCreate ? `<select class="crm-status-select" onchange="crmSetStatus(this.value)">${crmStatusOpts(e.status||'')}</select>`
+               : (crmStatusBadge(e.status)||'<span class="small" style="color:var(--muted)">kein Status</span>') }</div>`;
   const bodyByTab={
-    allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
-    aufgaben: aufgabenSec + vaSection + termineSec + angeboteSec,
+    allgemeines: statusCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
+    aufgaben: neuBtn + aufgabenSec + vaSection + termineSec + angeboteSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
@@ -982,6 +1049,66 @@ function paintDetail(){
   </div>`;
 }
 function crmDetailTab(t){ window._crmDetailTab=t; paintDetail(); }
+function crmSetStatus(v){ mutateEntity(e=>{ e.status=v; }); paintDetail(); }
+
+// ── Einheitliches Anlegen: EIN Knopf, Auswahl per Menü ─────────────
+function crmNeuToggle(ev){ if(ev){ ev.stopPropagation(); } const m=document.getElementById('crm-neu-menu'); if(!m) return;
+  const show=m.style.display!=='block'; m.style.display=show?'block':'none';
+  if(show) setTimeout(()=>document.addEventListener('click', _crmNeuClose), 0);
+}
+function _crmNeuClose(){ const m=document.getElementById('crm-neu-menu'); if(m) m.style.display='none'; document.removeEventListener('click', _crmNeuClose); }
+function crmNeuPick(kind){ _crmNeuClose();
+  if(kind==='termin') return crmAddTermin();
+  if(kind==='veranstaltung') return crmNewVeranstaltungFor();
+  return crmNewAufgabeDialog();
+}
+// Aufgabe anlegen: volle Felder + Wahl der Spalte (oder neue Spalte). Unteraufgaben/
+// Abhängigkeiten ergänzt man danach an der Karte im Board (Funktionen bleiben erhalten).
+function crmNewAufgabeDialog(){
+  const e=curEntity(); if(!e) return;
+  migEntityProjekte(e);
+  const openP=e.projekte.filter(p=>!p.closed);
+  const proj=openP.find(p=>p.id===window._crmProjSel)||openP[0]||null;
+  const cols=proj?(proj.todos||[]):[];
+  const colOpts=cols.map(c=>`<option value="${esc(c.id)}">${esc(c.text||'(Spalte)')}</option>`).join('');
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✓ Neue Aufgabe</h3>
+    <div class="crm-modal-field"><label>Aufgabe *</label><input id="crm-na-text" placeholder="Was ist zu tun?"></div>
+    <div class="crm-modal-field"><label>Spalte / Bereich</label>
+      <select id="crm-na-col" onchange="document.getElementById('crm-na-newcol-wrap').style.display=(this.value==='__new__'?'block':'none')">
+        ${colOpts}<option value="__new__">＋ Neue Spalte …</option>
+      </select>
+      <div id="crm-na-newcol-wrap" style="display:${cols.length?'none':'block'};margin-top:6px"><input id="crm-na-newcol" placeholder="Name der neuen Spalte (z. B. Vorbereitung)"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig (optional)</label><select id="crm-na-assignee">${assigneeOptsHtml([],'')}</select></div>
+      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Frist bis (optional)</label><input type="date" id="crm-na-due"></div>
+    </div>
+    <div class="crm-modal-field"><label>Notiz (optional)</label><input id="crm-na-note"></div>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Unteraufgaben &amp; Abhängigkeiten kannst du danach an der Karte im Board ergänzen.</div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="crmSaveNewAufgabe()">Anlegen</button></div>`);
+  if(!cols.length){ const sel=document.getElementById('crm-na-col'); if(sel) sel.value='__new__'; }
+}
+function crmSaveNewAufgabe(){
+  const text=(val('crm-na-text')||'').trim(); if(!text){ toast('Bitte eine Aufgabe eingeben.','err'); return; }
+  const colSel=val('crm-na-col'); const newColName=(val('crm-na-newcol')||'').trim();
+  const assigneeId=val('crm-na-assignee'); const due=val('crm-na-due'); const note=(val('crm-na-note')||'').trim();
+  const card={ id:newId(), text, children:[], deps:[], teams:[], attachments:[], status:'offen',
+    assigneeId:assigneeId||'', assigneeName:assigneeId?userName(assigneeId):'', due:due||'', note };
+  mutateEntity(en=>{
+    migEntityProjekte(en);
+    let p=en.projekte.find(x=>x.id===window._crmProjSel&&!x.closed) || en.projekte.find(x=>!x.closed);
+    if(!p){ p={ id:'pl-'+en.id, name:'Aufgaben', todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel() }; en.projekte.push(p); }
+    window._crmProjSel=p.id;
+    let col;
+    if(colSel==='__new__' || !(p.todos||[]).length){ col={ id:newId(), text:newColName||'Aufgaben', status:'offen', children:[], teams:[], deps:[] }; if(!Array.isArray(p.todos)) p.todos=[]; p.todos.push(col); }
+    else { col=p.todos.find(c=>c.id===colSel) || p.todos[0]; }
+    if(!Array.isArray(col.children)) col.children=[];
+    col.children.push(card);
+  });
+  crmCloseModal(); window._crmDetailTab='aufgaben'; paintDetail(); toast('Aufgabe angelegt ✓','ok');
+}
 
 // ── Globale CRM-Suche (über ALLE Bäume/Einträge/Kontakte/Projekte/Aufgaben) ──
 // Wichtig: tippt der Nutzer, wird NUR das Ergebnis-Overlay aktualisiert – die Bar
@@ -1076,15 +1203,43 @@ function stammFormHtml(s, flbls){
   flbls=flbls||{};
   return stammFields(window._crmTree).map(f=>{
     const v=esc(s[f.key]||'');
-    const inp = f.type==='textarea'
-      ? `<textarea id="crm-sf-${f.key}" rows="2">${v}</textarea>`
-      : f.type==='date'
-        ? `<input type="date" id="crm-sf-${f.key}" value="${v}">`
-        : `<input id="crm-sf-${f.key}" value="${v}">`;
+    let inp;
+    if(f.key==='tags'){
+      // Schlagworte mit Vorschlägen aus bereits vorhandenen Tags (verhindert Wildwuchs)
+      inp = `<input id="crm-sf-tags" value="${v}" autocomplete="off" placeholder="tippen für Vorschläge …" oninput="crmTagSuggest(this)" onfocus="crmTagSuggest(this)" onblur="setTimeout(crmTagHide,180)">
+        <div id="crm-tag-suggest" class="crm-tag-suggest"></div>`;
+    } else if(f.type==='textarea'){
+      inp = `<textarea id="crm-sf-${f.key}" rows="2">${v}</textarea>`;
+    } else if(f.type==='date'){
+      inp = `<input type="date" id="crm-sf-${f.key}" value="${v}">`;
+    } else {
+      inp = `<input id="crm-sf-${f.key}" value="${v}">`;
+    }
     const flabel=flbls[f.key]||f.label;
-    return `<div class="crm-modal-field"><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
+    return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
   }).join('');
 }
+// Schlagwort-Vorschläge (Token nach letztem Komma gegen vorhandene Tags)
+function crmTagSuggest(inp){
+  const box=document.getElementById('crm-tag-suggest'); if(!box) return;
+  const parts=String(inp.value||'').split(',');
+  const token=(parts[parts.length-1]||'').trim().toLowerCase();
+  const used=new Set(parts.slice(0,-1).map(t=>t.trim().toLowerCase()).filter(Boolean));
+  let list=allTags().filter(t=>!used.has(t.toLowerCase()));
+  if(token) list=list.filter(t=>t.toLowerCase().includes(token));
+  list=list.slice(0,10);
+  if(!list.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.innerHTML=list.map(t=>`<button type="button" data-tag="${esc(t)}" onmousedown="event.preventDefault()" onclick="crmTagPick(this.getAttribute('data-tag'))">${esc(t)}</button>`).join('');
+  box.style.display='block';
+}
+function crmTagPick(tag){
+  const inp=document.getElementById('crm-sf-tags'); if(!inp) return;
+  const parts=String(inp.value||'').split(',');
+  parts[parts.length-1]=tag;
+  inp.value=parts.map(p=>p.trim()).filter(Boolean).join(', ')+', ';
+  crmTagHide(); inp.focus();
+}
+function crmTagHide(){ const box=document.getElementById('crm-tag-suggest'); if(box) box.style.display='none'; }
 function crmOpenNew(){
   crmOpenModalShell();
   const tree=treeByKey(window._crmTree);
@@ -3750,6 +3905,8 @@ Object.assign(window, {
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
+  crmSetStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
+  crmTagSuggest, crmTagPick, crmTagHide,
   crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
