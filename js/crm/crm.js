@@ -154,7 +154,7 @@ const CRM_STATUS=[
   { key:'beratung',      label:'Beratung',           color:'#0d8a8a' },
   { key:'eigenstaendig', label:'Läuft eigenständig', color:'#2d6099' },
   { key:'foerderung',    label:'Förderung',          color:'#7b3fb3' },
-  { key:'klaerung',      label:'Klärung',            color:'#e58a00' },
+  { key:'klaerung',      label:'Klärung',            color:'#12b347' },
   { key:'sonstiges',     label:'Sonstiges',          color:'#6b7280' }
 ];
 function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
