@@ -534,10 +534,6 @@ function paint(){
   window._crmModalOpen = false;
   const mode = window._crmMode || 'kontakte';
   if(mode==='verteiler' && crmCanView()){ paintVerteiler(); return; }
-  if(mode==='workflows' && crmFull()){
-    if(window._wfSel && getWorkflow(window._wfSel)) paintWorkflowEditor(); else paintWorkflows();
-    return;
-  }
   if(mode==='veranstaltungen' && crmCanView()){
     if(window._crmVaSel && getVeranstaltung(window._crmVaSel)) paintVeranstaltungDetail(); else paintVeranstaltungen();
     return;
@@ -568,12 +564,12 @@ function barHtml(){
   const full = crmFull();
   const view = crmCanView();
   const lvl  = accessLevel();
-  const homeActive = (mode==='teams'||mode==='meine'||mode==='veranstaltungen'||mode==='workflows');
+  const homeActive = (mode==='teams'||mode==='meine'||mode==='veranstaltungen');
   const homeLabel  = view ? '👥 Teams' : '🙋 Meine Aufgaben';
   const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
   if(view){
     getTrees().forEach(t=>tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&t.key===window._crmTree)?' active':''}" onclick="crmSwitchTree('${t.key}')">${esc(t.icon||'')} ${esc(t.label)}</button>`));
-    // Veranstaltungen & Workflows sind unter „Teams" integriert (kein eigener Top-Reiter mehr)
+    // Veranstaltungen sind unter „Teams" integriert (kein eigener Top-Reiter mehr)
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
   } else if(lvl==='verein'){
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
@@ -1270,7 +1266,6 @@ function crmSaveStamm(isNew){
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
     saveEntity(window._crmTree, ent);
-    try{ wfApply(ent, 'entryCreated'); }catch(e){ console.warn('Workflow entryCreated:', e&&e.message); }
     window._crmSelId=id;
     crmCloseModal(); paintDetail(); toast('Angelegt ✓','ok');
   } else {
@@ -2143,10 +2138,9 @@ function paintTeamsList(){
   window._crmTaskCtx=null;
   // „Meine Aufgaben" oben – für alle
   const meine = meineSectionsHtml();
-  // Veranstaltungen & Workflows: deutlich sichtbare Buttons GANZ OBEN in der Teams-Ansicht
+  // Veranstaltungen: deutlich sichtbarer Button GANZ OBEN in der Teams-Ansicht
   const actions=[];
   if(crmCanView()) actions.push(`<button class="btn-sm-crm primary" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
-  if(crmFull()) actions.push(`<button class="btn-sm-crm" onclick="crmShowWorkflows()">⚡ Workflows</button>`);
   const topBar = actions.length ? `<div class="crm-sec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <span style="font-weight:700;color:var(--primary);font-size:13px;text-transform:uppercase;letter-spacing:.6px">CRM-Bereiche</span>
       ${actions.join('')}
@@ -3895,10 +3889,6 @@ Object.assign(window, {
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
   crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmImpExpModal,
-  // Workflows (Automatisierung)
-  crmShowWorkflows, crmWfNew, crmWfOpen, crmWfBack, crmWfDelete, crmWfRename,
-  crmWfSetTrigger, crmWfSetTriggerTree, crmWfSaveDraft, crmWfPublish, crmWfMove,
-  crmWfDelStep, crmWfAddStep, crmWfAddKind, crmWfEditStep, crmWfActionToggle, crmWfSaveStep, crmWfRun,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
