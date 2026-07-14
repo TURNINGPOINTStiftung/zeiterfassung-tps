@@ -150,11 +150,11 @@ function assigneeOptsHtml(team, selId){
 // ── Eintrags-Status (für Übersicht/Filter) ─────────────────────────
 const CRM_STATUS=[
   { key:'ruhend',        label:'Ruhend',             color:'#9aa4b2' },
-  { key:'aktiv',         label:'Aktiv',              color:'#2e7d32' },
+  { key:'aktiv',         label:'Aktiv',              color:'#12b347' },
   { key:'beratung',      label:'Beratung',           color:'#0d8a8a' },
   { key:'eigenstaendig', label:'Läuft eigenständig', color:'#2d6099' },
   { key:'foerderung',    label:'Förderung',          color:'#7b3fb3' },
-  { key:'klaerung',      label:'Klärung',            color:'#12b347' },
+  { key:'klaerung',      label:'Klärung',            color:'#e58a00' },
   { key:'sonstiges',     label:'Sonstiges',          color:'#6b7280' }
 ];
 function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
