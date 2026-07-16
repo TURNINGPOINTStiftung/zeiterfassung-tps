@@ -341,6 +341,16 @@ function injectStyles(){
   .crm-stat-note{white-space:pre-line;font-size:12.5px;line-height:1.45}
   .crm-stat-act{white-space:nowrap;text-align:right}
   .crm-stat-quote{background:rgba(45,96,153,.08);border:1px solid var(--border);border-left:4px solid var(--primary);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;color:var(--text)}
+  .crm-koop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--border)}
+  .crm-koop:last-child{border-bottom:none}
+  .crm-koop-p{cursor:pointer;font-weight:600;color:var(--primary)}
+  .crm-koop-p:hover{text-decoration:underline}
+  .crm-koop-art{background:rgba(0,0,0,.05);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--text)}
+  .crm-koop-note{cursor:help}
+  .crm-koop-act{margin-left:auto;white-space:nowrap}
+  .vw-card-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+  .vw-card-opt{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#fff}
+  .vw-card-opt input{width:auto;margin:0}
   .vw-table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
   .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
   .vw-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -597,6 +607,33 @@ function barHtml(){
 }
 
 // ── Liste der Einträge ─────────────────────────────────────────────
+// ── Konfigurierbare Kachel-Infos (zentral in der Verwaltung) ───────
+// Verfügbare Felder je Baum: Stammfelder (Präfix „s:") + abgeleitete („d:").
+function _cardFieldDefs(treeKey){
+  const defs=[];
+  stammFields(treeKey).forEach(f=>{ if(f.key==='name') return;
+    defs.push({ key:'s:'+f.key, label:f.label, get:e=>{ const v=e.stamm&&e.stamm[f.key]; return v?(esc(f.label)+': '+esc(String(v))):''; } });
+  });
+  defs.push({ key:'d:kontakte', label:'Anzahl Kontakte', get:e=>{ const n=(e.kontakte||[]).length; return n?('👤 '+n+' Kontakt'+(n===1?'':'e')):''; } });
+  defs.push({ key:'d:offene',   label:'Offene Aufgaben',  get:e=>{ const n=entityOpenTaskCount(e); return n?('✓ '+n+' offen'):''; } });
+  defs.push({ key:'d:naechste', label:'Nächste Veranstaltung', get:e=>{ const v=_naechsteVA(treeKey,e.id); return v?('📅 '+esc(v)):''; } });
+  defs.push({ key:'d:status',   label:'Status',           get:e=>crmStatusBadge(e.status) });
+  defs.push({ key:'d:tags',     label:'Schlagworte',      get:e=>{ const t=(e.stamm&&e.stamm.tags)||''; return t?('🏷 '+esc(t)):''; } });
+  defs.push({ key:'d:koop',     label:'Anzahl Kooperationen', get:e=>{ const n=koopCount(e); return n?('🤝 '+n):''; } });
+  return defs;
+}
+function _naechsteVA(tree,eid){
+  const today=new Date().toISOString().slice(0,10);
+  const up=veranstaltungenForEntity(tree,eid).filter(v=>!v.closed && String(v.start||'')>=today).sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+  const v=up[0]; return v ? ((v.titel||'(Veranstaltung)')+' · '+fmtDate(Date.parse(v.start))) : '';
+}
+function crmCardFields(treeKey){ const c=getCrmConfig(); const cf=c&&c.cardFields; return (cf&&Array.isArray(cf[treeKey]))?cf[treeKey]:null; }
+function _cardChipsHtml(e,treeKey){
+  const keys=crmCardFields(treeKey); if(!keys||!keys.length) return null;   // null → Standard-Rendering
+  const byKey={}; _cardFieldDefs(treeKey).forEach(d=>byKey[d.key]=d);
+  return keys.map(k=>{ const d=byKey[k]; if(!d) return ''; const v=d.get(e); if(!v) return '';
+    return k==='d:status' ? v : `<span class="crm-chip">${v}</span>`; }).filter(Boolean).join('');
+}
 function paintList(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const tree = treeByKey(window._crmTree);
@@ -605,7 +642,8 @@ function paintList(){
   if(q){
     items = items.filter(e=>{
       const s=e.stamm||{};
-      const hay=Object.values(s).map(x=>String(x==null?'':x).toLowerCase()).join(' ');  // ALLE Stammfelder (inkl. Vereinskürzel, Mentor, Vereinsentwickler …)
+      const koopTxt=(e.kooperationen||[]).map(k=>k.art+' '+_entityName(k.tree,k.eid)).join(' ');   // auch nach Kooperations-Partnern/-Art suchen
+      const hay=(Object.values(s).join(' ')+' '+koopTxt).toLowerCase();  // ALLE Stammfelder (inkl. Vereinskürzel, Mentor, Vereinsentwickler …) + Kooperationen
       const ctxt=(e.kontakte||[]).map(k=>k.name+' '+k.funktion).join(' ').toLowerCase();
       return (hay+' '+ctxt).includes(q);
     });
@@ -623,17 +661,17 @@ function paintList(){
     </div>`;
   const cards = items.map(e=>{
     const s=e.stamm||{};
-    const openTodos=entityOpenTaskCount(e);
-    const kCount=(e.kontakte||[]).length;
     const sub=[s.sitz,s.adresse].filter(Boolean).join(' · ');
+    // Zentral konfigurierte Kachel-Infos (Verwaltung) – sonst Standard
+    const cfgChips=_cardChipsHtml(e, window._crmTree);
+    let meta;
+    if(cfgChips!=null){ meta=cfgChips; }
+    else { const openTodos=entityOpenTaskCount(e); const kCount=(e.kontakte||[]).length;
+      meta=`${crmStatusBadge(e.status)}<span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}`; }
     return `<div class="crm-card" onclick="crmOpenDetail('${e.id}')">
       <h3>${esc(s.name||'(ohne Name)')}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
-      <div class="meta">
-        ${crmStatusBadge(e.status)}
-        <span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>
-        ${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}
-      </div>
+      <div class="meta">${meta}</div>
     </div>`;
   }).join('');
   root.innerHTML = barHtml() + `<div class="crm-body">
@@ -1032,7 +1070,7 @@ function paintDetail(){
      canCreate ? `<select class="crm-status-select" onchange="crmSetStatus(this.value)">${crmStatusOpts(e.status||'')}</select>`
                : (crmStatusBadge(e.status)||'<span class="small" style="color:var(--muted)">kein Status</span>') }</div>`;
   const bodyByTab={
-    allgemeines: statusCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kontakteSec,
+    allgemeines: statusCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
     aufgaben: neuBtn + termineSec + vaSection + angeboteSec + aufgabenSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
@@ -1126,7 +1164,7 @@ function crmSearchAll(q){
   getTrees().forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
       const s=e.stamm||{};
-      if(hit(...Object.values(s)))   // ALLE Stammfelder durchsuchen (nicht nur Name/Adresse/…)
+      if(hit(...Object.values(s), ...(e.kooperationen||[]).map(k=>(k.art||'')+' '+_entityName(k.tree,k.eid))))   // ALLE Stammfelder + Kooperationen
         res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
       (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,kEmails(k).join(' '),kTels(k).join(' ')))
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
@@ -1287,6 +1325,86 @@ function crmDeleteEntity(){
   if(!confirm(`„${(e.stamm&&e.stamm.name)||''}" wirklich löschen?`)) return;
   deleteEntity(window._crmTree, e.id);
   window._crmSelId=null; paintList(); toast('Gelöscht.','');
+}
+
+// ── Kooperationen zwischen Einträgen (baumübergreifend, beidseitig) ──
+// Gespeichert am „Besitzer"-Eintrag: e.kooperationen[]={id,tree,eid,art,note}.
+// Angezeigt werden ausgehende + eingehende (Scan) → bei beiden Partnern sichtbar.
+function _entityName(tree,eid){ const e=getEntity(tree,eid); return e?((e.stamm&&e.stamm.name)||'(ohne Name)'):'(gelöscht)'; }
+function _koopList(tree,eid){
+  const out=[]; const self=getEntity(tree,eid);
+  (self&&Array.isArray(self.kooperationen)?self.kooperationen:[]).forEach(k=>{
+    out.push({ partnerTree:k.tree, partnerEid:k.eid, art:k.art||'', note:k.note||'', ownerTree:tree, ownerEid:eid, koopId:k.id });
+  });
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{
+    if(tr.key===tree && o.id===eid) return;
+    (Array.isArray(o.kooperationen)?o.kooperationen:[]).forEach(k=>{
+      if(k.tree===tree && k.eid===eid) out.push({ partnerTree:tr.key, partnerEid:o.id, art:k.art||'', note:k.note||'', ownerTree:tr.key, ownerEid:o.id, koopId:k.id });
+    });
+  }));
+  const seen=new Set(); return out.filter(x=>{ const key=x.partnerTree+'::'+x.partnerEid; if(seen.has(key)) return false; seen.add(key); return true; });
+}
+function koopCount(e){ return e ? _koopList(e.tree||window._crmTree, e.id).length : 0; }
+function kooperationenSecHtml(e){
+  const canEdit=crmFull()||crmRestricted();
+  const list=_koopList(window._crmTree, e.id);
+  const rows=list.map(k=>{
+    const icon=(getTrees().find(t=>t.key===k.partnerTree)||{}).icon||'';
+    return `<div class="crm-koop">
+      <span class="crm-koop-p" onclick="crmGoEntry('${esc(k.partnerTree)}','${esc(k.partnerEid)}')">${esc(icon)} ${esc(_entityName(k.partnerTree,k.partnerEid))} ↗</span>
+      ${k.art?`<span class="crm-koop-art">${esc(k.art)}</span>`:''}
+      ${k.note?`<span class="crm-koop-note" title="${esc(k.note)}">💬</span>`:''}
+      ${canEdit?`<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✎</button><button class="crm-x" title="Entfernen" onclick="crmKoopDelete('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✕</button></span>`:''}
+    </div>`;
+  }).join('') || '<div class="small" style="color:var(--muted)">Keine Kooperationen erfasst.</div>';
+  return `<div class="crm-sec">
+    <h4><span class="ttl">🤝 Kooperationen</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmKoopAdd()">＋ Kooperation</button>`:''}</h4>
+    ${rows}
+  </div>`;
+}
+function crmKoopAdd(){
+  const e=curEntity(); if(!e) return;
+  const opts=['<option value="">– Partner wählen –</option>'];
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{ if(tr.key===window._crmTree&&o.id===e.id) return; const v=tr.key+'::'+o.id; opts.push(`<option value="${v}">${esc(tr.icon||'')} ${esc((o.stamm&&o.stamm.name)||'(ohne Name)')}</option>`); }));
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🤝 Kooperation</h3>
+   <input type="hidden" id="crm-koop-id" value=""><input type="hidden" id="crm-koop-ot" value=""><input type="hidden" id="crm-koop-oe" value="">
+   <div class="crm-modal-field"><label>Partner (Verein, Sozialakteur …) *</label><select id="crm-koop-partner">${opts.join('')}</select></div>
+   <div class="crm-modal-field"><label>Art der Kooperation</label><input id="crm-koop-art" placeholder="z. B. gemeinsames Training, nur Veranstaltung XY, dauerhaft …"></div>
+   <div class="crm-modal-field"><label>Notiz (optional)</label><textarea id="crm-koop-note" rows="2"></textarea></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmKoopSave()">Speichern</button></div>`);
+}
+function crmKoopEdit(ot,oe,id){
+  const o=getEntity(ot,oe); if(!o) return; const k=(o.kooperationen||[]).find(x=>x.id===id); if(!k) return;
+  const cur=curEntity(); const isOwnerCur=(ot===window._crmTree && cur && oe===cur.id);
+  const partnerName=isOwnerCur ? _entityName(k.tree,k.eid) : _entityName(ot,oe);
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🤝 Kooperation bearbeiten</h3>
+   <input type="hidden" id="crm-koop-id" value="${esc(id)}"><input type="hidden" id="crm-koop-ot" value="${esc(ot)}"><input type="hidden" id="crm-koop-oe" value="${esc(oe)}">
+   <div class="crm-modal-field"><label>Partner</label><div class="v">${esc(partnerName)}</div></div>
+   <div class="crm-modal-field"><label>Art der Kooperation</label><input id="crm-koop-art" value="${esc(k.art||'')}"></div>
+   <div class="crm-modal-field"><label>Notiz (optional)</label><textarea id="crm-koop-note" rows="2">${esc(k.note||'')}</textarea></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmKoopSave()">Speichern</button></div>`);
+}
+function crmKoopSave(){
+  const id=val('crm-koop-id'); const art=(val('crm-koop-art')||'').trim(); const note=(val('crm-koop-note')||'').trim();
+  if(id){
+    const ot=val('crm-koop-ot'), oe=val('crm-koop-oe'); const o=getEntity(ot,oe); if(!o) return;
+    const k=(o.kooperationen||[]).find(x=>x.id===id); if(k){ k.art=art; k.note=note; o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o); }
+  } else {
+    const raw=val('crm-koop-partner'); if(!raw||raw.indexOf('::')<0){ toast('Bitte einen Partner wählen.','err'); return; }
+    const i=raw.indexOf('::'); const pt=raw.slice(0,i), pe=raw.slice(i+2);
+    mutateEntity(e=>{ if(!Array.isArray(e.kooperationen)) e.kooperationen=[]; e.kooperationen.push({ id:newId(), tree:pt, eid:pe, art, note }); });
+  }
+  crmCloseModal(); paintDetail(); toast('Kooperation gespeichert ✓','ok');
+}
+function crmKoopDelete(ot,oe,id){
+  if(!confirm('Diese Kooperation entfernen?')) return;
+  const o=getEntity(ot,oe); if(!o) return;
+  o.kooperationen=(o.kooperationen||[]).filter(x=>x.id!==id); o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
+  paintDetail();
 }
 
 // ── Kontakte / Mitglieder ──────────────────────────────────────────
@@ -3229,7 +3347,8 @@ function _cfgWork(){
   return {
     trees: (c&&Array.isArray(c.trees)&&c.trees.length) ? _clone(c.trees) : _clone(DEFAULT_TREES),
     stammFields: (c&&c.stammFields&&typeof c.stammFields==='object') ? _clone(c.stammFields) : { __default:_clone(DEFAULT_STAMM_FIELDS) },
-    memberFunctions: (c&&Array.isArray(c.memberFunctions)&&c.memberFunctions.length) ? _clone(c.memberFunctions) : _clone(DEFAULT_MEMBER_FUNCTIONS)
+    memberFunctions: (c&&Array.isArray(c.memberFunctions)&&c.memberFunctions.length) ? _clone(c.memberFunctions) : _clone(DEFAULT_MEMBER_FUNCTIONS),
+    cardFields: (c&&c.cardFields&&typeof c.cardFields==='object') ? _clone(c.cardFields) : {}   // je Baum: welche Infos auf den Kacheln
   };
 }
 function _slug(label, takenArr){
@@ -3276,6 +3395,11 @@ function paintVerwConfig(){
         <button class="crm-x" title="Entfernen" ${(usesDefault||f.key==='name')?'disabled':''} onclick="crmCfgFieldDel('${f.key}')">✕</button>
       </td></tr>`).join('');
   const funcs=(work.memberFunctions||[]).join('\n');
+  // ── Kachel-Infos je Baum ──
+  const cardSel=(window._cfgCardTree && work.trees.some(t=>t.key===window._cfgCardTree)) ? window._cfgCardTree : (work.trees[0]&&work.trees[0].key);
+  const cardTreeOpts=work.trees.map(t=>`<option value="${esc(t.key)}"${cardSel===t.key?' selected':''}>${esc(t.label)}</option>`).join('');
+  const curCard=(work.cardFields&&Array.isArray(work.cardFields[cardSel]))?work.cardFields[cardSel]:[];
+  const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle('${esc(cardSel)}','${esc(d.key)}',this.checked)"> ${esc(d.label)}</label>`).join('');
 
   host.innerHTML = `
   <div class="crm-sec">
@@ -3298,7 +3422,22 @@ function paintVerwConfig(){
     <div class="small" style="color:var(--muted);margin-bottom:6px">Auswahl im Kontakt-Formular – eine Funktion pro Zeile.</div>
     <textarea id="cfg-funcs" rows="6" style="width:100%;box-sizing:border-box">${esc(funcs)}</textarea>
     <div style="margin-top:8px"><button class="btn-sm-crm primary" onclick="crmCfgFuncsSave()">Funktionen speichern</button></div>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">🧩 Kachel-Infos (Eintragsliste)</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Welche Infos auf den Kacheln der Eintragsliste erscheinen. Ohne Auswahl gilt die Standard-Anzeige (Status · Kontakte · offene Aufgaben). Änderungen werden sofort gespeichert.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label class="small" style="color:var(--muted)">Für:</label><select class="crm-tsel" onchange="crmCfgCardTree(this.value)">${cardTreeOpts}</select></div>
+    <div class="vw-card-opts">${cardChecks}</div>
   </div>`;
+}
+function crmCfgCardTree(k){ window._cfgCardTree=k; paintVerwConfig(); }
+function crmCfgCardToggle(tree,key,on){
+  const work=_cfgWork(); if(!work.cardFields||typeof work.cardFields!=='object') work.cardFields={};
+  let arr=Array.isArray(work.cardFields[tree])?work.cardFields[tree].slice():[];
+  if(on){ if(!arr.includes(key)) arr.push(key); } else { arr=arr.filter(x=>x!==key); }
+  work.cardFields[tree]=arr;
+  window._cfgCardTree=tree;
+  saveCrmConfig(work); paintVerwConfig();
 }
 
 // ── Bäume ──
@@ -3950,7 +4089,7 @@ Object.assign(window, {
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
-  crmCfgFuncsSave, crmQuickRenameField, crmQuickRenameFunktion,
+  crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSetStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
@@ -3958,6 +4097,7 @@ Object.assign(window, {
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
+  crmKoopAdd, crmKoopEdit, crmKoopSave, crmKoopDelete,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
