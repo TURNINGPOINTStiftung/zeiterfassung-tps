@@ -27,6 +27,10 @@ function _ausAllowed(){ const cu=window.cu; return !!cu && (cu.role==='admin'||c
 function _yearOf(d){ const t=Date.parse(d); if(isNaN(t)) return null; return new Date(t).getFullYear(); }
 function _eName(e){ return (e && e.stamm && e.stamm.name) || (e && e.name) || '(ohne Name)'; }
 function _num(x){ return Number(x||0); }
+// Statistik-Feld lesen, mit Fallback auf alte Schlüssel (v194-)
+function _sNum(s,key,legacy){ if(!s) return 0; let v=s[key]; if((v==null||v==='')&&legacy) v=s[legacy]; return Number(v||0); }
+// Spalten der Inklusions-Statistik (neue Felder)
+const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['gruppen','Trainingsgruppen',null]];
 function _euro(n){ return _num(n).toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 
 // Alle Einträge (Projekte) aus allen Bäumen einsammeln
@@ -66,8 +70,8 @@ function _statByYear(entities){
     const perYear={};
     (x.e.stats||[]).forEach(s=>{ const y=_yearOf(s.date); if(y==null) return; if(!perYear[y]||String(s.date)>String(perYear[y].date)) perYear[y]=s; });
     Object.keys(perYear).forEach(y=>{ const s=perYear[y];
-      if(!by[y]) by[y]={mitglieder:0,trainerInkl:0,tnInkl:0,tnAktiv:0};
-      by[y].mitglieder+=_num(s.mitglieder); by[y].trainerInkl+=_num(s.trainerInkl); by[y].tnInkl+=_num(s.tnInkl); by[y].tnAktiv+=_num(s.tnAktiv);
+      if(!by[y]) by[y]={engagierte:0,trainer:0,tn:0,gruppen:0};
+      STAT_COLS.forEach(([k,,leg])=>{ by[y][k]+=_sNum(s,k,leg); });
     });
   });
   return by;
@@ -125,10 +129,10 @@ function _tblFoerder(entities){
 }
 function _tblStat(entities){
   const by=_applyYear(_statByYear(entities)); const years=Object.keys(by).sort();
-  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td><td>${r.mitglieder}</td><td>${r.trainerInkl}</td><td>${r.tnInkl}</td><td>${r.tnAktiv}</td></tr>`; }).join('');
-  return `<div class="aus-card"><h3>📊 Statistik (Mitglieder · Teilnehmende)</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th><th>Vereinsmitglieder</th><th>Inkl. Trainer</th><th>Inkl. TN</th><th>aktiv im Training</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>'}</tbody></table></div>
+  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}</tr>`; }).join('');
+  return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
+    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="${STAT_COLS.length+1}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}</tbody></table></div>
     <div class="aus-sub" style="margin:8px 0 0">Pro Jahr die jeweils letzte Erfassung je Verein, über die Auswahl summiert.</div></div>`;
 }
 function _tblVeranst(entities){
@@ -149,10 +153,10 @@ function _tblProProjekt(entities){
     // aktuellste Statistik
     const stats=(x.e.stats||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const last=stats[stats.length-1]||{};
-    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${_euro(bew)}</td><td>${_euro(bea)}</td><td>${va}</td><td>${_num(last.mitglieder)}</td><td>${_num(last.tnAktiv)}</td></tr>`;
+    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${_euro(bew)}</td><td>${_euro(bea)}</td><td>${va}</td><td>${_sNum(last,'engagierte',null)}</td><td>${_sNum(last,'tn','tnInkl')}</td></tr>`;
   }).join('');
   return `<div class="aus-card"><h3>📁 Pro Projekt (Einzelübersicht)</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Projekt</th><th>Baum</th><th>Förderung bewilligt</th><th>offen beantragt</th><th>Veranst.</th><th>Mitglieder (akt.)</th><th>aktiv (akt.)</th></tr></thead>
+    <thead><tr><th>Projekt</th><th>Baum</th><th>Förderung bewilligt</th><th>offen beantragt</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
 }
 
@@ -228,8 +232,8 @@ export function ausExport(){
       XLSX.utils.book_append_sheet(wb, fRows.length?XLSX.utils.json_to_sheet(fRows,{header:fHead}):XLSX.utils.aoa_to_sheet([fHead]), 'Förderungen');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
-      const sRows=sYears.map(y=>{const r=sBy[y]; return {Jahr:y,Vereinsmitglieder:r.mitglieder,'Inkl. Trainer':r.trainerInkl,'Inkl. TN':r.tnInkl,'aktiv im Training':r.tnAktiv};});
-      const sHead=['Jahr','Vereinsmitglieder','Inkl. Trainer','Inkl. TN','aktiv im Training'];
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); return o;});
+      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l)];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
@@ -243,9 +247,9 @@ export function ausExport(){
         const bea=f.filter(v=>v.status==='beantragt').reduce((s,v)=>s+_num(v.betrag),0);
         const {total:va}=_veranstByYear([x]);
         const stats=(x.e.stats||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))); const last=stats[stats.length-1]||{};
-        return {Projekt:x.name,Baum:x.treeLabel||'','Förderung bewilligt':bew,'offen beantragt':bea,Veranstaltungen:va,'Mitglieder (aktuell)':_num(last.mitglieder),'aktiv (aktuell)':_num(last.tnAktiv)};
+        return {Projekt:x.name,Baum:x.treeLabel||'','Förderung bewilligt':bew,'offen beantragt':bea,Veranstaltungen:va,'Engagierte (aktuell)':_sNum(last,'engagierte',null),'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl')};
       });
-      const pHead=['Projekt','Baum','Förderung bewilligt','offen beantragt','Veranstaltungen','Mitglieder (aktuell)','aktiv (aktuell)'];
+      const pHead=['Projekt','Baum','Förderung bewilligt','offen beantragt','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)'];
       XLSX.utils.book_append_sheet(wb, pRows.length?XLSX.utils.json_to_sheet(pRows,{header:pHead}):XLSX.utils.aoa_to_sheet([pHead]), 'Pro Projekt');
       const d=new Date();
       XLSX.writeFile(wb, `Auswertung-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.xlsx`);

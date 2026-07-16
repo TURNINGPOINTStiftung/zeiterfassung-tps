@@ -333,6 +333,13 @@ function injectStyles(){
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
   .crm-delta{font-size:11px;font-weight:700}
   .crm-delta.up{color:var(--accent)} .crm-delta.down{color:#c0392b}
+  .crm-stat-year{margin-bottom:14px}
+  .crm-stat-yhead{font-size:13px;font-weight:800;color:var(--primary);padding:2px 0 6px;letter-spacing:.3px}
+  .crm-stat-typ{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;color:#fff}
+  .crm-stat-typ.t-training{background:#0d8a8a} .crm-stat-typ.t-veranstaltung{background:#7b3fb3} .crm-stat-typ.t-sonstiges{background:#6b7280}
+  .crm-stat-notecell{white-space:normal;min-width:160px;max-width:320px}
+  .crm-stat-note{white-space:pre-line;font-size:12.5px;line-height:1.45}
+  .crm-stat-act{white-space:nowrap;text-align:right}
   .vw-table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
   .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
   .vw-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -1752,57 +1759,93 @@ function crmAttDel(nid, attId){
 // Team-Ansicht: Anlagen mit passendem Container-Kontext öffnen
 function crmTeamAtt(tree,eid,id){ _entityNodeCtx(tree,eid,id); crmAttOpen(id); }
 
-// ── Statistik (Zahlen·Daten·Fakten) – Entwicklung über die Zeit ────
+// ── Statistik · Inklusion – Entwicklung über die Zeit ──────────────
+// Felder: für Inklusion engagierte Mitglieder, Inklusions-Trainer, inklusive TN,
+// Trainingsgruppen (nur Zahlen) + mehrzeilige Notiz. „Art" trennt regelmäßiges
+// Training von Veranstaltungen. Δ wird ggü. dem vorherigen Eintrag GLEICHER Art
+// gebildet → Veränderung übers Jahr sichtbar. Altdaten bleiben erhalten:
+// trainer/tn lesen notfalls die alten Schlüssel (trainerInkl/tnInkl); alte
+// „Vereinsmitglieder"/„aktiv im Training" werden als „früher erfasst" gezeigt.
+const STAT_TYPES=[['training','Regelmäßiges Training'],['veranstaltung','Veranstaltung'],['sonstiges','Sonstiges']];
+function statTypLabel(t){ const x=STAT_TYPES.find(z=>z[0]===t); return x?x[1]:''; }
 const STAT_METRICS=[
-  ['mitglieder','Vereinsmitglieder'],
-  ['trainerInkl','Inkl. Trainer'],
-  ['tnInkl','Inkl. TN'],
-  ['tnAktiv','aktiv im Training'],
+  { key:'engagierte', label:'Engagierte Mitglieder', title:'Vereinsmitglieder, die sich im Verein für Inklusion engagieren' },
+  { key:'trainer',    label:'Inklusions-Trainer',    title:'Inklusions-Trainer', legacy:'trainerInkl' },
+  { key:'tn',         label:'Inklusive TN',          title:'Inklusive Teilnehmende', legacy:'tnInkl' },
+  { key:'gruppen',    label:'Trainingsgruppen',      title:'Anzahl der Trainingsgruppen' },
 ];
+function statNum(s,m){ if(!s) return 0; let v=s[m.key]; if((v==null||v==='')&&m.legacy) v=s[m.legacy]; return Number(v||0); }
 function statsSecHtml(e){
   const start=(e.stamm&&e.stamm.statStart)||'';
   let stats=(e.stats||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   if(start) stats=stats.filter(s=>String(s.date)>=start);
-  const head=`<tr><th>Datum</th>${STAT_METRICS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th></th></tr>`;
-  const rows=stats.map((s,i)=>{
-    const prev=i>0?stats[i-1]:null;
-    const cells=STAT_METRICS.map(([k])=>{
-      const cur=Number(s[k]||0);
-      let d='';
-      if(prev){ const dv=cur-Number(prev[k]||0); if(dv) d=` <span class="crm-delta ${dv>0?'up':'down'}">${dv>0?'▲':'▼'}${Math.abs(dv)}</span>`; }
-      return `<td>${cur}${d}</td>`;
+  // vorheriger Eintrag GLEICHER Art (chronologisch) → Δ pro Art
+  const prevOf=new Map(), lastByTyp={};
+  stats.forEach(s=>{ const t=s.typ||'_'; prevOf.set(s.id, lastByTyp[t]||null); lastByTyp[t]=s; });
+  const canEdit=crmFull()||crmRestricted();
+  const metricHead=STAT_METRICS.map(m=>`<th title="${esc(m.title||m.label)}">${esc(m.label)}</th>`).join('');
+  // nach Jahr gruppieren (neueste zuerst)
+  const byYear={}; stats.forEach(s=>{ const y=(String(s.date).match(/^(\d{4})/)||[])[1]||'—'; (byYear[y]=byYear[y]||[]).push(s); });
+  const years=Object.keys(byYear).sort().reverse();
+  const yearBlocks=years.map(y=>{
+    const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
+      const prev=prevOf.get(s.id);
+      const cells=STAT_METRICS.map(m=>{ const cur=statNum(s,m); let d='';
+        if(prev){ const dv=cur-statNum(prev,m); if(dv) d=` <span class="crm-delta ${dv>0?'up':'down'}">${dv>0?'▲':'▼'}${Math.abs(dv)}</span>`; }
+        return `<td>${cur}${d}</td>`; }).join('');
+      const typ=s.typ?`<span class="crm-stat-typ t-${esc(s.typ)}">${esc(statTypLabel(s.typ)||s.typ)}</span>`:'<span class="small" style="color:var(--muted)">—</span>';
+      const legacy=[];
+      if(s.mitglieder!=null&&s.mitglieder!=='') legacy.push('Vereinsmitglieder: '+Number(s.mitglieder||0));
+      if(s.tnAktiv!=null&&s.tnAktiv!=='') legacy.push('aktiv im Training: '+Number(s.tnAktiv||0));
+      const noteHtml=[ s.notiz?`<div class="crm-stat-note">${nl2br(esc(s.notiz))}</div>`:'', legacy.length?`<div class="small" style="color:var(--muted)">früher erfasst · ${esc(legacy.join(' · '))}</div>`:'' ].join('');
+      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}</td>${cells}<td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
+        <td class="crm-stat-act">${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat('${s.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button>`:''}</td></tr>`;
     }).join('');
-    return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td>${cells}<td><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button></td></tr>`;
+    return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>
+      <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
   }).join('');
   return `<div class="crm-sec">
-    <h4><span class="ttl">📊 Zahlen · Daten · Fakten</span><button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button></h4>
-    ${stats.length
-      ? `<div style="overflow-x:auto"><table class="crm-stats">${head}${rows}</table></div>`
-      : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.${start?` (Statistik ab ${esc(fmtDate(Date.parse(start)))})`:' Tipp: Startdatum unter „Stammdaten · Statistik ab" setzen.'}</div>`}
+    <h4><span class="ttl">📊 Statistik · Inklusion</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button>`:''}</h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Pro Erfassung Art wählen (Training/Veranstaltung). ▲▼ zeigt die Veränderung zur vorigen Erfassung gleicher Art.</div>
+    ${stats.length ? yearBlocks
+      : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.${start?` (ab ${esc(fmtDate(Date.parse(start)))})`:''}</div>`}
   </div>`;
 }
-function crmAddStat(){
+function crmStatModal(s){
   const e=curEntity(); if(!e) return;
+  const isEdit=!!s; s=s||{};
   crmOpenModalShell();
-  const def=(e.stamm&&e.stamm.statStart)||new Date().toISOString().slice(0,10);
-  const f=(id,l)=>`<div class="crm-modal-field" style="flex:1;min-width:130px"><label>${esc(l)}</label><input id="${id}" type="number" min="0" inputmode="numeric"></div>`;
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Erfassung</h3>
-   <div class="crm-modal-field"><label>Datum</label><input id="crm-stat-date" type="date" value="${esc(def)}"></div>
-   <div style="display:flex;gap:10px;flex-wrap:wrap">${f('crm-stat-mitglieder','Vereinsmitglieder')}${f('crm-stat-trainerInkl','Inkl. Trainer')}</div>
-   <div style="display:flex;gap:10px;flex-wrap:wrap">${f('crm-stat-tnInkl','Inkl. TN')}${f('crm-stat-tnAktiv','aktiv im Training')}</div>
+  const def=s.date||(e.stamm&&e.stamm.statStart)||new Date().toISOString().slice(0,10);
+  const typOpts=STAT_TYPES.map(([k,l])=>`<option value="${k}"${(s.typ||'training')===k?' selected':''}>${esc(l)}</option>`).join('');
+  const f=m=>{ const pre=isEdit?statNum(s,m):0; return `<div class="crm-modal-field" style="flex:1;min-width:150px"><label title="${esc(m.title||m.label)}">${esc(m.label)}</label><input id="crm-stat-${m.key}" type="number" min="0" inputmode="numeric" value="${pre?pre:''}"></div>`; };
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎':'＋'} Erfassung</h3>
+   <input type="hidden" id="crm-stat-id" value="${isEdit?esc(s.id):''}">
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Datum</label><input id="crm-stat-date" type="date" value="${esc(def)}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:180px"><label>Art</label><select id="crm-stat-typ">${typOpts}</select></div>
+   </div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${f(STAT_METRICS[0])}${f(STAT_METRICS[1])}</div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${f(STAT_METRICS[2])}${f(STAT_METRICS[3])}</div>
+   <div class="crm-modal-field"><label>Notiz</label><textarea id="crm-stat-notiz" rows="3" placeholder="Freitext, mehrzeilig …">${isEdit?esc(s.notiz||''):''}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveStat()">Speichern</button></div>`);
 }
+function crmAddStat(){ crmStatModal(null); }
+function crmEditStat(id){ const e=curEntity(); if(!e) return; const s=(e.stats||[]).find(x=>x.id===id); if(s) crmStatModal(s); }
 function crmSaveStat(){
   const date=val('crm-stat-date'); if(!date){ toast('Bitte ein Datum wählen.','err'); return; }
-  const num=id=>{ const x=document.getElementById(id); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
+  const id=val('crm-stat-id');
+  const num=k=>{ const x=document.getElementById('crm-stat-'+k); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
+  const rec={ date, typ:val('crm-stat-typ')||'training', engagierte:num('engagierte'), trainer:num('trainer'), tn:num('tn'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim() };
   mutateEntity(e=>{
     if(!Array.isArray(e.stats)) e.stats=[];
-    e.stats.push({ id:newId(), date, mitglieder:num('crm-stat-mitglieder'), trainerInkl:num('crm-stat-trainerInkl'), tnInkl:num('crm-stat-tnInkl'), tnAktiv:num('crm-stat-tnAktiv') });
+    if(id){ const s=e.stats.find(x=>x.id===id); if(s) Object.assign(s, rec); }   // Altfelder (mitglieder/tnAktiv) bleiben erhalten
+    else { rec.id=newId(); e.stats.push(rec); }
   });
   crmCloseModal(); paintDetail(); toast('Erfassung gespeichert ✓','ok');
 }
 function crmDeleteStat(id){
+  if(!confirm('Diese Erfassung löschen?')) return;
   mutateEntity(e=>{ e.stats=(e.stats||[]).filter(x=>x.id!==id); });
   paintDetail();
 }
@@ -3917,7 +3960,7 @@ Object.assign(window, {
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
-  crmAddStat, crmSaveStat, crmDeleteStat,
+  crmAddStat, crmEditStat, crmSaveStat, crmDeleteStat,
   crmAddFoerderung, crmEditFoerderung, crmSaveFoerderung, crmDeleteFoerderung,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
