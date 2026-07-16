@@ -351,6 +351,9 @@ function injectStyles(){
   .vw-card-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
   .vw-card-opt{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#fff}
   .vw-card-opt input{width:auto;margin:0}
+  .crm-share-opts{display:flex;flex-wrap:wrap;gap:10px}
+  .crm-share-opts label{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+  .crm-share-opts input{width:auto;margin:0}
   .vw-table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
   .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
   .vw-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -1020,7 +1023,7 @@ function paintDetail(){
     </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
 
   // Statistik (nur bei Vereinen)
-  const statsSec = (window._crmTree==='vereine') ? statsSecHtml(e) : '';
+  const statsSec = statsSecHtml(e);   // auch für Nicht-Vereine (z. B. Sozialakteur mit gemeinsamer Statistik); Reiter erscheint nur bei Bedarf
   // Förderungen (für alle Baum-Typen)
   const foerderungenSec = foerderungenSecHtml(e);
 
@@ -1051,7 +1054,8 @@ function paintDetail(){
   const kCount=(e.kontakte||[]).length;
   const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben & Termine'+(openTasks?` (${openTasks})`:'')]];
   tabs.push(['kommunikation','Kommunikation']);
-  if(window._crmTree==='vereine') tabs.push(['statistik','Statistik']);
+  // Statistik-Reiter für Vereine – ODER wenn (geteilte) Statistik vorliegt (z. B. Sozialakteur mit gemeinsamer Erfassung)
+  if(window._crmTree==='vereine' || _statsForEntity(window._crmTree, e.id).length) tabs.push(['statistik','Statistik']);
   tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
@@ -1345,6 +1349,8 @@ function _koopList(tree,eid){
   const seen=new Set(); return out.filter(x=>{ const key=x.partnerTree+'::'+x.partnerEid; if(seen.has(key)) return false; seen.add(key); return true; });
 }
 function koopCount(e){ return e ? _koopList(e.tree||window._crmTree, e.id).length : 0; }
+// Eindeutige Kooperationspartner eines Eintrags (für „gemeinsam mit …")
+function _koopPartners(tree,eid){ return _koopList(tree,eid).map(k=>({tree:k.partnerTree,eid:k.partnerEid})); }
 function kooperationenSecHtml(e){
   const canEdit=crmFull()||crmRestricted();
   const list=_koopList(window._crmTree, e.id);
@@ -1677,16 +1683,36 @@ function migKontaktnotizen(e){
   return e;
 }
 function _knMeta(n){ return `${n.ts?esc(fmtDateTime(n.ts)):''}${n.byKuerzel?' · '+esc(n.byKuerzel):(n.byName?' · '+esc(n.byName):'')}`; }
+// Notizen eines Eintrags: eigene + von Kooperationspartnern GETEILTE (read-only)
+function _notesForEntity(tree,eid){
+  const self=getEntity(tree,eid); if(self) migKontaktnotizen(self);
+  const own=(self&&Array.isArray(self.kontaktnotizen)?self.kontaktnotizen:[]).map(n=>Object.assign({},n,{_own:true}));
+  const shared=[];
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{
+    if(tr.key===tree && o.id===eid) return;
+    (Array.isArray(o.kontaktnotizen)?o.kontaktnotizen:[]).forEach(n=>{
+      if(Array.isArray(n.sharedWith) && n.sharedWith.some(w=>w&&w.tree===tree&&w.eid===eid))
+        shared.push(Object.assign({},n,{_own:false,_ownerName:(o.stamm&&o.stamm.name)||''}));
+    });
+  }));
+  return own.concat(shared);
+}
 function kontaktnotizenSecHtml(e){
   migKontaktnotizen(e);
   const canEdit=crmFull()||crmRestricted();
-  const notes=(e.kontaktnotizen||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
-  const noteHtml=n=>`<div class="crm-kn-item">
-      <div class="crm-kn-meta">${_knMeta(n)}${canEdit?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz('${n.id}')">✕</button>`:''}</div>
+  const notes=_notesForEntity(window._crmTree, e.id).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const noteHtml=n=>{ const shared=n._own===false;
+    const tag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Notiz – beim Partner bearbeiten">🤝 mit ${esc(n._ownerName||'')}</span>`
+      : ((n.sharedWith&&n.sharedWith.length) ? ` <span class="crm-koop-art" title="Gemeinsam mit Kooperationspartner">🤝 gemeinsam</span>` : '');
+    return `<div class="crm-kn-item">
+      <div class="crm-kn-meta">${_knMeta(n)}${tag}${(canEdit&&!shared)?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz('${n.id}')">✕</button>`:''}</div>
       <div class="crm-kn-text">${linkify(n.text||'')}</div>
-    </div>`;
+    </div>`; };
   const latest=notes[0], older=notes.slice(1);
+  const partners=_koopPartners(window._crmTree, e.id);
+  const sharePicker = partners.length ? `<div class="crm-share-opts" style="margin:6px 0"><span class="small" style="color:var(--muted)">Gemeinsam mit:</span>${partners.map(p=>`<label><input type="checkbox" class="crm-kn-shareopt" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}"> ${esc(_entityName(p.tree,p.eid))}</label>`).join('')}</div>` : '';
   const input=canEdit?`<textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz …"></textarea>
+      ${sharePicker}
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>`:'';
   const latestHtml = latest ? `<div class="crm-kn-latest">${noteHtml(latest)}</div>`
     : `<div class="small" style="color:var(--muted)">Noch keine Kontaktnotizen.</div>`;
@@ -1700,7 +1726,8 @@ function kontaktnotizenSecHtml(e){
 }
 function crmAddKontaktnotiz(){
   const t=(val('crm-kn-new')||'').trim(); if(!t){ toast('Bitte eine Notiz eingeben.','err'); return; }
-  mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen.unshift({ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName() }); });
+  const sharedWith=Array.from(document.querySelectorAll('.crm-kn-shareopt:checked')).map(x=>({tree:x.getAttribute('data-tree'),eid:x.getAttribute('data-eid')}));
+  mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen.unshift({ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName(), sharedWith }); });
   paintDetail(); toast('Kontaktnotiz gespeichert ✓','ok');
 }
 function crmDeleteKontaktnotiz(id){
@@ -1894,9 +1921,24 @@ const STAT_METRICS=[
   { key:'gruppen',    label:'Trainingsgruppen',      title:'Anzahl der Trainingsgruppen' },
 ];
 function statNum(s,m){ if(!s) return 0; let v=s[m.key]; if((v==null||v==='')&&m.legacy) v=s[m.legacy]; return Number(v||0); }
+// Erfassungen eines Eintrags: eigene + von Kooperationspartnern GETEILTE (read-only).
+// Gemeinsame Erfassungen liegen einmalig beim Besitzer (sharedWith[]) → zählen einmal.
+function _statsForEntity(tree,eid){
+  const self=getEntity(tree,eid);
+  const own=(self&&Array.isArray(self.stats)?self.stats:[]).map(s=>Object.assign({},s,{_own:true}));
+  const shared=[];
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{
+    if(tr.key===tree && o.id===eid) return;
+    (Array.isArray(o.stats)?o.stats:[]).forEach(s=>{
+      if(Array.isArray(s.sharedWith) && s.sharedWith.some(w=>w&&w.tree===tree&&w.eid===eid))
+        shared.push(Object.assign({},s,{_own:false,_ownerTree:tr.key,_ownerEid:o.id,_ownerName:(o.stamm&&o.stamm.name)||''}));
+    });
+  }));
+  return own.concat(shared);
+}
 function statsSecHtml(e){
   const start=(e.stamm&&e.stamm.statStart)||'';
-  let stats=(e.stats||[]).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  let stats=_statsForEntity(window._crmTree, e.id).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   if(start) stats=stats.filter(s=>String(s.date)>=start);
   // vorheriger Eintrag GLEICHER Art (chronologisch) → Δ pro Art
   const prevOf=new Map(), lastByTyp={};
@@ -1924,13 +1966,16 @@ function statsSecHtml(e){
       const cells=STAT_METRICS.map(m=>{ const cur=statNum(s,m); let d='';
         if(prev){ const dv=cur-statNum(prev,m); if(dv) d=` <span class="crm-delta ${dv>0?'up':'down'}">${dv>0?'▲':'▼'}${Math.abs(dv)}</span>`; }
         return `<td>${cur}${d}</td>`; }).join('');
+      const shared=s._own===false;
       const typ=s.typ?`<span class="crm-stat-typ t-${esc(s.typ)}">${esc(statTypLabel(s.typ)||s.typ)}</span>`:'<span class="small" style="color:var(--muted)">—</span>';
+      const sharedTag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Erfassung – beim Partner bearbeiten">🤝 mit ${esc(s._ownerName||'')}</span>`
+        : ((s.sharedWith&&s.sharedWith.length) ? ` <span class="crm-koop-art" title="Gemeinsam mit Kooperationspartner">🤝 gemeinsam</span>` : '');
       const legacy=[];
       if(s.mitglieder!=null&&s.mitglieder!=='') legacy.push('Vereinsmitglieder: '+Number(s.mitglieder||0));
       if(s.tnAktiv!=null&&s.tnAktiv!=='') legacy.push('aktiv im Training: '+Number(s.tnAktiv||0));
       const noteHtml=[ s.notiz?`<div class="crm-stat-note">${nl2br(esc(s.notiz))}</div>`:'', legacy.length?`<div class="small" style="color:var(--muted)">früher erfasst · ${esc(legacy.join(' · '))}</div>`:'' ].join('');
-      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}</td>${cells}<td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
-        <td class="crm-stat-act">${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat('${s.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button>`:''}</td></tr>`;
+      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
+        <td class="crm-stat-act">${(canEdit&&!shared)?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat('${s.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button>`:(shared?`<button class="btn-sm-crm" title="Beim Partner öffnen" onclick="crmGoEntry('${esc(s._ownerTree)}','${esc(s._ownerEid)}')">↗</button>`:'')}</td></tr>`;
     }).join('');
     return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>${quoteBox}
       <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
@@ -1949,6 +1994,10 @@ function crmStatModal(s){
   const def=s.date||(e.stamm&&e.stamm.statStart)||new Date().toISOString().slice(0,10);
   const typOpts=STAT_TYPES.map(([k,l])=>`<option value="${k}"${(s.typ||'training')===k?' selected':''}>${esc(l)}</option>`).join('');
   const f=m=>{ const pre=isEdit?statNum(s,m):0; return `<div class="crm-modal-field" style="flex:1;min-width:150px"><label title="${esc(m.title||m.label)}">${esc(m.label)}</label><input id="crm-stat-${m.key}" type="number" min="0" inputmode="numeric" value="${pre?pre:''}"></div>`; };
+  const partners=_koopPartners(window._crmTree, e.id);
+  const sharePicker = partners.length ? `<div class="crm-modal-field"><label>Gemeinsam mit (Kooperation)</label>
+     <div class="crm-share-opts">${partners.map(p=>{ const on=isEdit&&Array.isArray(s.sharedWith)&&s.sharedWith.some(w=>w&&w.tree===p.tree&&w.eid===p.eid); return `<label><input type="checkbox" class="crm-stat-share" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}" ${on?'checked':''}> ${esc(_entityName(p.tree,p.eid))}</label>`; }).join('')}</div>
+     <div class="small" style="color:var(--muted)">Zählt nur EINMAL und erscheint bei beiden – bleibt auch nach Auflösen der Kooperation erhalten.</div></div>` : '';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎':'＋'} Erfassung</h3>
    <input type="hidden" id="crm-stat-id" value="${isEdit?esc(s.id):''}">
    <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -1958,6 +2007,7 @@ function crmStatModal(s){
    <div style="display:flex;gap:10px;flex-wrap:wrap">${f(STAT_METRICS[0])}${f(STAT_METRICS[1])}</div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">${f(STAT_METRICS[2])}${f(STAT_METRICS[3])}</div>
    <div class="crm-modal-field"><label>Notiz</label><textarea id="crm-stat-notiz" rows="3" placeholder="Freitext, mehrzeilig …">${isEdit?esc(s.notiz||''):''}</textarea></div>
+   ${sharePicker}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveStat()">Speichern</button></div>`);
 }
@@ -1967,7 +2017,8 @@ function crmSaveStat(){
   const date=val('crm-stat-date'); if(!date){ toast('Bitte ein Datum wählen.','err'); return; }
   const id=val('crm-stat-id');
   const num=k=>{ const x=document.getElementById('crm-stat-'+k); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
-  const rec={ date, typ:val('crm-stat-typ')||'training', engagierte:num('engagierte'), trainer:num('trainer'), tn:num('tn'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim() };
+  const sharedWith=Array.from(document.querySelectorAll('.crm-stat-share:checked')).map(x=>({tree:x.getAttribute('data-tree'),eid:x.getAttribute('data-eid')}));
+  const rec={ date, typ:val('crm-stat-typ')||'training', engagierte:num('engagierte'), trainer:num('trainer'), tn:num('tn'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim(), sharedWith };
   mutateEntity(e=>{
     if(!Array.isArray(e.stats)) e.stats=[];
     if(id){ const s=e.stats.find(x=>x.id===id); if(s) Object.assign(s, rec); }   // Altfelder (mitglieder/tnAktiv) bleiben erhalten
@@ -2745,7 +2796,10 @@ function veranstaltungenForEntity(tree,eid){
 // Neue Veranstaltung direkt vom Eintrag aus – mit diesem Eintrag als Teilnehmer
 function crmNewVeranstaltungFor(){
   const e=curEntity(); if(!e) return;
-  window._vaTeiln=[{tree:window._crmTree, eid:e.id}];
+  // Kooperationspartner gleich als Teilnehmer vorbelegen → gemeinsame Veranstaltung (bei beiden sichtbar)
+  const teil=[{tree:window._crmTree, eid:e.id}];
+  _koopPartners(window._crmTree, e.id).forEach(p=>{ if(!teil.some(x=>x.tree===p.tree&&x.eid===p.eid)) teil.push(p); });
+  window._vaTeiln=teil;
   crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true));
 }
 
