@@ -1792,12 +1792,12 @@ function statsSecHtml(e){
   const yearBlocks=years.map(y=>{
     // Weitermach-Quote: TN des letzten Trainings ÷ TN der Auftaktveranstaltung (frühestes Event) des Jahres
     const ye=byYear[y];
-    const evs=ye.filter(s=>s.typ==='veranstaltung').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const evs=ye.filter(s=>s.typ==='veranstaltung');
     const trs=ye.filter(s=>{const t=s.typ||''; return t===''||t==='training';}).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    const auftaktTN=evs.length?statNum(evs[0],tnM):0;
+    const eventTN=evs.reduce((a,s)=>a+statNum(s,tnM),0);   // Summe ALLER Veranstaltungen des Jahres
     const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;
-    const quoteBox=(auftaktTN>0&&trs.length)
-      ? `<div class="crm-stat-quote">🎯 Weitermach-Quote: Auftaktveranstaltung <b>${auftaktTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/auftaktTN*100)} %</b></div>` : '';
+    const quoteBox=(eventTN>0&&trs.length)
+      ? `<div class="crm-stat-quote">🎯 Weitermach-Quote: Veranstaltungen gesamt <b>${eventTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/eventTN*100)} %</b></div>` : '';
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
       const prev=prevOf.get(s.id);
       const cells=STAT_METRICS.map(m=>{ const cur=statNum(s,m); let d='';
