@@ -340,6 +340,7 @@ function injectStyles(){
   .crm-stat-notecell{white-space:normal;min-width:160px;max-width:320px}
   .crm-stat-note{white-space:pre-line;font-size:12.5px;line-height:1.45}
   .crm-stat-act{white-space:nowrap;text-align:right}
+  .crm-stat-quote{background:rgba(45,96,153,.08);border:1px solid var(--border);border-left:4px solid var(--primary);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;color:var(--text)}
   .vw-table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
   .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
   .vw-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -1787,7 +1788,16 @@ function statsSecHtml(e){
   // nach Jahr gruppieren (neueste zuerst)
   const byYear={}; stats.forEach(s=>{ const y=(String(s.date).match(/^(\d{4})/)||[])[1]||'—'; (byYear[y]=byYear[y]||[]).push(s); });
   const years=Object.keys(byYear).sort().reverse();
+  const tnM=STAT_METRICS.find(m=>m.key==='tn');
   const yearBlocks=years.map(y=>{
+    // Weitermach-Quote: TN des letzten Trainings ÷ TN der Auftaktveranstaltung (frühestes Event) des Jahres
+    const ye=byYear[y];
+    const evs=ye.filter(s=>s.typ==='veranstaltung').slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const trs=ye.filter(s=>{const t=s.typ||''; return t===''||t==='training';}).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const auftaktTN=evs.length?statNum(evs[0],tnM):0;
+    const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;
+    const quoteBox=(auftaktTN>0&&trs.length)
+      ? `<div class="crm-stat-quote">🎯 Weitermach-Quote: Auftaktveranstaltung <b>${auftaktTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/auftaktTN*100)} %</b></div>` : '';
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
       const prev=prevOf.get(s.id);
       const cells=STAT_METRICS.map(m=>{ const cur=statNum(s,m); let d='';
@@ -1801,7 +1811,7 @@ function statsSecHtml(e){
       return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}</td>${cells}<td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
         <td class="crm-stat-act">${canEdit?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat('${s.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button>`:''}</td></tr>`;
     }).join('');
-    return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>
+    return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>${quoteBox}
       <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
   }).join('');
   return `<div class="crm-sec">
