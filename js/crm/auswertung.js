@@ -68,15 +68,15 @@ function _foerderByYear(entities){
 function _statByYear(entities){
   const by={};
   entities.forEach(x=>{
-    const train={}, event={};   // je Jahr: letztes Training / früheste Veranstaltung
+    const train={}, eventSum={};   // je Jahr: letztes Training / Summe ALLER Veranstaltungs-TN
     (x.e.stats||[]).forEach(s=>{ const y=_yearOf(s.date); if(y==null) return; const t=s.typ||'';
-      if(t==='veranstaltung'){ if(!event[y]||String(s.date)<String(event[y].date)) event[y]=s; }
+      if(t==='veranstaltung'){ eventSum[y]=(eventSum[y]||0)+_sNum(s,'tn','tnInkl'); }
       else if(t===''||t==='training'){ if(!train[y]||String(s.date)>String(train[y].date)) train[y]=s; }
     });
-    const yset=new Set([...Object.keys(train),...Object.keys(event)]);
-    yset.forEach(y=>{ if(!by[y]) by[y]={engagierte:0,trainer:0,tn:0,gruppen:0,auftaktTN:0};
+    const yset=new Set([...Object.keys(train),...Object.keys(eventSum)]);
+    yset.forEach(y=>{ if(!by[y]) by[y]={engagierte:0,trainer:0,tn:0,gruppen:0,eventTN:0};
       const tr=train[y]; if(tr) STAT_COLS.forEach(([k,,leg])=>{ by[y][k]+=_sNum(tr,k,leg); });
-      const ev=event[y]; if(ev) by[y].auftaktTN+=_sNum(ev,'tn','tnInkl');
+      by[y].eventTN += (eventSum[y]||0);
     });
   });
   return by;
@@ -132,17 +132,17 @@ function _tblFoerder(entities){
     <thead><tr><th>Jahr</th><th>Beantragt</th><th>Genehmigt</th><th>Abgelehnt</th><th>Abgeschlossen</th><th>Bewilligt</th><th>Anzahl</th></tr></thead>
     <tbody>${rows||''}${years.length?totalRow:'<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Förderungen im Auswahlbereich.</td></tr>'}</tbody></table></div></div>`;
 }
-function _statQuote(r){ return r.auftaktTN>0 ? Math.round(r.tn/r.auftaktTN*100)+' %' : '–'; }
+function _statQuote(r){ return r.eventTN>0 ? Math.round(r.tn/r.eventTN*100)+' %' : '–'; }
 // letzte laufende Erfassung (Training/Alt, keine Veranstaltung) eines Vereins
 function _lastTrain(e){ return (e.stats||[]).filter(s=>{const t=s.typ||'';return t===''||t==='training';}).sort((a,b)=>String(a.date).localeCompare(String(b.date))).pop()||{}; }
 function _tblStat(entities){
   const by=_applyYear(_statByYear(entities)); const years=Object.keys(by).sort();
-  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.auftaktTN||'–'}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
+  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.eventTN||'–'}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
   const cols=STAT_COLS.length+3;
   return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>TN Auftakt (Veranst.)</th><th>Weitermach-Quote</th></tr></thead>
+    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>TN Veranstaltungen</th><th>Weitermach-Quote</th></tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}</tbody></table></div>
-    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letztes Training je Verein (über die Auswahl summiert). Weitermach-Quote = Inklusive TN (Training) ÷ TN der Auftaktveranstaltung.</div></div>`;
+    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letztes Training je Verein (über die Auswahl summiert). Weitermach-Quote = Inklusive TN (letztes Training) ÷ Summe der Veranstaltungs-TN des Jahres.</div></div>`;
 }
 function _tblVeranst(entities){
   const {by:byAll}=_veranstByYear(entities); const by=_applyYear(byAll); const years=Object.keys(by).sort();
@@ -239,8 +239,8 @@ export function ausExport(){
       XLSX.utils.book_append_sheet(wb, fRows.length?XLSX.utils.json_to_sheet(fRows,{header:fHead}):XLSX.utils.aoa_to_sheet([fHead]), 'Förderungen');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
-      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['TN Auftakt (Veranst.)']=r.auftaktTN; o['Weitermach-Quote']=_statQuote(r); return o;});
-      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'TN Auftakt (Veranst.)','Weitermach-Quote'];
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['TN Veranstaltungen']=r.eventTN; o['Weitermach-Quote']=_statQuote(r); return o;});
+      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'TN Veranstaltungen','Weitermach-Quote'];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
