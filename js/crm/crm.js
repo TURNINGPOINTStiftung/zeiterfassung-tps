@@ -1795,9 +1795,12 @@ function statsSecHtml(e){
     const evs=ye.filter(s=>s.typ==='veranstaltung');
     const trs=ye.filter(s=>{const t=s.typ||''; return t===''||t==='training';}).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const eventTN=evs.reduce((a,s)=>a+statNum(s,tnM),0);   // Summe ALLER Veranstaltungen des Jahres
-    const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;
-    const quoteBox=(eventTN>0&&trs.length)
-      ? `<div class="crm-stat-quote">🎯 Weitermach-Quote: Veranstaltungen gesamt <b>${eventTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/eventTN*100)} %</b></div>` : '';
+    const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;        // letztes Training
+    const firstTrainTN=trs.length?statNum(trs[0],tnM):0;             // erstes Training
+    const qParts=[];
+    if(eventTN>0&&trs.length) qParts.push(`Weitermach-Quote: Veranstaltungen gesamt <b>${eventTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/eventTN*100)} %</b>`);
+    if(trs.length>=2){ const zuw=trainTN-firstTrainTN; qParts.push(`Zuwachs Training: <b>${(zuw>0?'+':'')+zuw}</b> TN (${firstTrainTN} → ${trainTN})`); }
+    const quoteBox=qParts.length ? `<div class="crm-stat-quote">🎯 ${qParts.join('&nbsp;·&nbsp;')}</div>` : '';
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
       const prev=prevOf.get(s.id);
       const cells=STAT_METRICS.map(m=>{ const cur=statNum(s,m); let d='';
