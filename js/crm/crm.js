@@ -1162,7 +1162,7 @@ function crmSaveNewAufgabe(){
 // (und damit das Suchfeld) wird NICHT neu gezeichnet → Cursor/Fokus bleiben erhalten.
 function crmSearchAll(q){
   q=String(q||'').toLowerCase().trim();
-  const res={ entries:[], contacts:[], projects:[], tasks:[], events:[] };
+  const res={ entries:[], contacts:[], notes:[], projects:[], tasks:[], events:[] };
   if(!q) return res;
   const hit=(...vals)=>vals.map(x=>String(x==null?'':x).toLowerCase()).join(' ').includes(q);
   getTrees().forEach(tr=>{
@@ -1172,6 +1172,10 @@ function crmSearchAll(q){
         res.entries.push({tree:tr.key, eid:e.id, name:s.name||'(ohne Name)', sub:tr.label});
       (e.kontakte||[]).forEach(k=>{ if(hit(k.name,k.funktion,kEmails(k).join(' '),kTels(k).join(' ')))
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
+      // Kontaktnotizen durchsuchen (auch ältere) → Treffer mit Text, Verfasser, Datum
+      migKontaktnotizen(e);
+      (e.kontaktnotizen||[]).forEach(n=>{ if(hit(n.text))
+        res.notes.push({tree:tr.key, eid:e.id, entryName:s.name||'(ohne Name)', text:n.text||'', by:(n.byName||n.byKuerzel||''), ts:n.ts}); });
       migEntityProjekte(e);
       e.projekte.forEach(p=>{
         if(hit(p.name)) res.projects.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:p.name||'Projekt', sub:s.name||'', closed:!!p.closed});
@@ -1196,13 +1200,14 @@ function crmSearchAll(q){
 }
 function crmSearchPanelHtml(q){
   const r=crmSearchAll(q);
-  const total=r.entries.length+r.contacts.length+r.projects.length+r.tasks.length+r.events.length;
+  const total=r.entries.length+r.contacts.length+r.notes.length+r.projects.length+r.tasks.length+r.events.length;
   if(!total) return `<div class="crm-sr-empty">Keine Treffer für „${esc(q)}".</div>`;
   const row=(onclick,icon,name,sub,closed)=>`<div class="crm-sr" onclick="${onclick}"><span class="crm-sr-i">${icon}</span><div class="crm-sr-t"><div class="crm-sr-n">${esc(name)}${closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</div>${sub?`<div class="crm-sr-s">${esc(sub)}</div>`:''}</div></div>`;
   const grp=(title,arr,fn)=> arr.length?`<div class="crm-sr-grp"><div class="crm-sr-h">${title} (${arr.length})</div>${arr.slice(0,20).map(fn).join('')}${arr.length>20?`<div class="crm-sr-more">… ${arr.length-20} weitere – Suche verfeinern</div>`:''}</div>`:'';
   return `<div class="crm-sr-head">${total} Treffer für „${esc(q)}"</div>`
     + grp('📇 Einträge', r.entries, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'📇',x.name,x.sub))
     + grp('👤 Kontakte', r.contacts, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'👤',x.name,x.sub))
+    + grp('🗒 Kontaktnotizen', r.notes, x=>{ const snip=String(x.text||'').replace(/\s+/g,' ').trim().slice(0,90); const sub=[x.entryName, x.by?('von '+x.by):'', x.ts?fmtDate(x.ts):''].filter(Boolean).join(' · '); return row(`crmGoEntryTab('${esc(x.tree)}','${esc(x.eid)}','kommunikation')`,'🗒',snip||'(Notiz)',sub); })
     + grp('📂 Projekte', r.projects, x=> x.kind==='entity'
         ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
         : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
@@ -1223,6 +1228,7 @@ function crmSearchInput(v){
   panel.innerHTML=crmSearchPanelHtml(v);
 }
 function crmGoEntry(tree,eid){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel=''; paintDetail(); }
+function crmGoEntryTab(tree,eid,tab){ window._crmDetailTab=tab||'allgemeines'; crmGoEntry(tree,eid); }
 function crmGoEntityProj(tree,eid,pid){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel=pid; paintDetail(); }
 function crmGoTeamProj(id){
   window._crmSearch=''; const p=getTeamProjekt(id); if(!p) return;
@@ -4147,7 +4153,7 @@ Object.assign(window, {
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSetStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
-  crmSearchInput, crmGoEntry, crmGoEntityProj, crmGoTeamProj,
+  crmSearchInput, crmGoEntry, crmGoEntryTab, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
