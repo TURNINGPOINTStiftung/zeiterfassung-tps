@@ -620,12 +620,29 @@ export function rebuildAutoAbsences(uid,reviewerId){
   });
 }
 
+// Ermittelt selbstkonsistent, wie viel Pflichtpause im Endfeld eines ALTdatensatzes
+// (ohne verlässliches Tracking) eingebacken ist. Kein blindes Schätzen mehr:
+// getestet wird p∈{30,45}; zurückgegeben wird p nur, wenn das Ergebnis nach Modell A
+// (Eingabe = Netto, Pause hinten aufgeschlagen) exakt aufgeht. Sonst 0 (nichts entfernen).
+function _recoverBaked(day, carryF){
+  const orig=day[carryF]; if(!orig) return 0;
+  for(const p of [30,45]){
+    const testEnd=addMin(orig,-p);
+    const b1bis = carryF==='b1bis' ? testEnd : (day.b1bis||'');
+    const b2bis = carryF==='b2bis' ? testEnd : (day.b2bis||'');
+    const gross = diffMin(day.b1von||'',b1bis)+diffMin(day.b2von||'',b2bis)+Number(day.ktmin||0);
+    const required = gross>540?45:gross>360?30:0;
+    const gap = (b1bis&&day.b2von)?diffMin(b1bis,day.b2von):0;
+    if(Math.max(0,required-gap)===p) return p;
+  }
+  return 0;
+}
+
 // Zentrale, IDEMPOTENTE Pausen-Aufschlagung.
 // Entfernt die zuvor aufgeschlagene Pflichtpause und schlägt die aktuelle Pause
 // GENAU EINMAL auf die letzte Abfahrtszeit des Tages auf. Dadurch verschieben sich
 // Zeiten beim Nachbearbeiten nicht mehr (keine Mehrfach-Aufschläge, kein Aufaddieren).
-// editedField = gerade vom Nutzer eingegebenes Feld (enthält bereits den Netto-Wert,
-// wird daher beim Entfernen der Alt-Pause ausgelassen).
+// editedField = gerade vom Nutzer eingegebenes Feld (enthält bereits den Netto-Wert).
 function _applyDayPause(uid,ds,editedField){
   const user=getUser(uid); if(!user) return;
   mutate(d=>{
@@ -637,28 +654,50 @@ function _applyDayPause(uid,ds,editedField){
     if((e.status==='submitted'||e.status==='approved')&&!(window.cu&&window.cu.role==='admin')) return;
     const day=e.days?.[ds]; if(!day||day._nightShift) return;
     const hasB2=!!(day.b2von&&day.b2bis);
-    // 1) Bisher aufgeschlagene Pause IMMER zuerst entfernen (Tracking, sonst Schätzung
-    //    aus Altdaten). Frueher wurde bei erneuter Bearbeitung DESSELBEN Feldes nicht
-    //    entfernt (prevF!==editedField) – dadurch wurde die in der Endzeit bereits
-    //    enthaltene Pause als Netto missverstanden und ein zweites Mal aufgeschlagen
-    //    (Bug: 20:00 → 20:45 → 21:30). Jetzt idempotent: Endzeit = Netto + genau eine Pause.
+    // 1) Bisher aufgeschlagene Pause ZUVERLÄSSIG entfernen, damit die Endzeit wieder
+    //    reines Netto ist. NICHT mehr schätzen – das machte den ERSTEN Aufschlag auf
+    //    geladenen/älteren Tagen zu groß (Schätzung ≠ tatsächlich eingebackene Pause),
+    //    erst die zweite Korrektur war korrekt. Reihenfolge der Verlässlichkeit:
+    //    a) getipptes Feld  → Wert IST bereits Netto, nichts entfernen
+    //    b) gemerktes Netto-Ende (_netRaw) → exakt eingebackene Menge herausrechnen
+    //    c) sauber getracktes _paused/_pausedF → exakt herausrechnen
+    //    d) Altdaten ohne Tracking → selbstkonsistent zurückrechnen (0, wenn unklar)
     const prevF=day._pausedF||(hasB2?'b2bis':'b1bis');
-    const prevP=day._pInit?Number(day._paused||0):autoPauseMin(day,user);
-    if(prevP>0&&day[prevF]) day[prevF]=addMin(day[prevF],-prevP);
+    let baked=0;
+    if(editedField===prevF){
+      baked=0;
+    } else if(day._netRawF===prevF && day._netRaw && day[prevF]){
+      const amt=diffMin(day._netRaw, day[prevF]); baked=amt>0?amt:0;
+    } else if(day._pInit && day._pausedF===prevF){
+      baked=Number(day._paused||0);
+    } else {
+      baked=_recoverBaked(day, prevF);
+    }
+    if(baked>0 && day[prevF]) day[prevF]=addMin(day[prevF],-baked);
     day._paused=0; day._pausedF=''; day._pInit=true;
     // 2) Pause neu berechnen – keine bei Freiberufler / Veranstaltung / Abwesenheit
     const z=day.b1zuord||'', bem=day.b1bem||'';
     if(isFreelancer(user)||z.startsWith('Veranstaltung')
        ||z==='Urlaub'||z==='AU/Krank'||z==='Arbeitszeitausgleich'
-       ||bem==='Urlaub'||bem==='AU/Krank'||bem==='Arbeitszeitausgleich') return;
+       ||bem==='Urlaub'||bem==='AU/Krank'||bem==='Arbeitszeitausgleich'){ day._netRaw=''; day._netRawF=''; return; }
     const lastF=hasB2?'b2bis':(day.b1von&&day.b1bis?'b1bis':'');
-    if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00') return;
+    if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00'){
+      // Noch kein vollständiger Block (z.B. Endzeit getippt, Start fehlt noch) oder 24:00-Rand.
+      // Eine gerade getippte Endzeit als Netto merken, damit der spätere Aufschlag (sobald der
+      // Start kommt) sie NICHT als „Pause schon eingebacken" fehldeutet und zu wenig zählt.
+      if((editedField==='b1bis'||editedField==='b2bis')&&day[editedField]&&day[editedField]!=='23:59'&&day[editedField]!=='24:00'){ day._netRaw=day[editedField]; day._netRawF=editedField; }
+      else { day._netRaw=''; day._netRawF=''; }
+      return;
+    }
     const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
     const required=gross>540?45:gross>360?30:0; // NETTO, strikt > (DE: >6h=30, >9h=45)
     // Selbst genommene Pause = Lücke zwischen Block 1 und 2. Die FEHLENDE Pflichtpause
     // (Soll minus Lücke) wird hinten aufgeschlagen; die Tagessumme bleibt = Nettoarbeit.
     const _gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
     const pause=Math.max(0,required-_gap);
+    // Netto-Ende (VOR dem Aufschlag) merken → die nächste Bearbeitung rechnet EXAKT
+    // zurück, unabhängig davon ob _paused durch Sync o.ä. verloren ging.
+    day._netRaw=day[lastF]; day._netRawF=lastF;
     if(pause>0){
       // 24:00-Deckelung: die Abfahrtszeit darf NIE über Mitternacht hinausgehen
       // (sonst entstehen ungültige Zeiten wie 25:30). Passt die Pflichtpause nicht

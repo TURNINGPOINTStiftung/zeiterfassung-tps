@@ -323,11 +323,12 @@ function _recomputeFromSessions(day){
   const gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
   const missing=Math.max(0,required-gap);
   // Tracking setzen, damit autoPauseMin GENAU diesen Wert abzieht (Summe = Nettoarbeit).
-  day._pInit=true; day._paused=0; day._pausedF='';
-  if(missing>0){
-    if(day.b2von&&day.b2bis){ day.b2bis=addMin(day.b2bis,missing); day._paused=missing; day._pausedF='b2bis'; }
-    else if(day.b1bis){ day.b1bis=addMin(day.b1bis,missing); day._paused=missing; day._pausedF='b1bis'; }
-  }
+  // Zusätzlich _netRaw = Netto-Ende (VOR Aufschlag) merken, damit eine spätere Bearbeitung
+  // die Pause EXAKT zurückrechnen kann – auch falls _paused durch Sync o.ä. verloren geht.
+  day._pInit=true; day._paused=0; day._pausedF=''; day._netRaw=''; day._netRawF='';
+  const carryF=(day.b2von&&day.b2bis)?'b2bis':(day.b1bis?'b1bis':'');
+  if(carryF){ day._netRaw=day[carryF]; day._netRawF=carryF; }
+  if(missing>0&&carryF){ day[carryF]=addMin(day[carryF],missing); day._paused=missing; day._pausedF=carryF; }
 }
 
 export function stopZeitstempel(bisOverride){
