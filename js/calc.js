@@ -98,6 +98,28 @@ export function monthSOLLdays(user,y,m){
   return workdays;
 }
 
+// Wie monthSOLL, aber im LAUFENDEN Monat nur bis EINSCHLIESSLICH heute. Damit ziehen
+// noch nicht gearbeitete Tage (Rest des Monats, geplante AZA/Freizeit) die laufende
+// Über-/Unterstunden-Anzeige nicht vorab ins Minus. Abgeschlossene Monate: volles Soll.
+// Zukünftige Monate: 0. Ändert NICHT den Übertrag – computeAutoCarry nutzt weiterhin das
+// VOLLE Monats-Soll (monthSOLL) abgeschlossener Monate; dies ist reine Anzeige-Logik.
+export function monthSOLLToDate(user,y,m){
+  if(isFreelancer(user)||!y||!m) return monthSOLL(user,y,m);
+  const now=new Date(); const cy=now.getFullYear(), cm=now.getMonth()+1, cd=now.getDate();
+  if(y<cy||(y===cy&&m<cm)) return monthSOLL(user,y,m); // Vergangenheit → volles Soll
+  if(y>cy||(y===cy&&m>cm)) return 0;                   // Zukunft → noch kein Soll fällig
+  const dim=daysInMonth(y,m); const upto=Math.min(cd,dim);
+  const holFree=user.holidaysLikeSunday!==false;
+  const hols=getHolidays(y,user.bundesland||'');
+  const countWd=(from,to)=>{ let n=0; for(let d=from;d<=to;d++){ const ds=dateStr(y,m,d); const dw=new Date(y,m-1,d).getDay(); if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) n++; } return n; };
+  if(isVollzeit(user)||user.sollWorkdays){
+    return countWd(1,upto)*dailyMinutes(user); // arbeitstaggenau bis heute
+  }
+  // Teilzeit-Pauschal (4×Wochenarbeitszeit): anteilig nach vergangenen Wochentagen.
+  const wdF=countWd(1,dim); const wdT=countWd(1,upto);
+  return wdF>0?Math.round(monthSOLL(user,y,m)*wdT/wdF):0;
+}
+
 export function computeAutoCarry(uid,user,y,m,_d){
   _d=_d||0; if(_d>24) return 0;
   let py=y,pm=m-1; if(pm<1){pm=12;py--;}

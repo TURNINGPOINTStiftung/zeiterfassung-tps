@@ -202,6 +202,12 @@
         </table>
       </div>
 
+      <!-- Jahresverlauf (nur lesen): Monat für Monat IST / SOLL / Über-Unter / Saldo -->
+      <div class="zuord-breakdown no-print" id="jahresverlauf" style="display:none">
+        <h4 id="jv-head" style="cursor:pointer;user-select:none" onclick="toggleJahresverlauf()">▸ Jahresverlauf (IST · SOLL · Über-/Unterstunden · Saldo)</h4>
+        <div id="jv-body" style="display:none"></div>
+      </div>
+
       <div class="action-bar no-print" id="action-bar">
         <div class="info" id="action-info"></div>
         <div class="carryover-field" id="carryover-wrap">
@@ -412,6 +418,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=119"></script>
+<script type="module" src="js/main.js?v=120"></script>
 </body>
 </html>

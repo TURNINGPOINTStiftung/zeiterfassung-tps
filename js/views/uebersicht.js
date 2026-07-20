@@ -2,7 +2,7 @@ import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLA
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
-import { monthIST, monthSOLL, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
+import { monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord } from '../calc.js';
 import { getCatsForTeam, currentCatsForUser } from '../cats.js';
 import { notifyGF } from './gfberichte.js';
 
@@ -177,7 +177,7 @@ export function renderOverview(){
     const vacApproved=totalVacUsed(u.id,oy);       // ganzes Jahr (inkl. Zukunft)
     const vacLeft=(u.al||0)-vacUpTo;
     const vacFuture=Math.max(0,vacApproved-vacUpTo);
-    const curSOLL=monthSOLL(u,oy,om);
+    const curSOLL=monthSOLLToDate(u,oy,om); // laufender Monat: Soll bis heute (nicht ganzer Monat)
     const curDiff=curIST-(curSOLL-Math.round(curCarry*60));
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
     const diffStr=sFmt(curDiff);

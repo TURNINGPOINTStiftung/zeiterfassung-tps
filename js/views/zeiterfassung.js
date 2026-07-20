@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
+import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
@@ -209,6 +209,7 @@ export function renderZeiterfassung(){
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
   renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeksYTD:0);
   renderZuordBreakdown(entry);
+  renderJahresverlauf(uid,user);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
   renderSignature(user,entry);
@@ -247,7 +248,11 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     }
   } else {
     const soll=monthSOLL(user,year,mon);
-    const diff=istMin-(soll-Math.round(carryH*60));
+    const sollTD=monthSOLLToDate(user,year,mon);
+    const _now=new Date(); const isCurMonth=(year===_now.getFullYear()&&mon===_now.getMonth()+1);
+    // Im LAUFENDEN Monat gegen das Soll BIS HEUTE rechnen – sonst ziehen noch nicht
+    // gearbeitete Tage (Rest des Monats, geplante AZA) die Bilanz vorab ins Minus.
+    const diff=istMin-(sollTD-Math.round(carryH*60));
     const vd=vacDays(entry);
     const sk=sickDays(entry);
     const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
@@ -257,9 +262,9 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const sollDays=monthSOLLdays(user,year,mon);
     const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(user))}`:'4 × Wochenarbeitszeit';
     cards=[
-      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:sollSub},
+      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:(isCurMonth&&sollTD<soll)?`${sollSub} · bis heute ${hFmt(sollTD)}`:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-      {lbl:'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
+      {lbl:isCurMonth?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
       {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al}`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
@@ -305,6 +310,57 @@ function renderZuordBreakdown(entry){
     const pct=Math.round(min/total*100);
     return `<tr><td>${cat}</td><td style="text-align:right;font-weight:600">${hFmt(min)}</td><td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td></tr>`;
   }).join('');
+}
+
+// Jahresverlauf (NUR LESEN): macht die komplette Stunden-Kette Monat für Monat sichtbar,
+// damit man sofort erkennt, welche Zahl (IST, SOLL, Über-/Unter, Übertrag) unerwartet ist.
+// Alle Werte kommen aus denselben zentralen Funktionen wie Bildschirm/PDF/Übersicht.
+const _JV_MONS=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+function renderJahresverlauf(uid,user){
+  const wrap=document.getElementById('jahresverlauf'); const body=document.getElementById('jv-body');
+  if(!wrap||!body) return;
+  if(isFreelancer(user)){ wrap.style.display='none'; return; } // Freiberufler: eigenes Limit-Modell, hier nicht sinnvoll
+  wrap.style.display='';
+  const y=window.year;
+  let rows='', sIST=0, sSOLL=0;
+  for(let m=1;m<=12;m++){
+    const e=getEntry(uid,y,m);
+    const hasData=!!(e&&e.days&&Object.keys(e.days).length);
+    // Zukünftige, noch leere Monate ohne manuellen Übertrag ausblenden (sonst nur SOLL-Minus-Rauschen).
+    if(!hasData && m>window.mon && !(e&&e.carryoverManual)) continue;
+    const ist=monthIST(e,user);
+    const soll=monthSOLLToDate(user,y,m); // laufender Monat: bis heute; abgeschlossene: volles Soll
+    const carryIn=Math.round(getEffectiveCarryH(uid,user,y,m)*60);
+    const diffM=ist-soll;                 // nur dieser Monat
+    const saldo=ist-soll+carryIn;         // inkl. Übertrag = das, was in den Folgemonat geht
+    sIST+=ist; sSOLL+=soll;
+    const cur=(m===window.mon);
+    rows+=`<tr${cur?' style="font-weight:700;background:rgba(0,0,0,.04)"':''}>`
+      +`<td>${_JV_MONS[m-1]}</td>`
+      +`<td style="text-align:right">${hFmt(ist)}</td>`
+      +`<td style="text-align:right">${hFmt(soll)}</td>`
+      +`<td style="text-align:right;color:${diffM>=0?'var(--ok)':'var(--danger)'}">${sFmt(diffM)}</td>`
+      +`<td style="text-align:right">${sFmt(carryIn)}</td>`
+      +`<td style="text-align:right;font-weight:600;color:${saldo>=0?'var(--ok)':'var(--danger)'}">${sFmt(saldo)}</td>`
+      +`</tr>`;
+  }
+  const sDiff=sIST-sSOLL;
+  body.innerHTML=`<div style="overflow-x:auto"><table class="zuord-table" style="width:100%;font-size:12px">
+    <thead><tr><th>Monat ${y}</th><th style="text-align:right">IST</th><th style="text-align:right">SOLL</th><th style="text-align:right">Diff Monat</th><th style="text-align:right">Übertrag Anfang</th><th style="text-align:right">Saldo Ende</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" style="color:var(--muted);text-align:center">Keine Daten</td></tr>'}</tbody>
+    <tfoot><tr style="font-weight:700;border-top:2px solid var(--border)"><td>Summe ${y}</td><td style="text-align:right">${hFmt(sIST)}</td><td style="text-align:right">${hFmt(sSOLL)}</td><td style="text-align:right;color:${sDiff>=0?'var(--ok)':'var(--danger)'}">${sFmt(sDiff)}</td><td></td><td></td></tr></tfoot>
+  </table></div>
+  <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
+    <b>Diff Monat</b> = IST − SOLL (nur dieser Monat). <b>Saldo Ende</b> = Diff + Übertrag Anfang = Über-/Unterstunden gesamt = das, was als Übertrag in den nächsten Monat geht.
+    Ein leerer Monat reicht den Saldo unverändert weiter (er wird nicht als Minus gezählt).
+  </div>`;
+}
+export function toggleJahresverlauf(){
+  const b=document.getElementById('jv-body'); const h=document.getElementById('jv-head');
+  if(!b) return;
+  const open=b.style.display==='block';
+  b.style.display=open?'none':'block';
+  if(h) h.textContent=(open?'▸':'▾')+' Jahresverlauf (IST · SOLL · Über-/Unterstunden · Saldo)';
 }
 
 function renderActionBar(uid,user,entry,isLeiter){
