@@ -22,12 +22,15 @@ export function autoPauseMin(dd,user){
   // Wurde die Pause bereits beim Eintragen/Stempeln aufgeschlagen, gilt EXAKT dieser
   // Wert – sonst weicht der Abzug vom Aufschlag ab und die Summe stimmt nicht.
   if(dd._pInit) return Number(dd._paused||0);
-  // Legacy/auto erzeugte Tage (ohne Live-Tracking): schätzen. Diese Alt-Tage wurden nach
-  // der DAMALIGEN Regel gebacken (ktmin zählte mit) → hier ktmin bewusst weiter mitrechnen,
-  // damit Netto/Abfahrt konsistent bleiben. Neue/bearbeitete Tage haben _pInit und laufen
-  // oben über den exakt getrackten Wert – dort gilt die neue Regel (Kleinteilig ohne Pause).
+  // Legacy/auto erzeugte Tage (ohne Live-Tracking): die gespeicherte Abfahrt enthält die
+  // Pflichtpause bereits (BRUTTO). Deshalb müssen die Schwellen um die Pause verschoben
+  // zurückgerechnet werden (siehe Kommentar oben): Netto≥6h ⇔ Brutto≥6h30 (390) → 30,
+  // Netto≥9h ⇔ Brutto≥9h45 (585) → 45. Das ist die EXAKTE Umkehrung des Einbackens in
+  // data.js/firebase.js. (Früher fälschlich 540/360 → 8h45-Tage wurden 15 Min zu niedrig
+  // gezählt.) ktmin wird – wie beim Einbacken – mitgerechnet. Neue/bearbeitete Tage haben
+  // _pInit und laufen oben über den exakt getrackten Wert (dort: Kleinteilig ohne Pause).
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-  const required=gross>540?45:gross>360?30:0;
+  const required=gross>=585?45:gross>=390?30:0;
   const gap=(dd.b1bis&&dd.b2von)?diffMin(dd.b1bis,dd.b2von):0;
   return Math.max(0,required-gap);
 }
