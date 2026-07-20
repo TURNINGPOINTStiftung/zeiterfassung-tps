@@ -316,9 +316,11 @@ function _recomputeFromSessions(day){
   }
   const restMin=rest.reduce((s,r)=>s+r.min,0);
   day.ktmin=Math.round(restMin/15)*15;
-  // Fehlende Pflichtpause auf die LETZTE Abfahrtszeit aufschlagen (wie manuell)
-  const netGross=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-  const required=netGross>540?45:netGross>360?30:0; // strikt > (DE: >6h=30, >9h=45)
+  // Fehlende Pflichtpause auf die LETZTE Abfahrtszeit aufschlagen (wie manuell).
+  // Nur Blockzeiten zählen zur Schwelle – Kleinteilig (aus Rest-Sessions) löst keine
+  // Pflichtpause aus (keine festen Zeiten), bleibt aber volle Arbeitszeit.
+  const blockGross=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von||'',day.b2bis||'');
+  const required=blockGross>540?45:blockGross>360?30:0; // strikt > (DE: >6h=30, >9h=45)
   // Selbst genommene Pause = Lücke zwischen den Blöcken. Fehlende Pflichtpause aufschlagen.
   const gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
   const missing=Math.max(0,required-gap);

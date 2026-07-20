@@ -22,8 +22,10 @@ export function autoPauseMin(dd,user){
   // Wurde die Pause bereits beim Eintragen/Stempeln aufgeschlagen, gilt EXAKT dieser
   // Wert – sonst weicht der Abzug vom Aufschlag ab und die Summe stimmt nicht.
   if(dd._pInit) return Number(dd._paused||0);
-  // Legacy/auto erzeugte Tage: schätzen. Fehlende Pflichtpause = Soll minus selbst
-  // genommene Lücke. DE: >6h=30, >9h=45 (strikt >, exakt 6h/9h zählen nicht hoch).
+  // Legacy/auto erzeugte Tage (ohne Live-Tracking): schätzen. Diese Alt-Tage wurden nach
+  // der DAMALIGEN Regel gebacken (ktmin zählte mit) → hier ktmin bewusst weiter mitrechnen,
+  // damit Netto/Abfahrt konsistent bleiben. Neue/bearbeitete Tage haben _pInit und laufen
+  // oben über den exakt getrackten Wert – dort gilt die neue Regel (Kleinteilig ohne Pause).
   const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
   const required=gross>540?45:gross>360?30:0;
   const gap=(dd.b1bis&&dd.b2von)?diffMin(dd.b1bis,dd.b2von):0;

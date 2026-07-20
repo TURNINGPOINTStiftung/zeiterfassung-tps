@@ -38,6 +38,7 @@ export function _migrate(d){
       if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
+        if(day._pInit) return; // von der Live-Pausenlogik verwaltet → Pause ist bereits korrekt aufgeschlagen, NICHT erneut migrieren (sonst Doppel-Aufschlag beim Reload)
         if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
         if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
         if(day._pauseMigratedV2) return; // Bereits korrekt migriert
@@ -72,6 +73,7 @@ export function _migrate(d){
       if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||day._b2PauseMig) return;
+        if(day._pInit) return; // von der Live-Pausenlogik verwaltet → nicht erneut migrieren
         if(!day.b1von||!day.b1bis||!day.b2von||!day.b2bis) return; // nur echte Zwei-Block-Tage
         if(_ABS2.has(day.b1zuord)||_ABS2.has(day.b1bem)) return;
         const grossNet=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von,day.b2bis)+Number(day.ktmin||0);

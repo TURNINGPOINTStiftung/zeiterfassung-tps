@@ -630,6 +630,9 @@ function _recoverBaked(day, carryF){
     const testEnd=addMin(orig,-p);
     const b1bis = carryF==='b1bis' ? testEnd : (day.b1bis||'');
     const b2bis = carryF==='b2bis' ? testEnd : (day.b2bis||'');
+    // Rückrechnung von ALT-Tagen: mit der damaligen Basis (ktmin zählte mit), damit die
+    // tatsächlich eingebackene Pause exakt erkannt wird. Das anschließende Neu-Aufschlagen
+    // in _applyDayPause nutzt dann die neue Regel (nur Blockzeiten).
     const gross = diffMin(day.b1von||'',b1bis)+diffMin(day.b2von||'',b2bis)+Number(day.ktmin||0);
     const required = gross>540?45:gross>360?30:0;
     const gap = (b1bis&&day.b2von)?diffMin(b1bis,day.b2von):0;
@@ -689,8 +692,11 @@ function _applyDayPause(uid,ds,editedField){
       else { day._netRaw=''; day._netRawF=''; }
       return;
     }
-    const gross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'')+Number(day.ktmin||0);
-    const required=gross>540?45:gross>360?30:0; // NETTO, strikt > (DE: >6h=30, >9h=45)
+    // Pflichtpause richtet sich NUR nach den Blockzeiten (b1/b2). Kleinteilig (ktmin)
+    // hat keine festen Anfangs-/Endzeiten und löst daher KEINE Pause aus – zählt aber
+    // voll als Arbeitszeit (die Netto-Summe enthält ktmin weiterhin).
+    const blockGross=diffMin(day.b1von||'',day.b1bis||'')+diffMin(day.b2von||'',day.b2bis||'');
+    const required=blockGross>540?45:blockGross>360?30:0; // NETTO, strikt > (DE: >6h=30, >9h=45)
     // Selbst genommene Pause = Lücke zwischen Block 1 und 2. Die FEHLENDE Pflichtpause
     // (Soll minus Lücke) wird hinten aufgeschlagen; die Tagessumme bleibt = Nettoarbeit.
     const _gap=(day.b1bis&&day.b2von)?diffMin(day.b1bis,day.b2von):0;
