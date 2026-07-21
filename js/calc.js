@@ -64,7 +64,26 @@ export function vacDailyMin(user){
 }
 export function _isAZADay(dd){ return !!(dd&&(dd.b1zuord==='Arbeitszeitausgleich'||dd.b1bem==='Arbeitszeitausgleich')); }
 
+// Historische Parameter: liefert den User mit den Werten, die im Monat (y,m) GALTEN.
+// user.paramHistory=[{fromDate:'YYYY-MM-DD', wh,dpw,al,vacHoursPerDay,role,sollWorkdays,holidaysLikeSunday,bundesland,maxHours}]
+// Ohne Historie (oder Monat vor dem ersten Eintrag → frühester Eintrag) wird der aktuelle User
+// zurückgegeben. So rechnen vergangene Monate mit den DAMALIGEN Werten statt rückwirkend mit den heutigen.
+export const _PARAM_KEYS=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
+export function effUserAt(user,y,m){
+  const hist=user&&Array.isArray(user.paramHistory)?user.paramHistory:null;
+  if(!hist||!hist.length||!y||!m) return user;
+  const key=`${y}-${String(m).padStart(2,'0')}-01`;
+  let best=null;
+  for(const h of hist){ if(h&&h.fromDate&&h.fromDate<=key&&(!best||h.fromDate>best.fromDate)) best=h; }
+  if(!best){ for(const h of hist){ if(h&&h.fromDate&&(!best||h.fromDate<best.fromDate)) best=h; } } // vor 1. Eintrag → frühester
+  if(!best) return user;
+  const clone=Object.assign({},user);
+  _PARAM_KEYS.forEach(k=>{ if(best[k]!==undefined) clone[k]=best[k]; });
+  return clone;
+}
+
 export function monthSOLL(user,y,m){
+  user=effUserAt(user,y,m);
   if(isFreelancer(user)) return 0;
   const wh=user.wh||0;
   // Vollzeit ODER per Schalter "arbeitstaggenau": echte Arbeitstage × Tagessoll.
@@ -85,6 +104,7 @@ export function monthSOLL(user,y,m){
 }
 
 export function monthSOLLdays(user,y,m){
+  user=effUserAt(user,y,m);
   if((!isVollzeit(user)&&!user.sollWorkdays)||!y||!m) return 0;
   const dim=daysInMonth(y,m);
   const holFree=user.holidaysLikeSunday!==false;
@@ -104,6 +124,7 @@ export function monthSOLLdays(user,y,m){
 // Zukünftige Monate: 0. Ändert NICHT den Übertrag – computeAutoCarry nutzt weiterhin das
 // VOLLE Monats-Soll (monthSOLL) abgeschlossener Monate; dies ist reine Anzeige-Logik.
 export function monthSOLLToDate(user,y,m){
+  user=effUserAt(user,y,m);
   if(isFreelancer(user)||!y||!m) return monthSOLL(user,y,m);
   const now=new Date(); const cy=now.getFullYear(), cm=now.getMonth()+1, cd=now.getDate();
   if(y<cy||(y===cy&&m<cm)) return monthSOLL(user,y,m); // Vergangenheit → volles Soll
@@ -124,20 +145,21 @@ export function computeAutoCarry(uid,user,y,m,_d){
   _d=_d||0; if(_d>24) return 0;
   let py=y,pm=m-1; if(pm<1){pm=12;py--;}
   const pe=getEntry(uid,py,pm);
-  const pIST=monthIST(pe,user);
+  const pu=effUserAt(user,py,pm); // Parameter, die im VORMONAT galten (Rolle/maxHours/SOLL)
+  const pIST=monthIST(pe,pu);
   // Leerer Monat (noch nicht erfasst, kein manueller Übertrag): aufgelaufenen Saldo
   // UNVERÄNDERT durchreichen statt auf 0 zu setzen – sonst geht der Übertrag bei einer
   // Lücke zwischen erfassten Monaten verloren. (Leere Monate sind in monthIST sehr günstig.)
   if(pIST===0&&!pe.carryoverManual) return computeAutoCarry(uid,user,py,pm,_d+1);
   const pCarryH=pe.carryoverManual?(pe.carryover||0):computeAutoCarry(uid,user,py,pm,_d+1);
   const pCarryMin=Math.round(pCarryH*60); // Vormonats-Übertrag minutengenau (kein Float-Drift)
-  if(isFreelancer(user)){
-    const maxH=user.maxHours||0;
+  if(isFreelancer(pu)){
+    const maxH=pu.maxHours||0;
     if(maxH<=0) return 0;
     const total=pIST+pCarryMin;
     return Math.max(0,total-maxH*60)/60; // minutengenau – KEINE Viertelstunden-Rundung
   } else {
-    const pSOLL=monthSOLL(user,py,pm);
+    const pSOLL=monthSOLL(pu,py,pm);
     const pDiff=pIST-pSOLL+pCarryMin;
     return pDiff/60; // minutengenau – KEINE Viertelstunden-Rundung
   }
