@@ -100,3 +100,47 @@ export function toast(msg,type=''){
   document.getElementById('toasts').appendChild(el);
   setTimeout(()=>el.remove(),3500);
 }
+
+// ── Werkstudent-Zeiträume (Vorlesungszeiten / Brückentage) mit Verlauf ──
+// Ein Zeitraum gilt als „abgelaufen", sobald das Kalenderjahr seines Enddatums VORBEI ist
+// (bis < 1.1. des laufenden Jahres). Abgelaufene wandern in einen aufklappbaren „Verlauf"
+// (nur lesen), die editierbaren Slots zeigen nur laufende/künftige Zeiträume → alte Slots
+// werden wieder frei. Genutzt in Verwaltung (uf-*) und Profil (prof-*).
+export function wsPeriodRows(periods, idPrefix, count, labelWord, maxDate){
+  const all=(Array.isArray(periods)?periods:[]).filter(p=>p&&p.von&&p.bis);
+  const cut=(new Date().getFullYear())+'-01-01';   // Jahresanfang des laufenden Jahres
+  const active=all.filter(p=>p.bis>=cut), archived=all.filter(p=>p.bis<cut);
+  const md=maxDate?`max="${maxDate}"`:'';
+  const inp=`padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px`;
+  let rows='';
+  for(let i=0;i<count;i++){
+    const p=active[i]||{von:'',bis:''};
+    rows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+      <span style="font-size:12px;color:var(--muted);width:78px">${labelWord} ${i+1}</span>
+      <input type="date" id="${idPrefix}-von-${i}" value="${p.von||''}" ${md} style="${inp}">
+      <span style="font-size:12px;color:var(--muted)">bis</span>
+      <input type="date" id="${idPrefix}-bis-${i}" value="${p.bis||''}" ${md} style="${inp}">
+    </div>`;
+  }
+  let hist='';
+  if(archived.length){
+    const items=archived.slice().sort((a,b)=>a.von<b.von?1:-1)  // neueste zuerst
+      .map(p=>`<div style="font-size:12px;color:var(--muted);padding:2px 0 2px 8px">${p.von} – ${p.bis}</div>`).join('');
+    hist=`<details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Verlauf – ${archived.length} abgelaufen</summary>${items}</details>`;
+  }
+  // Abgelaufene in einem Hidden-Feld mitführen, damit sie beim Speichern erhalten bleiben.
+  return rows + `<input type="hidden" id="${idPrefix}-archived" value="${encodeURIComponent(JSON.stringify(archived))}">` + hist;
+}
+export function wsCollectPeriods(idPrefix, count){
+  const out=[];
+  for(let i=0;i<count;i++){
+    const von=document.getElementById(`${idPrefix}-von-${i}`)?.value||'';
+    const bis=document.getElementById(`${idPrefix}-bis-${i}`)?.value||'';
+    if(von&&bis&&von<=bis) out.push({von,bis});
+  }
+  try{
+    const raw=document.getElementById(`${idPrefix}-archived`)?.value;
+    if(raw){ const a=JSON.parse(decodeURIComponent(raw)); if(Array.isArray(a)) a.forEach(p=>{ if(p&&p.von&&p.bis) out.push({von:p.von,bis:p.bis}); }); }
+  }catch(e){}
+  return out;
+}
