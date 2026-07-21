@@ -244,6 +244,20 @@ function injectStyles(){
   .crm-tree-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(32,56,105,.25)}
   .crm-search{margin-left:auto;padding:8px 14px;border:1.5px solid var(--border);border-radius:999px;font-size:14px;min-width:200px;color:var(--text);background:#fff;transition:border-color .15s,box-shadow .15s}
   .crm-search:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
+  .crm-bell{position:relative;flex:none}
+  .crm-bell-badge{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:800;line-height:17px;text-align:center;box-shadow:0 0 0 2px #fff}
+  .crm-notif-pop{position:fixed;z-index:60;width:340px;max-width:calc(100vw - 20px);max-height:70vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:6px}
+  .crm-notif-head{font-size:13px;font-weight:700;color:var(--primary);padding:8px 10px 6px}
+  .crm-notif-item{display:flex;gap:9px;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .crm-notif-item:hover{background:#f5f8fd}
+  .crm-notif-item.unread{background:#eef4ff}
+  .crm-notif-ic{font-size:17px;flex:none}
+  .crm-notif-tx{min-width:0;flex:1}
+  .crm-notif-nm{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-notif-mt{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crm-notif-dot{width:8px;height:8px;border-radius:50%;background:#e5484d;flex:none}
+  .crm-notif-empty{color:var(--muted);padding:14px 10px;text-align:center;font-size:13px}
+  .crm-notif-more{font-size:11.5px;color:var(--muted);padding:6px 10px;text-align:center}
   .crm-body{padding:18px 22px;overflow-y:auto;flex:1}
   .crm-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
   .crm-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:15px 17px;cursor:pointer;transition:box-shadow .18s,border-color .18s,transform .12s;box-shadow:0 1px 2px rgba(32,56,105,.04)}
@@ -547,11 +561,12 @@ export function renderCRM(){
           const vs=accessVereine(); if(!vs.includes(window._crmSelId)) window._crmSelId=vs[0]||'';
         }
         paint();
+        crmLoadNotif(true);   // Benachrichtigungs-Glocke initial laden
       }catch(e){ console.error('CRM paint:',e); }
     });
   }catch(e){ console.error('renderCRM Fehler:',e); }
 }
-setCrmRenderHook(()=>{ try{ paint(); }catch(e){} });
+setCrmRenderHook(()=>{ try{ paint(); crmLoadNotif(false); }catch(e){} });
 
 function paint(){
   window._crmModalOpen = false;
@@ -581,6 +596,114 @@ function paint(){
   else { window._crmSelId = null; paintList(); }
 }
 
+// ── Benachrichtigungen: Glocke „Neu im CRM" (v222) ─────────────────
+// Quelle: crm_history (letzte 7 Tage), nur Änderungen ANDERER Personen, je
+// Datensatz dedupliziert (neueste zuerst). Gelesen-Stand = geräte-lokaler
+// localStorage-Marker (KEIN Firebase-Write → isoliert, kein Sync-Risiko).
+// Alles best-effort/try-catch – darf das CRM/die ZE nie beeinträchtigen.
+let _notifLoadTs=0;
+function _crmNotifSeen(){ try{ return +localStorage.getItem('tp_crm_notif_seen')||0; }catch(e){ return 0; } }
+function _crmNotifSetSeen(ts){ try{ localStorage.setItem('tp_crm_notif_seen', String(ts||Date.now())); }catch(e){} }
+function _notifType(coll){
+  const t=getTrees().find(x=>x.key===coll);
+  if(t) return {icon:t.icon||'📇', label:t.label||'Eintrag'};
+  return ({veranstaltungen:{icon:'📅',label:'Veranstaltung'},teamprojekte:{icon:'🗂️',label:'Projekt'},vorlagen:{icon:'📋',label:'Vorlage'},verteiler:{icon:'✉️',label:'Verteiler'},workflows:{icon:'⚡',label:'Workflow'}})[coll]||{icon:'•',label:coll};
+}
+function _agoStr(ts){
+  const s=Math.max(0,Math.floor((Date.now()-(ts||0))/1000));
+  if(s<90) return 'gerade eben';
+  const m=Math.floor(s/60); if(m<60) return 'vor '+m+' Min';
+  const h=Math.floor(m/60); if(h<24) return 'vor '+h+' Std';
+  const d=Math.floor(h/24); return d===1?'gestern':'vor '+d+' Tagen';
+}
+function _buildNotif(list){
+  const me=(window.cu&&window.cu.id)||'';
+  const rel=(list||[]).filter(h=> h && h.action==='save' && h.byId!==me && h.coll!=='config'); // neueste zuerst (listHistory sortiert)
+  const seen=new Set(); const items=[];
+  rel.forEach(h=>{ const k=h.coll+'::'+h.recId; if(seen.has(k)) return; seen.add(k);
+    items.push({ coll:h.coll, recId:h.recId, name:h.name||'', by:h.byName||h.byKuerzel||'?', ts:h.ts||0 }); });
+  return { items };
+}
+function _crmNotifBadgeCount(){ try{ const seen=_crmNotifSeen(); const d=window._crmNotif; if(!d||!d.items) return 0; return d.items.filter(it=>it.ts>seen).length; }catch(e){ return 0; } }
+function _updateBellBadge(){
+  try{ const b=document.getElementById('crm-bell-badge'); if(!b) return;
+    const n=_crmNotifBadgeCount();
+    if(n>0){ b.textContent=n>99?'99+':String(n); b.style.display=''; } else { b.style.display='none'; b.textContent=''; }
+  }catch(e){}
+}
+function crmLoadNotif(force){
+  try{
+    const now=Date.now();
+    if(!force && now-_notifLoadTs<15000){ _updateBellBadge(); return; }  // Drossel: max. alle 15 s
+    _notifLoadTs=now;
+    listHistory().then(list=>{ try{
+      window._crmNotif=_buildNotif(list);
+      if(!_crmNotifSeen()) _crmNotifSetSeen(Date.now()); // Erststart: sauber bei 0 beginnen
+      _updateBellBadge();
+      if(document.getElementById('crm-notif-pop')) _renderNotifPop();
+    }catch(e){} }).catch(()=>{});
+  }catch(e){}
+}
+function _positionNotifPop(pop){
+  try{ const bell=document.getElementById('crm-bell'); if(!bell) return;
+    const r=bell.getBoundingClientRect();
+    pop.style.top=(r.bottom+8)+'px';
+    const w=pop.offsetWidth||340; let left=r.right-w; if(left<10) left=10;
+    pop.style.left=left+'px';
+  }catch(e){}
+}
+function _crmNotifOutside(ev){
+  const pop=document.getElementById('crm-notif-pop'); if(!pop) return;
+  if(pop.contains(ev.target)) return;
+  const bell=document.getElementById('crm-bell'); if(bell&&bell.contains(ev.target)) return;
+  crmCloseNotif();
+}
+function crmCloseNotif(){
+  const pop=document.getElementById('crm-notif-pop'); if(pop) pop.remove();
+  window._crmNotifOpenSeen=undefined;
+  document.removeEventListener('click', _crmNotifOutside, true);
+}
+function _renderNotifPop(){
+  const data=window._crmNotif||{items:[]};
+  const seen=(window._crmNotifOpenSeen!==undefined)?window._crmNotifOpenSeen:_crmNotifSeen();
+  const list=data.items||[];
+  const rows = list.length ? list.slice(0,30).map(it=>{
+    const t=_notifType(it.coll); const unread=it.ts>seen;
+    return `<div class="crm-notif-item${unread?' unread':''}" onclick="crmNotifGo('${esc(it.coll)}','${esc(it.recId)}')">
+      <span class="crm-notif-ic">${t.icon}</span>
+      <div class="crm-notif-tx"><div class="crm-notif-nm">${esc(it.name||'(ohne Name)')}</div>
+      <div class="crm-notif-mt">${esc(t.label)} · von ${esc(it.by)} · ${_agoStr(it.ts)}</div></div>
+      ${unread?'<span class="crm-notif-dot"></span>':''}
+    </div>`;
+  }).join('') : '<div class="crm-notif-empty">Keine neuen Aktivitäten in den letzten 7 Tagen.</div>';
+  const more = list.length>30 ? `<div class="crm-notif-more">… und ${list.length-30} weitere</div>`:'';
+  let pop=document.getElementById('crm-notif-pop');
+  if(!pop){ pop=document.createElement('div'); pop.id='crm-notif-pop'; pop.className='crm-notif-pop'; document.body.appendChild(pop);
+    setTimeout(()=>document.addEventListener('click', _crmNotifOutside, true),0);
+  }
+  pop.innerHTML=`<div class="crm-notif-head">🔔 Neu im CRM</div><div class="crm-notif-list">${rows}${more}</div>`;
+  _positionNotifPop(pop);
+}
+function crmToggleNotif(ev){
+  if(ev){ ev.stopPropagation(); }
+  if(document.getElementById('crm-notif-pop')){ crmCloseNotif(); return; }
+  window._crmNotifOpenSeen=_crmNotifSeen();   // Highlight-Basis für diese Öffnung einfrieren
+  _renderNotifPop();
+  crmLoadNotif(true);                          // frisch nachladen (aktualisiert Liste/Badge)
+  _crmNotifSetSeen(Date.now());                // als gelesen markieren
+  _updateBellBadge();                          // Badge → 0
+}
+function crmNotifGo(coll, recId){
+  crmCloseNotif();
+  try{
+    if(getTrees().some(t=>t.key===coll)){ crmGoEntry(coll, recId); return; }
+    if(coll==='veranstaltungen'){ crmOpenVeranstaltung(recId); return; }
+    if(coll==='verteiler'){ crmShowVerteiler(); return; }
+    if(coll==='vorlagen'){ crmOpenVorlagen(); return; }
+    if(coll==='teamprojekte'){ window._crmMode='teams'; window._crmTeamProjSel=recId; paint(); return; }
+  }catch(e){}
+}
+
 // ── Bar ────────────────────────────────────────────────────────────
 function barHtml(){
   const mode = window._crmMode || 'kontakte';
@@ -600,7 +723,10 @@ function barHtml(){
   }
   let right = '';
   if(view){
+    const bc=_crmNotifBadgeCount();
+    const bell=`<button id="crm-bell" class="crm-bell btn-sm-crm" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
     right = `<input class="crm-search" type="search" placeholder="Im ganzen CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">
+      ${bell}
       ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
   } else {
     right = `<span style="margin-left:auto"></span>`;
@@ -4245,6 +4371,7 @@ Object.assign(window, {
   crmSetStatus, crmToggleStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
   crmSearchInput, crmGoEntry, crmGoEntryTab, crmGoEntityProj, crmGoTeamProj,
+  crmToggleNotif, crmNotifGo,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
