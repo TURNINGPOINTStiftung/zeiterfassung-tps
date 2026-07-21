@@ -262,6 +262,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const vacApproved=totalVacUsed(uid,year);       // ganzes Jahr (inkl. Zukunft)
     const vacLeft=user.al-vacUpTo;                  // Resturlaub bis hierher
     const vacFuture=Math.max(0,vacApproved-vacUpTo);// schon beantragt/genehmigt (später)
+    const vacUnbooked=Math.max(0,user.al-vacApproved); // Jahresanspruch minus ALLES schon Beantragte/Genommene = noch nicht beantragt
     const sollDays=monthSOLLdays(user,year,mon);
     const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(user))}`:'4 × Wochenarbeitszeit';
     cards=[
@@ -269,7 +270,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:_open?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al}`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?`${vacUnbooked} von ${user.al} noch nicht beantragt · ${vacFuture} schon geplant`:`${vacUnbooked} von ${user.al} noch nicht beantragt`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
     ];
   }
