@@ -605,12 +605,11 @@ function barHtml(){
   } else {
     right = `<span style="margin-left:auto"></span>`;
   }
-  const adminBtns = full
-    ? `<button class="btn-sm-crm" title="Aufgaben-Vorlagen verwalten" onclick="crmOpenVorlagen()">📋<span class="btn-lbl"> Vorlagen</span></button>
-       <button class="btn-sm-crm" title="Kontakte/Daten als Excel exportieren & importieren" onclick="crmImpExpModal()">⇅<span class="btn-lbl"> Excel</span></button>
-       <button class="btn-sm-crm" title="KI-Proxy für Zusammenfassungen" onclick="crmConfigAi()">⚙️<span class="btn-lbl"> KI ${getAiEndpoint()?'✓':'–'}</span></button>`
-    : '';
-  return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div>${right}${adminBtns}</div>`;
+  // Vorlagen/Excel/KI wurden aus der CRM-Leiste entfernt (v221):
+  //  • Vorlagen bleiben in Projekten/Veranstaltungen erreichbar (📋 Vorlage → „Vorlagen verwalten").
+  //  • Excel liegt als Panel in der Verwaltung (📊 Import/Export, paintVerwImpExp).
+  //  • KI ist noch nicht fertig gebaut → vorerst nur ausgeblendet (crmConfigAi bleibt im Code).
+  return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div>${right}</div>`;
 }
 
 // ── Liste der Einträge ─────────────────────────────────────────────
