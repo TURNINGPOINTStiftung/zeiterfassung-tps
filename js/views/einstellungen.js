@@ -474,7 +474,7 @@ function userForm(u={}){
         </label>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.</div>
       </div>
-      <div id="uf-werkstudent-fields" style="display:none">
+      <div id="uf-werkstudent-fields" data-haslecture="${((Array.isArray(u.lecturePeriods)&&u.lecturePeriods.length)||(Array.isArray(u.lectureFreeDays)&&u.lectureFreeDays.length))?'1':''}" style="display:none">
         <div class="uf-section-head">🎓 Werkstudent – Vorlesungszeiten</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze: Wochen, in denen Mo–Fr zwischen 8 und 20 Uhr mehr als 20h gearbeitet werden, werden in der Zeiterfassung rot markiert (Zeiten vor 8 / nach 20 Uhr und am Wochenende zählen nicht mit). Pro Semester einen Zeitraum eintragen.</div>
         ${(()=>{
@@ -487,6 +487,22 @@ function userForm(u={}){
               <input type="date" id="uf-lp-von-${i}" value="${p.von||''}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
               <span style="font-size:12px;color:var(--muted)">bis</span>
               <input type="date" id="uf-lp-bis-${i}" value="${p.bis||''}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+            </div>`;
+          }
+          return rows;
+        })()}
+        <div class="uf-section-head" style="margin-top:14px">🌉 Brückentage / vorlesungsfreie Tage</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tage oder Zeiträume INNERHALB der Vorlesungszeit, an denen die 20h-/Woche-Grenze NICHT gilt (z.B. Brückentage, vorlesungsfreie Tage – dann darf wie in den Semesterferien mehr gearbeitet werden). Einzelner Tag: bei „von" und „bis" dasselbe Datum eintragen.</div>
+        ${(()=>{
+          const fr=Array.isArray(u.lectureFreeDays)?u.lectureFreeDays:[];
+          let rows='';
+          for(let i=0;i<6;i++){
+            const p=fr[i]||{von:'',bis:''};
+            rows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+              <span style="font-size:12px;color:var(--muted);width:74px">Zeitraum ${i+1}</span>
+              <input type="date" id="uf-lf-von-${i}" value="${p.von||''}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <span style="font-size:12px;color:var(--muted)">bis</span>
+              <input type="date" id="uf-lf-bis-${i}" value="${p.bis||''}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
             </div>`;
           }
           return rows;
@@ -521,7 +537,10 @@ export function toggleWerkstudentFields(){
     if(cb&&cb.checked&&(cr.label||'').toLowerCase().includes('werkstudent')) isWst=true;
   });
   const role=_resolveUfRole();
-  wrap.style.display=(isWst&&role!=='freiberuflich'&&role!=='admin')?'':'none';
+  // Auch zeigen, wenn der Nutzer bereits Vorlesungszeiten/Brückentage hat (damit Bestands-
+  // Werkstudenten immer bearbeitbar sind, selbst wenn die Funktionsbezeichnung nicht (mehr) passt).
+  const forced=wrap.dataset.haslecture==='1';
+  wrap.style.display=((isWst||forced)&&role!=='freiberuflich'&&role!=='admin')?'':'none';
 }
 
 export function _resolveUfRole(){
@@ -558,6 +577,13 @@ function collectUserForm(){
     const bis=document.getElementById('uf-lp-bis-'+i)?.value||'';
     if(von&&bis&&von<=bis) lecturePeriods.push({von,bis});
   }
+  // Werkstudent: Brückentage / vorlesungsfreie Tage (dort gilt die 20h-Grenze nicht)
+  const lectureFreeDays=[];
+  for(let i=0;i<6;i++){
+    const von=document.getElementById('uf-lf-von-'+i)?.value||'';
+    const bis=document.getElementById('uf-lf-bis-'+i)?.value||'';
+    if(von&&bis&&von<=bis) lectureFreeDays.push({von,bis});
+  }
   // Pro-User-Berechtigungen (überschreiben die Rolle). Admin: keine Häkchen → leer.
   const perms={};
   PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
@@ -586,7 +612,8 @@ function collectUserForm(){
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
     prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0,
-    lecturePeriods
+    lecturePeriods,
+    lectureFreeDays
   };
 }
 

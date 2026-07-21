@@ -110,7 +110,9 @@ export function renderZeiterfassung(){
   const weekMinsYTD={};    // ganzes Jahr bis Monat – gesamte Wochenarbeit → 26-Wochen-Zähler
   // Vorlesungszeiten (Semester) des Werkstudenten – nur darin greift die 20h-Zeilen-Markierung.
   const _lectPeriods=Array.isArray(user.lecturePeriods)?user.lecturePeriods.filter(p=>p&&p.von&&p.bis):[];
-  const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis);
+  // Brückentage / vorlesungsfreie Tage INNERHALB der Vorlesungszeit: dort gilt die 20h-Grenze NICHT.
+  const _freeDays=Array.isArray(user.lectureFreeDays)?user.lectureFreeDays.filter(p=>p&&p.von&&p.bis):[];
+  const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis) && !_freeDays.some(p=>ds>=p.von&&ds<=p.bis);
   if(isWerkstudent){
     // a) Rot-Markierung im Semester: nur Mo–Fr, nur Arbeitszeit 8–20 Uhr (aktueller Monat)
     const _addWin=(kw,dd,dObj,ds)=>{
