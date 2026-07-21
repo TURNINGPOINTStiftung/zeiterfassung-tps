@@ -252,6 +252,37 @@ export function noteGoodData(d){
   _lastGoodUsers=Math.max(_lastGoodUsers, d.users.length);
   _lastGoodDayCount=Math.max(_lastGoodDayCount, _dayCount(d));
 }
+// Schreibt den Datenstand per update() statt set() nach Firebase. Entscheidend:
+// entries werden bis auf TAGES-Ebene als einzelne Pfade geschrieben (entries/<key>/days/<ds>),
+// die übrigen Top-Level-Schlüssel als ganzer Wert. update() ersetzt NUR die aufgeführten
+// Pfade und löscht NICHTS, was nicht dabei ist. Dadurch kann ein Gerät mit VERALTETEM Stand
+// keine Tage/Einträge mehr löschen, die es (noch) nicht kennt – z.B. einen gerade am PC
+// eingetragenen Tag. (set() hätte den ganzen Baum ersetzt und Unbekanntes gelöscht.)
+export function fbWriteMerge(d){
+  const ref=window._fbRef; if(!ref||!d) return Promise.resolve();
+  const upd={};
+  for(const k of Object.keys(d)){
+    if(k==='entries'){
+      const es=d.entries||{};
+      for(const ek of Object.keys(es)){
+        const e=es[ek]; if(!e){ continue; }
+        for(const f of Object.keys(e)){
+          if(f==='days'){
+            const days=e.days||{};
+            // Leeres days-Objekt trotzdem anlegen, damit ein frischer Eintrag existiert.
+            if(Object.keys(days).length===0){ upd['entries/'+ek+'/days']=e.days||{}; }
+            else { for(const ds of Object.keys(days)) upd['entries/'+ek+'/days/'+ds]=days[ds]; }
+          } else {
+            upd['entries/'+ek+'/'+f]=e[f];
+          }
+        }
+      }
+    } else {
+      upd[k]=d[k];
+    }
+  }
+  return ref.update(upd);
+}
 export function saveRaw(d){
   // Sanity-Guard gegen Massen-Datenverlust. Greift nur bei DRASTISCHER Reduktion
   // (< Hälfte) gegenüber dem bisher bekannten guten Stand. Legitime Vollersetzungen
@@ -276,10 +307,14 @@ export function saveRaw(d){
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
   noteGoodData(d);
   if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
-  return window._fbRef?.set(d).catch(e=>{
+  // Normale Bearbeitung: MERGEN via update() – löscht NICHTS, was dieses Gerät nicht kennt
+  // (behebt: veraltetes Handy löscht am PC eingetragene Tage). Nur beim expliziten
+  // Wiederherstellen/Import (window._allowDataShrink) wird der ganze Baum ersetzt (set()).
+  const _w = window._allowDataShrink ? (window._fbRef?.set(d)||Promise.resolve()) : fbWriteMerge(d);
+  return _w.catch(e=>{
     console.warn('Firebase sync error:',e);
     window._pendingSync=true;
-  })||Promise.resolve();
+  });
 }
 export function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
 

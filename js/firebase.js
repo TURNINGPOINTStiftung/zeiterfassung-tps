@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -151,12 +151,12 @@ export async function initFirebase(){
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
-    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await _fbRef.set(migrated).catch(()=>{}); }
+    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await fbWriteMerge(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
     const d=freshData();
     for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
     setDataCache(d);
-    await _fbRef.set(d).catch(()=>{});
+    await fbWriteMerge(d).catch(()=>{});
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch(e){}
   } else if(!getData()){
     setDataCache(freshData());
@@ -176,7 +176,7 @@ function _applyFirebaseSnap(val){
   // Migration-Flags nach Firebase schreiben damit sie nicht wiederholt laufen
   if((!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1)||
      (!hadB2Mig&&migrated._fixes&&migrated._fixes.b2PauseMigrationV1)){
-    _fbRef.set(migrated).catch(()=>{});
+    fbWriteMerge(migrated).catch(()=>{});
   }
   if(window.cu&&!(migrated.stamps&&migrated.stamps[window.cu.id])){
     try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
@@ -221,7 +221,7 @@ export function initFirebaseEvents(){
   window.addEventListener('online',()=>{
     window._offlineMode=false;
     if(window._pendingSync&&getData()){
-      window._fbRef.set(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
+      fbWriteMerge(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
     }
   });
   window.addEventListener('offline',()=>{
