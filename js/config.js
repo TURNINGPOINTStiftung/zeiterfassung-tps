@@ -42,7 +42,7 @@ export const DEFAULT_TEAM_CATS = {
   'Vereinsentwicklung': ['Vereinsentwicklung','Beratung','Netzwerkarbeit','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges']
 };
 export const DEFAULT_USERS = [
-  {id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,prevNeg:0,team:'',bundesland:'',dpw:5},
-  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,prevNeg:0,team:'',bundesland:'',dpw:5},
-  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,prevNeg:0,team:'Akademie',bundesland:'RP',dpw:5}
+  {id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,team:'',bundesland:'',dpw:5},
+  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,team:'',bundesland:'',dpw:5},
+  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,team:'Akademie',bundesland:'RP',dpw:5}
 ];
