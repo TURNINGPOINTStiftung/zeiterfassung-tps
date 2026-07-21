@@ -606,7 +606,7 @@ function _crmNotifSeen(){ try{ return +localStorage.getItem('tp_crm_notif_seen')
 function _crmNotifSetSeen(ts){ try{ localStorage.setItem('tp_crm_notif_seen', String(ts||Date.now())); }catch(e){} }
 function _notifType(coll){
   const t=getTrees().find(x=>x.key===coll);
-  if(t) return {icon:t.icon||'📇', label:t.label||'Eintrag'};
+  if(t) return {icon:t.icon||'📇', label:t.single||t.label||'Eintrag'};   // Einzahl bevorzugt („Verein" statt „Vereine")
   return ({veranstaltungen:{icon:'📅',label:'Veranstaltung'},teamprojekte:{icon:'🗂️',label:'Projekt'},vorlagen:{icon:'📋',label:'Vorlage'},verteiler:{icon:'✉️',label:'Verteiler'},workflows:{icon:'⚡',label:'Workflow'}})[coll]||{icon:'•',label:coll};
 }
 function _agoStr(ts){
@@ -618,10 +618,26 @@ function _agoStr(ts){
 }
 function _buildNotif(list){
   const me=(window.cu&&window.cu.id)||'';
+  const cutoff=Date.now()-7*24*60*60*1000;
   const rel=(list||[]).filter(h=> h && h.action==='save' && h.byId!==me && h.coll!=='config'); // neueste zuerst (listHistory sortiert)
   const seen=new Set(); const items=[];
-  rel.forEach(h=>{ const k=h.coll+'::'+h.recId; if(seen.has(k)) return; seen.add(k);
-    items.push({ coll:h.coll, recId:h.recId, name:h.name||'', by:h.byName||h.byKuerzel||'?', ts:h.ts||0 }); });
+  rel.forEach((h,idx)=>{
+    const k=h.coll+'::'+h.recId; if(seen.has(k)) return; seen.add(k);
+    // Vorgänger-Schnappschuss desselben Datensatzes im Fenster (für den WAS-Diff)
+    let prev=null; for(let j=idx+1;j<rel.length;j++){ if(rel[j].coll===h.coll && rel[j].recId===h.recId){ prev=rel[j]; break; } }
+    const cur=h.data||{};
+    const t=_notifType(h.coll);
+    const freshlyCreated = cur.createdAt && cur.createdAt>=cutoff; // zuverlässig „neu" via createdAt
+    let desc='';
+    try{ desc=_histDescribe(prev?prev.data:null, cur, h.coll)||''; }catch(e){}
+    if(!prev){
+      // kein Vorgänger im 7-Tage-Fenster: echt neu (createdAt frisch) ODER Alt-Eintrag geändert (Vorgänger schon gelöscht)
+      desc = freshlyCreated ? (t.label+' angelegt') : 'aktualisiert';
+    } else if(!desc){
+      desc = 'aktualisiert';
+    }
+    items.push({ coll:h.coll, recId:h.recId, name:h.name||'', by:h.byName||h.byKuerzel||'?', ts:h.ts||0, desc });
+  });
   return { items };
 }
 function _crmNotifBadgeCount(){ try{ const seen=_crmNotifSeen(); const d=window._crmNotif; if(!d||!d.items) return 0; return d.items.filter(it=>it.ts>seen).length; }catch(e){ return 0; } }
@@ -672,7 +688,7 @@ function _renderNotifPop(){
     return `<div class="crm-notif-item${unread?' unread':''}" onclick="crmNotifGo('${esc(it.coll)}','${esc(it.recId)}')">
       <span class="crm-notif-ic">${t.icon}</span>
       <div class="crm-notif-tx"><div class="crm-notif-nm">${esc(it.name||'(ohne Name)')}</div>
-      <div class="crm-notif-mt">${esc(t.label)} · von ${esc(it.by)} · ${_agoStr(it.ts)}</div></div>
+      <div class="crm-notif-mt">${esc(it.desc||t.label)} · von ${esc(it.by)} · ${_agoStr(it.ts)}</div></div>
       ${unread?'<span class="crm-notif-dot"></span>':''}
     </div>`;
   }).join('') : '<div class="crm-notif-empty">Keine neuen Aktivitäten in den letzten 7 Tagen.</div>';
