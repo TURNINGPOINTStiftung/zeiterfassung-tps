@@ -2,7 +2,7 @@ import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate } from './roles.js';
 import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
-import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed } from './calc.js';
+import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed, effUserAt } from './calc.js';
 
 export function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
 
@@ -198,6 +198,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
   }
 
   const maxH=isFree?(u.maxHours||0):0;
+  const eu=effUserAt(u,y,m);   // für diesen Monat gültige Vertragswerte (Std/Urlaub/Rolle)
   const soll=monthSOLL(u,y,m);
   // Übertrag immer wie am Bildschirm berechnen (auto ODER manuell), damit der
   // GF-Bericht denselben Saldo zeigt wie die Übersicht – nicht den rohen Speicherwert.
@@ -222,18 +223,18 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     const diffCls=diff>=0?'pos':'neg';
     const vacUpTo=vacUsedUpToMonth(u.id,y,m);
     const vacApproved=totalVacUsed(u.id,y);
-    const vacLeft=(u.al||0)-vacUpTo;
+    const vacLeft=(eu.al||0)-vacUpTo;
     const vacFuture=Math.max(0,vacApproved-vacUpTo);
     sumCards+=
-      '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+u.wh+' h/Woche</div></div>'
+      '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+eu.wh+' h/Woche</div></div>'
       +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
       +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+sFmt(diff)+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
       +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+sFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
-      +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+' von '+(u.al||0)+'</div></div>';
+      +'<div class="bh-sc"><div class="lbl">Resturlaub</div><div class="val">'+vacLeft+' T</div><div class="sub">'+vacUpTo+' von '+(eu.al||0)+'</div></div>';
   }
   sumCards+='</div>';
 
-  const empType=isFree?'Freiberuflich':'Festangestellt, '+u.wh+' h/Woche';
+  const empType=isFree?'Freiberuflich':'Festangestellt, '+eu.wh+' h/Woche';
   const statusLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[entry.status]||entry.status||'Entwurf';
   const _city=u.city||'';
   const _today=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});

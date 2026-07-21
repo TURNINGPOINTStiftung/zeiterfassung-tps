@@ -452,6 +452,12 @@ function userForm(u={}){
     </div>
     <div id="uf-employed-fields"${u.crmOnly?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
+      <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
+        <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
+        <input type="date" id="uf-param-change-date" value="${new Date().toISOString().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Greift nur, wenn du unten einen Wert änderst. Vergangene Monate rechnen dann weiter mit den bisherigen Werten (SOLL & Überträge bleiben korrekt).</div>
+        ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:11px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
+      </div>
       <div class="uf-grid2">
         <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
         <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
@@ -614,6 +620,22 @@ export async function saveEditUser(id){
       .sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
   } else {
     u.teamHistory=existing?.teamHistory||u.teamHistory;
+  }
+  // Parameter-Historie: bei Änderung von Stunden/Urlaub/Rolle etc. die ALTEN Werte mit
+  // Gültig-ab bewahren, damit vergangene Monate weiter mit den damaligen Werten rechnen.
+  const _pk=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
+  const _pnorm=(k,v)=>k==='holidaysLikeSunday'?(v!==false?'1':'0'):(k==='sollWorkdays'?(v?'1':'0'):String(v??''));
+  const _pchg=existing&&_pk.some(k=>_pnorm(k,existing[k])!==_pnorm(k,u[k]));
+  if(existing&&_pchg){
+    const cd=document.getElementById('uf-param-change-date')?.value||(new Date().toISOString().slice(0,8)+'01');
+    let ph=Array.isArray(existing.paramHistory)?existing.paramHistory.slice():[];
+    if(!ph.length){ const base={fromDate:'2000-01-01'}; _pk.forEach(k=>base[k]=existing[k]); ph.push(base); } // Alt-Werte gelten "seit jeher"
+    const rec={fromDate:cd}; _pk.forEach(k=>rec[k]=u[k]);
+    ph=ph.filter(h=>h.fromDate!==cd); ph.push(rec);
+    ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
+    u.paramHistory=ph;
+  } else {
+    u.paramHistory=existing?.paramHistory||u.paramHistory;
   }
   await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');

@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin } from '../calc.js';
+import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
@@ -275,6 +275,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       cards.push({lbl:`IST-Gesamt ${year}`,big:hFmt(yearTotal),sub:'alle Monate zusammen'});
     }
   } else {
+    const eu=effUserAt(user,year,mon);   // für diesen Monat gültige Vertragswerte (Std/Urlaub/Rolle)
     const soll=monthSOLL(user,year,mon);
     const _now=new Date(); const isCurMonth=(year===_now.getFullYear()&&mon===_now.getMonth()+1);
     // "Stand heute" nur im OFFENEN laufenden Monat. Sobald eingereicht/genehmigt (oder ein
@@ -288,18 +289,18 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const sk=sickDays(entry);
     const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
     const vacApproved=totalVacUsed(uid,year);       // ganzes Jahr (inkl. Zukunft)
-    const vacLeft=user.al-vacUpTo;                  // Resturlaub bis hierher
+    const vacLeft=eu.al-vacUpTo;                    // Resturlaub bis hierher
     const vacFuture=Math.max(0,vacApproved-vacUpTo);// schon beantragt/genehmigt (später)
-    const vacUnbooked=Math.max(0,user.al-vacApproved); // Jahresanspruch minus ALLES schon Beantragte/Genommene = noch nicht beantragt
+    const vacUnbooked=Math.max(0,eu.al-vacApproved); // Jahresanspruch minus ALLES schon Beantragte/Genommene = noch nicht beantragt
     const sollDays=monthSOLLdays(user,year,mon);
-    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(user))}`:'4 × Wochenarbeitszeit';
+    const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(eu))}`:'4 × Wochenarbeitszeit';
     cards=[
       {lbl:'SOLL-Stunden',big:hFmt(soll),sub:(_open&&sollBasis<soll)?`${sollSub} · bis heute ${hFmt(sollBasis)}`:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:_open?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${user.al} offen`},
-      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${eu.al} offen`},
+      {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(eu))+' h anteilig'},
     ];
   }
   let cardsHtml=cards.map(c=>`
