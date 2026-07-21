@@ -209,7 +209,6 @@ export function renderZeiterfassung(){
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
   renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeksYTD:0);
   renderZuordBreakdown(entry);
-  renderJahresverlauf(uid,user);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
   renderSignature(user,entry);
@@ -314,59 +313,6 @@ function renderZuordBreakdown(entry){
     const pct=Math.round(min/total*100);
     return `<tr><td>${cat}</td><td style="text-align:right;font-weight:600">${hFmt(min)}</td><td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td></tr>`;
   }).join('');
-}
-
-// Jahresverlauf (NUR LESEN): macht die komplette Stunden-Kette Monat für Monat sichtbar,
-// damit man sofort erkennt, welche Zahl (IST, SOLL, Über-/Unter, Übertrag) unerwartet ist.
-// Alle Werte kommen aus denselben zentralen Funktionen wie Bildschirm/PDF/Übersicht.
-const _JV_MONS=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-function renderJahresverlauf(uid,user){
-  const wrap=document.getElementById('jahresverlauf'); const body=document.getElementById('jv-body');
-  if(!wrap||!body) return;
-  if(isFreelancer(user)){ wrap.style.display='none'; return; } // Freiberufler: eigenes Limit-Modell, hier nicht sinnvoll
-  wrap.style.display='';
-  const y=window.year;
-  let rows='', sIST=0, sSOLL=0;
-  for(let m=1;m<=12;m++){
-    const e=getEntry(uid,y,m);
-    const hasData=!!(e&&e.days&&Object.keys(e.days).length);
-    // Zukünftige, noch leere Monate ohne manuellen Übertrag ausblenden (sonst nur SOLL-Minus-Rauschen).
-    if(!hasData && m>window.mon && !(e&&e.carryoverManual)) continue;
-    const ist=monthIST(e,user);
-    // Offener laufender Monat: Soll bis heute. Eingereicht/genehmigt oder abgeschlossen: volles Soll.
-    const _sub=!!(e&&(e.status==='submitted'||e.status==='approved'));
-    const soll=_sub?monthSOLL(user,y,m):monthSOLLToDate(user,y,m);
-    const carryIn=Math.round(getEffectiveCarryH(uid,user,y,m)*60);
-    const diffM=ist-soll;                 // nur dieser Monat
-    const saldo=ist-soll+carryIn;         // inkl. Übertrag = das, was in den Folgemonat geht
-    sIST+=ist; sSOLL+=soll;
-    const cur=(m===window.mon);
-    rows+=`<tr${cur?' style="font-weight:700;background:rgba(0,0,0,.04)"':''}>`
-      +`<td>${_JV_MONS[m-1]}</td>`
-      +`<td style="text-align:right">${hFmt(ist)}</td>`
-      +`<td style="text-align:right">${hFmt(soll)}</td>`
-      +`<td style="text-align:right;color:${diffM>=0?'var(--ok)':'var(--danger)'}">${sFmt(diffM)}</td>`
-      +`<td style="text-align:right">${sFmt(carryIn)}</td>`
-      +`<td style="text-align:right;font-weight:600;color:${saldo>=0?'var(--ok)':'var(--danger)'}">${sFmt(saldo)}</td>`
-      +`</tr>`;
-  }
-  const sDiff=sIST-sSOLL;
-  body.innerHTML=`<div style="overflow-x:auto"><table class="zuord-table" style="width:100%;font-size:12px">
-    <thead><tr><th>Monat ${y}</th><th style="text-align:right">IST</th><th style="text-align:right">SOLL</th><th style="text-align:right">Diff Monat</th><th style="text-align:right">Übertrag Anfang</th><th style="text-align:right">Saldo Ende</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="6" style="color:var(--muted);text-align:center">Keine Daten</td></tr>'}</tbody>
-    <tfoot><tr style="font-weight:700;border-top:2px solid var(--border)"><td>Summe ${y}</td><td style="text-align:right">${hFmt(sIST)}</td><td style="text-align:right">${hFmt(sSOLL)}</td><td style="text-align:right;color:${sDiff>=0?'var(--ok)':'var(--danger)'}">${sFmt(sDiff)}</td><td></td><td></td></tr></tfoot>
-  </table></div>
-  <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">
-    <b>Diff Monat</b> = IST − SOLL (nur dieser Monat). <b>Saldo Ende</b> = Diff + Übertrag Anfang = Über-/Unterstunden gesamt = das, was als Übertrag in den nächsten Monat geht.
-    Ein leerer Monat reicht den Saldo unverändert weiter (er wird nicht als Minus gezählt).
-  </div>`;
-}
-export function toggleJahresverlauf(){
-  const b=document.getElementById('jv-body'); const h=document.getElementById('jv-head');
-  if(!b) return;
-  const open=b.style.display==='block';
-  b.style.display=open?'none':'block';
-  if(h) h.textContent=(open?'▸':'▾')+' Jahresverlauf (IST · SOLL · Über-/Unterstunden · Saldo)';
 }
 
 function renderActionBar(uid,user,entry,isLeiter){
