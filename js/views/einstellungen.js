@@ -468,14 +468,11 @@ function userForm(u={}){
           <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}">
         </div>
       </div>
-      <div class="uf-grid2">
-        <div class="form-group"><label>Minusstunden Vorjahr (h)</label><input id="uf-neg" type="number" min="-99" max="0" value="${u.prevNeg||0}"></div>
-        <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:4px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
-            Feiertage = kein SOLL / kein Urlaubsabzug
-          </label>
-        </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
+          Feiertage = kein SOLL / kein Urlaubsabzug
+        </label>
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -584,7 +581,6 @@ function collectUserForm(){
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(vacDailyMin({wh,dpw,role})/60*10)/10),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
-    prevNeg:isFree?0:parseFloat(document.getElementById('uf-neg').value)||0,
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0,
     lecturePeriods,
     lectureFreeDays

@@ -91,14 +91,14 @@ const statusEl = document.getElementById('status');
 
 // Standard-Profile für fehlende Mitarbeiter (werden automatisch angelegt)
 const USERS_TO_CREATE = [
-  {name:"Max Meindl",         id:"max_meindl",          role:"mitarbeiter", pw:"max123",       wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"RP", prevNeg:0, teams:[]},
-  {name:"Anja Düvel",         id:"anja_duevel",          role:"mitarbeiter", pw:"anja123",      wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", prevNeg:0, teams:[]},
-  {name:"Jörg Aleith",        id:"joerg_aleith",         role:"mitarbeiter", pw:"joerg123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"HH", prevNeg:0, teams:[]},
-  {name:"Betty Pabst",        id:"betty_pabst",          role:"mitarbeiter", pw:"betty123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", prevNeg:0, teams:[]},
-  {name:"Mateo Alava Hilgert",id:"mateo_alava_hilgert",  role:"mitarbeiter", pw:"mateo123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BY", prevNeg:0, teams:[]},
-  {name:"Simon Scheidt",      id:"simon_scheidt",        role:"mitarbeiter", pw:"simon123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BW", prevNeg:0, teams:[]},
-  {name:"Christian Bittner",  id:"christian_bittner",    role:"freiberuflich",pw:"christian123", wh:0,  al:0,  dpw:5, team:"Akademie", maxHours:64, city:"", bundesland:"BY", prevNeg:0, teams:[]},
-  {name:"Janne Handermann",   id:"janne",                role:"mitarbeiter", pw:"janne123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"Speyer", bundesland:"RP", prevNeg:0, teams:[]}
+  {name:"Max Meindl",         id:"max_meindl",          role:"mitarbeiter", pw:"max123",       wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"RP", teams:[]},
+  {name:"Anja Düvel",         id:"anja_duevel",          role:"mitarbeiter", pw:"anja123",      wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", teams:[]},
+  {name:"Jörg Aleith",        id:"joerg_aleith",         role:"mitarbeiter", pw:"joerg123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"HH", teams:[]},
+  {name:"Betty Pabst",        id:"betty_pabst",          role:"mitarbeiter", pw:"betty123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"NW", teams:[]},
+  {name:"Mateo Alava Hilgert",id:"mateo_alava_hilgert",  role:"mitarbeiter", pw:"mateo123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BY", teams:[]},
+  {name:"Simon Scheidt",      id:"simon_scheidt",        role:"mitarbeiter", pw:"simon123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"", bundesland:"BW", teams:[]},
+  {name:"Christian Bittner",  id:"christian_bittner",    role:"freiberuflich",pw:"christian123", wh:0,  al:0,  dpw:5, team:"Akademie", maxHours:64, city:"", bundesland:"BY", teams:[]},
+  {name:"Janne Handermann",   id:"janne",                role:"mitarbeiter", pw:"janne123",     wh:20, al:24, dpw:5, team:"Akademie",          city:"Speyer", bundesland:"RP", teams:[]}
 ];
 
 function matchUser(users, name) {
