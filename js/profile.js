@@ -17,9 +17,42 @@ export function openProfileModal(){
     ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
     ['SH','Schleswig-Holstein'],['TH','Thüringen']];
   const blOpts=BL.map(([v,l])=>`<option value="${v}"${(cu.bundesland||'')===v?' selected':''}>${l}</option>`).join('');
-  // Vorlesungszeiten & Brückentage werden zentral in der Verwaltung gepflegt
-  // (nicht mehr Selbstpflege im Profil). Sammel-Logik unten greift dank Feld-Existenz-Check nicht.
-  const wstSection='';
+  // Werkstudent: eigene Vorlesungszeiten UND Brückentage pflegen – bis zu einem Jahr im Voraus.
+  // (Zusätzlich zentral in der Verwaltung pflegbar; beide schreiben dieselben Felder.)
+  const _maxD=new Date(); _maxD.setFullYear(_maxD.getFullYear()+1);
+  const maxDate=_maxD.toISOString().slice(0,10);
+  let wstSection='';
+  if(_cuIsWerkstudent(cu)){
+    const lp=Array.isArray(cu.lecturePeriods)?cu.lecturePeriods:[];
+    let lpRows='';
+    for(let i=0;i<4;i++){
+      const p=lp[i]||{von:'',bis:''};
+      lpRows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--muted);width:78px">Semester ${i+1}</span>
+        <input type="date" id="prof-lp-von-${i}" value="${p.von||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">bis</span>
+        <input type="date" id="prof-lp-bis-${i}" value="${p.bis||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+      </div>`;
+    }
+    const fr=Array.isArray(cu.lectureFreeDays)?cu.lectureFreeDays:[];
+    let frRows='';
+    for(let i=0;i<6;i++){
+      const p=fr[i]||{von:'',bis:''};
+      frRows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+        <span style="font-size:12px;color:var(--muted);width:78px">Zeitraum ${i+1}</span>
+        <input type="date" id="prof-lf-von-${i}" value="${p.von||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        <span style="font-size:12px;color:var(--muted)">bis</span>
+        <input type="date" id="prof-lf-bis-${i}" value="${p.bis||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+      </div>`;
+    }
+    wstSection=`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+      <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🎓 Meine Vorlesungszeiten</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze (Mo–Fr, 8–20 Uhr). Semester bis zu einem Jahr im Voraus eintragen.</div>
+      ${lpRows}
+      <div style="font-size:14px;font-weight:700;color:var(--primary);margin:16px 0 8px">🌉 Brückentage / vorlesungsfreie Tage</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Tage innerhalb der Vorlesungszeit, an denen die 20h-Grenze NICHT gilt. Einzelner Tag: bei „von" und „bis" dasselbe Datum.</div>
+      ${frRows}`;
+  }
   openModal(`<h3>👤 Mein Profil</h3>
     <div class="form-group"><label>Name</label>
       <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
@@ -68,8 +101,8 @@ export async function saveProfile(){
     if(pwNew.length<8){ toast('Neues Passwort zu kurz (min. 8 Zeichen).','err'); return; }
     newPwHash=await makePwRecord(pwNew);
   }
-  // Werkstudent: eigene Vorlesungszeiten einsammeln (nur wenn die Felder existieren)
-  let lecturePeriods=null;
+  // Werkstudent: eigene Vorlesungszeiten UND Brückentage einsammeln (nur wenn die Felder existieren)
+  let lecturePeriods=null, lectureFreeDays=null;
   if(document.getElementById('prof-lp-von-0')){
     lecturePeriods=[];
     for(let i=0;i<4;i++){
@@ -77,10 +110,16 @@ export async function saveProfile(){
       const bis=document.getElementById('prof-lp-bis-'+i)?.value||'';
       if(von&&bis&&von<=bis) lecturePeriods.push({von,bis});
     }
+    lectureFreeDays=[];
+    for(let i=0;i<6;i++){
+      const von=document.getElementById('prof-lf-von-'+i)?.value||'';
+      const bis=document.getElementById('prof-lf-bis-'+i)?.value||'';
+      if(von&&bis&&von<=bis) lectureFreeDays.push({von,bis});
+    }
   }
   await mutate(d=>{
     const u=d.users.find(x=>x.id===cu.id);
-    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; if(lecturePeriods) u.lecturePeriods=lecturePeriods; }
+    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; if(lecturePeriods) u.lecturePeriods=lecturePeriods; if(lectureFreeDays) u.lectureFreeDays=lectureFreeDays; }
   });
   window.cu=getUser(cu.id);
   closeModal();

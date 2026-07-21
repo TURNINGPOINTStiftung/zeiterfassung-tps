@@ -113,12 +113,16 @@ export function renderZeiterfassung(){
   // Brückentage / vorlesungsfreie Tage INNERHALB der Vorlesungszeit: dort gilt die 20h-Grenze NICHT.
   const _freeDays=Array.isArray(user.lectureFreeDays)?user.lectureFreeDays.filter(p=>p&&p.von&&p.bis):[];
   const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis) && !_freeDays.some(p=>ds>=p.von&&ds<=p.bis);
+  // Abwesenheit (Urlaub / AU-Krank / Arbeitszeitausgleich) ist KEINE geleistete Arbeit →
+  // zählt NICHT zur 20h-Grenze und nicht zum 26-Wochen-Zähler. (Veranstaltung = echte Arbeit → zählt.)
+  const _isWsAbsence=dd=>{ const z=dd.b1zuord||'', b=dd.b1bem||''; return z==='Urlaub'||z==='AU/Krank'||z==='Arbeitszeitausgleich'||b==='Urlaub'||b==='AU/Krank'||b==='Arbeitszeitausgleich'; };
   if(isWerkstudent){
     // a) Rot-Markierung im Semester: nur Mo–Fr, nur Arbeitszeit 8–20 Uhr (aktueller Monat)
     const _addWin=(kw,dd,dObj,ds)=>{
       const wd=dObj.getDay();
       if(wd===0||wd===6) return;       // Wochenende ignorieren
       if(!_inSemester(ds)) return;     // außerhalb der Vorlesungszeit ignorieren
+      if(_isWsAbsence(dd)) return;      // Kranken-/Urlaubs-/AZA-Tage sind keine Arbeit
       const net=Math.max(0,_workMinInWindow(dd,480,1200)-autoPauseMin(dd,user));
       if(net>0) weekMins[kw]=(weekMins[kw]||0)+net;
     };
@@ -129,6 +133,7 @@ export function renderZeiterfassung(){
     // b) 26-Wochen-Zähler (Werkstudentenprivileg): alle Wochen Jan–aktueller Monat,
     //    gezählt wird die gesamte Nettoarbeit/Tag (max 10h) – unabhängig von Uhrzeit/Wochenende.
     const _addTot=(kw,dd)=>{
+      if(_isWsAbsence(dd)) return;      // Kranken-/Urlaubs-/AZA-Tage sind keine Arbeit
       const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
       const net=Math.min(Math.max(0,Math.round((gross-autoPauseMin(dd,user))/15)*15),600);
       if(net>0) weekMinsYTD[kw]=(weekMinsYTD[kw]||0)+net;
@@ -209,11 +214,33 @@ export function renderZeiterfassung(){
   const _tp=document.getElementById('tfoot-pause');
   if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
+  _setupTodayJump(tbody);
   renderSummary(uid,user,entry,monthTotal,isWerkstudent?overWeeksYTD:0);
   renderZuordBreakdown(entry);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
   renderSignature(user,entry);
+}
+
+// Mobiler „→ Heute"-Sprung: zeigt einen schwebenden Knopf, sobald die heutige Zeile NICHT
+// im Bild ist, und scrollt auf Tippen dorthin. Kein Auto-Scroll (würde bei jedem Sync-Update
+// die Position wegreißen) – der Knopf erscheint nur bei Bedarf.
+let _ztTodayObs=null;
+function _setupTodayJump(tbody){
+  const btn=document.getElementById('zt-today-btn');
+  if(!btn||!tbody) return;
+  if(_ztTodayObs){ try{_ztTodayObs.disconnect();}catch(e){} _ztTodayObs=null; }
+  const row=tbody.querySelector('.today-row');
+  if(!row||!('IntersectionObserver'in window)){ btn.style.display='none'; return; }
+  _ztTodayObs=new IntersectionObserver(ents=>{
+    const vis=ents.some(e=>e.isIntersecting);
+    btn.style.display=vis?'none':'flex';
+  },{threshold:0});
+  _ztTodayObs.observe(row);
+}
+export function ztJumpToday(){
+  const row=document.querySelector('#zt-body .today-row');
+  if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
