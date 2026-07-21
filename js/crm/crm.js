@@ -160,6 +160,10 @@ const CRM_STATUS=[
 function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
 function crmStatusBadge(k){ const d=crmStatusDef(k); return d?`<span class="crm-statusbadge" style="background:${d.color}">${esc(d.label)}</span>`:''; }
 function crmStatusOpts(sel){ return ['<option value="">– kein Status –</option>'].concat(CRM_STATUS.map(s=>`<option value="${s.key}"${sel===s.key?' selected':''}>${esc(s.label)}</option>`)).join(''); }
+// Status kann MEHRERE Werte haben (Array). Alt-Daten (einzelner String) werden transparent
+// als [String] behandelt; leer → []. Badges = alle gesetzten Status nebeneinander.
+function _statusArr(e){ const s=e&&e.status; if(Array.isArray(s)) return s.filter(Boolean); if(typeof s==='string'&&s) return [s]; return []; }
+function crmStatusBadges(e){ const a=_statusArr(e); return a.length?a.map(crmStatusBadge).join(' '):''; }
 // Alle bereits vergebenen Schlagworte über ALLE Bäume (für Vorschläge)
 function allTags(){
   const seen=new Map();
@@ -620,7 +624,7 @@ function _cardFieldDefs(treeKey){
   defs.push({ key:'d:kontakte', label:'Anzahl Kontakte', get:e=>{ const n=(e.kontakte||[]).length; return n?('👤 '+n+' Kontakt'+(n===1?'':'e')):''; } });
   defs.push({ key:'d:offene',   label:'Offene Aufgaben',  get:e=>{ const n=entityOpenTaskCount(e); return n?('✓ '+n+' offen'):''; } });
   defs.push({ key:'d:naechste', label:'Nächste Veranstaltung', get:e=>{ const v=_naechsteVA(treeKey,e.id); return v?('📅 '+esc(v)):''; } });
-  defs.push({ key:'d:status',   label:'Status',           get:e=>crmStatusBadge(e.status) });
+  defs.push({ key:'d:status',   label:'Status',           get:e=>crmStatusBadges(e) });
   defs.push({ key:'d:tags',     label:'Schlagworte',      get:e=>{ const t=(e.stamm&&e.stamm.tags)||''; return t?('🏷 '+esc(t)):''; } });
   defs.push({ key:'d:koop',     label:'Anzahl Kooperationen', get:e=>{ const n=koopCount(e); return n?('🤝 '+n):''; } });
   return defs;
@@ -653,8 +657,8 @@ function paintList(){
   }
   // Status-Filter (bessere Übersicht)
   const sf=window._crmStatusFilter||'';
-  if(sf) items=items.filter(e=>(e.status||'')===sf);
-  const countBy=k=>listEntities(window._crmTree).filter(e=>(e.status||'')===k).length;
+  if(sf) items=items.filter(e=>_statusArr(e).includes(sf));
+  const countBy=k=>listEntities(window._crmTree).filter(e=>_statusArr(e).includes(k)).length;
   const filterBar=`<div class="crm-statusfilter">
       <label class="crm-sf-label">Status</label>
       <select class="crm-sf-select" onchange="crmSetStatusFilter(this.value)">
@@ -670,7 +674,7 @@ function paintList(){
     let meta;
     if(cfgChips!=null){ meta=cfgChips; }
     else { const openTodos=entityOpenTaskCount(e); const kCount=(e.kontakte||[]).length;
-      meta=`${crmStatusBadge(e.status)}<span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}`; }
+      meta=`${crmStatusBadges(e)}<span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}`; }
     return `<div class="crm-card" onclick="crmOpenDetail('${e.id}')">
       <h3>${esc(s.name||'(ohne Name)')}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
@@ -1070,9 +1074,12 @@ function paintDetail(){
         ${crmFull()?`<button type="button" onclick="crmNeuPick('veranstaltung')">🎪 Veranstaltung</button>`:''}
       </div>
     </div><span class="small" style="color:var(--muted)">Aufgabe, Termin oder Veranstaltung – hier wählen.</span></div>` : '';
+  const _curStatus=_statusArr(e);
   const statusCtrl = `<div class="crm-sec crm-statusrow"><span class="crm-statuslabel">Status</span>${
-     canCreate ? `<select class="crm-status-select" onchange="crmSetStatus(this.value)">${crmStatusOpts(e.status||'')}</select>`
-               : (crmStatusBadge(e.status)||'<span class="small" style="color:var(--muted)">kein Status</span>') }</div>`;
+     canCreate
+      ? `<div class="crm-status-multi" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{ const on=_curStatus.includes(s.key); return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?s.color:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer;background:${on?s.color:'transparent'};color:${on?'#fff':'inherit'}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatus('${s.key}',this.checked)" style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`; }).join('')}</div>`
+      : (crmStatusBadges(e)||'<span class="small" style="color:var(--muted)">kein Status</span>')
+     }${_statusLogHtml(e)}</div>`;
   const bodyByTab={
     allgemeines: statusCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
     aufgaben: neuBtn + termineSec + vaSection + angeboteSec + aufgabenSec,
@@ -1097,6 +1104,35 @@ function paintDetail(){
 }
 function crmDetailTab(t){ window._crmDetailTab=t; paintDetail(); }
 function crmSetStatus(v){ mutateEntity(e=>{ e.status=v; }); paintDetail(); }
+// Mehrfach-Status: einzelnen Status an-/abwählen + Änderung im Verlauf protokollieren.
+function crmToggleStatus(key, on){
+  mutateEntity(e=>{
+    let a=_statusArr(e);
+    if(on){ if(!a.includes(key)) a=a.concat(key); } else { a=a.filter(k=>k!==key); }
+    // Reihenfolge wie in CRM_STATUS (stabile Anzeige)
+    e.status=CRM_STATUS.map(s=>s.key).filter(k=>a.includes(k));
+    if(!Array.isArray(e.statusLog)) e.statusLog=[];
+    e.statusLog.push({ statuses:e.status.slice(), ts:Date.now(), by:curKuerzel() });
+  });
+  paintDetail();
+}
+// Status-Verlauf: Zeitleiste (neueste oben) mit Delta (+ dazugekommen / − entfernt) je Änderung.
+function _statusLogHtml(e){
+  const log=Array.isArray(e.statusLog)?e.statusLog:[];
+  if(!log.length) return '';
+  const rows=[]; let prev=[];
+  log.forEach(en=>{ const set=Array.isArray(en.statuses)?en.statuses:[];
+    rows.push({ ts:en.ts, by:en.by||'', set, added:set.filter(k=>!prev.includes(k)), removed:prev.filter(k=>!set.includes(k)) }); prev=set; });
+  const body=rows.slice().reverse().map(r=>{
+    const delta=[...r.added.map(k=>`<span style="color:#12b347">+ ${esc(crmStatusDef(k)?crmStatusDef(k).label:k)}</span>`),
+                 ...r.removed.map(k=>`<span style="color:var(--danger)">− ${esc(crmStatusDef(k)?crmStatusDef(k).label:k)}</span>`)].join(', ');
+    return `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--muted)">${esc(fmtDateTime(r.ts))}</span>${r.by?` · ${esc(r.by)}`:''}${delta?` · ${delta}`:''}
+      <div style="margin-top:3px">${r.set.length?r.set.map(crmStatusBadge).join(' '):'<span class="small" style="color:var(--muted)">kein Status</span>'}</div>
+    </div>`;
+  }).join('');
+  return `<details class="crm-statuslog" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">🕓 Status-Verlauf (${rows.length})</summary>${body}</details>`;
+}
 
 // ── Einheitliches Anlegen: EIN Knopf, Auswahl per Menü ─────────────
 function crmNeuToggle(ev){ if(ev){ ev.stopPropagation(); } const m=document.getElementById('crm-neu-menu'); if(!m) return;
@@ -4151,7 +4187,7 @@ Object.assign(window, {
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
-  crmSetStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
+  crmSetStatus, crmToggleStatus, crmSetStatusFilter, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
   crmSearchInput, crmGoEntry, crmGoEntryTab, crmGoEntityProj, crmGoTeamProj,
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
