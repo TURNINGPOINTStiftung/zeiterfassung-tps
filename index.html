@@ -209,9 +209,12 @@
           <label id="carryover-label" for="carryover-input" style="font-weight:600">Übertrag Vormonat (Std:Min):</label>
           <input type="text" id="carryover-input" inputmode="text" placeholder="z. B. 14:15 oder -2:30" value="0:00" onchange="saveCarryover()" style="width:96px;text-align:center">
           <button id="carryover-reset" class="btn btn-outline btn-sm" onclick="resetCarryover()" title="Auf automatischen Wert zurücksetzen" style="display:none">↺ Auto</button>
+          <div id="carryover-log" class="no-print" style="flex-basis:100%;font-size:11px;color:var(--muted);margin-top:2px"></div>
         </div>
         <div id="action-btns"></div>
       </div>
+
+      <div class="no-print" id="entry-status-log" style="margin:6px 0 0"></div>
 
       <div class="review-panel no-print" id="review-panel" style="display:none">
         <div class="title">Prüfvermerk (Leitung)</div>
@@ -413,6 +416,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=133"></script>
+<script type="module" src="js/main.js?v=134"></script>
 </body>
 </html>

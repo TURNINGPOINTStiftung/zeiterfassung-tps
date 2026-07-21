@@ -219,6 +219,7 @@ export function renderZeiterfassung(){
   renderZuordBreakdown(entry);
   renderActionBar(uid,user,entry,isLeiter);
   renderReviewPanel(uid,entry,isLeiter);
+  renderEntryAudit(entry);
   renderSignature(user,entry);
 }
 
@@ -1004,23 +1005,68 @@ function _fmtCarryInput(h){
 
 export function saveCarryover(){
   const uid=window.viewEmpId||window.cu.id;
+  const cu=window.cu;
   const v=_parseCarryInput(document.getElementById('carryover-input').value);
   mutate(d=>{
     const k=entryKey(uid,window.year,window.mon);
     if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-    d.entries[k].carryover=v;
-    d.entries[k].carryoverManual=true;
+    const e=d.entries[k];
+    const old=e.carryover||0, wasManual=!!e.carryoverManual;
+    e.carryover=v;
+    e.carryoverManual=true;
+    if(old!==v||!wasManual){ // Änderung protokollieren (Wert geändert oder von auto→manuell)
+      if(!Array.isArray(e.carryoverLog)) e.carryoverLog=[];
+      e.carryoverLog.push({ts:new Date().toISOString(), by:cu?cu.id:'', byName:cu?cu.name:'', from:old, to:v});
+    }
   });
   renderZeiterfassung();
 }
 
 export function resetCarryover(){
   const uid=window.viewEmpId||window.cu.id;
+  const cu=window.cu;
   mutate(d=>{
     const k=entryKey(uid,window.year,window.mon);
-    if(d.entries[k]){ d.entries[k].carryover=0; d.entries[k].carryoverManual=false; }
+    const e=d.entries[k]; if(!e) return;
+    const old=e.carryover||0, wasManual=!!e.carryoverManual;
+    e.carryover=0; e.carryoverManual=false;
+    if(wasManual){ // nur protokollieren, wenn wirklich ein manueller Wert entfernt wurde
+      if(!Array.isArray(e.carryoverLog)) e.carryoverLog=[];
+      e.carryoverLog.push({ts:new Date().toISOString(), by:cu?cu.id:'', byName:cu?cu.name:'', from:old, to:0, reset:true});
+    }
   });
   renderZeiterfassung();
+}
+
+// ── Audit-Verläufe (v219) ──────────────────────────────────────────
+// Einreich-/Prüf-Historie je Monat (entry.statusLog) + manuelle Übertrags-
+// Änderungen (entry.carryoverLog). Rein additiv – nur Anzeige/Protokoll.
+const _STATUS_LBL={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'};
+function _userName(id){ const u=id?getUser(id):null; return u?u.name:''; }
+function logEntryStatus(uid,year,mon,status,note){
+  const cu=window.cu;
+  mutate(d=>{
+    const k=entryKey(uid,year,mon); const e=d.entries[k]; if(!e) return;
+    if(!Array.isArray(e.statusLog)) e.statusLog=[];
+    e.statusLog.push({ts:new Date().toISOString(), status, by:cu?cu.id:'', byName:cu?cu.name:'', note:note||''});
+  });
+}
+function renderEntryAudit(entry){
+  const cl=document.getElementById('carryover-log');
+  if(cl){
+    const log=Array.isArray(entry.carryoverLog)?entry.carryoverLog:[];
+    cl.innerHTML=!log.length?'':`<details><summary style="cursor:pointer">📋 Übertrag-Änderungen (${log.length})</summary><div style="margin-top:3px">${
+      log.slice().reverse().map(r=>`<div style="padding:1px 0">${sFmt((r.from||0)*60)} → ${r.reset?'auto':sFmt((r.to||0)*60)} · ${esc(r.byName||_userName(r.by)||'?')} <span style="opacity:.8">${fmtTs(r.ts)}</span></div>`).join('')
+    }</div></details>`;
+  }
+  const sl=document.getElementById('entry-status-log');
+  if(sl){
+    const log=Array.isArray(entry.statusLog)?entry.statusLog:[];
+    if(!log.length){ sl.innerHTML=''; sl.style.display='none'; }
+    else { sl.style.display='block'; sl.innerHTML=`<details><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📋 Einreich-/Prüf-Verlauf (${log.length})</summary><div style="margin-top:4px">${
+      log.slice().reverse().map(r=>`<div style="padding:2px 0;font-size:12px"><span style="font-weight:600">${esc(_STATUS_LBL[r.status]||r.status)}</span> · ${esc(r.byName||_userName(r.by)||'?')} <span style="color:var(--muted)">${fmtTs(r.ts)}</span>${r.note?` – <span style="font-style:italic;color:var(--muted)">${esc(r.note)}</span>`:''}</div>`).join('')
+    }</div></details>`; }
+  }
 }
 
 // ISO-Wochenschlüssel (Jahr+KW) für Pro-Woche-Deckelung
@@ -1171,6 +1217,7 @@ export function doSubmit(){
   if(!confirm(q)) return;
   setEntryField(tuid,year,mon,'status','submitted');
   setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
+  logEntryStatus(tuid,year,mon,'submitted');
   // Leitung: eingereichter Monat automatisch als Buchhaltungsversion in den GF-Berichten.
   // Gruppenname = „Leitung <Team>" (das Team, für das die Leitung verantwortlich ist).
   if(leitungSelf){
@@ -1191,6 +1238,7 @@ export function doRecall(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
   setEntryField(tuid,year,mon,'status','draft');
+  logEntryStatus(tuid,year,mon,'draft','zurückgezogen');
   // War es ein Leitungs-Buchhaltungsbericht → beim GF wieder entfernen.
   const rKey='LEIT_'+tuid+'_'+year+'_'+String(mon).padStart(2,'0');
   mutate(d=>{ if(d.teamReports&&d.teamReports[rKey]) delete d.teamReports[rKey]; });
@@ -1207,6 +1255,7 @@ export function doApprove(){
   setEntryField(uid,year,mon,'managerNote',note);
   setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
   setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  logEntryStatus(uid,year,mon,'approved',note);
   toast('Zeiterfassung genehmigt.','ok'); renderZeiterfassung(); window.renderOverview?.();
 }
 
@@ -1220,6 +1269,7 @@ export function doReject(){
   setEntryField(uid,year,mon,'managerNote',note);
   setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
   setEntryField(uid,year,mon,'reviewedBy',cu.id);
+  logEntryStatus(uid,year,mon,'rejected',note);
   toast('Zeiterfassung abgelehnt.','err'); renderZeiterfassung(); window.renderOverview?.();
 }
 
@@ -1230,6 +1280,7 @@ export function doResetToDraft(){
   const year=window.year, mon=window.mon;
   setEntryField(window.viewEmpId,year,mon,'status','draft');
   setEntryField(window.viewEmpId,year,mon,'managerNote','');
+  logEntryStatus(window.viewEmpId,year,mon,'draft','Admin: zurück auf Entwurf');
   toast('Zurück auf Entwurf gesetzt.');
   renderZeiterfassung();
 }
