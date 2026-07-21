@@ -1380,34 +1380,53 @@ function _entityName(tree,eid){ const e=getEntity(tree,eid); return e?((e.stamm&
 function _koopList(tree,eid){
   const out=[]; const self=getEntity(tree,eid);
   (self&&Array.isArray(self.kooperationen)?self.kooperationen:[]).forEach(k=>{
-    out.push({ partnerTree:k.tree, partnerEid:k.eid, art:k.art||'', note:k.note||'', ownerTree:tree, ownerEid:eid, koopId:k.id });
+    out.push({ partnerTree:k.tree, partnerEid:k.eid, art:k.art||'', note:k.note||'', von:k.von||'', bis:k.bis||'', ownerTree:tree, ownerEid:eid, koopId:k.id });
   });
   getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{
     if(tr.key===tree && o.id===eid) return;
     (Array.isArray(o.kooperationen)?o.kooperationen:[]).forEach(k=>{
-      if(k.tree===tree && k.eid===eid) out.push({ partnerTree:tr.key, partnerEid:o.id, art:k.art||'', note:k.note||'', ownerTree:tr.key, ownerEid:o.id, koopId:k.id });
+      if(k.tree===tree && k.eid===eid) out.push({ partnerTree:tr.key, partnerEid:o.id, art:k.art||'', note:k.note||'', von:k.von||'', bis:k.bis||'', ownerTree:tr.key, ownerEid:o.id, koopId:k.id });
     });
   }));
   const seen=new Set(); return out.filter(x=>{ const key=x.partnerTree+'::'+x.partnerEid; if(seen.has(key)) return false; seen.add(key); return true; });
 }
-function koopCount(e){ return e ? _koopList(e.tree||window._crmTree, e.id).length : 0; }
-// Eindeutige Kooperationspartner eines Eintrags (für „gemeinsam mit …")
-function _koopPartners(tree,eid){ return _koopList(tree,eid).map(k=>({tree:k.partnerTree,eid:k.partnerEid})); }
+// Eine Kooperation gilt als BEENDET, sobald ein bis-Datum gesetzt ist, das <= heute liegt.
+// (Zukünftiges bis = noch aktiv, läuft nur befristet.) Beendete zählen/teilen NICHT mehr.
+function _koopEnded(k){ const t=new Date().toISOString().slice(0,10); return !!(k&&k.bis&&k.bis<=t); }
+function _koopActiveList(tree,eid){ return _koopList(tree,eid).filter(k=>!_koopEnded(k)); }
+function koopCount(e){ return e ? _koopActiveList(e.tree||window._crmTree, e.id).length : 0; }
+// Eindeutige AKTIVE Kooperationspartner eines Eintrags (für „gemeinsam mit …")
+function _koopPartners(tree,eid){ return _koopActiveList(tree,eid).map(k=>({tree:k.partnerTree,eid:k.partnerEid})); }
+function _koopDateChip(k){
+  const v=k.von?fmtDate(k.von):'', b=k.bis?fmtDate(k.bis):'';
+  if(v&&b) return `<span class="crm-koop-art" title="Zeitraum">🗓 ${v} – ${b}</span>`;
+  if(v)    return `<span class="crm-koop-art" title="Beginn">🗓 seit ${v}</span>`;
+  if(b)    return `<span class="crm-koop-art" title="Ende">🗓 bis ${b}</span>`;
+  return '';
+}
 function kooperationenSecHtml(e){
   const canEdit=crmFull()||crmRestricted();
   const list=_koopList(window._crmTree, e.id);
-  const rows=list.map(k=>{
+  const active=list.filter(k=>!_koopEnded(k)), ended=list.filter(k=>_koopEnded(k));
+  const row=(k,isEnded)=>{
     const icon=(getTrees().find(t=>t.key===k.partnerTree)||{}).icon||'';
-    return `<div class="crm-koop">
+    const acts = !canEdit ? '' : (isEnded
+      ? `<span class="crm-koop-act"><button class="btn-sm-crm" title="Wieder aktivieren" onclick="crmKoopReactivate('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">↩</button><button class="crm-x" title="Endgültig löschen" onclick="crmKoopDelete('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✕</button></span>`
+      : `<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✎</button><button class="btn-sm-crm" title="Kooperation beenden (bleibt im Verlauf)" onclick="crmKoopEnd('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">⏹</button></span>`);
+    return `<div class="crm-koop"${isEnded?' style="opacity:.6"':''}>
       <span class="crm-koop-p" onclick="crmGoEntry('${esc(k.partnerTree)}','${esc(k.partnerEid)}')">${esc(icon)} ${esc(_entityName(k.partnerTree,k.partnerEid))} ↗</span>
       ${k.art?`<span class="crm-koop-art">${esc(k.art)}</span>`:''}
+      ${_koopDateChip(k)}
       ${k.note?`<span class="crm-koop-note" title="${esc(k.note)}">💬</span>`:''}
-      ${canEdit?`<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✎</button><button class="crm-x" title="Entfernen" onclick="crmKoopDelete('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✕</button></span>`:''}
+      ${acts}
     </div>`;
-  }).join('') || '<div class="small" style="color:var(--muted)">Keine Kooperationen erfasst.</div>';
+  };
+  const activeRows=active.map(k=>row(k,false)).join('') || '<div class="small" style="color:var(--muted)">Keine aktiven Kooperationen erfasst.</div>';
+  const endedHtml = ended.length ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Beendete Kooperationen (${ended.length})</summary>${ended.map(k=>row(k,true)).join('')}</details>` : '';
   return `<div class="crm-sec">
     <h4><span class="ttl">🤝 Kooperationen</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmKoopAdd()">＋ Kooperation</button>`:''}</h4>
-    ${rows}
+    ${activeRows}
+    ${endedHtml}
   </div>`;
 }
 function crmKoopAdd(){
@@ -1419,6 +1438,10 @@ function crmKoopAdd(){
    <input type="hidden" id="crm-koop-id" value=""><input type="hidden" id="crm-koop-ot" value=""><input type="hidden" id="crm-koop-oe" value="">
    <div class="crm-modal-field"><label>Partner (Verein, Sozialakteur …) *</label><select id="crm-koop-partner">${opts.join('')}</select></div>
    <div class="crm-modal-field"><label>Art der Kooperation</label><input id="crm-koop-art" placeholder="z. B. gemeinsames Training, nur Veranstaltung XY, dauerhaft …"></div>
+   <div class="crm-modal-field" style="display:flex;gap:10px">
+     <div style="flex:1"><label>Von</label><input id="crm-koop-von" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+     <div style="flex:1"><label>Bis (optional)</label><input id="crm-koop-bis" type="date" value=""></div>
+   </div>
    <div class="crm-modal-field"><label>Notiz (optional)</label><textarea id="crm-koop-note" rows="2"></textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmKoopSave()">Speichern</button></div>`);
@@ -1432,24 +1455,43 @@ function crmKoopEdit(ot,oe,id){
    <input type="hidden" id="crm-koop-id" value="${esc(id)}"><input type="hidden" id="crm-koop-ot" value="${esc(ot)}"><input type="hidden" id="crm-koop-oe" value="${esc(oe)}">
    <div class="crm-modal-field"><label>Partner</label><div class="v">${esc(partnerName)}</div></div>
    <div class="crm-modal-field"><label>Art der Kooperation</label><input id="crm-koop-art" value="${esc(k.art||'')}"></div>
+   <div class="crm-modal-field" style="display:flex;gap:10px">
+     <div style="flex:1"><label>Von</label><input id="crm-koop-von" type="date" value="${esc(k.von||'')}"></div>
+     <div style="flex:1"><label>Bis (optional)</label><input id="crm-koop-bis" type="date" value="${esc(k.bis||'')}"></div>
+   </div>
    <div class="crm-modal-field"><label>Notiz (optional)</label><textarea id="crm-koop-note" rows="2">${esc(k.note||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmKoopSave()">Speichern</button></div>`);
 }
 function crmKoopSave(){
   const id=val('crm-koop-id'); const art=(val('crm-koop-art')||'').trim(); const note=(val('crm-koop-note')||'').trim();
+  const von=(val('crm-koop-von')||'').trim(); const bis=(val('crm-koop-bis')||'').trim();
+  if(bis&&von&&bis<von){ toast('„Bis" darf nicht vor „Von" liegen.','err'); return; }
   if(id){
     const ot=val('crm-koop-ot'), oe=val('crm-koop-oe'); const o=getEntity(ot,oe); if(!o) return;
-    const k=(o.kooperationen||[]).find(x=>x.id===id); if(k){ k.art=art; k.note=note; o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o); }
+    const k=(o.kooperationen||[]).find(x=>x.id===id); if(k){ k.art=art; k.note=note; k.von=von; k.bis=bis; o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o); }
   } else {
     const raw=val('crm-koop-partner'); if(!raw||raw.indexOf('::')<0){ toast('Bitte einen Partner wählen.','err'); return; }
     const i=raw.indexOf('::'); const pt=raw.slice(0,i), pe=raw.slice(i+2);
-    mutateEntity(e=>{ if(!Array.isArray(e.kooperationen)) e.kooperationen=[]; e.kooperationen.push({ id:newId(), tree:pt, eid:pe, art, note }); });
+    mutateEntity(e=>{ if(!Array.isArray(e.kooperationen)) e.kooperationen=[]; e.kooperationen.push({ id:newId(), tree:pt, eid:pe, art, note, von, bis }); });
   }
   crmCloseModal(); paintDetail(); toast('Kooperation gespeichert ✓','ok');
 }
+// Beenden = bis-Datum auf HEUTE setzen (bleibt als Verlauf erhalten). Ein anderes
+// Enddatum kann über ✎ Bearbeiten gesetzt werden.
+function crmKoopEnd(ot,oe,id){
+  if(!confirm('Kooperation zum heutigen Tag beenden?\nSie bleibt im Verlauf erhalten (anderes Enddatum über ✎ möglich).')) return;
+  const o=getEntity(ot,oe); if(!o) return; const k=(o.kooperationen||[]).find(x=>x.id===id); if(!k) return;
+  k.bis=new Date().toISOString().slice(0,10); o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
+  paintDetail(); toast('Kooperation beendet ✓','ok');
+}
+function crmKoopReactivate(ot,oe,id){
+  const o=getEntity(ot,oe); if(!o) return; const k=(o.kooperationen||[]).find(x=>x.id===id); if(!k) return;
+  k.bis=''; o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
+  paintDetail(); toast('Kooperation wieder aktiv ✓','ok');
+}
 function crmKoopDelete(ot,oe,id){
-  if(!confirm('Diese Kooperation entfernen?')) return;
+  if(!confirm('Diese Kooperation ENDGÜLTIG löschen?\n(Zum Beenden mit Erhalt im Verlauf lieber ⏹ nutzen.)')) return;
   const o=getEntity(ot,oe); if(!o) return;
   o.kooperationen=(o.kooperationen||[]).filter(x=>x.id!==id); o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
   paintDetail();
@@ -4193,7 +4235,7 @@ Object.assign(window, {
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
-  crmKoopAdd, crmKoopEdit, crmKoopSave, crmKoopDelete,
+  crmKoopAdd, crmKoopEdit, crmKoopSave, crmKoopDelete, crmKoopEnd, crmKoopReactivate,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
