@@ -248,11 +248,14 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     }
   } else {
     const soll=monthSOLL(user,year,mon);
-    const sollTD=monthSOLLToDate(user,year,mon);
     const _now=new Date(); const isCurMonth=(year===_now.getFullYear()&&mon===_now.getMonth()+1);
-    // Im LAUFENDEN Monat gegen das Soll BIS HEUTE rechnen – sonst ziehen noch nicht
-    // gearbeitete Tage (Rest des Monats, geplante AZA) die Bilanz vorab ins Minus.
-    const diff=istMin-(sollTD-Math.round(carryH*60));
+    // "Stand heute" nur im OFFENEN laufenden Monat. Sobald eingereicht/genehmigt (oder ein
+    // abgeschlossener Monat), gilt wieder das VOLLE Monats-Soll – identisch zur früheren
+    // Darstellung und konsistent mit dem Übertrag. Sonst würden noch nicht gearbeitete Tage
+    // (Rest des Monats, geplante AZA) die laufende Bilanz vorab ins Minus ziehen.
+    const _open=isCurMonth&&!(entry.status==='submitted'||entry.status==='approved');
+    const sollBasis=_open?monthSOLLToDate(user,year,mon):soll;
+    const diff=istMin-(sollBasis-Math.round(carryH*60));
     const vd=vacDays(entry);
     const sk=sickDays(entry);
     const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
@@ -262,9 +265,9 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const sollDays=monthSOLLdays(user,year,mon);
     const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(user))}`:'4 × Wochenarbeitszeit';
     cards=[
-      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:(isCurMonth&&sollTD<soll)?`${sollSub} · bis heute ${hFmt(sollTD)}`:sollSub},
+      {lbl:'SOLL-Stunden',big:hFmt(soll),sub:(_open&&sollBasis<soll)?`${sollSub} · bis heute ${hFmt(sollBasis)}`:sollSub},
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
-      {lbl:isCurMonth?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
+      {lbl:_open?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
       {lbl:'Resturlaub',big:vacLeft+' T',sub:`${vacUpTo} von ${user.al}`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(user))+' h anteilig'},
@@ -329,7 +332,9 @@ function renderJahresverlauf(uid,user){
     // Zukünftige, noch leere Monate ohne manuellen Übertrag ausblenden (sonst nur SOLL-Minus-Rauschen).
     if(!hasData && m>window.mon && !(e&&e.carryoverManual)) continue;
     const ist=monthIST(e,user);
-    const soll=monthSOLLToDate(user,y,m); // laufender Monat: bis heute; abgeschlossene: volles Soll
+    // Offener laufender Monat: Soll bis heute. Eingereicht/genehmigt oder abgeschlossen: volles Soll.
+    const _sub=!!(e&&(e.status==='submitted'||e.status==='approved'));
+    const soll=_sub?monthSOLL(user,y,m):monthSOLLToDate(user,y,m);
     const carryIn=Math.round(getEffectiveCarryH(uid,user,y,m)*60);
     const diffM=ist-soll;                 // nur dieser Monat
     const saldo=ist-soll+carryIn;         // inkl. Übertrag = das, was in den Folgemonat geht

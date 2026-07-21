@@ -177,7 +177,9 @@ export function renderOverview(){
     const vacApproved=totalVacUsed(u.id,oy);       // ganzes Jahr (inkl. Zukunft)
     const vacLeft=(u.al||0)-vacUpTo;
     const vacFuture=Math.max(0,vacApproved-vacUpTo);
-    const curSOLL=monthSOLLToDate(u,oy,om); // laufender Monat: Soll bis heute (nicht ganzer Monat)
+    // Offener laufender Monat: Soll bis heute; eingereicht/genehmigt (oder abgeschlossen): volles Soll.
+    const _curSub=curStatus==='submitted'||curStatus==='approved';
+    const curSOLL=_curSub?monthSOLL(u,oy,om):monthSOLLToDate(u,oy,om);
     const curDiff=curIST-(curSOLL-Math.round(curCarry*60));
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
     const diffStr=sFmt(curDiff);
