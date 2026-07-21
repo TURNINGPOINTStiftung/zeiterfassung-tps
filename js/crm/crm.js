@@ -836,6 +836,7 @@ function taskNodeHtml(c, n, depth){
   if(depth===0 && n.teams && n.teams.length) parts.push('👥 '+n.teams.join(', '));
   if(n.assigneeName) parts.push('👤 '+n.assigneeName);
   if(n.due) parts.push('📅 '+fmtDate(Date.parse(n.due)));
+  if(done && n.doneAt) parts.push('✓ erledigt '+fmtDate(Date.parse(n.doneAt))+(n.doneBy?' ('+n.doneBy+')':''));
   const meta=parts.map(esc).join(' · ');
   const kids=n.children||[];
   const prog=kids.length?`<span class="crm-prog">✓ ${kids.filter(k=>k.status==='erledigt').length}/${kids.length}</span>`:'';
@@ -879,11 +880,12 @@ function kbCardHtml(c, n){
       <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}</span>
     </div>
     ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
-    ${(n.assigneeName||n.due||kids.length)?`<div class="kb-card-meta">
+    ${(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt))?`<div class="kb-card-meta">
        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
        ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
        ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
        ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
+       ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
      </div>`:''}
     ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
     <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step','${n.id}')">
@@ -2129,6 +2131,13 @@ function foerderBadge(s){
   return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${col[0]};background:${col[1]}">${esc(foerderStatusLabel(s))}</span>`;
 }
 function fmtEuro(n){ n=Number(n||0); return n.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
+// Status-Verlauf einer Förderung als Tooltip (nur wenn es echte Wechsel gab).
+function _foerderLogHtml(f){
+  const log=Array.isArray(f.statusLog)?f.statusLog:[];
+  if(log.length<2) return '';
+  const tip=log.slice().reverse().map(r=>`${foerderStatusLabel(r.status)} — ${r.ts?fmtDate(Date.parse(r.ts)):''}${r.by?' ('+r.by+')':''}`).join('\n');
+  return ` <span title="${esc(tip)}" style="cursor:help">🕘</span>`;
+}
 function foerderungenSecHtml(e){
   const canEdit=crmFull()||crmRestricted();
   const list=(e.foerderungen||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
@@ -2136,7 +2145,7 @@ function foerderungenSecHtml(e){
       <td>${f.date?esc(fmtDate(Date.parse(f.date))):'–'}</td>
       <td style="text-align:right;white-space:nowrap">${fmtEuro(f.betrag)}</td>
       <td>${esc(f.was||'')}</td>
-      <td>${foerderBadge(f.status)}</td>
+      <td>${foerderBadge(f.status)}${_foerderLogHtml(f)}</td>
       <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung('${f.id}')">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung('${f.id}')">✕</button>`:''}</td>
     </tr>`).join('');
   const sum=pred=>list.filter(pred).reduce((s,f)=>s+Number(f.betrag||0),0);
@@ -2174,10 +2183,15 @@ function crmSaveFoerderung(){
   const status=val('crm-foerder-status')||'beantragt';
   const id=val('crm-foerder-id');
   if(!date&&!was){ toast('Bitte Datum oder Zweck angeben.','err'); return; }
+  const ts=new Date().toISOString(), by=curKuerzel();
   mutateEntity(e=>{
     if(!Array.isArray(e.foerderungen)) e.foerderungen=[];
-    if(id){ const f=e.foerderungen.find(x=>x.id===id); if(f){ f.date=date; f.betrag=betrag; f.was=was; f.status=status; } }
-    else { e.foerderungen.push({ id:newId(), date, betrag, was, status }); }
+    if(id){ const f=e.foerderungen.find(x=>x.id===id); if(f){
+      const prev=f.status;
+      f.date=date; f.betrag=betrag; f.was=was; f.status=status;
+      if(prev!==status){ if(!Array.isArray(f.statusLog)) f.statusLog=[]; f.statusLog.push({status, ts, by}); } // Status-Wechsel protokollieren
+    } }
+    else { e.foerderungen.push({ id:newId(), date, betrag, was, status, statusLog:[{status, ts, by}] }); }
   });
   crmCloseModal(); paintDetail(); toast('Förderung gespeichert ✓','ok');
 }
@@ -2301,11 +2315,11 @@ function crmToggleDone(id){
   const e=curContainer(); if(!e) return;
   const f=findNode(e, id); if(!f) return;
   if(f.node.status==='erledigt'){
-    mutateContainer(en=>{ const g=findNode(en,id); if(g) g.node.status='offen'; });
+    mutateContainer(en=>{ const g=findNode(en,id); if(g){ g.node.status='offen'; g.node.doneAt=''; g.node.doneBy=''; } });
   } else {
     const blk=blockingTexts(e, f.node);
     if(blk){ toast('🔒 Blockiert durch: '+blk.join(', '),'err'); repaintContainer(); return; }
-    mutateContainer(en=>{ const g=findNode(en,id); if(g) g.node.status='erledigt'; });
+    mutateContainer(en=>{ const g=findNode(en,id); if(g){ g.node.status='erledigt'; g.node.doneAt=new Date().toISOString(); g.node.doneBy=curKuerzel(); } });
   }
   repaintContainer();
 }
