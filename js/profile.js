@@ -17,27 +17,9 @@ export function openProfileModal(){
     ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
     ['SH','Schleswig-Holstein'],['TH','Thüringen']];
   const blOpts=BL.map(([v,l])=>`<option value="${v}"${(cu.bundesland||'')===v?' selected':''}>${l}</option>`).join('');
-  // Werkstudent: eigene Vorlesungszeiten pflegen – bis zu einem Jahr im Voraus.
-  const _maxD=new Date(); _maxD.setFullYear(_maxD.getFullYear()+1);
-  const maxDate=_maxD.toISOString().slice(0,10);
-  let wstSection='';
-  if(_cuIsWerkstudent(cu)){
-    const lp=Array.isArray(cu.lecturePeriods)?cu.lecturePeriods:[];
-    let rows='';
-    for(let i=0;i<4;i++){
-      const p=lp[i]||{von:'',bis:''};
-      rows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
-        <span style="font-size:12px;color:var(--muted);width:78px">Semester ${i+1}</span>
-        <input type="date" id="prof-lp-von-${i}" value="${p.von||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-        <span style="font-size:12px;color:var(--muted)">bis</span>
-        <input type="date" id="prof-lp-bis-${i}" value="${p.bis||''}" max="${maxDate}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-      </div>`;
-    }
-    wstSection=`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
-      <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🎓 Meine Vorlesungszeiten</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze (Mo–Fr, 8–20 Uhr). Du kannst deine Semester bis zu einem Jahr im Voraus eintragen.</div>
-      ${rows}`;
-  }
+  // Vorlesungszeiten & Brückentage werden zentral in der Verwaltung gepflegt
+  // (nicht mehr Selbstpflege im Profil). Sammel-Logik unten greift dank Feld-Existenz-Check nicht.
+  const wstSection='';
   openModal(`<h3>👤 Mein Profil</h3>
     <div class="form-group"><label>Name</label>
       <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
