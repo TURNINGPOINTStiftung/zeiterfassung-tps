@@ -2661,6 +2661,7 @@ function paintTeamDetail(){
 }
 // Neue Veranstaltung direkt aus einer Team-Ansicht (Team vorbelegt)
 function crmNewVeranstaltungForTeam(team){
+  window._crmVaReturn={ mode:'teams', teamSel:team };
   window._vaTeiln=[];
   crmOpenModalShell(); openModal(veranstaltungFormHtml({ team:(team==='Ohne Team'?'':team) }, true));
 }
@@ -2916,7 +2917,14 @@ function paintVeranstaltungen(){
   window._crmTaskCtx=null;
   root.innerHTML = barHtml() + `<div class="crm-body">${veranstaltungenListHtml()}</div>`;
 }
-function crmOpenVeranstaltung(id){ window._crmSearch=''; window._crmMode='veranstaltungen'; window._crmVaSel=id; paintVeranstaltungDetail(); }
+// Rücksprung-Kontext beim Öffnen einer Veranstaltung: woher kam der Nutzer?
+// (Eintrag/Verein, Team-Detail, oder Übersicht) – damit „← Zurück" gezielt dorthin führt.
+function _vaReturnSnapshot(){
+  const m=window._crmMode;
+  if(m==='veranstaltungen') return window._crmVaReturn||null; // schon in VA → bestehenden Kontext behalten
+  return { mode:m, tree:window._crmTree, selId:window._crmSelId, teamSel:window._crmTeamSel, projSel:window._crmProjSel, detailTab:window._crmDetailTab };
+}
+function crmOpenVeranstaltung(id){ window._crmVaReturn=_vaReturnSnapshot(); window._crmSearch=''; window._crmMode='veranstaltungen'; window._crmVaSel=id; paintVeranstaltungDetail(); }
 function paintVeranstaltungDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const v=getVeranstaltung(window._crmVaSel);
@@ -2956,7 +2964,19 @@ function paintVeranstaltungDetail(){
     </div>
   </div>`;
 }
-function crmBackToVeranstaltungen(){ window._crmVaSel=null; crmShowTeams(); }
+function crmBackToVeranstaltungen(){
+  window._crmVaSel=null;
+  const r=window._crmVaReturn; window._crmVaReturn=null;
+  if(r){
+    if(r.mode==='kontakte' && r.selId && getEntity(r.tree, r.selId)){ // zurück zum Eintrag (Verein/Sozialakteur …)
+      window._crmMode='kontakte'; window._crmTree=r.tree; window._crmSelId=r.selId; window._crmProjSel=r.projSel||'';
+      if(r.detailTab) window._crmDetailTab=r.detailTab;
+      paintDetail(); return;
+    }
+    if(r.mode==='teams' && r.teamSel){ window._crmMode='teams'; window._crmTeamSel=r.teamSel; window._crmTeamProjSel=null; paintTeamDetail(); return; }
+  }
+  crmShowTeams(); // Fallback: Teams-Übersicht (Veranstaltungen stehen dort oben)
+}
 // ── Teilnehmer-Auswahl im Formular (window._vaTeiln = Arbeitskopie) ──
 function vaTeilnEditHtml(){ return (window._vaTeiln||[]).map((t,i)=>vaTeilnChip(t,i,true)).join('')||'<span class="small" style="color:var(--muted)">Keine – übergeordnete Veranstaltung.</span>'; }
 function crmVaAddTeiln(){
@@ -2988,7 +3008,7 @@ function veranstaltungFormHtml(v,isNew){
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
-function crmNewVeranstaltung(){ window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
+function crmNewVeranstaltung(){ window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
 function crmEditVeranstaltung(){
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
@@ -3032,6 +3052,7 @@ function veranstaltungenForEntity(tree,eid){
 // Neue Veranstaltung direkt vom Eintrag aus – mit diesem Eintrag als Teilnehmer
 function crmNewVeranstaltungFor(){
   const e=curEntity(); if(!e) return;
+  window._crmVaReturn={ mode:'kontakte', tree:window._crmTree, selId:e.id, projSel:window._crmProjSel, detailTab:window._crmDetailTab };
   // Kooperationspartner gleich als Teilnehmer vorbelegen → gemeinsame Veranstaltung (bei beiden sichtbar)
   const teil=[{tree:window._crmTree, eid:e.id}];
   _koopPartners(window._crmTree, e.id).forEach(p=>{ if(!teil.some(x=>x.tree===p.tree&&x.eid===p.eid)) teil.push(p); });
