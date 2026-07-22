@@ -364,7 +364,7 @@ function injectStyles(){
   .crm-koop-p{cursor:pointer;font-weight:600;color:var(--primary)}
   .crm-koop-p:hover{text-decoration:underline}
   .crm-koop-art{background:rgba(0,0,0,.05);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--text)}
-  .crm-koop-note{cursor:help}
+  .crm-koop-notetext{flex-basis:100%;width:100%;font-size:12.5px;color:var(--text);background:rgba(0,0,0,.035);border-radius:7px;padding:6px 10px;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
   .crm-koop-act{margin-left:auto;white-space:nowrap}
   .vw-card-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
   .vw-card-opt{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:#fff}
@@ -1560,8 +1560,8 @@ function kooperationenSecHtml(e){
       <span class="crm-koop-p" onclick="crmGoEntry('${esc(k.partnerTree)}','${esc(k.partnerEid)}')">${esc(icon)} ${esc(_entityName(k.partnerTree,k.partnerEid))} ↗</span>
       ${k.art?`<span class="crm-koop-art">${esc(k.art)}</span>`:''}
       ${_koopDateChip(k)}
-      ${k.note?`<span class="crm-koop-note" title="${esc(k.note)}">💬</span>`:''}
       ${acts}
+      ${k.note?`<div class="crm-koop-notetext">${esc(k.note)}</div>`:''}
     </div>`;
   };
   const activeRows=active.map(k=>row(k,false)).join('') || '<div class="small" style="color:var(--muted)">Keine aktiven Kooperationen erfasst.</div>';
