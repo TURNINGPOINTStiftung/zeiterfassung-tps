@@ -244,8 +244,11 @@ function injectStyles(){
   .crm-tree-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(32,56,105,.25)}
   .crm-search{margin-left:auto;padding:8px 14px;border:1.5px solid var(--border);border-radius:999px;font-size:14px;min-width:200px;color:var(--text);background:#fff;transition:border-color .15s,box-shadow .15s}
   .crm-search:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
-  .crm-bell{position:relative;flex:none}
-  .crm-bell-badge{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:800;line-height:17px;text-align:center;box-shadow:0 0 0 2px #fff}
+  .crm-bell{position:relative;flex:none;font-size:19px;line-height:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
+  .crm-bell:hover{border-color:var(--primary-l);background:#f5f8fd}
+  .crm-bell:active{transform:translateY(1px)}
+  .crm-bell.has-new{border-color:#e5484d;background:#fff1f1;box-shadow:0 0 0 3px rgba(229,72,77,.12)}
+  .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
   .crm-notif-pop{position:fixed;z-index:60;width:440px;max-width:calc(100vw - 20px);max-height:72vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:6px}
   .crm-notif-head{font-size:13px;font-weight:700;color:var(--primary);padding:8px 10px 6px}
   .crm-notif-item{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
@@ -618,8 +621,13 @@ function _agoStr(ts){
 }
 function _buildNotif(list){
   const me=(window.cu&&window.cu.id)||'';
+  const meName=(window.cu&&window.cu.name)||'';
+  const meKrz=meName?initials(meName):'';
+  // Selbst gemachte Änderungen NIE benachrichtigen – robust über ID ODER Name ODER Kürzel
+  // (einzelne Verlaufs-Einträge haben evtl. keine/abweichende ID).
+  const isMine=h=> (!!me && h.byId===me) || (!!meName && h.byName===meName) || (!!meKrz && h.byKuerzel===meKrz);
   const cutoff=Date.now()-7*24*60*60*1000;
-  const rel=(list||[]).filter(h=> h && h.action==='save' && h.byId!==me && h.coll!=='config'); // neueste zuerst (listHistory sortiert)
+  const rel=(list||[]).filter(h=> h && h.action==='save' && !isMine(h) && h.coll!=='config'); // neueste zuerst (listHistory sortiert)
   const seen=new Set(); const items=[];
   rel.forEach((h,idx)=>{
     const k=h.coll+'::'+h.recId; if(seen.has(k)) return; seen.add(k);
@@ -642,8 +650,10 @@ function _buildNotif(list){
 }
 function _crmNotifBadgeCount(){ try{ const seen=_crmNotifSeen(); const d=window._crmNotif; if(!d||!d.items) return 0; return d.items.filter(it=>it.ts>seen).length; }catch(e){ return 0; } }
 function _updateBellBadge(){
-  try{ const b=document.getElementById('crm-bell-badge'); if(!b) return;
+  try{ const b=document.getElementById('crm-bell-badge'); const bell=document.getElementById('crm-bell');
     const n=_crmNotifBadgeCount();
+    if(bell) bell.classList.toggle('has-new', n>0);
+    if(!b) return;
     if(n>0){ b.textContent=n>99?'99+':String(n); b.style.display=''; } else { b.style.display='none'; b.textContent=''; }
   }catch(e){}
 }
@@ -740,7 +750,7 @@ function barHtml(){
   let right = '';
   if(view){
     const bc=_crmNotifBadgeCount();
-    const bell=`<button id="crm-bell" class="crm-bell btn-sm-crm" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
+    const bell=`<button id="crm-bell" class="crm-bell${bc?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
     right = `<input class="crm-search" type="search" placeholder="Im ganzen CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">
       ${bell}
       ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
