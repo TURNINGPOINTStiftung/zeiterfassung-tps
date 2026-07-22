@@ -1189,7 +1189,7 @@ function paintDetail(){
   const aufgabenSec = entityProjekteSectionHtml(e);
   const _kEdit=crmFull()||crmRestricted();
   const kontakteSec = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(e.kontakte||[]).some(k=>kEmails(k).length)?`<button class="btn-sm-crm" title="Mail an alle Kontakte (BCC)" onclick="crmMailKontakte()">✉️ Mail an alle</button>`:''}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(()=>{ const em=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean); const h=_mailtoHref(em,'to'); return h?`<a class="btn-sm-crm" style="text-decoration:none" title="Mail an alle Kontakte" href="${esc(h)}">✉️ Mail an alle</a>`:''; })()}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
       ${kontakte}
     </div>`;
   const termineSec = `<div class="crm-sec">
@@ -3085,13 +3085,20 @@ function _normEmails(parts){
   return out;
 }
 // Outlook/Standard-Mailprogramm öffnen – feld='bcc' (verdeckt) oder 'to' (sichtbar)
-function _openMail(emails, feld){
+function _mailtoHref(emails, feld){
   const list=_normEmails(emails);
-  if(!list.length){ toast('Keine gültigen E-Mail-Adressen.','err'); return; }
-  const url='mailto:?'+(feld||'bcc')+'='+encodeURIComponent(list.join(','));
-  if(url.length>1900) toast('Sehr viele Adressen – falls Outlook nicht alle übernimmt, nutze „Adressen kopieren".','');
-  try{ window.location.href=url; }
-  catch(e){ try{ const a=document.createElement('a'); a.href=url; document.body.appendChild(a); a.click(); a.remove(); }catch(_){ toast('Mail konnte nicht geöffnet werden.','err'); } }
+  if(!list.length) return '';
+  return 'mailto:?'+(feld||'bcc')+'='+encodeURIComponent(list.join(','));
+}
+function _openMail(emails, feld){
+  const url=_mailtoHref(emails, feld);
+  if(!url){ toast('Keine gültigen E-Mail-Adressen.','err'); return; }
+  if(url.length>1900) toast('Sehr viele Adressen – falls nicht alle übernommen werden, nutze „Adressen kopieren".','');
+  // Zuverlässig auch in installierter PWA: echten Link anklicken statt location.href programmatisch
+  // zu setzen (letzteres wird im Standalone-/neuen-Outlook-Umfeld oft still verschluckt).
+  try{ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); return; }catch(e){}
+  try{ if(window.open(url)) return; }catch(e){}
+  try{ window.location.href=url; }catch(e){}
 }
 function _openBcc(emails){ _openMail(emails,'bcc'); }
 function _openTo(emails){ _openMail(emails,'to'); }
@@ -3115,7 +3122,7 @@ function paintVerteiler(){
       <h3>✉️ ${esc(v.name||'(ohne Name)')}</h3>
       <div class="meta"><span class="crm-chip">${n} Adresse${n===1?'':'n'}</span></div>
       <div class="vt-actions">
-        <button class="btn-sm-crm primary" onclick="crmVerteilerMail('${v.id}')">✉️ Mail (BCC)</button>
+        ${(()=>{ const h=_mailtoHref(v.emails,'bcc'); return h?`<a class="btn-sm-crm primary" style="text-decoration:none" href="${esc(h)}">✉️ Mail (BCC)</a>`:`<button class="btn-sm-crm" disabled title="Keine Adressen">✉️ Mail (BCC)</button>`; })()}
         <button class="btn-sm-crm" onclick="crmCopyVerteiler('${v.id}')">⧉ Kopieren</button>
         ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler('${v.id}')">Bearbeiten</button>
         <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC('${v.id}')">✕</button>`:''}
