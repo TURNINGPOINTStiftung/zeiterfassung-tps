@@ -2603,13 +2603,8 @@ function paintTeamsList(){
   window._crmTaskCtx=null;
   // „Meine Aufgaben" oben – für alle
   const meine = meineSectionsHtml();
-  // Veranstaltungen: deutlich sichtbarer Button GANZ OBEN in der Teams-Ansicht
-  const actions=[];
-  if(crmCanView()) actions.push(`<button class="btn-sm-crm primary" onclick="crmShowVeranstaltungen()">📅 Veranstaltungen</button>`);
-  const topBar = actions.length ? `<div class="crm-sec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <span style="font-weight:700;color:var(--primary);font-size:13px;text-transform:uppercase;letter-spacing:.6px">CRM-Bereiche</span>
-      ${actions.join('')}
-    </div>` : '';
+  // Veranstaltungen direkt GANZ OBEN in der Teams-Ansicht (kein eigener Reiter mehr)
+  const vaBlock = crmCanView() ? veranstaltungenListHtml() : '';
   // Teams-Kacheln für alle, die alles sehen dürfen (voll + erweitert)
   let teamsBlock='';
   if(crmCanView()){
@@ -2623,7 +2618,7 @@ function paintTeamsList(){
       <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte.</div>
     </div>`;
   }
-  root.innerHTML = barHtml() + `<div class="crm-body">${topBar}${meine}${teamsBlock}</div>`;
+  root.innerHTML = barHtml() + `<div class="crm-body">${vaBlock}${meine}${teamsBlock}</div>`;
 }
 function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
@@ -2897,10 +2892,9 @@ function vaTeilnChip(t,i,removable){
   const tr=getTrees().find(x=>x.key===t.tree);
   return `<span class="crm-chip" style="font-size:12px">${esc((tr&&tr.icon)||'')} ${esc(vaEntityName(t))}${removable?` <span style="cursor:pointer;color:#c0392b;font-weight:700" onclick="crmVaRemoveTeiln(${i})">✕</span>`:''}</span>`;
 }
-function crmShowVeranstaltungen(){ window._crmMode='veranstaltungen'; window._crmVaSel=null; window._crmSearch=''; paint(); }
-function paintVeranstaltungen(){
-  const root=document.getElementById('crm-root'); if(!root) return;
-  window._crmTaskCtx=null;
+// Veranstaltungs-Liste (übergreifend) – wiederverwendbar: eigene Ansicht UND
+// direkt oben in der Teams-Ansicht (kein eigener Reiter mehr nötig).
+function veranstaltungenListHtml(){
   const all=listVeranstaltungen();
   const card=v=>{ const op=flatNodes(v.todos).filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
@@ -2910,14 +2904,17 @@ function paintVeranstaltungen(){
     </div>`; };
   const upcoming=all.filter(v=>!vaIsPast(v)&&!v.closed);
   const past=all.filter(v=>vaIsPast(v)||v.closed);
-  root.innerHTML = barHtml() + `<div class="crm-body">
-    <div class="crm-sec">
+  return `<div class="crm-sec">
       <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltung()">＋ Veranstaltung</button>`:''}</h4>
       <div class="small" style="color:var(--muted);margin-bottom:10px">Übergreifende Termine & Online-Treffen – mit beliebig vielen beteiligten Einträgen (Vereine, Sozialakteure …) oder ganz ohne (übergeordnet).</div>
       ${upcoming.length?`<div class="crm-list">${upcoming.map(card).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen.</div>`}
       ${past.length?`<details style="margin-top:14px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${past.length})</summary><div class="crm-list" style="margin-top:10px">${past.map(card).join('')}</div></details>`:''}
-    </div>
-  </div>`;
+    </div>`;
+}
+function paintVeranstaltungen(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  window._crmTaskCtx=null;
+  root.innerHTML = barHtml() + `<div class="crm-body">${veranstaltungenListHtml()}</div>`;
 }
 function crmOpenVeranstaltung(id){ window._crmSearch=''; window._crmMode='veranstaltungen'; window._crmVaSel=id; paintVeranstaltungDetail(); }
 function paintVeranstaltungDetail(){
@@ -2932,7 +2929,7 @@ function paintVeranstaltungDetail(){
     : (v.ortOderLink?('📍 '+esc(v.ortOderLink)):'');
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
-      <button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Veranstaltungen</button>
+      <button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Zurück</button>
       <h2>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
       ${crmFull()?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditVeranstaltung()">✎ Bearbeiten</button>
@@ -2959,7 +2956,7 @@ function paintVeranstaltungDetail(){
     </div>
   </div>`;
 }
-function crmBackToVeranstaltungen(){ window._crmVaSel=null; paintVeranstaltungen(); }
+function crmBackToVeranstaltungen(){ window._crmVaSel=null; crmShowTeams(); }
 // ── Teilnehmer-Auswahl im Formular (window._vaTeiln = Arbeitskopie) ──
 function vaTeilnEditHtml(){ return (window._vaTeiln||[]).map((t,i)=>vaTeilnChip(t,i,true)).join('')||'<span class="small" style="color:var(--muted)">Keine – übergeordnete Veranstaltung.</span>'; }
 function crmVaAddTeiln(){
@@ -4403,7 +4400,7 @@ Object.assign(window, {
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
   crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
-  crmShowVeranstaltungen, crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
+  crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
