@@ -752,8 +752,8 @@ function barHtml(){
     const bc=_crmNotifBadgeCount();
     const bell=`<button id="crm-bell" class="crm-bell${bc?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
     right = `<input class="crm-search" type="search" placeholder="Im ganzen CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">
-      ${bell}
-      ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}`;
+      ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
+      ${bell}`;
   } else {
     right = `<span style="margin-left:auto"></span>`;
   }
