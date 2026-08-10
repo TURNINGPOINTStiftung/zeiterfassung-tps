@@ -72,32 +72,38 @@ export function renderGFBerichte(){
     return;
   }
   if(!reports.length){ content.innerHTML=html; return; }
-  const teamMap={};
+  // Gruppierung nach MONAT (neueste zuerst) – wie in der Zeiterfassung ist der Monat
+  // die oberste Ebene; darunter stehen die einzelnen Abteilungs-/Leitungsberichte.
+  const monMap={};
   reports.forEach(function(r){
-    const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
-    if(!teamMap[team]) teamMap[team]=[];
-    teamMap[team].push(r);
+    const mk=r.year*100+r.month;
+    if(!monMap[mk]) monMap[mk]=[];
+    monMap[mk].push(r);
   });
-  const teams=Object.keys(teamMap).sort(function(a,b){ return a.localeCompare(b,'de'); });
-  teams.forEach(function(team){
-    const teamReports=teamMap[team].slice().sort(function(a,b){
-      if(b.year!==a.year) return b.year-a.year;
-      return b.month-a.month;
+  const monKeys=Object.keys(monMap).map(Number).sort(function(a,b){ return b-a; });
+  monKeys.forEach(function(mk){
+    const list=monMap[mk].slice().sort(function(a,b){
+      const ta=a.teamName||(a.managedTeams&&a.managedTeams[0])||'';
+      const tb=b.teamName||(b.managedTeams&&b.managedTeams[0])||'';
+      if(ta!==tb) return ta.localeCompare(tb,'de');
+      return (a.leitungName||'').localeCompare(b.leitungName||'','de');
     });
-    const newCount=teamReports.filter(function(r){ return !r.seenAt; }).length;
+    const y=list[0].year, m=list[0].month;
+    const newCount=list.filter(function(r){ return !r.seenAt; }).length;
     html+='<div class="gf-team-group">';
-    html+='<div class="gf-team-header"><span class="gf-team-name">🏢 '+esc(team)+'</span>'
+    html+='<div class="gf-team-header"><span class="gf-team-name">📅 '+MONTHS[m-1]+' '+y+'</span>'
       +(newCount?'<span class="gf-new-badge">'+newCount+' NEU</span>':'')
-      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+teamReports.length+' Bericht'+(teamReports.length!==1?'e':'')+'</span>'
+      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+list.length+' Bericht'+(list.length!==1?'e':'')+'</span>'
       +'</div>';
     html+='<div>';
-    teamReports.forEach(function(r){
+    list.forEach(function(r){
+      const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
       const dt=new Date(r.submittedAt);
       const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       const isNew=!r.seenAt;
       html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
         +'<div>'
-        +'<div class="gf-report-title">'+MONTHS[r.month-1]+' '+r.year+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+        +'<div class="gf-report-title">🏢 '+esc(team)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
         +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
         +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
           +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
