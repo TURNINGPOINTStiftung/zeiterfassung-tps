@@ -246,11 +246,18 @@ export function getDataCache(){ return _dataCache; }
 // unterschreiten würde (z.B. versehentliches Überschreiben der ganzen DB mit
 // Test-/Leerdaten), wird BLOCKIERT – nur mit explizitem Opt-in erlaubt.
 let _lastGoodUsers=0, _lastGoodDayCount=0;
+// Vertrauens-Baseline übersteht Reloads (localStorage). Ein Gerät, das schon einmal den
+// vollen Bestand gesehen hat, blockiert danach AUCH NACH EINEM NEUSTART einen drastisch
+// kleineren Schreibvorgang. (Vorher nur pro Sitzung gemerkt – genau die Lücke, durch die
+// ein frisch geladenes Gerät die Nutzerliste auf 3 zusammenschrumpfen konnte.)
+const _GUARD_KEY='tp_zt_guard';
+try{ const _g=JSON.parse(localStorage.getItem(_GUARD_KEY)||'null'); if(_g){ _lastGoodUsers=Math.max(0,+_g.u||0); _lastGoodDayCount=Math.max(0,+_g.d||0); } }catch(e){}
 function _dayCount(d){ let n=0; for(const e of Object.values(d?.entries||{})) n+=Object.keys((e&&e.days)||{}).length; return n; }
 export function noteGoodData(d){
   if(!d||!Array.isArray(d.users)) return;
   _lastGoodUsers=Math.max(_lastGoodUsers, d.users.length);
   _lastGoodDayCount=Math.max(_lastGoodDayCount, _dayCount(d));
+  try{ localStorage.setItem(_GUARD_KEY, JSON.stringify({u:_lastGoodUsers, d:_lastGoodDayCount})); }catch(e){}
 }
 // Schreibt den Datenstand per update() statt set() nach Firebase. Entscheidend:
 // entries werden bis auf TAGES-Ebene als einzelne Pfade geschrieben (entries/<key>/days/<ds>),
