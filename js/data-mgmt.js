@@ -3,6 +3,10 @@ import { getData, getUser, mutate, saveRaw } from './data.js';
 import { computeAutoCarry } from './calc.js';
 import { openModal, closeModal, toast, diffMin, addMin } from './utils.js';
 
+// Große/zerstörerische Datenoperationen (Gesamt-Export, Import/Überschreiben, Reset)
+// sind ausschließlich dem Admin vorbehalten. Normale Nutzung (eigene Zeiten) bleibt offen.
+const _isAdmin = () => ((window.cu && window.cu.role) === 'admin');
+
 // Manuelle Überträge, die vom automatischen (minutengenauen) Wert abweichen, auf
 // Automatik zurücksetzen. Behebt z.B. alte, versehentlich auf ganze Stunden
 // gerundete Überträge (40:30 → faelschlich manuell 40). Reine Zeitdaten bleiben unberührt.
@@ -29,6 +33,7 @@ export function fixManualCarryovers(){
 }
 
 export function exportData(){
+  if(!_isAdmin()){ toast('Nur der Administrator darf die Gesamtdaten exportieren.','err'); return; }
   const blob=new Blob([JSON.stringify(getData(),null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -37,6 +42,7 @@ export function exportData(){
 }
 
 export function importData(e){
+  if(!_isAdmin()){ toast('Nur der Administrator darf Daten importieren/überschreiben.','err'); try{ e.target.value=''; }catch(_){} return; }
   const file=e.target.files[0]; if(!file) return;
   const reader=new FileReader();
   reader.onload=ev=>{
@@ -56,6 +62,7 @@ export function importData(e){
 }
 
 export function resetData(){
+  if(!_isAdmin()){ toast('Nur der Administrator darf die Daten zurücksetzen.','err'); return; }
   if(!confirm('ACHTUNG: Alle Zeitdaten unwiderruflich löschen?')) return;
   if(!confirm('Wirklich?')) return;
   localStorage.removeItem(STORAGE_KEY);
