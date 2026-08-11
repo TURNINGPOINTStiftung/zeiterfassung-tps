@@ -150,6 +150,10 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .gf-report-title{font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px}
 .gf-report-meta{font-size:12px;color:var(--muted);margin-top:3px}
 .gf-new-badge{display:inline-block;background:var(--warn);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle}
+.gf-mon-switch{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.gf-mon-select{flex:1;min-width:170px;max-width:340px;padding:9px 12px;font-size:14px;font-weight:600;color:var(--primary);border:1.5px solid var(--border);border-radius:8px;background:var(--white);cursor:pointer}
+.gf-mon-arrow{white-space:nowrap}
+.gf-mon-switch .btn[disabled]{opacity:.4;cursor:default;pointer-events:none}
 
 /* ── Abwesenheiten ── */
 .ab-card{background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;transition:box-shadow .2s}
