@@ -244,10 +244,10 @@ function injectStyles(){
   .crm-tree-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(32,56,105,.25)}
   .crm-search{margin-left:auto;padding:8px 14px;border:1.5px solid var(--border);border-radius:999px;font-size:14px;min-width:200px;color:var(--text);background:#fff;transition:border-color .15s,box-shadow .15s}
   .crm-search:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
-  .crm-bell{position:relative;flex:none;font-size:19px;line-height:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
-  .crm-bell:hover{border-color:var(--primary-l);background:#f5f8fd}
+  .crm-bell{position:relative;flex:none;font-size:19px;line-height:1;padding:6px 11px;border:1.5px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;cursor:pointer;transition:filter .15s,box-shadow .15s,transform .05s}
+  .crm-bell:hover{filter:brightness(1.1)}
   .crm-bell:active{transform:translateY(1px)}
-  .crm-bell.has-new{border-color:#e5484d;background:#fff1f1;box-shadow:0 0 0 3px rgba(229,72,77,.12)}
+  .crm-bell.has-new{box-shadow:0 0 0 3px rgba(229,72,77,.35)}
   .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
   .crm-notif-pop{position:fixed;z-index:60;width:440px;max-width:calc(100vw - 20px);max-height:72vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:6px}
   .crm-notif-head{font-size:13px;font-weight:700;color:var(--primary);padding:8px 10px 6px}
