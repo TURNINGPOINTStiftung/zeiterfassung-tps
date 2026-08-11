@@ -511,14 +511,24 @@ function injectStyles(){
   .crm-sf-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;color:var(--text);cursor:pointer}
   /* Kategorie-Badge (analog Status) */
   .crm-catbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
-  /* Häkchen-Filter (Status + Kategorie, Mehrfachauswahl) */
-  .crm-filterbar{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;padding:10px 12px;background:#f5f8fd;border:1px solid var(--border);border-radius:10px}
-  .crm-filtergrp{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-  .crm-filterlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);min-width:74px}
-  .crm-fchk{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid var(--border);border-radius:14px;font-size:12.5px;cursor:pointer;background:#fff;user-select:none}
-  .crm-fchk input{margin:0;width:auto;cursor:pointer}
-  .crm-fchk.on{border-color:var(--primary);background:var(--primary);color:#fff}
-  .crm-filterclear{align-self:flex-start}
+  /* Filter als Button + Popup-Menü */
+  .crm-filterrow{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:#fff;color:var(--text);font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+  .crm-filter-btn:hover{border-color:var(--primary-l)}
+  .crm-filter-btn.on{border-color:var(--primary);background:var(--primary);color:#fff}
+  .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800}
+  .crm-filter-count{font-size:12px;color:var(--muted);margin-left:auto}
+  .crm-filter-pop{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 20px);max-height:74vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:8px}
+  .crm-fpop-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
+  .crm-fpop-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13.5px}
+  .crm-fpop-item:hover{background:#f5f8fd}
+  .crm-fpop-item.on{background:#eef4ff}
+  .crm-fpop-item input{margin:0;width:auto;cursor:pointer;flex:none}
+  .crm-fpop-dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .crm-fpop-lbl{flex:1;min-width:0}
+  .crm-fpop-n{font-size:12px;color:var(--muted);font-weight:700}
+  .crm-fpop-empty{padding:8px 9px;font-size:12.5px;color:var(--muted)}
+  .crm-fpop-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 6px 4px;margin-top:4px;border-top:1px solid var(--border)}
   /* Schlagwort-Vorschläge */
   .crm-tag-suggest{display:none;position:absolute;left:0;right:0;top:100%;z-index:25;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);margin-top:2px;max-height:210px;overflow:auto;padding:4px}
   .crm-tag-suggest button{display:block;width:100%;text-align:left;background:none;border:none;padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text)}
@@ -855,15 +865,14 @@ function paintList(){
   const matchStatus = e=> !stf.length || _statusArr(e).some(k=>stf.includes(k));
   const matchCat    = e=> !ctf.length || _catsOf(e, e.tree||window._crmTree).some(k=>ctf.includes(k));
   const items = base.filter(e=>matchQ(e)&&matchStatus(e)&&matchCat(e));
-  // Zähler auf dem such-gefilterten Grundbestand (unabhängig von der aktuellen Häkchen-Auswahl)
-  const baseQ = base.filter(matchQ);
-  const stCount = k=>baseQ.filter(e=>_statusArr(e).includes(k)).length;
-  const ctCount = k=>baseQ.filter(e=>_catsOf(e, e.tree||window._crmTree).includes(k)).length;
   const anyFilter = stf.length||ctf.length;
-  const filterBar = unified ? `<div class="crm-filterbar">
-      <div class="crm-filtergrp"><span class="crm-filterlabel">Status</span>${CRM_STATUS.map(s=>{const n=stCount(s.key);const on=stf.includes(s.key);return `<label class="crm-fchk${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatusFilter('${s.key}')"> ${esc(s.label)}${n?` <b>${n}</b>`:''}</label>`;}).join('')}</div>
-      <div class="crm-filtergrp"><span class="crm-filterlabel">Kategorie</span>${getCategories().map(c=>{const n=ctCount(c.key);const on=ctf.includes(c.key);return `<label class="crm-fchk${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCatFilter('${esc(c.key)}')"> ${esc(c.label)}${n?` <b>${n}</b>`:''}</label>`;}).join('')}</div>
-      ${anyFilter?`<button class="btn-sm-crm crm-filterclear" onclick="crmClearFilters()">✕ Filter zurücksetzen</button>`:''}
+  const fCount = stf.length+ctf.length;
+  // Filter als Button → öffnet ein Popup-Menü (crmToggleFilterPop). Der Button trägt die Anzahl
+  // aktiver Häkchen; die eigentlichen Checkboxen leben im Popover (bleibt beim Klicken offen).
+  const filterBar = unified ? `<div class="crm-filterrow">
+      <button id="crm-filter-btn" class="crm-filter-btn${anyFilter?' on':''}" onclick="crmToggleFilterPop(event)">⚑ Filter${fCount?` <span class="crm-filter-badge">${fCount}</span>`:''}</button>
+      ${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ zurücksetzen</button>`:''}
+      <span class="crm-filter-count">${items.length} Kontakt${items.length===1?'':'e'}</span>
     </div>` : '';
   const cards = items.map(e=>{
     const s=e.stamm||{};
@@ -888,13 +897,39 @@ function paintList(){
   }</div>`;
 }
 // Häkchen-Filter (Mehrfachauswahl). Status und Kategorie sind unabhängige Gruppen.
-function crmToggleStatusFilter(k){ let a=Array.isArray(window._crmStatusFilter)?window._crmStatusFilter.slice():[]; a=a.includes(k)?a.filter(x=>x!==k):a.concat(k); window._crmStatusFilter=a; paintList(); }
-function crmToggleCatFilter(k){ let a=Array.isArray(window._crmCatFilter)?window._crmCatFilter.slice():[]; a=a.includes(k)?a.filter(x=>x!==k):a.concat(k); window._crmCatFilter=a; paintList(); }
-function crmClearFilters(){ window._crmStatusFilter=[]; window._crmCatFilter=[]; paintList(); }
+// Nach jeder Änderung: Liste neu zeichnen UND (falls offen) das Popover aktualisieren.
+function crmToggleStatusFilter(k){ let a=Array.isArray(window._crmStatusFilter)?window._crmStatusFilter.slice():[]; a=a.includes(k)?a.filter(x=>x!==k):a.concat(k); window._crmStatusFilter=a; paintList(); _refreshFilterPop(); }
+function crmToggleCatFilter(k){ let a=Array.isArray(window._crmCatFilter)?window._crmCatFilter.slice():[]; a=a.includes(k)?a.filter(x=>x!==k):a.concat(k); window._crmCatFilter=a; paintList(); _refreshFilterPop(); }
+function crmClearFilters(){ window._crmStatusFilter=[]; window._crmCatFilter=[]; paintList(); _refreshFilterPop(); }
 // Kompat: früherer Einzel-Status-Filter (wird nicht mehr aus der UI aufgerufen)
 function crmSetStatusFilter(v){ window._crmStatusFilter = v?[v]:[]; paintList(); }
 // Einheitlicher „Kontakte"-Reiter (alle Bäume zusammengeführt)
-function crmShowKontakte(){ window._crmMode='kontakte'; window._crmSelId=null; window._crmSearch=''; paintList(); }
+function crmShowKontakte(){ window._crmMode='kontakte'; window._crmSelId=null; window._crmSearch=''; crmCloseFilterPop(); paintList(); }
+
+// ── Filter als Popup-Menü (an document.body, überlebt Listen-Repaint) ──
+function _refreshFilterPop(){ if(document.getElementById('crm-filter-pop')) _renderFilterPop(); }
+function _renderFilterPop(){
+  const base = crmCanView()?allEntitiesWithTree():listEntities(window._crmTree);
+  const q=(window._crmSearch||'').toLowerCase().trim();
+  const matchQ=e=>{ if(!q) return true; const s=e.stamm||{}; const koopTxt=(e.kooperationen||[]).map(k=>k.art+' '+_entityName(k.tree,k.eid)).join(' '); const hay=(Object.values(s).join(' ')+' '+koopTxt).toLowerCase(); const ctxt=(e.kontakte||[]).map(k=>k.name+' '+k.funktion).join(' ').toLowerCase(); return (hay+' '+ctxt).includes(q); };
+  const baseQ=base.filter(matchQ);
+  const stf=Array.isArray(window._crmStatusFilter)?window._crmStatusFilter:[];
+  const ctf=Array.isArray(window._crmCatFilter)?window._crmCatFilter:[];
+  const stCount=k=>baseQ.filter(e=>_statusArr(e).includes(k)).length;
+  const ctCount=k=>baseQ.filter(e=>_catsOf(e,e.tree||window._crmTree).includes(k)).length;
+  const stRows=CRM_STATUS.map(s=>{const on=stf.includes(s.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatusFilter('${s.key}')"><span class="crm-fpop-dot" style="background:${s.color}"></span><span class="crm-fpop-lbl">${esc(s.label)}</span><span class="crm-fpop-n">${stCount(s.key)}</span></label>`;}).join('');
+  const ctRows=getCategories().map(c=>{const on=ctf.includes(c.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCatFilter('${esc(c.key)}')"><span class="crm-fpop-dot" style="background:${c.color||'#5b6b7d'}"></span><span class="crm-fpop-lbl">${esc(c.label)}</span><span class="crm-fpop-n">${ctCount(c.key)}</span></label>`;}).join('')||'<div class="crm-fpop-empty">Noch keine Kategorien angelegt.</div>';
+  let pop=document.getElementById('crm-filter-pop');
+  if(!pop){ pop=document.createElement('div'); pop.id='crm-filter-pop'; pop.className='crm-filter-pop'; document.body.appendChild(pop);
+    setTimeout(()=>document.addEventListener('click', _crmFilterOutside, true),0);
+  }
+  pop.innerHTML=`<div class="crm-fpop-head">Status</div>${stRows}<div class="crm-fpop-head">Kategorie</div>${ctRows}<div class="crm-fpop-foot">${(stf.length||ctf.length)?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ Zurücksetzen</button>`:'<span></span>'}<button class="btn-sm-crm primary" onclick="crmCloseFilterPop()">Fertig</button></div>`;
+  _positionFilterPop(pop);
+}
+function _positionFilterPop(pop){ try{ const btn=document.getElementById('crm-filter-btn'); if(!btn) return; const r=btn.getBoundingClientRect(); pop.style.top=(r.bottom+8)+'px'; const w=pop.offsetWidth||300; let left=r.left; if(left+w>window.innerWidth-10) left=window.innerWidth-10-w; if(left<10) left=10; pop.style.left=left+'px'; }catch(e){} }
+function _crmFilterOutside(ev){ const pop=document.getElementById('crm-filter-pop'); if(!pop) return; if(pop.contains(ev.target)) return; const btn=document.getElementById('crm-filter-btn'); if(btn&&btn.contains(ev.target)) return; crmCloseFilterPop(); }
+function crmCloseFilterPop(){ const pop=document.getElementById('crm-filter-pop'); if(pop) pop.remove(); document.removeEventListener('click', _crmFilterOutside, true); }
+function crmToggleFilterPop(ev){ if(ev){ ev.stopPropagation(); } if(document.getElementById('crm-filter-pop')){ crmCloseFilterPop(); return; } _renderFilterPop(); }
 
 // ── Aufgaben: hierarchisch (Hauptaufgabe + Unterpunkte) + Abhängigkeiten
 // Datenmodell je Eintrag:
@@ -4551,7 +4586,7 @@ Object.assign(window, {
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
-  crmSetStatus, crmToggleStatus, crmToggleCat, crmSetStatusFilter, crmToggleStatusFilter, crmToggleCatFilter, crmClearFilters, crmShowKontakte, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
+  crmSetStatus, crmToggleStatus, crmToggleCat, crmSetStatusFilter, crmToggleStatusFilter, crmToggleCatFilter, crmClearFilters, crmToggleFilterPop, crmCloseFilterPop, crmShowKontakte, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
   crmSearchInput, crmGoEntry, crmGoEntryTab, crmGoEntityProj, crmGoTeamProj,
   crmToggleNotif, crmNotifGo,
