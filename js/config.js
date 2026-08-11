@@ -41,8 +41,15 @@ export const DEFAULT_TEAM_CATS = {
   'Verwaltung':         ['Verwaltung','Besprechung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges'],
   'Vereinsentwicklung': ['Vereinsentwicklung','Beratung','Netzwerkarbeit','Besprechung','Veranstaltung','Telefonate','Mails/Nachrichten','Kooperationspartner','Urlaub','AU/Krank','Sonstiges']
 };
+// SICHERHEIT: Diese Standard-User sind nur ein Gerüst für eine KOMPLETT LEERE Datenbank
+// (echter Erststart). Sie haben ABSICHTLICH KEIN Passwort (pw:'') – ein leeres Passwort
+// schlägt in verifyPw immer fehl, d.h. im öffentlichen Code steht KEIN funktionierendes
+// Login mehr. Echte Nutzer/Passwörter liegen ausschließlich in der (nicht-öffentlichen)
+// Firebase-DB. Früher stand hier 'admin123' etc. – das war der öffentlich lesbare
+// Schlüssel zum Admin-Konto und die Ursache dafür, dass ein Zurückfallen auf die Defaults
+// das Admin-Passwort auf einen allgemein bekannten Wert setzte.
 export const DEFAULT_USERS = [
-  {id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,team:'',bundesland:'',dpw:5},
-  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,team:'',bundesland:'',dpw:5},
-  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'janne123',city:'Speyer',wh:20,al:24,team:'Akademie',bundesland:'RP',dpw:5}
+  {id:'admin',name:'Administrator',role:'admin',pw:'',city:'',wh:0,al:0,team:'',bundesland:'',dpw:5},
+  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'',city:'',wh:40,al:30,team:'',bundesland:'',dpw:5},
+  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'',city:'Speyer',wh:20,al:24,team:'Akademie',bundesland:'RP',dpw:5}
 ];

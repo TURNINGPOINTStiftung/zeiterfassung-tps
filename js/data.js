@@ -312,6 +312,12 @@ export function saveRaw(d){
   try{ const prev=localStorage.getItem(STORAGE_KEY); if(prev) localStorage.setItem(STORAGE_KEY+'_prev', prev); }catch(e){}
   _dataCache=d;
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(d)); }catch(e){}
+  // Cloud-Schutz: Solange der echte Cloud-Stand nicht bestätigt ist (dieses Gerät konnte beim
+  // Start KEINE Cloud-User laden → window._cloudUnverified), NUR lokal speichern und NICHT in die
+  // Cloud schreiben. Sonst könnten Default-/Teildaten den echten Bestand überschreiben. Der
+  // Realtime-Listener löscht das Flag, sobald echte Daten ankommen. Explizites Restore/Import
+  // (window._allowDataShrink) umgeht das bewusst.
+  if(window._cloudUnverified && !window._allowDataShrink){ return Promise.resolve(); }
   noteGoodData(d);
   if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
   // Normale Bearbeitung: MERGEN via update() – löscht NICHTS, was dieses Gerät nicht kennt

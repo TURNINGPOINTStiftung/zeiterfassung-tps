@@ -153,13 +153,22 @@ export async function initFirebase(){
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
     if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await fbWriteMerge(migrated).catch(()=>{}); }
   } else if(!window._offlineMode){
+    // Kein brauchbarer Datenstand geladen. WICHTIG: Der Client schreibt Default-User NIEMALS
+    // automatisch in die Cloud. Ein leerer/fehlgeschlagener Read (auch fbData==null) darf echte
+    // Cloud-User nicht mit Defaults überschreiben – genau das hat die Nutzerliste zweimal auf die
+    // 3 Standard-User geplättet. Defaults gibt es nur lokal; der Realtime-Listener lädt gleich den
+    // echten Stand nach und hebt die Sperre (window._cloudUnverified) wieder auf. Eine wirklich
+    // leere DB wird bewusst manuell (Firebase-Konsole / Import) befüllt, nicht automatisch.
     const d=freshData();
     for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
     setDataCache(d);
-    await fbWriteMerge(d).catch(()=>{});
-    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}catch(e){}
+    window._cloudUnverified=true;
+    console.warn('[Datenschutz] Kein Cloud-Stand geladen – Defaults NUR lokal, KEIN automatischer Cloud-Write. Warte auf echten Snapshot.');
   } else if(!getData()){
+    // Offline und gar kein Stand → Defaults nur lokal; Cloud gilt als unbestätigt, damit ein
+    // reiner Offline-Start beim Reconnect nie Defaults hochlädt.
     setDataCache(freshData());
+    window._cloudUnverified=true;
   }
 
   _setupRealtimeSync();
@@ -167,6 +176,8 @@ export async function initFirebase(){
 
 function _applyFirebaseSnap(val){
   if(!val||!getData()) return;
+  // Echter Cloud-Stand ist da → „unbestätigt"-Sperre aufheben (Writes dürfen wieder in die Cloud).
+  if(Array.isArray(val.users)&&val.users.length>0) window._cloudUnverified=false;
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
@@ -220,7 +231,7 @@ export function initFirebaseEvents(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
-    if(window._pendingSync&&getData()){
+    if(window._pendingSync&&getData()&&!window._cloudUnverified){
       fbWriteMerge(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
     }
   });
