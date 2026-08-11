@@ -51,6 +51,17 @@ export function getTrees(){
 }
 export function treeByKey(k){ const t=getTrees(); return t.find(x=>x.key===k) || t[0]; }
 
+// ── Kategorien (frei definierbar; für den einheitlichen Kontakte-Filter) ───
+// Ersetzen die früheren festen Reiter durch frei vergebbare Kategorien. Solange in der
+// Verwaltung nichts Eigenes angelegt ist, werden sie aus den Bäumen abgeleitet – die
+// bisherigen Bereiche (Vereine, Sozialakteure …) bleiben so verlustfrei als Kategorien.
+export function getCategories(){
+  const c=_cfg();
+  if(c && Array.isArray(c.categories) && c.categories.length) return c.categories;
+  return getTrees().map(t=>({ key:t.key, label:t.label, color:'' }));
+}
+export function categoryByKey(k){ return getCategories().find(x=>x.key===k) || null; }
+
 // Stammdaten-Felder eines Baums: baum-spezifisch → Standard-Override → Code-Default
 export function stammFields(tree){
   const c=_cfg();
