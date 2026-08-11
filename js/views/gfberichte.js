@@ -116,7 +116,14 @@ export function renderGFBerichte(){
     +'</div>';
   html+='<div>';
   list.forEach(function(r){
-    const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
+    let team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
+    // Leitungs-Karten nach Fachbereich benennen (Moritz→Akademie, Rebecca→Vereinsentwicklung,
+    // Isabel→Marketing/ÖA), sonst heißen alle drei nur „Leitung". Reine Anzeige: der Bereich
+    // kommt aus dem Team-Feld der berichteten Person – keine Änderung an den Berichtsdaten.
+    if(team==='Leitung' && Array.isArray(r.employeeIds) && r.employeeIds.length){
+      const _p=(d.users||[]).find(function(u){ return u.id===r.employeeIds[0]; });
+      if(_p && _p.team) team='Leitung '+_p.team;
+    }
     const dt=new Date(r.submittedAt);
     const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
     const isNew=!r.seenAt;
