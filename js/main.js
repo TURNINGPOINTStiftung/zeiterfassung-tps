@@ -36,7 +36,7 @@ import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
          cancelZeitstempel, stopZeitstempel,
          syncStempelVon, startZeitstempelAt } from './views/stempeln.js';
 
-import { renderGFBerichte, viewTeamReport, markReportSeen, viewYearReport, deleteGfReport,
+import { renderGFBerichte, gfSetMonth, viewTeamReport, markReportSeen, viewYearReport, deleteGfReport,
          markYearReportSeen, sendTeamReport, sendTeamReportForTeam, recallTeamReport } from './views/gfberichte.js';
 
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
@@ -176,6 +176,7 @@ window.startZeitstempelAt  = startZeitstempelAt;
 
 // GF-Berichte view
 window.renderGFBerichte    = renderGFBerichte;
+window.gfSetMonth          = gfSetMonth;
 window.viewTeamReport      = viewTeamReport;
 window.deleteGfReport      = deleteGfReport;
 window.markReportSeen      = markReportSeen;

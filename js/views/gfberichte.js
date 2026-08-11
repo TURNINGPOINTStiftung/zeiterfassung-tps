@@ -31,6 +31,10 @@ export async function notifyGF(params){
   }
 }
 
+// Aktuell in der GF-Berichte-Ansicht gezeigter Monat (year*100+month). null = neuester mit Berichten.
+let _gfMon=null;
+export function gfSetMonth(mk){ if(mk==null||isNaN(mk)) return; _gfMon=mk; renderGFBerichte(); }
+
 export function renderGFBerichte(){
   const content=document.getElementById('gf-berichte-content');
   if(!content) return;
@@ -72,52 +76,66 @@ export function renderGFBerichte(){
     return;
   }
   if(!reports.length){ content.innerHTML=html; return; }
-  // Gruppierung nach MONAT (neueste zuerst) – wie in der Zeiterfassung ist der Monat
-  // die oberste Ebene; darunter stehen die einzelnen Abteilungs-/Leitungsberichte.
+  // Nach Monat gruppieren; oben umschaltbar – wie in der Zeiterfassung wird EIN Monat gezeigt,
+  // wählbar über ‹ älter / neuer › und ein Dropdown. (Jahresberichte bleiben oben stehen.)
   const monMap={};
   reports.forEach(function(r){
     const mk=r.year*100+r.month;
     if(!monMap[mk]) monMap[mk]=[];
     monMap[mk].push(r);
   });
-  const monKeys=Object.keys(monMap).map(Number).sort(function(a,b){ return b-a; });
-  monKeys.forEach(function(mk){
-    const list=monMap[mk].slice().sort(function(a,b){
-      const ta=a.teamName||(a.managedTeams&&a.managedTeams[0])||'';
-      const tb=b.teamName||(b.managedTeams&&b.managedTeams[0])||'';
-      if(ta!==tb) return ta.localeCompare(tb,'de');
-      return (a.leitungName||'').localeCompare(b.leitungName||'','de');
-    });
-    const y=list[0].year, m=list[0].month;
-    const newCount=list.filter(function(r){ return !r.seenAt; }).length;
-    html+='<div class="gf-team-group">';
-    html+='<div class="gf-team-header"><span class="gf-team-name">📅 '+MONTHS[m-1]+' '+y+'</span>'
-      +(newCount?'<span class="gf-new-badge">'+newCount+' NEU</span>':'')
-      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+list.length+' Bericht'+(list.length!==1?'e':'')+'</span>'
-      +'</div>';
-    html+='<div>';
-    list.forEach(function(r){
-      const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
-      const dt=new Date(r.submittedAt);
-      const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-      const isNew=!r.seenAt;
-      html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
-        +'<div>'
-        +'<div class="gf-report-title">🏢 '+esc(team)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
-        +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
-        +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
-          +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
-        +'</div>'
-        +'</div>'
-        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-        +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
-        +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
-        +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\',\''+r.id+'\')">🗑 Entfernen</button>':'')
-        +'</div>'
-        +'</div>';
-    });
-    html+='</div></div>';
+  const monKeys=Object.keys(monMap).map(Number).sort(function(a,b){ return b-a; }); // neueste zuerst
+  let cur=_gfMon; if(cur==null||monKeys.indexOf(cur)<0) cur=monKeys[0];
+  _gfMon=cur;
+  const idx=monKeys.indexOf(cur);
+  const curY=Math.floor(cur/100), curM=cur%100;
+  const olderKey=(idx<monKeys.length-1)?monKeys[idx+1]:null; // weiter in die Vergangenheit
+  const newerKey=(idx>0)?monKeys[idx-1]:null;
+  html+='<div class="gf-mon-switch">';
+  html+='<button class="btn btn-outline btn-sm gf-mon-arrow"'+(olderKey==null?' disabled':' onclick="gfSetMonth('+olderKey+')"')+'>‹ älter</button>';
+  html+='<select class="gf-mon-select" onchange="gfSetMonth(parseInt(this.value,10))">';
+  monKeys.forEach(function(k){
+    const yy=Math.floor(k/100), mm=k%100;
+    const nc=monMap[k].filter(function(r){ return !r.seenAt; }).length;
+    html+='<option value="'+k+'"'+(k===cur?' selected':'')+'>'+MONTHS[mm-1]+' '+yy+' &middot; '+monMap[k].length+' Bericht'+(monMap[k].length!==1?'e':'')+(nc?' &middot; '+nc+' neu':'')+'</option>';
   });
+  html+='</select>';
+  html+='<button class="btn btn-outline btn-sm gf-mon-arrow"'+(newerKey==null?' disabled':' onclick="gfSetMonth('+newerKey+')"')+'>neuer ›</button>';
+  html+='</div>';
+  const list=monMap[cur].slice().sort(function(a,b){
+    const ta=a.teamName||(a.managedTeams&&a.managedTeams[0])||'';
+    const tb=b.teamName||(b.managedTeams&&b.managedTeams[0])||'';
+    if(ta!==tb) return ta.localeCompare(tb,'de');
+    return (a.leitungName||'').localeCompare(b.leitungName||'','de');
+  });
+  const newCount=list.filter(function(r){ return !r.seenAt; }).length;
+  html+='<div class="gf-team-group">';
+  html+='<div class="gf-team-header"><span class="gf-team-name">📅 '+MONTHS[curM-1]+' '+curY+'</span>'
+    +(newCount?'<span class="gf-new-badge">'+newCount+' NEU</span>':'')
+    +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+list.length+' Bericht'+(list.length!==1?'e':'')+'</span>'
+    +'</div>';
+  html+='<div>';
+  list.forEach(function(r){
+    const team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
+    const dt=new Date(r.submittedAt);
+    const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+    const isNew=!r.seenAt;
+    html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
+      +'<div>'
+      +'<div class="gf-report-title">🏢 '+esc(team)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+      +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
+      +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
+        +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
+      +'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
+      +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
+      +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\',\''+r.id+'\')">🗑 Entfernen</button>':'')
+      +'</div>'
+      +'</div>';
+  });
+  html+='</div></div>';
   content.innerHTML=html;
 }
 
