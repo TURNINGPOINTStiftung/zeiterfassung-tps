@@ -67,11 +67,21 @@ export function provisionAuthAccount(id, pw, email){
   }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
 }
 
-// Bestehende Firebase-Sitzung wiederverwenden statt sie beim Start mit einer
-// NEUEN anonymen zu überschreiben. Wer sich einmal echt angemeldet hat, läuft
-// danach dauerhaft als echter Nutzer (Firebase persistiert die Sitzung lokal) –
-// dadurch entstehen nicht mehr ständig neue „(anonymous)"-Konten. Nur wenn gar
-// keine Sitzung existiert, wird (wie bisher) anonym angemeldet. Fallback-sicher.
+// Festes technisches „Bootstrap"-Konto: erlaubt einem FRISCHEN Gerät (ohne gespeicherte
+// Sitzung), die Daten ZU LESEN, damit die Login-Maske die echten Nutzer zeigt. Nötig, seit
+// die anonyme Anmeldung deaktiviert ist – die Regeln verlangen eine NICHT-anonyme Sitzung,
+// und ohne Lese-Zugriff käme ein neues Gerät gar nicht mehr an die Nutzerliste. Kein
+// zusätzliches Sicherheitsrisiko: Wer den (öffentlichen) Code hat, könnte sich ohnehin ein
+// Firebase-Konto anlegen; die echte Zugangskontrolle macht die App über das gehashte u.pw.
+const _BOOT_ACCT='bootstrap@tps.intern';
+function _bootAuthPw(){ return _stableAuthPw('__bootstrap__'); }
+
+// Bestehende Firebase-Sitzung wiederverwenden statt sie beim Start zu überschreiben. Wer sich
+// einmal echt angemeldet hat, läuft dauerhaft als echter Nutzer (Firebase persistiert die
+// Sitzung lokal). Nur wenn GAR KEINE Sitzung existiert, wird über das Bootstrap-Konto eine
+// nicht-anonyme Lese-Sitzung hergestellt (bei Bedarf einmalig angelegt). Alles fällt am Ende
+// sauber auf finish(null) zurück → dann greift wie bisher der Offline-Modus. Diese Verzweigung
+// läuft NIE, wenn schon eine Sitzung da ist – bestehende, funktionierende Geräte bleiben unberührt.
 function _ensureAuthSession(){
   return new Promise(resolve=>{
     let done=false; const finish=v=>{ if(!done){ done=true; resolve(v); } };
@@ -79,8 +89,11 @@ function _ensureAuthSession(){
       const auth=firebase.auth();
       const unsub=auth.onAuthStateChanged(u=>{
         try{ unsub(); }catch(_){}
-        if(u) finish(u);                                   // vorhandene Sitzung (echt ODER anonym) behalten
-        else auth.signInAnonymously().then(finish).catch(()=>finish(null));
+        if(u){ finish(u); return; }                        // vorhandene Sitzung behalten
+        const boot=_bootAuthPw();
+        auth.signInWithEmailAndPassword(_BOOT_ACCT, boot)
+          .then(finish)
+          .catch(()=> auth.createUserWithEmailAndPassword(_BOOT_ACCT, boot).then(finish).catch(()=>finish(null)) );
       }, ()=>finish(null));
     }catch(e){ finish(null); }
   });
