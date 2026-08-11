@@ -186,6 +186,18 @@ function _catsOf(e, treeKey){
 function crmCatDef(k){ try{ return categoryByKey(k); }catch(e){ return null; } }
 function crmCatBadge(k){ const d=crmCatDef(k); const c=(d&&d.color)||'#5b6b7d'; return `<span class="crm-catbadge" style="background:${c}">${esc(d?d.label:k)}</span>`; }
 function crmCatBadges(e, treeKey){ const a=_catsOf(e, treeKey); return a.length?a.map(crmCatBadge).join(' '):''; }
+// Vereinskürzel (falls als Stammfeld gepflegt) – für Anzeige „Name (KÜRZEL)". Sucht das
+// Stammfeld, dessen Label oder Key „kürzel/kuerzel" enthält, und liefert dessen Wert.
+function _kuerzelOf(e, treeKey){
+  try{
+    const tk=e.tree||treeKey;
+    const f=(stammFields(tk)||[]).find(x=>/k(ü|ue)rzel/i.test(x.label||'')||/k(ü|ue)rzel/i.test(x.key||''));
+    if(f) return String((e.stamm&&e.stamm[f.key])||'').trim();
+  }catch(err){}
+  return '';
+}
+// Anzeige-Suffix „ (KÜRZEL)" hinter dem Namen – nur der Kürzel-Wert, sonst nichts. Leer, wenn kein Kürzel.
+function _kuerzelSuffix(e, treeKey){ const k=_kuerzelOf(e, treeKey); return k?` <span class="crm-kuerzel">(${esc(k)})</span>`:''; }
 // Alle Einträge ALLER Bäume zusammengeführt (einheitliche Kontakte-Ansicht), je mit
 // ihrem Speicher-Baum getaggt (e.tree wird abgesichert, falls Altdaten es nicht haben).
 function allEntitiesWithTree(){
@@ -511,6 +523,7 @@ function injectStyles(){
   .crm-sf-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:#fff;color:var(--text);cursor:pointer}
   /* Kategorie-Badge (analog Status) */
   .crm-catbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+  .crm-kuerzel{font-weight:600;color:var(--muted)}
   /* Filter als Button + Popup-Menü */
   .crm-filterrow{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
   .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:#fff;color:var(--text);font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
@@ -885,7 +898,7 @@ function paintList(){
     else { const openTodos=entityOpenTaskCount(e); const kCount=(e.kontakte||[]).length;
       meta=`${crmStatusBadges(e)} ${crmCatBadges(e, tk)}<span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}`; }
     return `<div class="crm-card" onclick="crmGoEntry('${tk}','${e.id}')">
-      <h3>${esc(s.name||'(ohne Name)')}</h3>
+      <h3>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, tk)}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
       <div class="meta">${meta}</div>
     </div>`;
@@ -1341,7 +1354,7 @@ function paintDetail(){
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?'Kontakte':'Meine Aufgaben'}</button>
-      <h2>${esc(s.name||'(ohne Name)')}</h2>
+      <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)}</h2>
       ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
     </div>
