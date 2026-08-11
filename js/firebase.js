@@ -1,4 +1,4 @@
-import { STORAGE_KEY, _STAMP_KEY } from './config.js';
+import { STORAGE_KEY, _STAMP_KEY, _PW_SALT } from './config.js';
 import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
@@ -15,26 +15,40 @@ function _accountEmail(id, email){
   if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return e;
   return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 }
-// Beim Login: echtes Konto verwenden oder (einmalig) anlegen. NON-BLOCKING –
-// schlägt es fehl (z. B. Provider noch nicht aktiviert), bleibt der Login unberührt.
+// Stabiles, APP-VERWALTETES Firebase-Passwort je Nutzer – bewusst UNABHÄNGIG vom Login-
+// Passwort des Nutzers. Dadurch bleibt das Firebase-Konto gültig, auch wenn der Nutzer sein
+// (App-)Passwort ändert; genau diese Kopplung hat sonst dazu geführt, dass ein Passwort-
+// wechsel das Firebase-Login auf ein neues Gerät aussperrte. (KEIN Sicherheits-Boundary:
+// die Firebase-Regeln verlangen nur IRGENDEINE nicht-anonyme Anmeldung; die echte
+// Zugangskontrolle macht die App über das gehashte u.pw.)
+function _stableAuthPw(id){ return 'tpsfb$'+String(id||'').toLowerCase()+'$'+_PW_SALT; }
+
+// Beim Login: echtes Firebase-Konto verwenden oder (einmalig) anlegen. NON-BLOCKING –
+// schlägt es fehl (z. B. Provider nicht aktiv), bleibt der App-Login unberührt. Das Konto
+// nutzt das STABILE Passwort. Alt-Konten, die noch mit dem Login-Passwort angelegt wurden,
+// werden beim nächsten erfolgreichen Login EINMALIG darauf umgestellt (Selbst-Migration) –
+// danach kann kein Passwortwechsel das Firebase-Login mehr aus dem Tritt bringen.
 export function ensureRealAuth(id, pw, email){
   try{
-    if(!window.firebase || !firebase.auth || !id || !pw) return;
+    if(!window.firebase || !firebase.auth || !id) return;
     const acct=_accountEmail(id, email);
+    const authPw=_stableAuthPw(id);
     const auth=firebase.auth();
-    auth.signInWithEmailAndPassword(acct, pw).catch(err=>{
-      const code=err&&err.code;
-      if(code==='auth/operation-not-allowed' || code==='auth/network-request-failed') return;
-      // Login fehlgeschlagen → Konto existiert vermutlich noch nicht (neuere Firebase
-      // liefert dafür generisch 'auth/invalid-credential'). Also Konto anlegen.
-      auth.createUserWithEmailAndPassword(acct, pw).catch(e=>{
-        const c=e&&e.code;
-        if(c==='auth/email-already-in-use'){
-          /* Konto existiert bereits, Passwort weicht von Firebase ab (DB ≠ Auth) – ignorieren */
-        } else if(c!=='auth/operation-not-allowed' && c!=='auth/network-request-failed'){
-          console.warn('CRM-Auth anlegen:', e&&e.message);
-        }
-      });
+    const create=()=>auth.createUserWithEmailAndPassword(acct, authPw).catch(e=>{
+      const c=e&&e.code;
+      if(c!=='auth/email-already-in-use' && c!=='auth/operation-not-allowed' && c!=='auth/network-request-failed') console.warn('CRM-Auth anlegen:', e&&e.message);
+    });
+    // 1) Bevorzugt mit dem stabilen Passwort anmelden.
+    auth.signInWithEmailAndPassword(acct, authPw).catch(()=>{
+      // 2) Klappt nicht → evtl. Alt-Konto (mit Login-Passwort angelegt). Damit anmelden und
+      //    danach EINMALIG auf das stabile Passwort umstellen. Sonst: Konto neu anlegen.
+      if(pw){
+        auth.signInWithEmailAndPassword(acct, pw)
+          .then(cred=>{ try{ cred.user.updatePassword(authPw).catch(()=>{}); }catch(_){} })
+          .catch(()=>create());
+      } else {
+        create();
+      }
     });
   }catch(e){ console.warn('ensureRealAuth:', e&&e.message); }
 }
@@ -42,11 +56,12 @@ export function ensureRealAuth(id, pw, email){
 // damit die Admin-Sitzung nicht ersetzt wird. Best effort.
 export function provisionAuthAccount(id, pw, email){
   try{
-    if(!window.firebase || !id || !pw) return;
+    if(!window.firebase || !id) return;
     const acct=_accountEmail(id, email);
+    const authPw=_stableAuthPw(id);   // stabiles Passwort (unabhängig vom Login-Passwort)
     const cfg=firebase.app().options;
     const sec=(firebase.apps||[]).find(a=>a.name==='admin-prov') || firebase.initializeApp(cfg, 'admin-prov');
-    sec.auth().createUserWithEmailAndPassword(acct, pw)
+    sec.auth().createUserWithEmailAndPassword(acct, authPw)
       .then(()=>{ try{ sec.auth().signOut(); }catch(_){} })
       .catch(e=>{ const c=e&&e.code; if(c!=='auth/email-already-in-use'&&c!=='auth/operation-not-allowed') console.warn('CRM-Auth provisionieren:', e&&e.message); try{ sec.auth().signOut(); }catch(_){} });
   }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
