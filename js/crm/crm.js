@@ -540,6 +540,7 @@ function injectStyles(){
   /* Kategorie-Badge (analog Status) */
   .crm-catbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
   .crm-kuerzel{font-weight:600;color:var(--muted)}
+  .crm-scbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 14px}
   /* Filter als Button + Popup-Menü */
   .crm-filterrow{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
   .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:#fff;color:var(--text);font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
@@ -1352,20 +1353,11 @@ function paintDetail(){
         ${crmFull()?`<button type="button" onclick="crmNeuPick('veranstaltung')">🎪 Veranstaltung</button>`:''}
       </div>
     </div><span class="small" style="color:var(--muted)">Aufgabe, Termin oder Veranstaltung – hier wählen.</span></div>` : '';
-  const _curStatus=_statusArr(e);
-  const statusCtrl = `<div class="crm-sec crm-statusrow"><span class="crm-statuslabel">Status</span>${
-     canCreate
-      ? `<div class="crm-status-multi" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{ const on=_curStatus.includes(s.key); return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?s.color:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer;background:${on?s.color:'transparent'};color:${on?'#fff':'inherit'}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatus('${s.key}',this.checked)" style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`; }).join('')}</div>`
-      : (crmStatusBadges(e)||'<span class="small" style="color:var(--muted)">kein Status</span>')
-     }${_statusLogHtml(e)}</div>`;
-  const _curCats=_catsOf(e, window._crmTree);
-  const catCtrl = `<div class="crm-sec crm-statusrow"><span class="crm-statuslabel">Kategorie</span>${
-     canCreate
-      ? `<div class="crm-status-multi" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{ const on=_curCats.includes(c.key); const col=c.color||'#5b6b7d'; return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?col:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer;background:${on?col:'transparent'};color:${on?'#fff':'inherit'}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCat('${esc(c.key)}',this.checked)" style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`; }).join('')}</div>`
-      : (crmCatBadges(e, window._crmTree)||'<span class="small" style="color:var(--muted)">keine Kategorie</span>')
-     }</div>`;
+  // Status + Kategorie werden jetzt im „✎ Stammdaten"-Dialog geändert; hier oben nur kompakt als Badges.
+  const _stBadges=crmStatusBadges(e), _catBadges=crmCatBadges(e, window._crmTree);
+  const scBar = `<div class="crm-scbar">${_stBadges||''}${(_stBadges&&_catBadges)?' ':''}${_catBadges||''}${(!_stBadges&&!_catBadges)?'<span class="small" style="color:var(--muted)">Kein Status · keine Kategorie – über „✎ Stammdaten" setzen</span>':''}${_statusLogHtml(e)}</div>`;
   const bodyByTab={
-    allgemeines: statusCtrl + catCtrl + (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
+    allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
     aufgaben: neuBtn + termineSec + vaSection + angeboteSec + aufgabenSec,
     kommunikation: statusSec + kommSec,
     statistik: statsSec,
@@ -1382,6 +1374,7 @@ function paintDetail(){
     ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 12px">${
         e.createdAt?`angelegt ${e.createdByKuerzel?'von '+esc(e.createdByKuerzel)+' ':''}am ${esc(fmtDate(e.createdAt))}`:''
       }${e.updatedByKuerzel?` · zuletzt geändert von ${esc(e.updatedByKuerzel)}${e.updatedAt?' am '+esc(fmtDateTime(e.updatedAt)):''}`:''}</div>`:''}
+    ${scBar}
     ${subbar}
     ${bodyByTab[dt]||''}
   </div>`;
@@ -1619,11 +1612,18 @@ function _catPickerHtml(sel){
   return `<div class="crm-modal-field"><label>Kategorie(n) *</label>
     <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?col:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
 }
+// Status-Häkchen fürs Anlage-/Bearbeiten-Formular (Checkbox-IDs crm-st-<key>).
+function _statusPickerHtml(sel){
+  sel=sel||[];
+  return `<div class="crm-modal-field"><label>Status</label>
+    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{const on=sel.includes(s.key);return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?s.color:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-st-${esc(s.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`;}).join('')}</div></div>`;
+}
 function crmOpenNew(){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Kontakt anlegen</h3>
     ${stammFormHtml({})}
     ${_catPickerHtml([])}
+    ${_statusPickerHtml([])}
     <div class="crm-modal-actions">
       <button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
       <button class="btn-sm-crm primary" onclick="crmSaveStamm(true)">Anlegen</button>
@@ -1634,6 +1634,8 @@ function crmEditStamm(){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Stammdaten</h3>
     ${stammFormHtml(e.stamm||{}, e.fieldLabels||{})}
+    ${_catPickerHtml(_catsOf(e, window._crmTree))}
+    ${_statusPickerHtml(_statusArr(e))}
     <div class="crm-modal-actions">
       <button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
       <button class="btn-sm-crm primary" onclick="crmSaveStamm(false)">Speichern</button>
@@ -1643,24 +1645,31 @@ function crmSaveStamm(isNew){
   const stamm={};
   stammFields(window._crmTree).forEach(f=>{ stamm[f.key]=val('crm-sf-'+f.key); });
   if(!stamm.name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  // Kategorie(n) + Status aus den Häkchen im Formular. Kategorie ist PFLICHT (eindeutige Ablage).
+  const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
+  if(!cats.length){ toast('Bitte mindestens eine Kategorie wählen.','err'); return; }
+  const statuses=CRM_STATUS.map(s=>s.key).filter(k=>{ const el=document.getElementById('crm-st-'+k); return el&&el.checked; });
   if(isNew){
-    // Kategorien aus den Häkchen — PFLICHT: mindestens eine, damit die Ablage eindeutig ist.
-    // Speicher-Baum = Pfad der ERSTEN gewählten Kategorie (Kategorie = Ablageort). Fallback nur
-    // als Sicherheitsnetz, falls eine Kategorie ausnahmsweise keinen eigenen Baum hat.
-    const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
-    if(!cats.length){ toast('Bitte mindestens eine Kategorie wählen.','err'); return; }
+    // Speicher-Baum = Pfad der ERSTEN gewählten Kategorie (Kategorie = Ablageort).
     const treeKeys=getTrees().map(t=>t.key);
     const tree = cats.find(k=>treeKeys.includes(k)) || (treeKeys.includes(window._crmTree)?window._crmTree:treeKeys[0]);
     const id=newId();
     const ent={ id, tree, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
-      categories: cats,
+      categories: cats, status: statuses,
+      statusLog: statuses.length?[{ statuses:statuses.slice(), ts:Date.now(), by:curKuerzel() }]:[],
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
     saveEntity(tree, ent);
     window._crmTree=tree; window._crmSelId=id;
     crmCloseModal(); paintDetail(); toast('Angelegt ✓','ok');
   } else {
-    mutateEntity(e=>{ e.stamm=stamm; });
+    mutateEntity(e=>{
+      e.stamm=stamm; e.categories=cats;
+      const oldS=_statusArr(e);
+      const changed = oldS.length!==statuses.length || oldS.some(k=>!statuses.includes(k));
+      e.status=statuses;
+      if(changed){ if(!Array.isArray(e.statusLog)) e.statusLog=[]; e.statusLog.push({ statuses:statuses.slice(), ts:Date.now(), by:curKuerzel() }); }
+    });
     crmCloseModal(); paintDetail(); toast('Gespeichert ✓','ok');
   }
 }
