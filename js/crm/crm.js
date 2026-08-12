@@ -1237,6 +1237,7 @@ function paintDetail(){
     <div class="crm-card crm-kontakt" onclick="crmMemberDetail('${k.id}')">
       <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
       ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
+      ${k.adresse?`<div class="sub" style="white-space:pre-line">📍 ${esc(k.adresse)}</div>`:''}
       ${(kEmails(k).length||kTels(k).length)?`<div class="meta" onclick="event.stopPropagation()">
         ${kEmails(k).map(em=>`<a href="${mailHref(em)}" class="crm-chip">✉️ ${esc(em)}</a>`).join('')}
         ${kTels(k).map(t=>`<a href="${telHref(t)}" class="crm-chip">📞 ${esc(t)}</a>`).join('')}
@@ -2228,6 +2229,7 @@ function crmAttOpen(nid){
   const rows=a.length ? a.map(x=>`<div class="crm-att-row">
       <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
       ${x.size?`<span class="small" style="color:var(--muted)">${Math.round(x.size/1024)} KB</span>`:''}
+      <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmAttEdit('${nid}','${x.id}')">✎</button>
       <button class="crm-x" title="Entfernen" onclick="crmAttDel('${nid}','${x.id}')">✕</button>
     </div>`).join('') : `<div class="small" style="color:var(--muted);padding:4px 0">Noch keine Anlagen.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📎 Anlagen</h3>
@@ -2272,6 +2274,15 @@ function crmAttDel(nid, attId){
   let delPath=null;
   mutateContainer(c=>{ const f=findNode(c,nid); if(!f||!Array.isArray(f.node.attachments)) return; const x=f.node.attachments.find(a=>a.id===attId); if(x&&x.path) delPath=x.path; f.node.attachments=f.node.attachments.filter(a=>a.id!==attId); });
   if(delPath && _storageOn()){ try{ firebase.storage().ref(delPath).delete().catch(()=>{}); }catch(e){} }
+  crmAttOpen(nid);
+}
+// Anzeigename (Titel) einer bestehenden Anlage ändern – so wird statt der langen URL der Name gezeigt.
+function crmAttEdit(nid, attId){
+  const c=curContainer(); if(!c) return;
+  const f=findNode(c,nid); if(!f) return;
+  const x=(f.node.attachments||[]).find(a=>a.id===attId); if(!x) return;
+  const nt=window.prompt('Anzeigename der Anlage (leer = Link/Dateiname zeigen):', x.title||''); if(nt===null) return;
+  mutateContainer(cc=>{ const ff=findNode(cc,nid); if(!ff) return; const xx=(ff.node.attachments||[]).find(a=>a.id===attId); if(xx) xx.title=String(nt).trim(); });
   crmAttOpen(nid);
 }
 // Team-Ansicht: Anlagen mit passendem Container-Kontext öffnen
@@ -2673,6 +2684,7 @@ function _applyVorlageCore(id){
   const build=(n,depth)=>{
     const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
+      attachments:(n.attachments||[]).map(a=>({ ...a, id:newId() })),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
     if(depth===0) node.teams = isEntityCtx()?(n.team?[n.team]:[]):[];
     return node;
@@ -3366,9 +3378,10 @@ function vNodeHtml(v,n,depth){
   const children=(n.children||[]).map(ch=>vNodeHtml(v,ch,depth+1)).join('');
   return `<div class="crm-tnode${depth===0?' top':''}">
     <div class="crm-task">
-      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}</div>
+      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}${attachChips(n)}</div>
       <button class="btn-sm-crm" title="Unterpunkt" onclick="crmVNodeAdd('${v.id}','${n.id}')">＋</button>
       <button class="btn-sm-crm" title="Bearbeiten" onclick="crmVNodeEdit('${v.id}','${n.id}')">✎</button>
+      <button class="btn-sm-crm" title="Anlagen (Links/Dokumente)" onclick="crmVAtt('${v.id}','${n.id}')">📎${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
       <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">🔗</button>
       <button class="crm-x" title="Löschen" onclick="crmVNodeDel('${v.id}','${n.id}')">✕</button>
     </div>
@@ -3413,6 +3426,55 @@ function crmVNodeAddSave(vid, pid){
   if(!Array.isArray(f.node.children)) f.node.children=[];
   f.node.children.push({ id:newId(), text, note:val('crm-vnode-note'), deps:[], children:[] });
   saveVorlage(v); crmEditVorlage(vid);
+}
+// ── Anlagen (Links/Dokumente) an Vorlagen-Knoten – kommen beim Anwenden automatisch mit ──
+function crmVAtt(vid, nid){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, nid); if(!f) return;
+  crmOpenModalShell();
+  const a=f.node.attachments||[];
+  const rows=a.length ? a.map(x=>`<div class="crm-att-row">
+      <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
+      <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmVAttEdit('${vid}','${nid}','${x.id}')">✎</button>
+      <button class="crm-x" title="Entfernen" onclick="crmVAttDel('${vid}','${nid}','${x.id}')">✕</button>
+    </div>`).join('') : `<div class="small" style="color:var(--muted);padding:4px 0">Noch keine Anlagen.</div>`;
+  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📎 Anlagen (Vorlage)</h3>
+   <div style="margin-bottom:6px;font-size:13px;color:var(--muted)">${esc(f.node.text||'')}</div>
+   ${rows}
+   <div class="crm-att-add">
+     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">📎 Datei oder Link anhängen</div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <input id="crm-vatt-title" placeholder="Bezeichnung (optional)" style="flex:1;min-width:130px">
+       <input id="crm-vatt-url" placeholder="Link einfügen (z. B. OneDrive-Freigabelink)" style="flex:2;min-width:200px">
+       <button class="btn-sm-crm primary" onclick="crmVAttLink('${vid}','${nid}')">＋ Anhängen</button>
+     </div>
+     <div class="small" style="color:var(--muted);margin-top:8px;line-height:1.5">📂 Dokument: in OneDrive/Teams ablegen → Teilen → Link kopieren → oben einfügen. Beim Anwenden der Vorlage kommen die Anlagen automatisch mit.</div>
+   </div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmEditVorlage('${vid}')">Fertig</button></div>`);
+}
+function crmVAttLink(vid, nid){
+  const url=val('crm-vatt-url'); if(!url){ toast('Bitte einen Link einfügen.','err'); return; }
+  const u=/^https?:\/\//i.test(url)?url:('https://'+url.replace(/^\/+/,''));
+  const title=val('crm-vatt-title');
+  const type=_looksLikeFile(u)?'file':'link';
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, nid); if(!f) return;
+  if(!Array.isArray(f.node.attachments)) f.node.attachments=[];
+  f.node.attachments.push({id:newId(),type,title,url:u});
+  saveVorlage(v); crmVAtt(vid,nid); toast('Anlage hinzugefügt ✓','ok');
+}
+function crmVAttEdit(vid, nid, attId){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, nid); if(!f) return;
+  const x=(f.node.attachments||[]).find(a=>a.id===attId); if(!x) return;
+  const nt=window.prompt('Anzeigename der Anlage (leer = Link/Dateiname zeigen):', x.title||''); if(nt===null) return;
+  x.title=String(nt).trim(); saveVorlage(v); crmVAtt(vid,nid);
+}
+function crmVAttDel(vid, nid, attId){
+  const v=getVorlage(vid); if(!v) return; normVorlage(v);
+  const f=findNodeIn(v.items, nid); if(!f) return;
+  f.node.attachments=(f.node.attachments||[]).filter(a=>a.id!==attId);
+  saveVorlage(v); crmVAtt(vid,nid);
 }
 function crmVNodeEdit(vid, id){
   const v=getVorlage(vid); if(!v) return; normVorlage(v);
@@ -4639,7 +4701,8 @@ Object.assign(window, {
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
-  crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmTeamAtt,
+  crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmAttEdit, crmTeamAtt,
+  crmVAtt, crmVAttLink, crmVAttEdit, crmVAttDel,
   crmAddStat, crmEditStat, crmSaveStat, crmDeleteStat,
   crmAddFoerderung, crmEditFoerderung, crmSaveFoerderung, crmDeleteFoerderung,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
