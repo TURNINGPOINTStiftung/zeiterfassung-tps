@@ -51,6 +51,18 @@ function linkify(s){
   h = h.replace(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g, m=>`<a href="mailto:${m}">${m}</a>`);
   return h;
 }
+// Anzeige eines Stammdaten-Feldwerts. Unterstützt „Anzeigename | https://…" (zeigt NUR den Namen
+// als Link) und kürzt eine nackte einzelne URL auf den Host (voller Link bleibt im Klick), damit
+// lange Links die Ansicht nicht zumüllen. Sonst normaler linkify (Freitext mit evtl. Links).
+function _fieldDisp(v){
+  const s=String(v==null?'':v).trim();
+  if(!s) return '';
+  const m=s.match(/^(.+?)\s*\|\s*(https?:\/\/\S+|www\.\S+)$/i);
+  if(m){ let url=m[2]; if(/^www\./i.test(url)) url='https://'+url; return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(m[1].trim())} ↗</a>`; }
+  const u=s.match(/^(https?:\/\/\S+|www\.\S+)$/i);
+  if(u){ let url=s; if(/^www\./i.test(url)) url='https://'+url; let host=url; try{ host=new URL(url).hostname.replace(/^www\./,''); }catch(e){} return `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(url)}">${esc(host)} ↗</a>`; }
+  return linkify(s);
+}
 const val   = id => { const el=document.getElementById(id); return el ? el.value.trim() : ''; };
 const fmtDate = ts => { try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '';} };
 const fmtDateTime = ts => { try{ return new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
@@ -1229,7 +1241,7 @@ function paintDetail(){
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):linkify(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):_fieldDisp(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   // Kontakte als klickbare Karten (wie im Gartenverein-CRM) → Detail-Ansicht beim Klick.
@@ -1578,7 +1590,7 @@ function stammFormHtml(s, flbls){
     }
     const flabel=flbls[f.key]||f.label;
     return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
-  }).join('');
+  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
 }
 // Schlagwort-Vorschläge (Token nach letztem Komma gegen vorhandene Tags)
 function crmTagSuggest(inp){
