@@ -1808,6 +1808,7 @@ function memberFormHtml(k){
    <div class="crm-modal-field"><label>Telefonnummern</label>
      <div id="crm-mf-tels">${(tels.length?tels:['']).map(v=>_mfRow('tel',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
+   <div class="crm-modal-field"><label>Adresse</label><textarea id="crm-mf-adresse" rows="2" placeholder="Straße, PLZ Ort">${esc(k.adresse||'')}</textarea></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>
    ${vBlock}`;
 }
@@ -1829,7 +1830,7 @@ function crmSaveMember(mid){
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const emails=Array.from(document.querySelectorAll('.crm-mf-email')).map(x=>x.value.trim()).filter(Boolean);
   const tels=Array.from(document.querySelectorAll('.crm-mf-tel')).map(x=>x.value.trim()).filter(Boolean);
-  const rec={ name, funktion:val('crm-mf-fn'), emails, tels, note:val('crm-mf-note') };
+  const rec={ name, funktion:val('crm-mf-fn'), emails, tels, adresse:val('crm-mf-adresse'), note:val('crm-mf-note') };
   // Verteiler-Auswahl AUS DEM DOM lesen, BEVOR das Modal geschlossen wird (primäre = erste E-Mail)
   const email=String(emails[0]||'').trim();
   const want=new Set(Array.from(document.querySelectorAll('.crm-mf-vt:checked')).map(x=>x.value));
@@ -1874,6 +1875,7 @@ function crmMemberDetail(mid){
     ${det('Rolle / Funktion', k.funktion?esc(k.funktion):'')}
     ${det('E-Mail', kEmails(k).map(em=>`<a href="${mailHref(em)}">${esc(em)}</a>`).join('<br>'))}
     ${det('Telefon', kTels(k).map(t=>`<a href="${telHref(t)}">${esc(t)}</a>`).join('<br>'))}
+    ${det('Adresse', k.adresse?`<span style="white-space:pre-line">${esc(k.adresse)}</span>`:'')}
     ${det('Notiz', k.note?`<span style="white-space:pre-line">${linkify(k.note)}</span>`:'')}
     <div class="crm-modal-actions" style="margin-top:16px">
       ${canEdit?`<button class="btn-sm-crm danger" style="margin-right:auto" onclick="crmDeleteMemberConfirm('${k.id}')">🗑 Löschen</button>`:''}
@@ -1892,6 +1894,7 @@ function crmContactsToVCard(list){
     if(k.funktion) L.push('TITLE:'+_vcEsc(k.funktion));
     kEmails(k).forEach(em=>L.push('EMAIL;TYPE=INTERNET:'+_vcEsc(em)));
     kTels(k).forEach(t=>L.push('TEL;TYPE=CELL:'+_vcEsc(t)));
+    if(k.adresse) L.push('ADR;TYPE=HOME:;;'+_vcEsc(k.adresse)+';;;;');
     if(k.note) L.push('NOTE:'+_vcEsc(k.note));
     L.push('END:VCARD');
     return L.join('\r\n');
@@ -4157,7 +4160,7 @@ function allContactRows(){
   getTrees().forEach(t=>{ listEntities(t.key).forEach(e=>{
     (e.kontakte||[]).forEach(k=>{
       rows.push({ baum:t.label, eintrag:(e.stamm&&e.stamm.name)||'',
-        name:k.name||'', funktion:k.funktion||'', email:kEmails(k).join('; '), tel:kTels(k).join('; '), note:k.note||'' });
+        name:k.name||'', funktion:k.funktion||'', email:kEmails(k).join('; '), tel:kTels(k).join('; '), adresse:k.adresse||'', note:k.note||'' });
     });
   }); });
   return rows;
