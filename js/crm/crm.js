@@ -198,6 +198,10 @@ function _kuerzelOf(e, treeKey){
 }
 // Anzeige-Suffix „ (KÜRZEL)" hinter dem Namen – nur der Kürzel-Wert, sonst nichts. Leer, wenn kein Kürzel.
 function _kuerzelSuffix(e, treeKey){ const k=_kuerzelOf(e, treeKey); return k?` <span class="crm-kuerzel">(${esc(k)})</span>`:''; }
+// Hat eine Kategorie die Statistik/Weitermach-Quote? (Alt-Configs ohne Flag: „vereine" = ja.)
+function _catStats(c){ return !!(c && (c.stats===true || (c.stats==null && c.key==='vereine'))); }
+// Hat der Eintrag mindestens eine Kategorie mit Statistik? → steuert den Statistik-Reiter.
+function _entityHasStatsCat(e){ try{ const cats=_catsOf(e, window._crmTree); return getCategories().some(c=>_catStats(c)&&cats.includes(c.key)); }catch(err){ return false; } }
 // Alle Einträge ALLER Bäume zusammengeführt (einheitliche Kontakte-Ansicht), je mit
 // ihrem Speicher-Baum getaggt (e.tree wird abgesichert, falls Altdaten es nicht haben).
 function allEntitiesWithTree(){
@@ -1320,7 +1324,7 @@ function paintDetail(){
   const tabs=[['allgemeines','Allgemeines'],['aufgaben','Aufgaben & Termine'+(openTasks?` (${openTasks})`:'')]];
   tabs.push(['kommunikation','Kommunikation']);
   // Statistik-Reiter für Vereine – ODER wenn (geteilte) Statistik vorliegt (z. B. Sozialakteur mit gemeinsamer Erfassung)
-  if(window._crmTree==='vereine' || _statsForEntity(window._crmTree, e.id).length) tabs.push(['statistik','Statistik']);
+  if(_entityHasStatsCat(e) || _statsForEntity(window._crmTree, e.id).length) tabs.push(['statistik','Statistik']);
   tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
@@ -3807,7 +3811,7 @@ function _cfgWork(){
     cardFields: (c&&c.cardFields&&typeof c.cardFields==='object') ? _clone(c.cardFields) : {},   // je Baum: welche Infos auf den Kacheln
     // Kategorien für den einheitlichen „Kontakte"-Filter. Fallback = aus den Bäumen abgeleitet
     // (die bisherigen Bereiche), damit ohne Konfiguration nichts verloren geht.
-    categories: (c&&Array.isArray(c.categories)&&c.categories.length) ? _clone(c.categories) : trees.map(t=>({ key:t.key, label:t.label, color:'' }))
+    categories: (c&&Array.isArray(c.categories)&&c.categories.length) ? _clone(c.categories) : trees.map(t=>({ key:t.key, label:t.label, color:'', stats:t.key==='vereine' }))
   };
 }
 function _slug(label, takenArr){
@@ -3840,7 +3844,7 @@ function paintVerwConfig(){
       </td></tr>`).join('');
   // ── Kategorien ──
   const catRows=work.categories.map((c,i)=>`<tr>
-      <td><span class="vw-name">${esc(c.label)}</span><div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
+      <td><span class="vw-name">${esc(c.label)}</span>${_catStats(c)?' <span title="Statistik/Weitermach-Quote aktiv">📊</span>':''}<div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
       <td>${c.color?`<span class="crm-catbadge" style="background:${esc(c.color)}">${esc(c.label)}</span>`:'<span class="small" style="color:var(--muted)">—</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgCatMove('${esc(c.key)}',-1)">↑</button>
@@ -3969,6 +3973,7 @@ function crmCfgCatEdit(key){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${key?'✎ Kategorie bearbeiten':'＋ Neue Kategorie'}</h3>
    <div class="crm-modal-field"><label>Bezeichnung *</label><input id="cfg-cat-label" value="${esc(c.label||'')}" placeholder="z. B. Förderpartner"></div>
    <div class="crm-modal-field"><label>Farbe (optional)</label><input id="cfg-cat-color" type="color" value="${esc(c.color||'#5b6b7d')}" style="width:64px;height:34px;padding:2px;cursor:pointer"></div>
+   <div class="crm-modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cfg-cat-stats" ${_catStats(c)?'checked':''} style="width:auto;margin:0"> Statistik / Weitermach-Quote für diese Kategorie</label><div class="small" style="color:var(--muted)">z. B. Vereine oder Segelschulen – schaltet den Statistik-Reiter an Kontakten dieser Kategorie frei.</div></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmCfgCatSave('${esc(key)}')">Speichern</button></div>`);
@@ -3976,9 +3981,14 @@ function crmCfgCatEdit(key){
 function crmCfgCatSave(origKey){
   const label=val('cfg-cat-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
   const color=val('cfg-cat-color')||'';
+  const stats=!!(document.getElementById('cfg-cat-stats')&&document.getElementById('cfg-cat-stats').checked);
   const work=_cfgWork();
-  if(origKey){ const c=work.categories.find(x=>x.key===origKey); if(c){ c.label=label; c.color=color; } }
-  else { const key=_slug(label, work.categories.map(c=>c.key)); work.categories.push({ key, label, color }); }
+  let key=origKey;
+  if(origKey){ const c=work.categories.find(x=>x.key===origKey); if(c){ c.label=label; c.color=color; c.stats=stats; } }
+  else { key=_slug(label, work.categories.map(c=>c.key).concat(work.trees.map(t=>t.key))); work.categories.push({ key, label, color, stats }); }
+  // Kategorie = Speicherpfad: einen Baum mit gleichem Schlüssel sicherstellen, damit neue
+  // Kontakte dieser Kategorie dort abgelegt werden. Bestehende Daten bleiben unberührt.
+  if(key && !work.trees.some(t=>t.key===key)) work.trees.push({ key, label, icon:'🏷️', single:label });
   saveCrmConfig(work); crmCloseModal(); paintVerwConfig();
   toast('Kategorie gespeichert ✓','ok');
 }
