@@ -530,7 +530,8 @@ function injectStyles(){
   .crm-filter-btn:hover{border-color:var(--primary-l)}
   .crm-filter-btn.on{border-color:var(--primary);background:var(--primary);color:#fff}
   .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800}
-  .crm-filter-count{font-size:12px;color:var(--muted);margin-left:auto}
+  .crm-sortsel{margin-left:auto;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:var(--text);cursor:pointer}
+  .crm-filter-count{font-size:12px;color:var(--muted)}
   .crm-filter-pop{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 20px);max-height:74vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:8px}
   .crm-fpop-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
   .crm-fpop-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13.5px}
@@ -877,14 +878,16 @@ function paintList(){
   const ctf = Array.isArray(window._crmCatFilter) ? window._crmCatFilter : [];
   const matchStatus = e=> !stf.length || _statusArr(e).some(k=>stf.includes(k));
   const matchCat    = e=> !ctf.length || _catsOf(e, e.tree||window._crmTree).some(k=>ctf.includes(k));
+  const sort = window._crmSort==='za'?'za':'az';
   const items = base.filter(e=>matchQ(e)&&matchStatus(e)&&matchCat(e));
+  items.sort((a,b)=>{ const c=String((a.stamm&&a.stamm.name)||'').localeCompare(String((b.stamm&&b.stamm.name)||''),'de',{sensitivity:'base'}); return sort==='za'?-c:c; });
   const anyFilter = stf.length||ctf.length;
   const fCount = stf.length+ctf.length;
-  // Filter als Button → öffnet ein Popup-Menü (crmToggleFilterPop). Der Button trägt die Anzahl
-  // aktiver Häkchen; die eigentlichen Checkboxen leben im Popover (bleibt beim Klicken offen).
+  // Filter als Button → öffnet ein Popup-Menü (crmToggleFilterPop). Rechts: Sortierung + Anzahl.
   const filterBar = unified ? `<div class="crm-filterrow">
       <button id="crm-filter-btn" class="crm-filter-btn${anyFilter?' on':''}" onclick="crmToggleFilterPop(event)">⚑ Filter${fCount?` <span class="crm-filter-badge">${fCount}</span>`:''}</button>
       ${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ zurücksetzen</button>`:''}
+      <select class="crm-sortsel" onchange="crmSetSort(this.value)"><option value="az"${sort==='az'?' selected':''}>Name A–Z</option><option value="za"${sort==='za'?' selected':''}>Name Z–A</option></select>
       <span class="crm-filter-count">${items.length} Kontakt${items.length===1?'':'e'}</span>
     </div>` : '';
   const cards = items.map(e=>{
@@ -918,6 +921,7 @@ function crmClearFilters(){ window._crmStatusFilter=[]; window._crmCatFilter=[];
 function crmSetStatusFilter(v){ window._crmStatusFilter = v?[v]:[]; paintList(); }
 // Einheitlicher „Kontakte"-Reiter (alle Bäume zusammengeführt)
 function crmShowKontakte(){ window._crmMode='kontakte'; window._crmSelId=null; window._crmSearch=''; crmCloseFilterPop(); paintList(); }
+function crmSetSort(v){ window._crmSort = v==='za'?'za':'az'; paintList(); }
 
 // ── Filter als Popup-Menü (an document.body, überlebt Listen-Repaint) ──
 function _refreshFilterPop(){ if(document.getElementById('crm-filter-pop')) _renderFilterPop(); }
@@ -4599,7 +4603,7 @@ Object.assign(window, {
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
-  crmSetStatus, crmToggleStatus, crmToggleCat, crmSetStatusFilter, crmToggleStatusFilter, crmToggleCatFilter, crmClearFilters, crmToggleFilterPop, crmCloseFilterPop, crmShowKontakte, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
+  crmSetStatus, crmToggleStatus, crmToggleCat, crmSetStatusFilter, crmToggleStatusFilter, crmToggleCatFilter, crmClearFilters, crmToggleFilterPop, crmCloseFilterPop, crmShowKontakte, crmSetSort, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
   crmSearchInput, crmGoEntry, crmGoEntryTab, crmGoEntityProj, crmGoTeamProj,
   crmToggleNotif, crmNotifGo,
