@@ -1603,7 +1603,7 @@ function crmTagHide(){ const box=document.getElementById('crm-tag-suggest'); if(
 // Kategorie-Häkchen fürs Anlage-Formular (Checkbox-IDs crm-cat-<key>).
 function _catPickerHtml(sel){
   sel=sel||[];
-  return `<div class="crm-modal-field"><label>Kategorie(n)</label>
+  return `<div class="crm-modal-field"><label>Kategorie(n) *</label>
     <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?col:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
 }
 function crmOpenNew(){
@@ -1631,16 +1631,17 @@ function crmSaveStamm(isNew){
   stammFields(window._crmTree).forEach(f=>{ stamm[f.key]=val('crm-sf-'+f.key); });
   if(!stamm.name){ toast('Bitte einen Namen eingeben.','err'); return; }
   if(isNew){
-    // Kategorien aus den Häkchen. Speicher-Baum daraus ableiten: passt eine gewählte
-    // Kategorie zu einem Baum-Key, wird dort gespeichert (behält passende Stammfelder/Statistik),
-    // sonst der aktuelle bzw. erste Baum. Ohne Auswahl gilt der Baum selbst als Kategorie.
+    // Kategorien aus den Häkchen — PFLICHT: mindestens eine, damit die Ablage eindeutig ist.
+    // Speicher-Baum = Pfad der ERSTEN gewählten Kategorie (Kategorie = Ablageort). Fallback nur
+    // als Sicherheitsnetz, falls eine Kategorie ausnahmsweise keinen eigenen Baum hat.
     const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
+    if(!cats.length){ toast('Bitte mindestens eine Kategorie wählen.','err'); return; }
     const treeKeys=getTrees().map(t=>t.key);
     const tree = cats.find(k=>treeKeys.includes(k)) || (treeKeys.includes(window._crmTree)?window._crmTree:treeKeys[0]);
     const id=newId();
     const ent={ id, tree, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
-      categories: cats.length?cats:[tree],
+      categories: cats,
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
     saveEntity(tree, ent);
     window._crmTree=tree; window._crmSelId=id;
