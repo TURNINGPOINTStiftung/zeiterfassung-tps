@@ -58,7 +58,8 @@ export function treeByKey(k){ const t=getTrees(); return t.find(x=>x.key===k) ||
 export function getCategories(){
   const c=_cfg();
   if(c && Array.isArray(c.categories) && c.categories.length) return c.categories;
-  return getTrees().map(t=>({ key:t.key, label:t.label, color:'' }));
+  // Fallback aus den Bäumen abgeleitet; „vereine" bekommt standardmäßig die Statistik.
+  return getTrees().map(t=>({ key:t.key, label:t.label, color:'', stats: t.key==='vereine' }));
 }
 export function categoryByKey(k){ return getCategories().find(x=>x.key===k) || null; }
 
