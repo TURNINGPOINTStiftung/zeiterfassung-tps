@@ -64,6 +64,35 @@ function _fieldDisp(v){
   return linkify(s);
 }
 const val   = id => { const el=document.getElementById(id); return el ? el.value.trim() : ''; };
+// Profilbild: eine gewählte Bilddatei auf max. Kantenlänge verkleinern → JPEG-Data-URL.
+// Hält die pro-Eintrag gespeicherte Größe klein (~50–120 KB) und bleibt herunterladbar.
+function _crmImgToDataUrl(file, maxDim, cb){
+  if(!file){ cb(''); return; }
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      const scale=Math.min(1, maxDim/Math.max(w,h||1));
+      w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
+      try{
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        cb(c.toDataURL('image/jpeg', 0.82));
+      }catch(e){ cb(rd.result); }
+    };
+    img.onerror=()=>{ toast('Bild konnte nicht gelesen werden.','err'); cb(''); };
+    img.src=rd.result;
+  };
+  rd.onerror=()=>{ toast('Datei konnte nicht gelesen werden.','err'); cb(''); };
+  rd.readAsDataURL(file);
+}
+// Data-URL als Datei herunterladen (Profilbild „wieder herausholen").
+function _crmDownloadDataUrl(dataUrl, filename){
+  try{ const a=document.createElement('a'); a.href=dataUrl; a.download=filename||'bild.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
+  catch(e){ toast('Download nicht möglich.','err'); }
+}
+function _crmFotoName(e){ return (((e&&e.stamm&&e.stamm.name)||'profilbild').replace(/[^\wäöüÄÖÜß .\-]+/g,'_').trim()||'profilbild')+'.jpg'; }
 const fmtDate = ts => { try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '';} };
 const fmtDateTime = ts => { try{ return new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
 
@@ -1375,6 +1404,7 @@ function paintDetail(){
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?'Kontakte':'Meine Aufgaben'}</button>
+      ${e.foto?`<img src="${e.foto}" alt="Profilbild" title="Profilbild herunterladen" onclick="crmFotoDownloadEntity()" style="width:46px;height:46px;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer;flex:0 0 auto">`:''}
       <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)}</h2>
       ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
@@ -1597,9 +1627,32 @@ function crmOpenModalShell(){ window._crmModalOpen=true; }
 function crmCloseModal(){ window._crmModalOpen=false; closeModal(); }
 
 // ── Neu anlegen / Stammdaten bearbeiten ────────────────────────────
+// Profilbild-Feld für die Stammdaten (Anlegen + Bearbeiten). Aktueller Stand: window._crmStammFoto.
+function _crmFotoFieldHtml(){
+  const f=window._crmStammFoto||'';
+  return `<div class="crm-modal-field" id="crm-foto-field"><label>Profilbild</label>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      ${f?`<img src="${f}" alt="Profilbild" style="width:76px;height:76px;object-fit:cover;border-radius:12px;border:1px solid var(--border)">`
+         :`<div style="width:76px;height:76px;border-radius:12px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:26px">🖼️</div>`}
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label class="btn-sm-crm" style="cursor:pointer;text-align:center">📷 ${f?'Bild ersetzen':'Bild wählen'}<input type="file" accept="image/*" onchange="crmFotoPick(this)" style="display:none"></label>
+        ${f?`<div style="display:flex;gap:6px"><button type="button" class="btn-sm-crm" onclick="crmFotoDownload()">⬇ Herunterladen</button><button type="button" class="btn-sm-crm danger" onclick="crmFotoRemove()">Entfernen</button></div>`:''}
+      </div>
+    </div></div>`;
+}
+function crmFotoRender(){ const el=document.getElementById('crm-foto-field'); if(el) el.outerHTML=_crmFotoFieldHtml(); }
+function crmFotoPick(input){
+  const file=input&&input.files&&input.files[0]; if(!file) return;
+  if(!/^image\//.test(file.type||'')){ toast('Bitte eine Bilddatei wählen.','err'); return; }
+  _crmImgToDataUrl(file, 640, url=>{ if(url){ window._crmStammFoto=url; crmFotoRender(); } });
+}
+function crmFotoRemove(){ window._crmStammFoto=''; crmFotoRender(); }
+function crmFotoDownload(){ const f=window._crmStammFoto||''; if(!f){ toast('Kein Bild vorhanden.','err'); return; } _crmDownloadDataUrl(f, _crmFotoName(curEntity())); }
+// Download aus der Detailansicht (gespeichertes Bild des Eintrags).
+function crmFotoDownloadEntity(){ const e=curEntity(); const f=e&&e.foto; if(!f){ toast('Kein Bild vorhanden.','err'); return; } _crmDownloadDataUrl(f, _crmFotoName(e)); }
 function stammFormHtml(s, flbls){
   flbls=flbls||{};
-  return stammFields(window._crmTree).map(f=>{
+  return _crmFotoFieldHtml() + stammFields(window._crmTree).map(f=>{
     const v=esc(s[f.key]||'');
     let inp;
     if(f.key==='tags'){
@@ -1652,6 +1705,7 @@ function _statusPickerHtml(sel){
 }
 function crmOpenNew(){
   crmOpenModalShell();
+  window._crmStammFoto='';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Kontakt anlegen</h3>
     ${stammFormHtml({})}
     ${_catPickerHtml([])}
@@ -1664,6 +1718,7 @@ function crmOpenNew(){
 function crmEditStamm(){
   const e=curEntity(); if(!e) return;
   crmOpenModalShell();
+  window._crmStammFoto=e.foto||'';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Stammdaten</h3>
     ${stammFormHtml(e.stamm||{}, e.fieldLabels||{})}
     ${_catPickerHtml(_catsOf(e, window._crmTree))}
@@ -1688,6 +1743,7 @@ function crmSaveStamm(isNew){
     const id=newId();
     const ent={ id, tree, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
+      foto: window._crmStammFoto||'',
       categories: cats, status: statuses,
       statusLog: statuses.length?[{ statuses:statuses.slice(), ts:Date.now(), by:curKuerzel() }]:[],
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
@@ -1697,6 +1753,7 @@ function crmSaveStamm(isNew){
   } else {
     mutateEntity(e=>{
       e.stamm=stamm; e.categories=cats;
+      e.foto=window._crmStammFoto||'';
       const oldS=_statusArr(e);
       const changed = oldS.length!==statuses.length || oldS.some(k=>!statuses.includes(k));
       e.status=statuses;
@@ -4739,6 +4796,7 @@ Object.assign(window, {
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
+  crmFotoPick, crmFotoRemove, crmFotoDownload, crmFotoDownloadEntity,
   crmKoopAdd, crmKoopEdit, crmKoopSave, crmKoopDelete, crmKoopEnd, crmKoopReactivate,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
