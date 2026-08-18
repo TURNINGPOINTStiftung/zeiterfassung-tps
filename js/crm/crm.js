@@ -481,6 +481,12 @@ function injectStyles(){
   .crm-att-row .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .crm-att-row .crm-x{border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;padding:2px 6px}
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
+  /* Schwebende horizontale Scrollleiste: bleibt per sticky immer unten sichtbar, spiegelt .kb-board */
+  .kb-hbar{display:none;position:sticky;bottom:8px;z-index:15;height:15px;margin:6px 2px 0;overflow-x:auto;overflow-y:hidden;background:var(--bg);border:1px solid var(--border);border-radius:9px;box-shadow:0 3px 12px rgba(32,56,105,.22);scrollbar-width:thin;scrollbar-color:var(--primary-l) var(--bg)}
+  .kb-hbar>div{height:1px}
+  .kb-hbar::-webkit-scrollbar{height:13px}
+  .kb-hbar::-webkit-scrollbar-thumb{background:var(--primary-l,#9db8e8);border-radius:7px;border:3px solid var(--bg)}
+  .kb-hbar::-webkit-scrollbar-thumb:hover{background:var(--primary,#2c4a8a)}
   .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
   .kb-col-head{display:flex;align-items:center;gap:6px}
@@ -637,6 +643,7 @@ export function renderCRM(){
     window._crmModalOpen = false;
     const root = document.getElementById('crm-root');
     if(!root) return;
+    crmInitBoardScroll();   // schwebende Board-Scrollleiste (einmalig verdrahtet)
     root.innerHTML = '<div class="crm-empty">Lade CRM …</div>';
     ensureCrmReady().then(()=>{
       try{
@@ -1189,7 +1196,8 @@ function taskBoardHtml(c){
   }).join('');
   return `<div class="kb-board">${cols}
     <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><input class="kb-qadd kb-qadd-col" id="kb-qa-col" placeholder="＋ Spalte (Enter)" onkeydown="crmQaKey(event,'col','')"></div>
-  </div>`;
+  </div>
+  <div class="kb-hbar" aria-hidden="true"><div></div></div>`;
 }
 function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
 function crmColDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='col'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} ev.stopPropagation(); }
@@ -1378,6 +1386,30 @@ function paintDetail(){
     ${subbar}
     ${bodyByTab[dt]||''}
   </div>`;
+}
+// Schwebende horizontale Scrollleiste fürs Kanban-Board: eine dünne Leiste, die per
+// position:sticky immer am unteren Rand des CRM-Bereichs sichtbar bleibt und .kb-board
+// spiegelt. So verschiebt man das Board seitlich, ohne ans (oft weit unten liegende)
+// Board-Ende scrollen zu müssen. Einmalig per MutationObserver auf #crm-root verdrahtet →
+// gilt für ALLE Board-Ansichten (Kontakt-Detail, Team, Projekt, Meine Aufgaben, Veranstaltung)
+// und übersteht jedes Re-Render (neue Nodes werden automatisch neu verbunden).
+function crmInitBoardScroll(){
+  const root=document.getElementById('crm-root'); if(!root||root._kbObserved) return;
+  const wire=()=>{
+    const board=root.querySelector('.kb-board'); const bar=root.querySelector('.kb-hbar');
+    if(!board||!bar||bar._kbBoard===board) return;   // kein (neues) Board zu verdrahten
+    bar._kbBoard=board;
+    const inner=bar.firstElementChild;
+    const sync=()=>{ inner.style.width=board.scrollWidth+'px'; bar.style.display=(board.scrollWidth-board.clientWidth>4)?'block':'none'; };
+    let lock=false;
+    board.addEventListener('scroll',()=>{ if(lock)return; lock=true; bar.scrollLeft=board.scrollLeft; lock=false; },{passive:true});
+    bar.addEventListener('scroll',()=>{ if(lock)return; lock=true; board.scrollLeft=bar.scrollLeft; lock=false; },{passive:true});
+    if(window._kbRO){ try{ window._kbRO.disconnect(); }catch(e){} window._kbRO=null; }
+    if(window.ResizeObserver){ const ro=new ResizeObserver(sync); ro.observe(board); Array.from(board.children).forEach(c=>ro.observe(c)); window._kbRO=ro; }
+    sync();
+  };
+  try{ const mo=new MutationObserver(wire); mo.observe(root,{childList:true,subtree:true}); root._kbObserved=true; }catch(e){}
+  wire();
 }
 function crmDetailTab(t){ window._crmDetailTab=t; paintDetail(); }
 function crmSetStatus(v){ mutateEntity(e=>{ e.status=v; }); paintDetail(); }
