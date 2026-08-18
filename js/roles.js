@@ -62,6 +62,18 @@ export function isManagerRole(u){ return u&&(u.role==='leitung'||u.role==='gesch
 export function getLeitungTeams(u){ return (u&&u.role==='leitung'&&Array.isArray(u.teams))?u.teams:[]; }
 export function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'&&getLeitungTeams(u).length===0)); }
 
+// Teams, die ein Nutzer AKTUELL vertritt (aktive, befristete Vertretung). Der/die Vertreter:in
+// sieht + prüft + leitet die Zeiten dieser Teams weiter, bis von/bis abläuft oder manuell beendet
+// wird. Datenquelle: d.vertretungen[]={id,team,deputyId,von,bis,ended,…}.
+export function activeVertretungTeams(u){
+  if(!u) return [];
+  const today=_cmpDate(new Date().toISOString().slice(0,10));
+  return (getData().vertretungen||[]).filter(v=>
+      v && v.deputyId===u.id && !v.ended
+      && _cmpDate(v.von)<=today && (!v.bis || today<=_cmpDate(v.bis))
+    ).map(v=>v.team).filter(Boolean);
+}
+
 export function teamHasLeitung(teamName){
   if(!teamName) return false;
   return getData().users.some(u=>{
@@ -87,13 +99,18 @@ export function canSeeEmployee(mgr,emp,dateStr){
     // GF sieht einen Mitarbeiter nur, wenn KEINES seiner Teams eine Leitung hat
     // (sonst reportet ihn die Leitung). Alle Teams prüfen, nicht nur das primäre.
     const empTeams=(Array.isArray(emp.teams)&&emp.teams.length)?emp.teams:(emp.team?[emp.team]:[]);
+    // Vertretung: übernimmt der GF selbst ein Team, sieht er dessen Mitarbeiter
+    // (sonst nur Mitarbeiter aus Teams ganz ohne eigene Leitung).
+    const vtG=activeVertretungTeams(mgr);
+    if(vtG.length && empTeams.some(t=>vtG.includes(t))) return true;
     return !empTeams.some(t=>teamHasLeitung(t));
   }
   if(mgr.role==='leitung'){
     // Andere Leitung ist ebenfalls privat (nicht durch Kolleg:innen einsehbar).
     if(isBerater(emp)||emp.role==='leitung') return false;
-    const t=getLeitungTeams(mgr);
-    if(t.length===0) return true;
+    const base=getLeitungTeams(mgr);
+    if(base.length===0) return true;   // „Admin-artige" Leitung ohne eigene Teams sieht alles (unverändert)
+    const t=base.concat(activeVertretungTeams(mgr));   // eigene + aktuell vertretene Teams
     // History-aware: für ein bestimmtes Datum das damals gültige Team prüfen
     // (sonst das aktuelle). So sieht z.B. die Akademie-Leitung Simon bis Mai,
     // die Marketing-Leitung ab Juni.
