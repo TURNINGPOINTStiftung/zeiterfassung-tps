@@ -14,6 +14,19 @@ function _vtActive(v){
 }
 function _vtDate(s){ if(!s) return ''; try{ return new Date(s).toLocaleDateString('de-DE'); }catch(e){ return String(s); } }
 function _vtVal(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+// Vollständige Team-Auswahl: konfigurierte Teams (d.teams) PLUS alle Teams, die tatsächlich
+// bei Nutzern hinterlegt sind (u.teams[]/u.team). So sind auch Teams wählbar, die nie explizit
+// in der Verwaltung angelegt, aber Mitarbeitern zugeordnet wurden (z.B. Wendewirkung, Förderung).
+// Konfig-Reihenfolge bleibt vorn, fehlende Teams werden alphabetisch hinten ergänzt.
+function _allTeams(d){
+  const base=(d.teams||[]).slice();
+  const extra=new Set();
+  (d.users||[]).forEach(u=>{
+    const ts=(Array.isArray(u.teams)&&u.teams.length)?u.teams:(u.team?[u.team]:[]);
+    ts.forEach(t=>{ if(t&&!base.includes(t)) extra.add(t); });
+  });
+  return base.concat([...extra].sort((a,b)=>a.localeCompare(b,'de')));
+}
 
 export function renderVertretungen(){
   const content=document.getElementById('vertretungen-content');
@@ -24,7 +37,7 @@ export function renderVertretungen(){
     return;
   }
   const d=getData();
-  const teams=(d.teams||[]).slice();
+  const teams=_allTeams(d);
   const deputies=(d.users||[]).filter(u=>u.role==='geschaeftsfuehrer'||u.role==='leitung'||u.role==='admin');
   const vs=(d.vertretungen||[]).slice().sort((a,b)=>String(b.von||'').localeCompare(String(a.von||'')));
 
