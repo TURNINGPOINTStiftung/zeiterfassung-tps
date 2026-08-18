@@ -64,35 +64,6 @@ function _fieldDisp(v){
   return linkify(s);
 }
 const val   = id => { const el=document.getElementById(id); return el ? el.value.trim() : ''; };
-// Profilbild: eine gewählte Bilddatei auf max. Kantenlänge verkleinern → JPEG-Data-URL.
-// Hält die pro-Eintrag gespeicherte Größe klein (~50–120 KB) und bleibt herunterladbar.
-function _crmImgToDataUrl(file, maxDim, cb){
-  if(!file){ cb(''); return; }
-  const rd=new FileReader();
-  rd.onload=()=>{
-    const img=new Image();
-    img.onload=()=>{
-      let w=img.width, h=img.height;
-      const scale=Math.min(1, maxDim/Math.max(w,h||1));
-      w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
-      try{
-        const c=document.createElement('canvas'); c.width=w; c.height=h;
-        c.getContext('2d').drawImage(img,0,0,w,h);
-        cb(c.toDataURL('image/jpeg', 0.82));
-      }catch(e){ cb(rd.result); }
-    };
-    img.onerror=()=>{ toast('Bild konnte nicht gelesen werden.','err'); cb(''); };
-    img.src=rd.result;
-  };
-  rd.onerror=()=>{ toast('Datei konnte nicht gelesen werden.','err'); cb(''); };
-  rd.readAsDataURL(file);
-}
-// Data-URL als Datei herunterladen (Profilbild „wieder herausholen").
-function _crmDownloadDataUrl(dataUrl, filename){
-  try{ const a=document.createElement('a'); a.href=dataUrl; a.download=filename||'bild.jpg'; document.body.appendChild(a); a.click(); a.remove(); }
-  catch(e){ toast('Download nicht möglich.','err'); }
-}
-function _crmFotoName(e){ return (((e&&e.stamm&&e.stamm.name)||'profilbild').replace(/[^\wäöüÄÖÜß .\-]+/g,'_').trim()||'profilbild')+'.jpg'; }
 const fmtDate = ts => { try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '';} };
 const fmtDateTime = ts => { try{ return new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';} };
 
@@ -510,12 +481,13 @@ function injectStyles(){
   .crm-att-row .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .crm-att-row .crm-x{border:none;background:none;color:#c0392b;cursor:pointer;font-size:14px;padding:2px 6px}
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
-  /* Schwebende horizontale Scrollleiste: bleibt per sticky immer unten sichtbar, spiegelt .kb-board */
-  .kb-hbar{display:none;position:sticky;bottom:8px;z-index:15;height:15px;margin:6px 2px 0;overflow-x:auto;overflow-y:hidden;background:var(--bg);border:1px solid var(--border);border-radius:9px;box-shadow:0 3px 12px rgba(32,56,105,.22);scrollbar-width:thin;scrollbar-color:var(--primary-l) var(--bg)}
-  .kb-hbar>div{height:1px}
-  .kb-hbar::-webkit-scrollbar{height:13px}
-  .kb-hbar::-webkit-scrollbar-thumb{background:var(--primary-l,#9db8e8);border-radius:7px;border:3px solid var(--bg)}
-  .kb-hbar::-webkit-scrollbar-thumb:hover{background:var(--primary,#2c4a8a)}
+  /* Schwebende Blätter-Knöpfe (links/rechts): Board seitlich verschieben, ohne runterzuscrollen */
+  .kb-nav-btn{position:fixed;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:var(--primary,#1a3a5c);color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:.82;z-index:45;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+  .kb-nav-btn:hover{opacity:1}
+  .kb-nav-btn:active{transform:translateY(-50%) scale(.93)}
+  .kb-nav-btn[data-dir="-1"]{left:16px}
+  .kb-nav-btn[data-dir="1"]{right:16px}
+  @media(max-width:640px){ #kb-nav{display:none!important} }
   .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
   .kb-col-head{display:flex;align-items:center;gap:6px}
@@ -672,7 +644,7 @@ export function renderCRM(){
     window._crmModalOpen = false;
     const root = document.getElementById('crm-root');
     if(!root) return;
-    crmInitBoardScroll();   // schwebende Board-Scrollleiste (einmalig verdrahtet)
+    crmInitBoardScroll();   // schwebende ←/→-Knöpfe fürs Board (einmalig; blendet sich passend ein/aus)
     root.innerHTML = '<div class="crm-empty">Lade CRM …</div>';
     ensureCrmReady().then(()=>{
       try{
@@ -1225,8 +1197,7 @@ function taskBoardHtml(c){
   }).join('');
   return `<div class="kb-board">${cols}
     <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><input class="kb-qadd kb-qadd-col" id="kb-qa-col" placeholder="＋ Spalte (Enter)" onkeydown="crmQaKey(event,'col','')"></div>
-  </div>
-  <div class="kb-hbar" aria-hidden="true"><div></div></div>`;
+  </div>`;
 }
 function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
 function crmColDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='col'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} ev.stopPropagation(); }
@@ -1404,7 +1375,6 @@ function paintDetail(){
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?'Kontakte':'Meine Aufgaben'}</button>
-      ${e.foto?`<img src="${e.foto}" alt="Profilbild" title="Profilbild herunterladen" onclick="crmFotoDownloadEntity()" style="width:46px;height:46px;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:pointer;flex:0 0 auto">`:''}
       <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)}</h2>
       ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
@@ -1423,23 +1393,39 @@ function paintDetail(){
 // Board-Ende scrollen zu müssen. Einmalig per MutationObserver auf #crm-root verdrahtet →
 // gilt für ALLE Board-Ansichten (Kontakt-Detail, Team, Projekt, Meine Aufgaben, Veranstaltung)
 // und übersteht jedes Re-Render (neue Nodes werden automatisch neu verbunden).
+// Schwebende Blätter-Knöpfe (←/→) zum seitlichen Verschieben des Kanban-Boards, ohne ans
+// (evtl. weit unten liegende) Board-Ende scrollen zu müssen. position:fixed am Bildschirmrand,
+// mittig — funktioniert unter dem `body.zoom`-Zoom (kein transform → fixed bleibt intakt).
+// An #mod-crm gehängt (NICHT #crm-root, dessen innerHTML bei jedem paint() überschrieben wird);
+// blendet sich automatisch aus, wenn CRM nicht aktiv ist (Ancestor display:none) oder das
+// sichtbare Board gar nicht seitlich überläuft. Gilt für alle Board-Ansichten.
 function crmInitBoardScroll(){
-  const root=document.getElementById('crm-root'); if(!root||root._kbObserved) return;
-  const wire=()=>{
-    const board=root.querySelector('.kb-board'); const bar=root.querySelector('.kb-hbar');
-    if(!board||!bar||bar._kbBoard===board) return;   // kein (neues) Board zu verdrahten
-    bar._kbBoard=board;
-    const inner=bar.firstElementChild;
-    const sync=()=>{ inner.style.width=board.scrollWidth+'px'; bar.style.display=(board.scrollWidth-board.clientWidth>4)?'block':'none'; };
-    let lock=false;
-    board.addEventListener('scroll',()=>{ if(lock)return; lock=true; bar.scrollLeft=board.scrollLeft; lock=false; },{passive:true});
-    bar.addEventListener('scroll',()=>{ if(lock)return; lock=true; board.scrollLeft=bar.scrollLeft; lock=false; },{passive:true});
-    if(window._kbRO){ try{ window._kbRO.disconnect(); }catch(e){} window._kbRO=null; }
-    if(window.ResizeObserver){ const ro=new ResizeObserver(sync); ro.observe(board); Array.from(board.children).forEach(c=>ro.observe(c)); window._kbRO=ro; }
-    sync();
+  const root=document.getElementById('crm-root'); if(!root) return;
+  const curBoard=()=>{ const bs=root.querySelectorAll('.kb-board'); for(let i=0;i<bs.length;i++){ if(bs[i].offsetParent!==null) return bs[i]; } return null; };
+  const update=()=>{
+    const n=document.getElementById('kb-nav'); if(!n) return;
+    const b=curBoard();
+    const can=!!b && (b.scrollWidth-b.clientWidth>4);
+    n.style.display=can?'block':'none';
+    if(can){
+      const l=n.querySelector('[data-dir="-1"]'), r=n.querySelector('[data-dir="1"]');
+      if(l) l.style.opacity=b.scrollLeft>4?'':'.35';
+      if(r) r.style.opacity=(b.scrollLeft<b.scrollWidth-b.clientWidth-4)?'':'.35';
+    }
   };
-  try{ const mo=new MutationObserver(wire); mo.observe(root,{childList:true,subtree:true}); root._kbObserved=true; }catch(e){}
-  wire();
+  window._kbNavUpdate=update;
+  if(document.getElementById('kb-nav')){ update(); return; }   // schon initialisiert
+  const host=document.getElementById('mod-crm')||root;
+  const nav=document.createElement('div'); nav.id='kb-nav'; nav.style.display='none';
+  nav.innerHTML='<button type="button" class="kb-nav-btn" data-dir="-1" aria-label="Board nach links">←</button>'
+              + '<button type="button" class="kb-nav-btn" data-dir="1" aria-label="Board nach rechts">→</button>';
+  host.appendChild(nav);
+  const step=dir=>{ const b=curBoard(); if(!b) return; b.scrollBy({left:dir*Math.max(240,Math.round(b.clientWidth*0.8)),behavior:'smooth'}); setTimeout(update,320); };
+  nav.querySelectorAll('.kb-nav-btn').forEach(btn=>btn.addEventListener('click',()=>step(parseInt(btn.getAttribute('data-dir'),10))));
+  try{ const mo=new MutationObserver(()=>{ if(window._kbT) return; window._kbT=setTimeout(()=>{ window._kbT=null; update(); },60); }); mo.observe(root,{childList:true,subtree:true}); }catch(e){}
+  window.addEventListener('resize',update);
+  root.addEventListener('scroll',update,true);   // Board-Scroll → Pfeil-Zustände (Ränder)
+  update();
 }
 function crmDetailTab(t){ window._crmDetailTab=t; paintDetail(); }
 function crmSetStatus(v){ mutateEntity(e=>{ e.status=v; }); paintDetail(); }
@@ -1627,32 +1613,9 @@ function crmOpenModalShell(){ window._crmModalOpen=true; }
 function crmCloseModal(){ window._crmModalOpen=false; closeModal(); }
 
 // ── Neu anlegen / Stammdaten bearbeiten ────────────────────────────
-// Profilbild-Feld für die Stammdaten (Anlegen + Bearbeiten). Aktueller Stand: window._crmStammFoto.
-function _crmFotoFieldHtml(){
-  const f=window._crmStammFoto||'';
-  return `<div class="crm-modal-field" id="crm-foto-field"><label>Profilbild</label>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      ${f?`<img src="${f}" alt="Profilbild" style="width:76px;height:76px;object-fit:cover;border-radius:12px;border:1px solid var(--border)">`
-         :`<div style="width:76px;height:76px;border-radius:12px;border:1.5px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:26px">🖼️</div>`}
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <label class="btn-sm-crm" style="cursor:pointer;text-align:center">📷 ${f?'Bild ersetzen':'Bild wählen'}<input type="file" accept="image/*" onchange="crmFotoPick(this)" style="display:none"></label>
-        ${f?`<div style="display:flex;gap:6px"><button type="button" class="btn-sm-crm" onclick="crmFotoDownload()">⬇ Herunterladen</button><button type="button" class="btn-sm-crm danger" onclick="crmFotoRemove()">Entfernen</button></div>`:''}
-      </div>
-    </div></div>`;
-}
-function crmFotoRender(){ const el=document.getElementById('crm-foto-field'); if(el) el.outerHTML=_crmFotoFieldHtml(); }
-function crmFotoPick(input){
-  const file=input&&input.files&&input.files[0]; if(!file) return;
-  if(!/^image\//.test(file.type||'')){ toast('Bitte eine Bilddatei wählen.','err'); return; }
-  _crmImgToDataUrl(file, 640, url=>{ if(url){ window._crmStammFoto=url; crmFotoRender(); } });
-}
-function crmFotoRemove(){ window._crmStammFoto=''; crmFotoRender(); }
-function crmFotoDownload(){ const f=window._crmStammFoto||''; if(!f){ toast('Kein Bild vorhanden.','err'); return; } _crmDownloadDataUrl(f, _crmFotoName(curEntity())); }
-// Download aus der Detailansicht (gespeichertes Bild des Eintrags).
-function crmFotoDownloadEntity(){ const e=curEntity(); const f=e&&e.foto; if(!f){ toast('Kein Bild vorhanden.','err'); return; } _crmDownloadDataUrl(f, _crmFotoName(e)); }
 function stammFormHtml(s, flbls){
   flbls=flbls||{};
-  return _crmFotoFieldHtml() + stammFields(window._crmTree).map(f=>{
+  return stammFields(window._crmTree).map(f=>{
     const v=esc(s[f.key]||'');
     let inp;
     if(f.key==='tags'){
@@ -1705,7 +1668,6 @@ function _statusPickerHtml(sel){
 }
 function crmOpenNew(){
   crmOpenModalShell();
-  window._crmStammFoto='';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Kontakt anlegen</h3>
     ${stammFormHtml({})}
     ${_catPickerHtml([])}
@@ -1718,7 +1680,6 @@ function crmOpenNew(){
 function crmEditStamm(){
   const e=curEntity(); if(!e) return;
   crmOpenModalShell();
-  window._crmStammFoto=e.foto||'';
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Stammdaten</h3>
     ${stammFormHtml(e.stamm||{}, e.fieldLabels||{})}
     ${_catPickerHtml(_catsOf(e, window._crmTree))}
@@ -1743,7 +1704,6 @@ function crmSaveStamm(isNew){
     const id=newId();
     const ent={ id, tree, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), stamm,
-      foto: window._crmStammFoto||'',
       categories: cats, status: statuses,
       statusLog: statuses.length?[{ statuses:statuses.slice(), ts:Date.now(), by:curKuerzel() }]:[],
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
@@ -1753,7 +1713,6 @@ function crmSaveStamm(isNew){
   } else {
     mutateEntity(e=>{
       e.stamm=stamm; e.categories=cats;
-      e.foto=window._crmStammFoto||'';
       const oldS=_statusArr(e);
       const changed = oldS.length!==statuses.length || oldS.some(k=>!statuses.includes(k));
       e.status=statuses;
@@ -4796,7 +4755,6 @@ Object.assign(window, {
   crmShowMeine, crmOpenMyVerein, crmMeineToggle, crmMeineOpen,
   crmOpenMeinProjekt, crmNewMeinProjekt, crmSaveMeinProjekt,
   crmOpenNew, crmEditStamm, crmSaveStamm, crmDeleteEntity,
-  crmFotoPick, crmFotoRemove, crmFotoDownload, crmFotoDownloadEntity,
   crmKoopAdd, crmKoopEdit, crmKoopSave, crmKoopDelete, crmKoopEnd, crmKoopReactivate,
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
