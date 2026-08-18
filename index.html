@@ -116,6 +116,7 @@
     <div class="nav-tab active" data-view="zeiterfassung" onclick="if(cu)viewEmpId=cu.id;switchView('zeiterfassung')">Zeiterfassung</div>
     <div class="nav-tab" data-view="uebersicht" id="tab-uebersicht" style="display:none" onclick="switchView('uebersicht')">Mitarbeiterübersicht</div>
     <div class="nav-tab" data-view="gfberichte" id="tab-gfberichte" style="display:none" onclick="switchView('gfberichte')">Eingegangene Berichte</div>
+    <div class="nav-tab" data-view="vertretungen" id="tab-vertretungen" style="display:none" onclick="switchView('vertretungen')">Vertretungen</div>
     <div class="nav-tab" data-view="abwesenheiten" id="tab-abwesenheiten" style="display:none" onclick="switchView('abwesenheiten')">Abwesenheiten<span class="tab-badge" id="tab-ab-badge" style="display:none">0</span></div>
     <div class="nav-tab" data-view="einstellungen" id="tab-einstellungen" style="display:none" onclick="switchView('einstellungen')">Einstellungen</div>
   </nav>
@@ -278,6 +279,14 @@
       <div id="ab-content"><p style="color:var(--muted)">Wird geladen…</p></div>
     </div>
 
+    <!-- ─── Vertretungen ─── -->
+    <div class="view" id="view-vertretungen">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+        <h2 style="font-size:19px;font-weight:700;color:var(--primary)">🔄 Vertretungen</h2>
+      </div>
+      <div id="vertretungen-content"><p style="color:var(--muted)">Wird geladen…</p></div>
+    </div>
+
     <!-- ─── Stempeln (mobile Vollbild-View) ─── -->
     <div class="view" id="view-stempeln"></div>
 
@@ -416,6 +425,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=164"></script>
+<script type="module" src="js/main.js?v=165"></script>
 </body>
 </html>
