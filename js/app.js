@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v249':'';
+  if(_hv) _hv.textContent=_showVer?'v250':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -39,6 +39,7 @@ export function initApp(){
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE||crmOnly)?'none':'';
   document.getElementById('tab-uebersicht').style.display=hasPermission('tab_uebersicht',cu)?'':'none';
   document.getElementById('tab-gfberichte').style.display=hasPermission('tab_gfberichte',cu)?'':'none';
+  document.getElementById('tab-vertretungen').style.display=(isGF||isAdmin)?'':'none';
   document.getElementById('tab-abwesenheiten').style.display='';
   document.getElementById('tab-einstellungen').style.display='none'; // Einstellungen sind in die Verwaltung umgezogen
   const btnTeam=document.getElementById('btn-teamberichte');
@@ -126,6 +127,7 @@ export function switchView(v){
   if(v==='einstellungen') window.renderSettings?.();
   if(v==='gfberichte') window.renderGFBerichte?.();
   if(v==='abwesenheiten') window.renderAbwesenheiten?.();
+  if(v==='vertretungen') window.renderVertretungen?.();
   if(v==='stempeln') window.renderStempelView?.();
 }
 
