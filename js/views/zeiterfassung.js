@@ -395,16 +395,16 @@ function renderActionBar(uid,user,entry,isLeiter){
         ?(isLeitungSelf?'Bitte Zeiten erfassen und einreichen – geht als Buchhaltungsversion an die Geschäftsführung.'
           :(isNoReport?'Zeiten erfassen – keine Einreichung erforderlich.':'Bitte alle Zeiten erfassen und den Monat am Monatsende einreichen.'))
         :'Entwurf – Monat kann für diesen Mitarbeiter eingereicht werden.';
-      btns.innerHTML=extraBtns+(isNoReport?'': `<button class="btn btn-warn" onclick="doSubmit()">📨 Monat einreichen${isLeitungSelf?' (an GF)':''}</button>`);
+      btns.innerHTML=extraBtns+(isNoReport?'': `<button class="btn btn-warn" onclick="submitBtn(this,()=>doSubmit())">📨 Monat einreichen${isLeitungSelf?' (an GF)':''}</button>`);
     } else if(entry.status==='submitted'){
       info.textContent=isLeitungSelf?'✓ Eingereicht – als Buchhaltungsversion an die Geschäftsführung übermittelt.':'Monat eingereicht – wartet auf Prüfung durch die Leitung.';
-      btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="doRecall()">↩ Zurückziehen</button>`;
+      btns.innerHTML=extraBtns+`<button class="btn btn-outline" onclick="submitBtn(this,()=>doRecall())">↩ Zurückziehen</button>`;
     } else if(entry.status==='approved'){
       info.textContent='✓ Dieser Monat wurde genehmigt.';
       btns.innerHTML=extraBtns;
     } else if(entry.status==='rejected'){
       info.textContent='✗ Abgelehnt – bitte korrigieren und erneut einreichen.'+(entry.managerNote?` Anmerkung: „${entry.managerNote}"`:'');
-      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="doRecall()">Bearbeiten &amp; erneut einreichen</button>`;
+      btns.innerHTML=extraBtns+`<button class="btn btn-warn" onclick="submitBtn(this,()=>doRecall())">Bearbeiten &amp; erneut einreichen</button>`;
     }
   } else {
     btns.innerHTML=extraBtns;

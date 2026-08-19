@@ -240,7 +240,7 @@ export function renderOverview(){
     return `<div class="team-send-bar">
         <span style="color:${allApproved?'var(--ok)':'var(--warn)'};font-weight:600;font-size:13px">${statusText}</span>
         ${sentInfo}
-        <button class="btn btn-ok btn-sm" onclick='sendTeamReportForTeam(${JSON.stringify(team)},${approvedIds},${oy},${om})'>
+        <button class="btn btn-ok btn-sm" onclick='submitBtn(this,()=>sendTeamReportForTeam(${JSON.stringify(team)},${approvedIds},${oy},${om}))'>
           ${btnLabel}
         </button>
       </div>`;
@@ -466,7 +466,7 @@ export function openJahresübersicht(uid,y){
     ${zuordSection}
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
-      ${canSendGF?`<button class="btn btn-ok" onclick="sendJahresbericht('${uid}',${y})" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
+      ${canSendGF?`<button class="btn btn-ok" onclick="submitBtn(this,()=>sendJahresbericht('${uid}',${y}))" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
       ${canSendGF&&yrSent?`<button class="btn btn-outline" onclick="recallYearReport('${uid}',${y})" style="width:auto;border-color:var(--danger);color:var(--danger)" title="Jahresbericht von der GF zurückziehen">↩ Zurückziehen</button>`:''}
       <button class="btn btn-primary" onclick="printJahresübersicht('${uid}',${y})" style="width:auto">⬇ PDF herunterladen</button>
     </div>
