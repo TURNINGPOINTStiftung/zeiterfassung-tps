@@ -323,11 +323,13 @@ export function saveRaw(d){
   // Normale Bearbeitung: MERGEN via update() – löscht NICHTS, was dieses Gerät nicht kennt
   // (behebt: veraltetes Handy löscht am PC eingetragene Tage). Nur beim expliziten
   // Wiederherstellen/Import (window._allowDataShrink) wird der ganze Baum ersetzt (set()).
+  // Cloud-Write im HINTERGRUND (best effort). Die Oberfläche wartet NICHT auf den Server-Roundtrip,
+  // sonst bliebe ein „Speichern" bei langsamer/instabiler Verbindung sichtbar hängen (Dialog schließt
+  // nie, Button bleibt ausgegraut). Der lokale Stand ist oben bereits gesichert; der Realtime-Listener
+  // gleicht mit der Cloud ab. saveRaw meldet sich also fertig, sobald LOKAL gespeichert wurde.
   const _w = window._allowDataShrink ? (window._fbRef?.set(d)||Promise.resolve()) : fbWriteMerge(d);
-  return _w.catch(e=>{
-    console.warn('Firebase sync error:',e);
-    window._pendingSync=true;
-  });
+  _w.catch(e=>{ console.warn('Firebase sync error:',e); window._pendingSync=true; });
+  return Promise.resolve();
 }
 export function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
 
