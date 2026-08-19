@@ -396,7 +396,7 @@ function userForm(u={}){
           onchange="var f=document.getElementById('uf-employed-fields'); if(f) f.style.display=this.checked?'none':'';">
         🚫 Nur CRM-Zugang – keine Zeiterfassung
       </label>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Für externe/zusätzliche Personen, die nur das CRM nutzen. Der Zeiterfassungs-Bereich wird für sie ausgeblendet; den CRM-Zugriff stellst du unten in der Tabelle ein.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Für externe/zusätzliche Personen, die nur das CRM nutzen. Der Zeiterfassungs-Bereich wird für sie ausgeblendet. Die CRM-Zugriffsstufe stellst du weiter unten ein.</div>
     </div>`}
     ${u.id==='admin'?'':`<div class="form-group">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -404,6 +404,18 @@ function userForm(u={}){
         ✍ Zeiterfassung vom GF gegenzeichnen lassen <span style="font-weight:400;color:var(--muted)">(nur für Leitung)</span>
       </label>
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Wenn aktiv, sieht die Geschäftsführung die <b>eingereichten</b> Monate dieser Leitung in der Mitarbeiterübersicht und zeichnet sie gegen. Ohne Haken bleibt die Leitung für den GF privat.</div>
+    </div>`}
+    ${u.id==='admin'?'':`<div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="uf-notimesheet" ${u.noTimesheet?'checked':''} style="width:auto;cursor:pointer">
+        ⏱ Zeiterfassung ausblenden <span style="font-weight:400;color:var(--muted)">(für Geschäftsführung ohne eigene Zeiterfassung)</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="uf-noreport" ${u.noReport?'checked':''} style="width:auto;cursor:pointer">
+        🔒 Zeiterfassung privat <span style="font-weight:400;color:var(--muted)">(Leitung: kein Einreichen, GF hat keinen Zugriff)</span>
+      </label>
     </div>`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
@@ -493,6 +505,26 @@ function userForm(u={}){
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
     </div>
+    ${u.id==='admin'?'':(()=>{
+      const acc=(window.crmUserAccess&&window.crmUserAccess(u.id))||{level:'none',vereinIds:[]};
+      const vereine=(window.crmVereinList&&window.crmVereinList())||[];
+      const accIds=acc.vereinIds||[];
+      const vChecks=vereine.length
+        ? vereine.map(v=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" class="uf-crmv" value="${esc(v.id)}"${accIds.includes(v.id)?' checked':''}> ${esc(v.name)}</label>`).join('')
+        : '<span style="font-size:12px;color:var(--muted)">Keine Vereine im CRM angelegt.</span>';
+      const LV=[['none','Kein CRM-Zugriff'],['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
+      return `<div class="uf-section-head">📇 CRM-Zugriff</div>
+        <div class="form-group"><label>CRM-Zugriffsstufe</label>
+          <select id="uf-crmlevel" onchange="var v=document.getElementById('uf-crmverein'); if(v) v.style.display=this.value==='verein'?'':'none';">
+            ${LV.map(([L,t])=>`<option value="${L}"${acc.level===L?' selected':''}>${t}</option>`).join('')}
+          </select>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Steuert, was diese Person im CRM sieht und darf. „Erweitert" = alles ansehen, aber nichts anlegen/löschen.</div>
+        </div>
+        <div class="form-group" id="uf-crmverein" style="display:${acc.level==='verein'?'':'none'}">
+          <label>Zugeordnete Vereine</label>
+          <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${vChecks}</div>
+        </div>`;
+    })()}
     <div class="uf-section-head">🔐 Berechtigungen <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
     ${u.id==='admin'
       ? `<div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`
@@ -560,10 +592,14 @@ function collectUserForm(){
   PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
   const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
   const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
+  const noTimesheet=!!(document.getElementById('uf-notimesheet')?.checked);
+  const noReport=!!(document.getElementById('uf-noreport')?.checked);
   return {
     perms,
     crmOnly,
     gfCountersign,
+    noTimesheet,
+    noReport,
     name:document.getElementById('uf-name').value.trim(),
     id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
     email:document.getElementById('uf-email')?.value.trim()||'',
@@ -594,6 +630,9 @@ export async function saveNewUser(){
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   const _plainPw=u.pw;  // Klartext vor dem Hashen für das Firebase-Konto
   u.pw=await makePwRecord(u.pw);
+  const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
+  const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
+  try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   await mutate(d=>d.users.push(u));
   try{ window.provisionAuthAccount?.(u.id, _plainPw, u.email); }catch(e){}  // echtes Konto anlegen (best effort)
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
@@ -633,6 +672,9 @@ export async function saveEditUser(id){
   } else {
     u.paramHistory=existing?.paramHistory||u.paramHistory;
   }
+  const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
+  const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
+  try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
