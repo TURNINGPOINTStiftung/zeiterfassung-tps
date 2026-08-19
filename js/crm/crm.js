@@ -12,7 +12,7 @@ import {
   saveEntity, deleteEntity, newId,
   saveVorlage, deleteVorlage, getVorlage, listVorlagen,
   saveTeamProjekt, deleteTeamProjekt, getTeamProjekt, listTeamProjekte,
-  saveAccess, getAccess, getCrmConfig, saveCrmConfig,
+  saveAccess, getAccess, exportCrmBlob, restoreCrmBlob, getCrmConfig, saveCrmConfig,
   saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
   saveVeranstaltung, deleteVeranstaltung, getVeranstaltung, listVeranstaltungen,
   listHistory, restoreHistory
@@ -4497,6 +4497,7 @@ async function crmImportXlsx(input){
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
   crmUserAccess, crmSetUserAccess, crmVereinList,
+  crmExportBlob: exportCrmBlob, crmRestoreBlob: restoreCrmBlob,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
