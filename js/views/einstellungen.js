@@ -1,10 +1,13 @@
 import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
-import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate } from '../roles.js';
+import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods } from '../utils.js';
 import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
 import { vacDailyMin } from '../calc.js';
+
+// Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
+const _canVerwaltung = cu => !!(cu && (cu.role==='admin' || hasPermission('zugriff_verwaltung', cu)));
 
 export function renderSettings(){
   const cu=window.cu;
@@ -95,7 +98,7 @@ export function renderSettings(){
 // Es werden NUR Genehmiger-/Absender-Felder gesetzt – Zeiten/Inhalte bleiben unangetastet.
 export function fixApproverToLeitung(){
   const cu=window.cu;
-  if(!cu||cu.role!=='admin'){ toast('Nur als Admin möglich.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Nur mit Verwaltungs-Zugriff möglich.','err'); return; }
   const d=getData();
   const users=d.users||[];
   const isAdminId=id=>{ const u=id?getUser(id):null; return !!u&&u.role==='admin'; };
@@ -165,6 +168,7 @@ const PERM_DEFS=[
   {key:'btn_erinnerungen',     label:'Button: „Erinnerungen senden"'},
   {key:'genehmigung_abwesenheit', label:'Funktion: Abwesenheiten genehmigen / ablehnen'},
   {key:'stempel',              label:'Funktion: Zeitstempel nutzen'},
+  {key:'zugriff_verwaltung',   label:'🔑 Verwaltung (voller Admin-Zugriff aufs Verwaltungs-Modul)'},
 ];
 const PERM_ROLES=[
   {key:'mitarbeiter',      label:'Mitarbeiter'},
@@ -318,7 +322,7 @@ export function moveTeamCat(teamName,i,dir){
 
 export function showAddUser(){
   const cu=window.cu;
-  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveNewUser()">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
@@ -326,7 +330,7 @@ export function showAddUser(){
 
 export function showEditUser(id){
   const cu=window.cu;
-  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="saveEditUser('${id}')">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
@@ -723,7 +727,7 @@ export function deleteTeamHistEntry(uid,idx){
 
 export function toggleGFTimesheet(uid){
   const cu=window.cu;
-  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   mutate(d=>{
     const u=d.users.find(x=>x.id===uid);
     if(u&&u.role==='geschaeftsfuehrer') u.noTimesheet=!u.noTimesheet;
@@ -734,7 +738,7 @@ export function toggleGFTimesheet(uid){
 
 export function toggleLeitungReport(uid){
   const cu=window.cu;
-  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   mutate(d=>{
     const u=d.users.find(x=>x.id===uid);
     if(u&&u.role==='leitung') u.noReport=!u.noReport;
@@ -747,7 +751,7 @@ export function toggleLeitungReport(uid){
 
 export function deleteUser(id){
   const cu=window.cu;
-  if(cu.role!=='admin'){ toast('Kein Zugriff – nur Admin.','err'); return; }
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
   if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
   mutate(d=>{

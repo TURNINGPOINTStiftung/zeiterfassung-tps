@@ -52,6 +52,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
          _openPerEmpPrint, _teamReportStyle, renderBuchhaltungHTML } from './print.js';
 
 import { importHistorical, importHistForUser } from './import-data.js';
+import { hasPermission } from './roles.js';
 import { exportData, exportAllData, exportCrmOnly, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,
          fixManualCarryovers } from './data-mgmt.js';
@@ -230,6 +231,7 @@ window.renderBuchhaltungHTML = renderBuchhaltungHTML;
 // Import / data management
 window.importHistorical      = importHistorical;
 window.importHistForUser     = importHistForUser;
+window.hasPermission         = hasPermission;
 window.exportData            = exportData;
 window.exportAllData         = exportAllData;
 window.exportCrmOnly         = exportCrmOnly;
