@@ -53,6 +53,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
 
 import { importHistorical, importHistForUser } from './import-data.js';
 import { hasPermission } from './roles.js';
+import './messe.js';   // Messemodus (registriert window.messeStart etc.)
 import { exportData, exportAllData, exportCrmOnly, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,
          fixManualCarryovers } from './data-mgmt.js';
