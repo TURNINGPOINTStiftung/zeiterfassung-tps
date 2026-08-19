@@ -297,6 +297,11 @@ function injectStyles(){
   .crm-sr-more{font-size:12px;color:var(--muted);padding:4px 2px}
   .crm-sr-empty{color:var(--muted);padding:10px 2px}
   .crm-bar{display:flex;align-items:center;gap:10px;padding:11px 22px;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(8px);-webkit-backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:20;box-shadow:0 1px 3px rgba(32,56,105,.05)}
+  /* Verwaltung: Reiter-Navigation (statt einem langen Scroll) */
+  .verw-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 18px 0;background:var(--bg);border-bottom:1px solid var(--border)}
+  .verw-tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 15px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:8px 8px 0 0;transition:color .12s,background .12s}
+  .verw-tab:hover{color:var(--primary);background:rgba(32,56,105,.05)}
+  .verw-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
   .crm-trees{display:flex;gap:6px;flex-wrap:wrap}
   .crm-tree-tab{background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:7px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .crm-tree-tab:hover{border-color:var(--primary-l);color:var(--primary);background:#f5f8fd}
@@ -3709,19 +3714,34 @@ function roleLbl(u){
 // Kategorien/Daten) EINMALIG hierher umhängen (gleiche Elemente/IDs →
 // renderSettings füllt sie am neuen Ort). Mitarbeiter rendern wir selbst
 // als breite Tabelle. Idempotent.
+function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
+function verwShowTab(name){
+  document.querySelectorAll('#verw-root .verw-panel').forEach(p=>{ p.style.display=(p.id==='verw-tab-'+name)?'':'none'; });
+  document.querySelectorAll('#verw-root .verw-tab').forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-vtab')===name); });
+  try{ localStorage.setItem('tp_verw_tab', name); }catch(e){}
+}
 function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
   if(document.getElementById('verw-users')) return;
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
+   <div class="verw-tabs">
+     <button class="verw-tab" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
+     <button class="verw-tab" data-vtab="org" onclick="verwShowTab('org')">🏢 Organisation</button>
+     <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
+     <button class="verw-tab" data-vtab="data" onclick="verwShowTab('data')">💾 Daten &amp; Backup</button>
+   </div>
    <div class="crm-body">
-     <div id="verw-users"></div>
-     <div id="verw-crmcfg"></div>
-     <div id="verw-impexp"></div>
-     <div id="verw-history"></div>
-     <div id="verw-config"></div>
+     <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
+     <div class="verw-panel" id="verw-tab-org" style="display:none"></div>
+     <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
+     <div class="verw-panel" id="verw-tab-data" style="display:none"><div id="verw-impexp"></div><div id="verw-history"></div></div>
    </div>`;
-  const cfg=document.getElementById('verw-config');
-  ['set-org-box','set-cats-box'].forEach(id=>{ const el=document.getElementById(id); if(el&&cfg) cfg.appendChild(el); });
+  // ZE-Bausteine an ihren neuen Ort im jeweiligen Reiter hängen (gleiche IDs → renderSettings füllt sie dort).
+  const org=document.getElementById('verw-tab-org');
+  ['set-teamsroles-box','set-cats-box','set-perms-box'].forEach(id=>{ const el=document.getElementById(id); if(el&&org) org.appendChild(el); });
+  const data=document.getElementById('verw-tab-data');
+  const dbox=document.getElementById('set-data-box'); if(dbox&&data) data.insertBefore(dbox, data.firstChild);   // Daten/Backup oben
+  verwShowTab(_verwTab());
 }
 function renderVerwaltung(){
   try{
@@ -4736,7 +4756,7 @@ function crmWfRun(id){
 
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM, crmSetupModuleBar, renderVerwaltung, crmVerwSetLevel, crmVerwToggleVerein,
+  renderCRM, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
