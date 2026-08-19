@@ -101,6 +101,19 @@ export function toast(msg,type=''){
   setTimeout(()=>el.remove(),3500);
 }
 
+// Absende-/Speicher-Feedback für inline onclick: den geklickten Button SOFORT ausgrauen
+// (klares Signal „läuft" + verhindert Doppelklick/-versand), dann die Aktion ausführen.
+// Bei Erfolg schließt der Dialog / rendert die Ansicht neu (Button ist dann ohnehin weg);
+// sonst (z.B. abgebrochen/Validierungsfehler) wird der Button wieder aktiviert.
+// Verwendung: onclick="submitBtn(this,()=>meineFunktion(args))"
+export async function submitBtn(btn, fn){
+  if(btn && btn.disabled) return;               // schon in Arbeit → ignorieren
+  const orig = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ …'; }
+  try{ return await fn(); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
+}
+
 // ── Werkstudent-Zeiträume (Vorlesungszeiten / Brückentage) mit Verlauf ──
 // Ein Zeitraum gilt als „abgelaufen", sobald das Kalenderjahr seines Enddatums VORBEI ist
 // (bis < 1.1. des laufenden Jahres). Abgelaufene wandern in einen aufklappbaren „Verlauf"

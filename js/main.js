@@ -11,7 +11,7 @@ import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
 import { initApp, switchView, switchModule, changeMonth, rebuildEmpSelect, onEmpSelect,
          toggleModuleMenu, closeModuleMenu } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
-import { openModal, closeModal } from './utils.js';
+import { openModal, closeModal, submitBtn } from './utils.js';
 
 // ── View modules ───────────────────────────────────────────────────
 import { renderZeiterfassung, renderSignature, td_change, td_zuord,
@@ -232,6 +232,7 @@ window.renderBuchhaltungHTML = renderBuchhaltungHTML;
 window.importHistorical      = importHistorical;
 window.importHistForUser     = importHistForUser;
 window.hasPermission         = hasPermission;
+window.submitBtn             = submitBtn;
 window.exportData            = exportData;
 window.exportAllData         = exportAllData;
 window.exportCrmOnly         = exportCrmOnly;
