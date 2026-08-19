@@ -304,7 +304,7 @@
 
       <!-- ── Organisation + Daten (wird in die Verwaltung umgehängt) ── -->
       <div class="settings-row" id="set-org-box" style="margin-bottom:16px">
-        <div class="s-box">
+        <div class="s-box" id="set-teamsroles-box">
           <h3>🏢 Teams</h3>
           <div id="team-list"></div>
           <div class="flex mt-14">
@@ -326,7 +326,7 @@
             <button class="btn btn-ok btn-sm" onclick="addCustomRole()">+</button>
           </div>
         </div>
-        <div class="s-box">
+        <div class="s-box" id="set-data-box">
           <h3>💾 Daten</h3>
           <div style="display:flex;flex-direction:column;gap:10px">
             <button class="btn btn-ok btn-sm" onclick="shareApp()">⬇ App herunterladen / teilen</button>
@@ -425,6 +425,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=169"></script>
+<script type="module" src="js/main.js?v=170"></script>
 </body>
 </html>
