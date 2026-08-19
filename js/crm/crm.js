@@ -3760,26 +3760,20 @@ function renderVerwaltung(){
 }
 function paintVerwUsers(){
   const host=document.getElementById('verw-users'); if(!host) return;
-  const vereine=listEntities('vereine');
-  const vOpts=sel=>['<option value="">– Verein wählen –</option>']
-    .concat(vereine.map(v=>`<option value="${v.id}" ${sel===v.id?'selected':''}>${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</option>`)).join('');
+  const LVL={none:'Kein Zugriff',verein:'Nur zugeordnete Vereine',readonly:'Erweitert (nur Ansicht)',full:'Voll'};
   const users=zeUsers().filter(u=>u.id!=='admin')
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const rows=users.map(u=>{
     const a=getAccess(u.id)||{level:'none'};
     const lvl=a.level||'none';
     const vereinIds=Array.isArray(a.vereinIds)?a.vereinIds:(a.vereinId?[a.vereinId]:[]);
-    const lvlSel=[['none','Kein Zugriff'],['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles sehen'],['full','Voll']]
-      .map(([L,t])=>`<option value="${L}" ${lvl===L?'selected':''}>${t}</option>`).join('');
     const teams=(Array.isArray(u.teams)&&u.teams.length?u.teams:(u.team?[u.team]:[])).filter(Boolean);
-    const vereinPick = lvl==='verein'
-      ? `<div class="vw-vpick">${vereine.map(v=>`<label><input type="checkbox" ${vereinIds.includes(v.id)?'checked':''} onchange="crmVerwToggleVerein('${u.id}','${v.id}',this.checked)"> ${esc((v.stamm&&v.stamm.name)||'(ohne Name)')}</label>`).join('')||'<span class="small" style="color:var(--muted)">Keine Vereine angelegt.</span>'}</div>`
-      : '';
+    const accTxt=(LVL[lvl]||lvl)+(lvl==='verein'?` (${vereinIds.length})`:'');
     return `<tr>
       <td><span class="vw-name">${esc(u.name)}</span>${u.crmOnly?' <span class="vw-team" title="Nur CRM, keine Zeiterfassung">CRM-only</span>':''}</td>
       <td>${esc(roleLbl(u))}</td>
       <td>${teams.map(t=>`<span class="vw-team">${esc(t)}</span>`).join('')||'<span class="small" style="color:var(--muted)">–</span>'}</td>
-      <td><select class="crm-tsel" onchange="crmVerwSetLevel('${u.id}',this.value)">${lvlSel}</select>${vereinPick}</td>
+      <td>${lvl==='none'?'<span class="small" style="color:var(--muted)">–</span>':`<span class="vw-team">${esc(accTxt)}</span>`}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
         <button class="crm-x" title="Löschen" onclick="deleteUser('${u.id}')">✕</button>
@@ -3788,7 +3782,7 @@ function paintVerwUsers(){
   }).join('');
   host.innerHTML = `<div class="crm-sec">
     <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span><button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">CRM-Zugriff direkt hier setzen. <b>Erweitert</b> = sieht alle Bäume/Teams, kann aber nichts anlegen/löschen/umbenennen (nur Aufgaben bearbeiten). Bei <b>Nur zugeordnete Vereine</b> mehrere Vereine ankreuzbar. „Bearbeiten" öffnet Rolle, Teams, Stunden und Berechtigungen.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Alles zu einer Person – Rolle, Teams, Arbeitszeit, Urlaub, Berechtigungen und <b>CRM-Zugriff</b> – wird über „Bearbeiten" gesetzt. Die Spalte „CRM-Zugriff" zeigt nur den aktuellen Stand.</div>
     <div style="overflow-x:auto"><table class="vw-table">
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
       <tbody>${rows||'<tr><td colspan="5" class="small" style="color:var(--muted)">Keine Nutzer.</td></tr>'}</tbody>
@@ -3807,6 +3801,24 @@ function crmVerwToggleVerein(uid, vid, checked){
   let ids=Array.isArray(a.vereinIds)?a.vereinIds.slice():(a.vereinId?[a.vereinId]:[]);
   if(checked){ if(!ids.includes(vid)) ids.push(vid); } else { ids=ids.filter(x=>x!==vid); }
   saveAccess(uid, { level:'verein', vereinIds:ids });
+}
+// ── Bridge für den Mitarbeiter-Dialog der Zeiterfassung ────────────
+// Der CRM-Zugriff (crm/access) wird jetzt direkt im ZE-Mitarbeiter-Dialog gesetzt.
+// Diese window-Funktionen kapseln den Zugriff isolationssicher (try/catch, Defaults).
+function crmUserAccess(uid){
+  try{ const a=getAccess(uid)||{}; return { level:a.level||'none', vereinIds:Array.isArray(a.vereinIds)?a.vereinIds:(a.vereinId?[a.vereinId]:[]) }; }
+  catch(e){ return { level:'none', vereinIds:[] }; }
+}
+function crmSetUserAccess(uid, level, vereinIds){
+  try{
+    if(!uid) return;
+    if(!level || level==='none') saveAccess(uid, null);
+    else saveAccess(uid, { level, vereinIds: level==='verein' ? (Array.isArray(vereinIds)?vereinIds:[]) : [] });
+  }catch(e){ console.warn('crmSetUserAccess:', e&&e.message); }
+}
+function crmVereinList(){
+  try{ return listEntities('vereine').map(v=>({ id:v.id, name:(v.stamm&&v.stamm.name)||'(ohne Name)' })); }
+  catch(e){ return []; }
 }
 
 // ── Änderungs-Verlauf & Wiederherstellung (Backup) ─────────────────
@@ -4484,6 +4496,7 @@ async function crmImportXlsx(input){
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
   renderCRM, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
+  crmUserAccess, crmSetUserAccess, crmVereinList,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
