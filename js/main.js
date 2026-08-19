@@ -52,7 +52,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
          _openPerEmpPrint, _teamReportStyle, renderBuchhaltungHTML } from './print.js';
 
 import { importHistorical, importHistForUser } from './import-data.js';
-import { exportData, importData, resetData,
+import { exportData, exportAllData, exportCrmOnly, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,
          fixManualCarryovers } from './data-mgmt.js';
 import { openProfileModal, saveProfile, shareApp, _downloadHtml } from './profile.js';
@@ -231,6 +231,8 @@ window.renderBuchhaltungHTML = renderBuchhaltungHTML;
 window.importHistorical      = importHistorical;
 window.importHistForUser     = importHistForUser;
 window.exportData            = exportData;
+window.exportAllData         = exportAllData;
+window.exportCrmOnly         = exportCrmOnly;
 window.importData            = importData;
 window.resetData             = resetData;
 window.showCarryoverCleanup  = showCarryoverCleanup;

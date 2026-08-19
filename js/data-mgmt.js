@@ -32,15 +32,37 @@ export function fixManualCarryovers(){
   try{ window.renderZeiterfassung?.(); window.renderOverview?.(); }catch(e){}
 }
 
-export function exportData(){
-  if(!_isAdmin()){ toast('Nur der Administrator darf die Gesamtdaten exportieren.','err'); return; }
-  const blob=new Blob([JSON.stringify(getData(),null,2)],{type:'application/json'});
+function _dlJson(obj, prefix){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`zeiterfassung_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.download=`${prefix}_${new Date().toISOString().slice(0,10)}.json`;
   a.click();
 }
+// Nur Zeiterfassung
+export function exportData(){
+  if(!_isAdmin()){ toast('Nur der Administrator darf die Gesamtdaten exportieren.','err'); return; }
+  _dlJson(getData(), 'Zeiterfassung-Backup');
+  toast('Zeiterfassungs-Backup erstellt ✓','ok');
+}
+// Alles: Zeiterfassung + CRM in EINER Datei (echtes Komplett-Backup)
+export function exportAllData(){
+  if(!_isAdmin()){ toast('Nur der Administrator darf exportieren.','err'); return; }
+  let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
+  _dlJson({ _type:'tps-vollbackup', exportedAt:new Date().toISOString(), zeiterfassung:getData(), crm:crm }, 'TPS-Vollbackup');
+  toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM) ✓':'Nur Zeiterfassung gesichert – CRM war nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
+}
+// Nur CRM
+export function exportCrmOnly(){
+  if(!_isAdmin()){ toast('Nur der Administrator darf exportieren.','err'); return; }
+  let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
+  if(!crm){ toast('CRM-Daten nicht verfügbar – bitte das CRM einmal öffnen und erneut versuchen.','err'); return; }
+  _dlJson({ _type:'tps-crm-backup', exportedAt:new Date().toISOString(), crm:crm }, 'CRM-Backup');
+  toast('CRM-Backup erstellt ✓','ok');
+}
 
+// Import: erkennt automatisch Vollbackup ({_type:'tps-vollbackup', zeiterfassung, crm}),
+// CRM-Backup ({_type:'tps-crm-backup', crm}) oder ein reines Zeiterfassungs-Blob ({users,entries}).
 export function importData(e){
   if(!_isAdmin()){ toast('Nur der Administrator darf Daten importieren/überschreiben.','err'); try{ e.target.value=''; }catch(_){} return; }
   const file=e.target.files[0]; if(!file) return;
@@ -48,15 +70,26 @@ export function importData(e){
   reader.onload=ev=>{
     try{
       const d=JSON.parse(ev.target.result);
-      if(!d.users||!d.entries) throw new Error();
-      if(!confirm('Alle aktuellen Daten ersetzen?')) return;
-      // Beabsichtigte Vollersetzung: Datenverlust-Schutz für DIESEN Schreibvorgang
-      // erlauben (ein Import/Backup darf kleiner sein als der aktuelle Stand).
-      window._allowDataShrink=true;
-      Promise.resolve(saveRaw(d)).finally(()=>{ window._allowDataShrink=false; });
-      toast('Import erfolgreich – Seite wird neu geladen…','ok');
-      setTimeout(()=>location.reload(),1200);
-    }catch(e){ toast('Ungültige Datei.','err'); }
+      const isVoll = d && d._type==='tps-vollbackup';
+      const isCrm  = d && d._type==='tps-crm-backup';
+      const ze  = isVoll ? d.zeiterfassung : (isCrm ? null : d);
+      const crm = (isVoll||isCrm) ? d.crm : null;
+      const hasZE = !!(ze && ze.users && ze.entries);
+      if(!hasZE && !crm) throw new Error('unrecognized');
+      const what = (hasZE&&crm) ? 'Zeiterfassung UND CRM' : (crm ? 'nur CRM' : 'nur Zeiterfassung');
+      if(!confirm(`Backup einspielen: ${what}.\n\nDie betroffenen aktuellen Daten werden vollständig ersetzt. Fortfahren?`)){ try{ e.target.value=''; }catch(_){} return; }
+      const tasks=[];
+      if(hasZE){
+        // Beabsichtigte Vollersetzung: Datenverlust-Schutz für DIESEN Schreibvorgang erlauben.
+        window._allowDataShrink=true;
+        tasks.push(Promise.resolve(saveRaw(ze)).finally(()=>{ window._allowDataShrink=false; }));
+      }
+      if(crm && window.crmRestoreBlob){ tasks.push(Promise.resolve(window.crmRestoreBlob(crm))); }
+      Promise.all(tasks).finally(()=>{
+        toast('Import erfolgreich – Seite wird neu geladen…','ok');
+        setTimeout(()=>location.reload(),1200);
+      });
+    }catch(err){ toast('Ungültige oder unbekannte Backup-Datei.','err'); }
   };
   reader.readAsText(file); e.target.value='';
 }

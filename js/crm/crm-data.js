@@ -411,6 +411,19 @@ export function saveAccess(uid, obj){
 }
 export function getAccess(uid){ const d=getCrm(); return (d.access && d.access[uid]) || null; }
 
+// ── Vollbackup: gesamten CRM-Blob exportieren / wiederherstellen ───
+// exportCrmBlob liefert eine tiefe Kopie aller CRM-Daten (Bäume, config, access, vorlagen,
+// teamprojekte, veranstaltungen, verteiler). restoreCrmBlob ersetzt ALLES (ein Backup-Restore)
+// – Cache + localStorage + ein einziger _ref.set(). Nur über die Verwaltung mit Bestätigung.
+export function exportCrmBlob(){ try{ return JSON.parse(JSON.stringify(getCrm())); }catch(e){ return getCrm(); } }
+export function restoreCrmBlob(obj){
+  if(!obj || typeof obj!=='object' || Array.isArray(obj)) return Promise.resolve();
+  _cache = obj; _persistLocal();
+  try{ if(_ref) return _ref.set(obj).catch(e=>console.warn('CRM restoreCrmBlob Firebase-Fehler:', e && e.message)); }
+  catch(e){ console.warn('CRM restoreCrmBlob:', e && e.message); }
+  return Promise.resolve();
+}
+
 // ── CRM-Konfiguration (admin-editierbare Bäume & Felder) ───────────
 // Liegt unter crm/config (ein einzelnes Objekt, kein Datensatz-Map).
 // null = noch nie konfiguriert → die UI fällt auf die Code-Defaults zurück.
