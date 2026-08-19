@@ -637,7 +637,8 @@ export async function saveNewUser(){
   const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
-  await mutate(d=>d.users.push(u));
+  try{ await mutate(d=>d.users.push(u)); }
+  catch(e){ toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':'Speichern fehlgeschlagen – bitte erneut versuchen.','err'); return; }
   try{ window.provisionAuthAccount?.(u.id, _plainPw, u.email); }catch(e){}  // echtes Konto anlegen (best effort)
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
@@ -679,7 +680,8 @@ export async function saveEditUser(id){
   const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
-  await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } });
+  try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }
+  catch(e){ toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':'Speichern fehlgeschlagen – bitte erneut versuchen.','err'); return; }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }
