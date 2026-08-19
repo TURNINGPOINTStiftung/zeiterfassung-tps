@@ -265,7 +265,7 @@ function crmSetupModuleBar(){
     ensureCrmReady().then(()=>{
       // CRM für ALLE (jede Person hat „Meine Aufgaben"); Tiefe der Sicht regelt das CRM selbst.
       const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:_canVerw() };
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
