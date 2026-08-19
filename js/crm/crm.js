@@ -254,6 +254,8 @@ function crmFull(){ const l=accessLevel(); return l==='admin'||l==='full'; }
 function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l==='readonly'; }
 
 // Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
+// Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5) darf das Verwaltungs-Modul nutzen.
+function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
 function crmSetupModuleBar(){
   try{
     const cu=window.cu; if(!cu) return;
@@ -263,7 +265,7 @@ function crmSetupModuleBar(){
     ensureCrmReady().then(()=>{
       // CRM für ALLE (jede Person hat „Meine Aufgaben"); Tiefe der Sicht regelt das CRM selbst.
       const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:isAdmin };
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:_canVerw() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -273,7 +275,7 @@ function crmSetupModuleBar(){
       // ☰-Menü nur zeigen, wenn es mehr als ein Modul gibt
       const menuBtn=document.getElementById('mb-menu-btn'); if(menuBtn) menuBtn.style.display=count>1?'':'none';
       // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
-      if(isAdmin){ try{ ensureVerwMounted(); }catch(e){} }
+      if(_canVerw()){ try{ ensureVerwMounted(); }catch(e){} }
     }).catch(()=>{});
   }catch(e){ console.error('crmSetupModuleBar:',e); }
 }
@@ -3745,7 +3747,7 @@ function renderVerwaltung(){
   try{
     injectStyles();
     const root=document.getElementById('verw-root'); if(!root) return;
-    if(!window.cu || window.cu.role!=='admin'){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
+    if(!_canVerw()){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
     ensureCrmReady().then(()=>{
       try{
         ensureVerwMounted();
@@ -4040,11 +4042,6 @@ function paintVerwConfig(){
   const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle('${esc(cardSel)}','${esc(d.key)}',this.checked)"> ${esc(d.label)}</label>`).join('');
 
   host.innerHTML = `
-  <div class="crm-sec">
-    <h4><span class="ttl">🌳 CRM-Bäume</span><button class="btn-sm-crm primary" onclick="crmCfgTreeEdit('')">＋ Baum</button></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:8px">Oberste Ebenen im CRM. Umbenennen/Icon ändern jederzeit; der interne Schlüssel bleibt fix. Löschen blendet den Baum aus – <b>vorhandene Einträge bleiben in der Datenbank erhalten</b>.${live?'':' <i>(Noch nicht angepasst – es gelten die Standardwerte.)</i>'}</div>
-    <div style="overflow-x:auto"><table class="vw-table"><tbody>${treeRows}</tbody></table></div>
-  </div>
   <div class="crm-sec">
     <h4><span class="ttl">🏷️ Kategorien</span><button class="btn-sm-crm primary" onclick="crmCfgCatEdit('')">＋ Kategorie</button></h4>
     <div class="small" style="color:var(--muted);margin-bottom:8px">Kategorien für den einheitlichen „Kontakte"-Filter (Status + Kategorie). Frei erweiterbar. Löschen blendet die Kategorie nur aus – <b>Zuordnungen an Kontakten bleiben erhalten</b>.</div>

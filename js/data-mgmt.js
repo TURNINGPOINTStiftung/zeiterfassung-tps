@@ -5,7 +5,8 @@ import { openModal, closeModal, toast, diffMin, addMin } from './utils.js';
 
 // Große/zerstörerische Datenoperationen (Gesamt-Export, Import/Überschreiben, Reset)
 // sind ausschließlich dem Admin vorbehalten. Normale Nutzung (eigene Zeiten) bleibt offen.
-const _isAdmin = () => ((window.cu && window.cu.role) === 'admin');
+// Admin ODER Person mit delegiertem Verwaltungs-Zugriff (volle Rechte im Verwaltungs-Modul).
+const _isAdmin = () => { const cu=window.cu; return !!(cu && (cu.role==='admin' || (window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)))); };
 
 // Manuelle Überträge, die vom automatischen (minutengenauen) Wert abweichen, auf
 // Automatik zurücksetzen. Behebt z.B. alte, versehentlich auf ganze Stunden

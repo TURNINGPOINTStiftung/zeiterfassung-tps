@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v258':'';
+  if(_hv) _hv.textContent=_showVer?'v259':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -71,7 +71,8 @@ export function initApp(){
   // Zuletzt geöffnetes Modul wiederherstellen (sonst landet man nach Reload immer in der ZE).
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
-  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || (isMgr && _lastMod==='auswertung') || (isAdmin && (_lastMod==='website'||_lastMod==='forum'||_lastMod==='verwaltung'));
+  const _canVerw = isAdmin || hasPermission('zugriff_verwaltung',cu);
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || (isMgr && _lastMod==='auswertung') || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
 }
