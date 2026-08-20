@@ -517,7 +517,7 @@ function injectStyles(){
   .kb-toggle:hover{background:rgba(0,0,0,.06);color:var(--primary)}
   .kb-count{font-size:10px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.06);border-radius:999px;padding:1px 7px;margin-left:4px}
   .kb-col.collapsed .kb-cards,.kb-col.collapsed .kb-qadd,.kb-col.collapsed .kb-col-sub,.kb-col.collapsed .kb-resize{display:none}
-  .kb-col.collapsed{flex:0 0 auto!important;width:auto!important;min-width:150px}
+  .kb-col.collapsed{flex:0 0 auto!important;width:auto!important;min-width:150px;align-self:flex-start}
   .kb-card.collapsed .kb-card-body{display:none}
   /* Spaltenbreite am rechten Rand ziehen (Maus & Touch) */
   .kb-resize{position:absolute;top:34px;right:-4px;width:12px;bottom:8px;cursor:ew-resize;touch-action:none;z-index:3}
@@ -531,10 +531,14 @@ function injectStyles(){
   .kb-card-note{font-size:12px;color:var(--muted);margin-top:5px;white-space:pre-line}
   .kb-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
   .kb-chip{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)}
-  .kb-checklist{margin-top:8px;border-top:1px solid var(--border);padding-top:6px;display:flex;flex-direction:column;gap:3px}
-  .kb-check{display:flex;align-items:center;gap:6px;font-size:12.5px}
+  .kb-checklist{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+  /* Jeder Unterpunkt = eigener Chip (Rahmen + Grund) → klar voneinander abgehoben */
+  .kb-check{display:flex;align-items:center;gap:7px;font-size:12.5px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px}
+  .kb-check.done{opacity:.7}
   .kb-check.done .kb-check-tx{text-decoration:line-through;color:var(--muted)}
-  .kb-check-tx{cursor:pointer;flex:1}
+  .kb-check-tx{cursor:pointer;flex:1;min-width:0;overflow-wrap:anywhere}
+  /* Vorlagen-Board: Unterpunkte ohne Häkchen → deutlicher ▸-Marker davor */
+  #crm-vboard .kb-check-tx::before{content:'▸';color:var(--primary);font-weight:700;margin-right:6px}
   .kb-add,.kb-additem{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-align:left;padding:4px 2px}
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
   /* Inline-Schnellerfassung: Aufgabe/Spalte/Schritt direkt tippen + Enter (kein Dialog nötig) */
@@ -551,7 +555,12 @@ function injectStyles(){
   #crm-vboard .vb-title-in:hover{border-color:var(--border);background:#fff}
   #crm-vboard .vb-title-in:focus{outline:none;border-color:var(--primary-l);background:#fff;box-shadow:0 0 0 3px rgba(32,56,105,.12)}
   #crm-vboard .vb-hint{flex-basis:100%;font-size:12.5px;color:var(--muted);line-height:1.5;padding:2px 2px 0}
-  #crm-vboard .vb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:18px 20px;-webkit-overflow-scrolling:touch}
+  #crm-vboard .vb-scroll{flex:1;overflow:hidden;padding:14px 16px;-webkit-overflow-scrolling:touch}
+  /* Board füllt die ganze Fläche → Spalten sind volle Höhe, jede scrollt selbst, KEIN großer leerer Rand */
+  #crm-vboard .kb-board{height:100%;align-items:stretch}
+  #crm-vboard .kb-col{max-height:100%}
+  #crm-vboard .kb-cards{flex:1;max-height:none}
+  #crm-vboard .kb-col-new{align-self:flex-start}
   #crm-vboard .vb-nav{z-index:5}
   /* Hintergrund-Seite sperren, solange der Vorlagen-Editor offen ist → kein zweiter Scrollbalken */
   html.vb-lock, html.vb-lock body{overflow:hidden}
@@ -1269,8 +1278,8 @@ function taskBoardHtml(c){
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
-      <div class="kb-cards">${cards}</div>
       <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card','${top.id}')">
+      <div class="kb-cards">${cards}</div>
       <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,'${top.id}')"></div>
     </div>`;
   }).join('');
@@ -2758,7 +2767,7 @@ function crmQaKey(ev, kind, parentId){
   const inp=ev.target; const text=(inp.value||'').trim(); if(!text) return;
   inp.value='';
   if(kind==='col') crmQuickAddColumn(text, inp.id);
-  else crmQuickAddChildInline(parentId, text, inp.id);
+  else crmQuickAddChildInline(parentId, text, inp.id, kind==='card');   // neue Aufgabe kommt OBEN in die Spalte
 }
 function crmQuickAddColumn(text, focusId){
   // Bei Einträgen: sicherstellen, dass ein offenes Projekt existiert (sonst automatisch anlegen),
@@ -2778,8 +2787,8 @@ function crmQuickAddColumn(text, focusId){
   window._crmFocusAfter=focusId||'kb-qa-col';
   repaintContainer();
 }
-function crmQuickAddChildInline(parentId, text, focusId){
-  mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; f.node.children.push({ id:newId(), text, status:'offen', children:[] }); });
+function crmQuickAddChildInline(parentId, text, focusId, prepend){
+  mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; const node={ id:newId(), text, status:'offen', children:[] }; if(prepend) f.node.children.unshift(node); else f.node.children.push(node); });
   window._crmFocusAfter=focusId;
   repaintContainer();
 }
