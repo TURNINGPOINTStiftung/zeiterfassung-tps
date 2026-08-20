@@ -503,15 +503,26 @@ function injectStyles(){
   .kb-nav-btn[data-dir="-1"]{left:16px}
   .kb-nav-btn[data-dir="1"]{right:16px}
   @media(max-width:640px){ #kb-nav{display:none!important} }
-  .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px}
+  .kb-col{flex:0 0 268px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:70px;position:relative}
   .kb-col-new{background:none;border:1px dashed var(--border);align-items:flex-start}
   .kb-col-head{display:flex;align-items:center;gap:6px}
   .kb-grip{cursor:grab;color:var(--muted);font-size:13px;line-height:1;user-select:none;flex-shrink:0}
   .kb-grip:active{cursor:grabbing}
   .kb-col-title{font-weight:700;color:var(--primary);font-size:14px;cursor:pointer;flex:1}
   .kb-col-sub{font-size:11px;color:var(--muted);margin-top:-4px}
-  .kb-cards{display:flex;flex-direction:column;gap:8px;min-height:8px}
+  .kb-cards{display:flex;flex-direction:column;gap:8px;min-height:8px;max-height:64vh;overflow-y:auto;overflow-x:hidden}   /* jede Spalte scrollt EINZELN */
   .kb-card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 10px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:grab}
+  /* Ein-/Ausklappen (▾/▸) je Karte UND je Spalte */
+  .kb-toggle{background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:1px 3px;line-height:1;flex:0 0 auto;border-radius:5px}
+  .kb-toggle:hover{background:rgba(0,0,0,.06);color:var(--primary)}
+  .kb-count{font-size:10px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.06);border-radius:999px;padding:1px 7px;margin-left:4px}
+  .kb-col.collapsed .kb-cards,.kb-col.collapsed .kb-qadd,.kb-col.collapsed .kb-col-sub,.kb-col.collapsed .kb-resize{display:none}
+  .kb-col.collapsed{flex:0 0 auto!important;width:auto!important;min-width:150px}
+  .kb-card.collapsed .kb-card-body{display:none}
+  /* Spaltenbreite am rechten Rand ziehen (Maus & Touch) */
+  .kb-resize{position:absolute;top:34px;right:-4px;width:12px;bottom:8px;cursor:ew-resize;touch-action:none;z-index:3}
+  .kb-resize::after{content:'';position:absolute;top:50%;left:4px;transform:translateY(-50%);width:3px;height:40px;border-radius:2px;background:var(--border)}
+  .kb-resize:hover::after{background:var(--primary)}
   .kb-card:active{cursor:grabbing}
   .kb-card.done{opacity:.65}
   .kb-card-top{display:flex;align-items:flex-start;gap:7px}
@@ -1179,8 +1190,27 @@ function taskNodeHtml(c, n, depth){
 function crmSetTaskView(v){ window._crmTaskView=v; repaintContainer(); }
 function _hideDone(){ return !!window._crmHideDone; }
 function crmToggleHideDone(){ window._crmHideDone=!window._crmHideDone; paint(); }
+// ── Board-Ansicht (GERÄTE-LOKAL, persönlich): eingeklappte Knoten + Spaltenbreiten ──
+// Bewusst nur in localStorage (nicht in Firebase) → jede/r hat die eigene Ansicht,
+// kein Sync-Rauschen, kein Datenrisiko.
+function _kbView(){ try{ return JSON.parse(localStorage.getItem('tp_crm_kbview')||'{}')||{}; }catch(e){ return {}; } }
+function _kbViewSave(v){ try{ localStorage.setItem('tp_crm_kbview', JSON.stringify(v)); }catch(e){} }
+function _kbCollapsed(id){ const v=_kbView(); return !!(v.collapsed && v.collapsed[id]); }
+function crmKbToggleCollapse(id){ const v=_kbView(); v.collapsed=v.collapsed||{}; if(v.collapsed[id]) delete v.collapsed[id]; else v.collapsed[id]=1; _kbViewSave(v); repaintContainer(); }
+function _kbWidth(id){ const v=_kbView(); const w=v.width&&v.width[id]; return (typeof w==='number'&&w>=160&&w<=760)?w:null; }
+function crmKbSetWidth(id,px){ const v=_kbView(); v.width=v.width||{}; v.width[id]=Math.max(180,Math.min(720,Math.round(px))); _kbViewSave(v); }
+// Spalte per Ziehen am rechten Rand breiter/schmaler machen (Maus + Touch via Pointer-Events).
+function crmKbResizeStart(ev, id){
+  ev.preventDefault(); ev.stopPropagation();
+  const col = ev.currentTarget && ev.currentTarget.closest ? ev.currentTarget.closest('.kb-col') : null; if(!col) return;
+  const startX = ev.clientX, startW = col.getBoundingClientRect().width;
+  const move = e => { const w=Math.max(180,Math.min(720, startW + (e.clientX-startX))); col.style.flex='0 0 '+w+'px'; col.style.width=w+'px'; };
+  const up = () => { document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); crmKbSetWidth(id, col.getBoundingClientRect().width); };
+  document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+}
 function kbCardHtml(c, n){
   const vo=_isVorlageCtx();   // Vorlagen-Modus: Blaupause – ohne Häkchen/Status/Zuständig/Fällig
+  const collapsed=_kbCollapsed(n.id);
   const kids=n.children||[];
   const done=kids.filter(k=>k.status==='erledigt').length;
   const visKids=(!vo&&_hideDone())?kids.filter(k=>k.status!=='erledigt'):kids;
@@ -1199,42 +1229,49 @@ function kbCardHtml(c, n){
   }).join('');
   const cdone=!vo&&n.status==='erledigt';
   const st=vo?null:taskStatusByKey(n.status);
-  return `<div class="kb-card${cdone?' done':''}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')">
+  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')">
     <div class="kb-card-top">
+      <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse('${n.id}')">${collapsed?'▸':'▾'}</button>
       ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">`}
-      <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}</span>
+      <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
       ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode('${n.id}')">✕</button>`:''}
     </div>
-    ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
-    ${(!vo&&(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt)))?`<div class="kb-card-meta">
-       <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
-       ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
-       ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
-       ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
-       ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
-     </div>`:''}
-    ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-    <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step','${n.id}')">
-    ${attachChips(n)}
-    <div class="kb-cardbtns">
-      <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen('${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
+    <div class="kb-card-body">
+      ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
+      ${(!vo&&(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt)))?`<div class="kb-card-meta">
+         <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+         ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
+         ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
+         ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
+         ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
+       </div>`:''}
+      ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
+      <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step','${n.id}')">
+      ${attachChips(n)}
+      <div class="kb-cardbtns">
+        <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen('${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
+      </div>
     </div>
   </div>`;
 }
 function taskBoardHtml(c){
   const tops=_hideDone()?(c.todos||[]).filter(t=>t.status!=='erledigt'):(c.todos||[]);
   const cols=tops.map(top=>{
+    const collapsed=_kbCollapsed(top.id);
+    const w=_kbWidth(top.id);
     const childs=_hideDone()?(top.children||[]).filter(card=>card.status!=='erledigt'):(top.children||[]);
     const cards=childs.map(card=>kbCardHtml(c,card)).join('');
-    return `<div class="kb-col" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
+    return `<div class="kb-col${collapsed?' collapsed':''}"${w?` style="flex:0 0 ${w}px;width:${w}px"`:''} ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
       <div class="kb-col-head">
+        <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse('${top.id}')">${collapsed?'▸':'▾'}</button>
         <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,'${top.id}')" title="Spalte verschieben">⠿</span>
-        <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}</span>
+        <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}${collapsed?`<span class="kb-count">${childs.length}</span>`:''}</span>
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
       <div class="kb-cards">${cards}</div>
       <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card','${top.id}')">
+      <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,'${top.id}')"></div>
     </div>`;
   }).join('');
   return `<div class="kb-board">${cols}
@@ -4476,6 +4513,7 @@ Object.assign(window, {
   crmApplyVorlagePick, crmApplyVorlage,
   // Kanban-Board
   crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn, crmToggleHideDone,
+  crmKbToggleCollapse, crmKbResizeStart,
   // Team-Ansicht
   crmShowTeams, crmOpenTeam, crmBackToTeams, crmOpenEntryFromTeam,
   crmTeamSetStatus, crmTeamSetAssignee, crmTeamToggleDone, crmTeamAddChild, crmTeamEditNode,
