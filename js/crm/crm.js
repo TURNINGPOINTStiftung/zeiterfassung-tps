@@ -93,10 +93,14 @@ function mutateEntity(fn){
 // _crmAfterTask steuert, welche Ansicht nach einer Aufgaben-Aktion neu rendert.
 function isTPCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='teamprojekt'); }
 function isEntityCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='entity'); }
+// Eine Aufgaben-Vorlage ist ein ganz normaler Board-Container (Knoten in .todos),
+// damit sie mit derselben Kanban-Engine gebaut werden kann wie ein Projekt.
+function _isVorlageCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='vorlage'); }
 function curContainer(){
   const ctx=window._crmTaskCtx; if(!ctx) return null;
   if(ctx.kind==='teamprojekt'){ const c=getTeamProjekt(ctx.id); if(c) normTasks(c); return c; }
   if(ctx.kind==='veranstaltung'){ const c=getVeranstaltung(ctx.id); if(c){ normTasks(c); recoverV187VaItems(c); } return c; }
+  if(ctx.kind==='vorlage'){ const c=getVorlage(ctx.id); if(c) normVorlage(c); return c; }
   // Eintrag: der Container ist das AUSGEWÄHLTE Projekt (ctx.pid)
   const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return null; migEntityProjekte(ent);
   const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return null;
@@ -114,6 +118,10 @@ function mutateContainer(fn){
     try{ fn(v); }catch(e){ console.error('CRM mutateContainer:',e); return; }
     v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
     saveVeranstaltung(v);
+  } else if(ctx.kind==='vorlage'){
+    const v=getVorlage(ctx.id); if(!v) return; normVorlage(v);
+    try{ fn(v); }catch(e){ console.error('CRM mutateContainer:',e); return; }
+    saveVorlage(v);
   } else {
     const ent=getEntity(ctx.tree, ctx.eid); if(!ent) return; migEntityProjekte(ent);
     const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return; normTasks(p);
@@ -128,6 +136,7 @@ function repaintContainer(){
     case 'teamdetail':    paintTeamDetail(); break;
     case 'meine':         paintMeine(); break;
     case 'veranstaltung': paintVeranstaltungDetail(); break;
+    case 'vorlage':       paintVorlageEditor(window._crmVorlageEditId); break;
     default:              paintDetail();
   }
   // Nach der Schnellerfassung den Fokus zurück ins Eingabefeld (flüssiges Tippen)
@@ -523,6 +532,15 @@ function injectStyles(){
   .kb-qadd:focus{outline:none;border-style:solid;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(45,96,153,.12)}
   .kb-qadd-step{font-size:12px;padding:4px 8px;margin-top:6px}
   .kb-qadd-col{margin-top:0}
+  .kb-del{margin-left:auto;flex:0 0 auto;font-size:12px;line-height:1}
+  /* Vorlagen-Board: eigener, großer Vollbild-Editor (eigene Ebene, unter dem Modal z-index:200) */
+  #crm-vboard{display:none;position:fixed;inset:0;z-index:120;background:var(--bg);flex-direction:column}
+  #crm-vboard .vb-head{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.96);backdrop-filter:saturate(1.4) blur(8px);-webkit-backdrop-filter:saturate(1.4) blur(8px);flex-wrap:wrap}
+  #crm-vboard .vb-title-in{flex:1;min-width:200px;font-size:18px;font-weight:800;color:var(--primary);border:1.5px solid transparent;border-radius:9px;padding:7px 11px;background:transparent;font-family:inherit}
+  #crm-vboard .vb-title-in:hover{border-color:var(--border);background:#fff}
+  #crm-vboard .vb-title-in:focus{outline:none;border-color:var(--primary-l);background:#fff;box-shadow:0 0 0 3px rgba(32,56,105,.12)}
+  #crm-vboard .vb-hint{flex-basis:100%;font-size:12.5px;color:var(--muted);line-height:1.5;padding:2px 2px 0}
+  #crm-vboard .vb-scroll{flex:1;overflow:auto;padding:18px 20px;-webkit-overflow-scrolling:touch}
   /* Mehrfach-Eingabe (E-Mails/Telefon) im Kontaktformular */
   .crm-mf-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
   .crm-mf-row input{flex:1;min-width:0}
@@ -1151,11 +1169,16 @@ function crmSetTaskView(v){ window._crmTaskView=v; repaintContainer(); }
 function _hideDone(){ return !!window._crmHideDone; }
 function crmToggleHideDone(){ window._crmHideDone=!window._crmHideDone; paint(); }
 function kbCardHtml(c, n){
-  const st=taskStatusByKey(n.status);
+  const vo=_isVorlageCtx();   // Vorlagen-Modus: Blaupause – ohne Häkchen/Status/Zuständig/Fällig
   const kids=n.children||[];
   const done=kids.filter(k=>k.status==='erledigt').length;
-  const visKids=_hideDone()?kids.filter(k=>k.status!=='erledigt'):kids;
+  const visKids=(!vo&&_hideDone())?kids.filter(k=>k.status!=='erledigt'):kids;
   const checklist=visKids.map(k=>{
+    if(vo) return `<div class="kb-check" onclick="event.stopPropagation()">
+      <span class="kb-check-tx" onclick="crmOpenTask('${k.id}')">${esc(k.text)}</span>
+      ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.length}</span>`:''}
+      <button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode('${k.id}')">✕</button>
+    </div>`;
     const kdone=k.status==='erledigt';
     return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
       <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone('${k.id}')">
@@ -1163,14 +1186,16 @@ function kbCardHtml(c, n){
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
     </div>`;
   }).join('');
-  const cdone=n.status==='erledigt';
+  const cdone=!vo&&n.status==='erledigt';
+  const st=vo?null:taskStatusByKey(n.status);
   return `<div class="kb-card${cdone?' done':''}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')">
     <div class="kb-card-top">
-      <input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">
+      ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">`}
       <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}</span>
+      ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode('${n.id}')">✕</button>`:''}
     </div>
     ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
-    ${(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt))?`<div class="kb-card-meta">
+    ${(!vo&&(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt)))?`<div class="kb-card-meta">
        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
        ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
        ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
@@ -2205,7 +2230,7 @@ function crmNewEntityProjekt(){
   crmOpenModalShell();
   const vs=listVorlagen();
   const vorlageOpts=['<option value="">– ohne Vorlage (leeres Board) –</option>']
-    .concat(vs.map(v=>`<option value="${v.id}">${esc(v.name)} (${(v.items||[]).length})</option>`)).join('');
+    .concat(vs.map(v=>`<option value="${v.id}">${esc(v.name)} (${_vCount(v)})</option>`)).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Neues Projekt</h3>
    <div class="crm-modal-field"><label>Projektname *</label><input id="crm-np-name" placeholder="z. B. Wendekurs 2026"></div>
    <div class="crm-modal-field"><label>Vorlage</label><select id="crm-np-vorlage">${vorlageOpts}</select>
@@ -2579,11 +2604,12 @@ function enforceBlock(e, deps, status){
 // isTop=true → Team-Feld (außer im Team-Projekt). Sonst Team geerbt.
 function nodeModal(o){
   const e=curContainer(); if(!e) return;
-  const n=o.node||{}; const tp=!isEntityCtx();
+  const n=o.node||{}; const tp=!isEntityCtx(); const vo=_isVorlageCtx();
   crmOpenModalShell();
   const statusOpts=getTaskStatus().map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
   let teamRow;
-  if(o.isTop && !tp){
+  if(vo){ teamRow=''; }
+  else if(o.isTop && !tp){
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${(n.teams||[]).includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(n.teams||[], n.assigneeId||'')}</select></div>`;
@@ -2595,10 +2621,10 @@ function nodeModal(o){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(o.titel)}</h3>
    <div class="crm-modal-field"><label>${o.isTop?'Aufgabe':'Unterpunkt'} *</label><input id="crm-task-text" value="${esc(n.text||'')}"></div>
    ${teamRow}
-   <div style="display:flex;gap:10px;flex-wrap:wrap">
+   ${vo?'':`<div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(n.due||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
-   </div>
+   </div>`}
    <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-task-note" rows="3" placeholder="Details, Kontext, Notizen …">${esc(n.note||'')}</textarea></div>
    <details class="crm-modal-field"${(n.deps&&n.deps.length)?' open':''}>
      <summary style="cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔗 Abhängig von …${(n.deps&&n.deps.length)?` (${n.deps.length})`:''}</summary>
@@ -2715,7 +2741,7 @@ function crmApplyVorlagePick(){
   if(!vs.length){ if(confirm('Es gibt noch keine Vorlagen.\nJetzt eine anlegen?')) crmOpenVorlagen(); return; }
   crmOpenModalShell();
   const rows=vs.map(v=>`<div class="crm-row">
-    <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} Hauptaufgaben</span></div>
+    <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${_vCount(v)} Hauptaufgaben</span></div>
     <button class="btn-sm-crm primary" onclick="crmApplyVorlage('${v.id}')">Anwenden</button>
   </div>`).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 Vorlage anwenden</h3>${rows}
@@ -2724,18 +2750,25 @@ function crmApplyVorlagePick(){
 }
 // Sichert ids/children/deps für Vorlagen-Knoten (rekursiv, Lazy-Migration von subs→children)
 function normVorlage(v){
-  if(!v||!Array.isArray(v.items)) { if(v) v.items=[]; return v; }
-  const fix=n=>{ if(!n.id) n.id=newId(); normNode(n); };
-  v.items.forEach(fix);
+  if(!v) return v;
+  // Board-Container-Form: Knoten liegen in .todos (wie ein Projekt). Früher lagen sie
+  // in .items – einmalige, NICHT-destruktive Migration (altes .items bleibt als Ballast).
+  if(!Array.isArray(v.todos)) v.todos = Array.isArray(v.items) ? v.items : [];
+  v.todos.forEach(n=>{ if(!n.id) n.id=newId(); normNode(n); });
+  // Status für die Board-Anzeige absichern (Blaupause = alles „offen")
+  const setSt=arr=>arr.forEach(n=>{ if(!n.status) n.status='offen'; if(Array.isArray(n.children)) setSt(n.children); });
+  setSt(v.todos);
   return v;
 }
+// Anzahl Hauptaufgaben (Spalten) einer Vorlage – auf Basis der Board-Knoten.
+function _vCount(v){ normVorlage(v); return (v.todos||[]).length; }
 // Kern: baut die Vorlage in den AKTUELLEN Container (ctx) – ohne UI-Nebenwirkungen.
 // Liefert die Anzahl Hauptaufgaben (0 = nichts/Fehler).
 function _applyVorlageCore(id){
   const v=getVorlage(id); if(!v) return 0;
   normVorlage(v);
   const idMap={};
-  flatNodes(v.items).forEach(x=>{ idMap[x.id]=newId(); });
+  flatNodes(v.todos).forEach(x=>{ idMap[x.id]=newId(); });
   const build=(n,depth)=>{
     const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
@@ -2744,7 +2777,7 @@ function _applyVorlageCore(id){
     if(depth===0) node.teams = isEntityCtx()?(n.team?[n.team]:[]):[];
     return node;
   };
-  const mains=(v.items||[]).map(n=>build(n,0));
+  const mains=(v.todos||[]).map(n=>build(n,0));
   mutateContainer(c=>{ if(!Array.isArray(c.todos)) c.todos=[]; mains.forEach(m=>c.todos.push(m)); if(!isTPCtx() && !c.name) c.name=v.name; });
   return mains.length;
 }
@@ -3409,7 +3442,7 @@ function crmOpenVorlagen(){
   crmOpenModalShell();
   const vs=listVorlagen();
   const rows=vs.length ? vs.map(v=>`<div class="crm-row">
-      <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${(v.items||[]).length} Hauptaufgaben</span></div>
+      <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${_vCount(v)} Hauptaufgaben</span></div>
       <button class="btn-sm-crm" onclick="crmEditVorlage('${v.id}')">Bearbeiten</button>
       <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage('${v.id}')">✕</button>
     </div>`).join('') : `<div class="small" style="color:var(--muted)">Noch keine Vorlagen.</div>`;
@@ -3424,164 +3457,46 @@ function crmOpenVorlagen(){
 function crmCreateVorlage(){
   const name=val('crm-vorlage-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const id=newId();
-  saveVorlage({ id, name, items:[] });
+  saveVorlage({ id, name, todos:[] });
   crmEditVorlage(id);
 }
-// Rekursive Knoten-Darstellung im Vorlagen-Editor (beliebig tief)
-function vNodeHtml(v,n,depth){
-  const depNames=(n.deps||[]).map(d=>{ const x=flatNodes(v.items).find(y=>y.id===d); return x?x.text:''; }).filter(Boolean);
-  const children=(n.children||[]).map(ch=>vNodeHtml(v,ch,depth+1)).join('');
-  return `<div class="crm-tnode${depth===0?' top':''}">
-    <div class="crm-task">
-      <div class="grow"><span class="tx">${esc(n.text)}</span>${(depth===0&&n.team)?` <span class="fn">${esc(n.team)}</span>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${depNames.length?`<div class="small crm-locked">↦ nach: ${esc(depNames.join(', '))}</div>`:''}${attachChips(n)}</div>
-      <button class="btn-sm-crm" title="Unterpunkt" onclick="crmVNodeAdd('${v.id}','${n.id}')">＋</button>
-      <button class="btn-sm-crm" title="Bearbeiten" onclick="crmVNodeEdit('${v.id}','${n.id}')">✎</button>
-      <button class="btn-sm-crm" title="Anlagen (Links/Dokumente)" onclick="crmVAtt('${v.id}','${n.id}')">📎${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
-      <button class="btn-sm-crm" title="Abhängigkeit" onclick="crmVNodeDeps('${v.id}','${n.id}')">🔗</button>
-      <button class="crm-x" title="Löschen" onclick="crmVNodeDel('${v.id}','${n.id}')">✕</button>
-    </div>
-    ${(n.children&&n.children.length)?`<div class="crm-subs">${children}</div>`:''}
-  </div>`;
-}
+// Vorlage bearbeiten = großer Board-Editor (dieselbe Kanban-Bedienung wie ein Projekt).
 function crmEditVorlage(id){
   const v=getVorlage(id); if(!v) return;
+  crmCloseModal();            // Listen-Modal zu, großer Editor auf
+  paintVorlageEditor(id);
+}
+// Vollflächiger Board-Editor als eigene Ebene (überlebt Hintergrund-Repaints von #crm-root).
+function paintVorlageEditor(id){
+  const v=getVorlage(id); if(!v){ crmCloseVorlageEditor(); return; }
   normVorlage(v);
-  crmOpenModalShell();
-  const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option>${esc(tm)}</option>`)).join('');
-  const itemsHtml=(v.items||[]).map(it=>vNodeHtml(v,it,0)).join('') || `<div class="small" style="color:var(--muted)">Noch keine Hauptaufgaben.</div>`;
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 ${esc(v.name)}</h3>
-   ${itemsHtml}
-   <div class="crm-add-inline" style="margin-top:10px">
-     <input id="crm-vit-text" placeholder="Neue Hauptaufgabe …" style="flex:1;min-width:150px">
-     <select id="crm-vit-team" title="Standard-Team">${teamOpts}</select>
-     <button class="btn-sm-crm primary" onclick="crmVorlageAddItem('${id}')">＋ Hauptaufgabe</button>
-   </div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmOpenVorlagen()">← Zurück</button>
-   <button class="btn-sm-crm primary" onclick="crmCloseModal()">Fertig</button></div>`, true);
+  window._crmTaskCtx={ kind:'vorlage', id }; window._crmAfterTask='vorlage'; window._crmVorlageEditId=id;
+  let ov=document.getElementById('crm-vboard');
+  if(!ov){ ov=document.createElement('div'); ov.id='crm-vboard'; (document.getElementById('mod-crm')||document.body).appendChild(ov); }
+  ov.style.display='flex';
+  ov.innerHTML=`
+    <div class="vb-head">
+      <button class="btn-sm-crm" onclick="crmCloseVorlageEditor()">← Vorlagen</button>
+      <input class="vb-title-in" value="${esc(v.name)}" onchange="crmVorlageRename('${id}',this.value)" title="Vorlagenname – hier direkt ändern">
+      <button class="btn-sm-crm primary" onclick="crmCloseVorlageEditor()">✓ Fertig</button>
+      <div class="vb-hint">Bau die Vorlage wie ein Board: <b>Spalte</b> anlegen → <b>Aufgabe</b> (Enter) → <b>Unterpunkt</b> je Karte (Enter). Klick auf eine Aufgabe öffnet Notiz, Abhängigkeiten und Anlagen. Beim <b>Anwenden</b> werden alle Aufgaben in ein Projekt kopiert.</div>
+    </div>
+    <div class="vb-scroll">${taskBoardHtml(v)}</div>`;
+  const n=document.getElementById('kb-nav'); if(n) n.style.display='none';   // schwebende Board-Pfeile gehören zum Haupt-Board
 }
-function crmVorlageAddItem(id){
+function crmCloseVorlageEditor(){
+  const ov=document.getElementById('crm-vboard'); if(ov) ov.style.display='none';
+  window._crmTaskCtx=null; window._crmVorlageEditId=null; window._crmAfterTask='detail';
+  try{ window._kbNavUpdate&&window._kbNavUpdate(); }catch(e){}
+  crmOpenVorlagen();          // zurück zur Vorlagen-Liste
+}
+function crmVorlageRename(id, name){
   const v=getVorlage(id); if(!v) return; normVorlage(v);
-  const text=val('crm-vit-text'); if(!text){ toast('Bitte eine Hauptaufgabe eingeben.','err'); return; }
-  v.items.push({ id:newId(), text, team:val('crm-vit-team'), deps:[], children:[] });
-  saveVorlage(v); crmEditVorlage(id);
+  const nm=String(name||'').trim(); if(nm) v.name=nm;
+  saveVorlage(v);
 }
-// ── Vorlagen-Knoten (beliebig tief): Unterpunkt / Bearbeiten / Abhängigkeit / Löschen
-function crmVNodeAdd(vid, pid){
-  crmOpenModalShell();
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Unterpunkt</h3>
-   <div class="crm-modal-field"><label>Unterpunkt *</label><input id="crm-vnode-text"></div>
-   <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-vnode-note" rows="2"></textarea></div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmVNodeAddSave('${vid}','${pid}')">Hinzufügen</button></div>`);
-}
-function crmVNodeAddSave(vid, pid){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Unterpunkt eingeben.','err'); return; }
-  const f=findNodeIn(v.items, pid); if(!f) return;
-  if(!Array.isArray(f.node.children)) f.node.children=[];
-  f.node.children.push({ id:newId(), text, note:val('crm-vnode-note'), deps:[], children:[] });
-  saveVorlage(v); crmEditVorlage(vid);
-}
-// ── Anlagen (Links/Dokumente) an Vorlagen-Knoten – kommen beim Anwenden automatisch mit ──
-function crmVAtt(vid, nid){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, nid); if(!f) return;
-  crmOpenModalShell();
-  const a=f.node.attachments||[];
-  const rows=a.length ? a.map(x=>`<div class="crm-att-row">
-      <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
-      <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmVAttEdit('${vid}','${nid}','${x.id}')">✎</button>
-      <button class="crm-x" title="Entfernen" onclick="crmVAttDel('${vid}','${nid}','${x.id}')">✕</button>
-    </div>`).join('') : `<div class="small" style="color:var(--muted);padding:4px 0">Noch keine Anlagen.</div>`;
-  openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📎 Anlagen (Vorlage)</h3>
-   <div style="margin-bottom:6px;font-size:13px;color:var(--muted)">${esc(f.node.text||'')}</div>
-   ${rows}
-   <div class="crm-att-add">
-     <div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:14px 0 6px">📎 Datei oder Link anhängen</div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap">
-       <input id="crm-vatt-title" placeholder="Bezeichnung (optional)" style="flex:1;min-width:130px">
-       <input id="crm-vatt-url" placeholder="Link einfügen (z. B. OneDrive-Freigabelink)" style="flex:2;min-width:200px">
-       <button class="btn-sm-crm primary" onclick="crmVAttLink('${vid}','${nid}')">＋ Anhängen</button>
-     </div>
-     <div class="small" style="color:var(--muted);margin-top:8px;line-height:1.5">📂 Dokument: in OneDrive/Teams ablegen → Teilen → Link kopieren → oben einfügen. Beim Anwenden der Vorlage kommen die Anlagen automatisch mit.</div>
-   </div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmEditVorlage('${vid}')">Fertig</button></div>`);
-}
-function crmVAttLink(vid, nid){
-  const url=val('crm-vatt-url'); if(!url){ toast('Bitte einen Link einfügen.','err'); return; }
-  const u=/^https?:\/\//i.test(url)?url:('https://'+url.replace(/^\/+/,''));
-  const title=val('crm-vatt-title');
-  const type=_looksLikeFile(u)?'file':'link';
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, nid); if(!f) return;
-  if(!Array.isArray(f.node.attachments)) f.node.attachments=[];
-  f.node.attachments.push({id:newId(),type,title,url:u});
-  saveVorlage(v); crmVAtt(vid,nid); toast('Anlage hinzugefügt ✓','ok');
-}
-function crmVAttEdit(vid, nid, attId){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, nid); if(!f) return;
-  const x=(f.node.attachments||[]).find(a=>a.id===attId); if(!x) return;
-  const nt=window.prompt('Anzeigename der Anlage (leer = Link/Dateiname zeigen):', x.title||''); if(nt===null) return;
-  x.title=String(nt).trim(); saveVorlage(v); crmVAtt(vid,nid);
-}
-function crmVAttDel(vid, nid, attId){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, nid); if(!f) return;
-  f.node.attachments=(f.node.attachments||[]).filter(a=>a.id!==attId);
-  saveVorlage(v); crmVAtt(vid,nid);
-}
-function crmVNodeEdit(vid, id){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, id); if(!f) return;
-  const isTop=f.parent===null;
-  crmOpenModalShell();
-  const teamSel=isTop?`<div class="crm-modal-field"><label>Standard-Team</label><select id="crm-vnode-team">${['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${f.node.team===tm?'selected':''}>${esc(tm)}</option>`)).join('')}</select></div>`:'';
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ ${isTop?'Hauptaufgabe':'Unterpunkt'}</h3>
-   <div class="crm-modal-field"><label>Text *</label><input id="crm-vnode-text" value="${esc(f.node.text||'')}"></div>
-   <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-vnode-note" rows="2">${esc(f.node.note||'')}</textarea></div>
-   ${teamSel}
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmVNodeEditSave('${vid}','${id}')">Speichern</button></div>`);
-}
-function crmVNodeEditSave(vid, id){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, id); if(!f) return;
-  const text=val('crm-vnode-text'); if(!text){ toast('Bitte einen Text eingeben.','err'); return; }
-  f.node.text=text;
-  f.node.note=val('crm-vnode-note');
-  if(f.parent===null){ const t=document.getElementById('crm-vnode-team'); if(t) f.node.team=t.value; }
-  saveVorlage(v); crmEditVorlage(vid);
-}
-function crmVNodeDel(vid, id){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, id); if(!f) return;
-  if(!confirm('Diesen Punkt samt Unterpunkten löschen?')) return;
-  const removed=new Set(flatNodes([f.node]).map(x=>x.id));
-  const i=f.arr.indexOf(f.node); if(i>=0) f.arr.splice(i,1);
-  flatNodes(v.items).forEach(x=>{ if(Array.isArray(x.ref.deps)) x.ref.deps=x.ref.deps.filter(d=>!removed.has(d)); });
-  saveVorlage(v); crmEditVorlage(vid);
-}
-function crmVNodeDeps(vid, id){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, id); if(!f) return;
-  crmOpenModalShell();
-  const excl=new Set(flatNodes([f.node]).map(x=>x.id));  // sich selbst + eigene Unterpunkte
-  const sel=new Set(f.node.deps||[]);
-  const opts=flatNodes(v.items).filter(x=>!excl.has(x.id)).map(x=>
-    `<label><input type="checkbox" value="${x.id}" ${sel.has(x.id)?'checked':''}> ${'↳ '.repeat(x.depth)}${esc(x.text)}</label>`
-  ).join('') || '<div class="small" style="color:var(--muted)">Keine anderen Aufgaben vorhanden.</div>';
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">⛓ „${esc(f.node.text)}" startet erst nach …</h3>
-   <div class="crm-deps-box" id="crm-vdeps">${opts}</div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmEditVorlage('${vid}')">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmVNodeDepsSave('${vid}','${id}')">Speichern</button></div>`);
-}
-function crmVNodeDepsSave(vid, id){
-  const v=getVorlage(vid); if(!v) return; normVorlage(v);
-  const f=findNodeIn(v.items, id); if(!f) return;
-  f.node.deps=readChecked('crm-vdeps');
-  saveVorlage(v); crmEditVorlage(vid);
-}
+// (Der frühere verschachtelte Vorlagen-Editor – crmVNodeAdd/…/crmVAtt*/crmVNodeDeps* – ist
+//  entfallen: Vorlagen werden jetzt im großen Board-Editor gebaut, siehe paintVorlageEditor.)
 function crmDeleteVorlage(id){
   const v=getVorlage(id); if(!v) return;
   if(!confirm(`Vorlage „${v.name}" löschen?`)) return;
@@ -3856,7 +3771,7 @@ function _histDescribe(prev, cur, coll){
   if(coll==='vorlagen'){
     if(!prev) return 'angelegt';
     if((prev.name||'')!==(cur.name||'')) parts.push(`umbenannt → „${cur.name||''}"`);
-    _diffTasks((prev.items||[]),(cur.items||[]),parts);
+    _diffTasks((prev.todos||prev.items||[]),(cur.todos||cur.items||[]),parts);
     return parts.slice(0,4).join('; ')+(parts.length>4?` (+${parts.length-4})`:'');
   }
   if(coll==='teamprojekte'){
@@ -4517,7 +4432,6 @@ Object.assign(window, {
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
   crmCloseVeranstaltung, crmReopenVeranstaltung, crmVaAddTeiln, crmVaRemoveTeiln, crmNewVeranstaltungFor,
   crmAttOpen, crmAttLink, crmAttFile, crmAttDel, crmAttEdit, crmTeamAtt,
-  crmVAtt, crmVAttLink, crmVAttEdit, crmVAttDel,
   crmAddStat, crmEditStat, crmSaveStat, crmDeleteStat,
   crmAddFoerderung, crmEditFoerderung, crmSaveFoerderung, crmDeleteFoerderung,
   // Aufgaben (beliebig tief + Abhängigkeiten + Häkchen)
@@ -4534,9 +4448,9 @@ Object.assign(window, {
   crmOpenTeamProjekt, crmBackToTeamProjekte, crmNewTeamProjekt,
   crmEditTeamProjekt, crmSaveTeamProjekt, crmDeleteTeamProjekt, crmCloseProjekt, crmReopenProjekt,
   crmOpenLinkedEntity,
-  // Vorlagen (beliebig tief)
-  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmVorlageAddItem, crmDeleteVorlage,
-  crmVNodeAdd, crmVNodeAddSave, crmVNodeEdit, crmVNodeEditSave, crmVNodeDel, crmVNodeDeps, crmVNodeDepsSave,
+  // Vorlagen (als großes Kanban-Board)
+  crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmDeleteVorlage,
+  paintVorlageEditor, crmCloseVorlageEditor, crmVorlageRename,
   // Kommunikation
   crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmDeleteNote, crmConfigAi
 });
