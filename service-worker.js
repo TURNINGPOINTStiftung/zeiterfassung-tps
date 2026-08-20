@@ -2,7 +2,7 @@
 // Strategie: netzwerk-first für frische Versionen, Antworten werden aber gecacht,
 // damit bei Netzwerk-Aussetzern die letzte gute Version statt "rohem HTML" kommt.
 // KEIN automatisches Neuladen offener Tabs mehr (verursachte stoerendes Aufblitzen).
-const CACHE = 'tps-ze-v269';
+const CACHE = 'tps-ze-v270';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -58,18 +58,23 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Alle App-Dateien (HTML/JS/CSS): netzwerk-first für frische Versionen, ABER
-  // erfolgreiche Antworten cachen. Bei Netzwerk-Aussetzern wird die letzte gute
-  // Version geliefert statt ungestyltem "rohem HTML" (fehlgeschlagenes CSS).
+  // Alle App-Dateien (HTML/JS/CSS): STALE-WHILE-REVALIDATE.
+  // Sofort aus dem Cache liefern → Neuladen ist quasi instant. Parallel im
+  // Hintergrund die frische Version holen und für das naechste Mal cachen.
+  // Neue Deploys kommen so spaetestens beim naechsten Neuladen an; zusaetzlich
+  // leert der CACHE-Namenswechsel pro Version den alten Cache (activate).
+  // Offline / Netzaussetzer → letzte gute Version aus dem Cache.
   e.respondWith(
-    fetch(e.request, { cache: 'no-store' })
-      .then(res => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
+    caches.open(CACHE).then(cache =>
+      cache.match(e.request).then(cached => {
+        const network = fetch(e.request)
+          .then(res => {
+            if (res && res.status === 200 && res.type === 'basic') cache.put(e.request, res.clone());
+            return res;
+          })
+          .catch(() => cached);
+        return cached || network;   // Cache sofort; wenn nicht vorhanden, aufs Netz warten
       })
-      .catch(() => caches.match(e.request)) // Offline-/Aussetzer-Fallback
+    )
   );
 });
