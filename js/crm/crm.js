@@ -1306,19 +1306,6 @@ function paintDetail(){
     ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div style="margin-top:6px">${vaPast.map(vaRow).join('')}</div></details>`:''}
   </div>`;
 
-  const angebote=(e.angebote||[]).map(a=>`
-    <div class="crm-row">
-      <div class="grow"><span class="name">${esc(a.titel)}</span>${a.note?`<div class="small">${linkify(a.note)}</div>`:''}</div>
-      <button class="crm-x" title="Entfernen" onclick="crmDeleteAngebot('${a.id}')">✕</button>
-    </div>`).join('') || `<div class="small" style="color:var(--muted)">Keine Angebote.</div>`;
-
-  const log=(e.log||[]).slice().sort((a,b)=>b.ts-a.ts).map(l=>`
-    <div class="crm-logitem">
-      <div class="lh"><span>${esc(l.autor||'')}${l.kuerzel?` <strong>[${esc(l.kuerzel)}]</strong>`:''}</span><span>${fmtDateTime(l.ts)} <button class="crm-x" onclick="crmDeleteNote('${l.id}')">✕</button></span></div>
-      <div class="lt">${linkify(l.text||'')}</div>
-      ${l.summary?`<div class="ls"><strong>KI-Zusammenfassung:</strong><br>${linkify(l.summary)}</div>`:''}
-    </div>`).join('') || `<div class="small" style="color:var(--muted)">Noch keine Notizen.</div>`;
-
   // Statistik (nur bei Vereinen)
   const statsSec = statsSecHtml(e);   // auch für Nicht-Vereine (z. B. Sozialakteur mit gemeinsamer Statistik); Reiter erscheint nur bei Bedarf
   // Förderungen (für alle Baum-Typen)
@@ -1336,15 +1323,7 @@ function paintDetail(){
       <h4><span class="ttl">📅 Termine</span></h4>
       ${termine}
     </div>`;
-  const angeboteSec = `<div class="crm-sec">
-      <h4><span class="ttl">🎯 Angebote</span><button class="btn-sm-crm" onclick="crmAddAngebot()">＋ Angebot</button></h4>
-      ${angebote}
-    </div>`;
   const statusSec = kontaktnotizenSecHtml(e);
-  const kommSec = `<div class="crm-sec">
-      <h4><span class="ttl">💬 Interne Kommunikation</span><button class="btn-sm-crm primary" onclick="crmOpenNote()">🎤 Neue Notiz</button></h4>
-      ${log}
-    </div>`;
 
   // Unterreiter (wie in den Referenz-Screenshots) – eine Ansicht statt langem Scrollen
   const openTasks=entityOpenTaskCount(e);
@@ -1372,8 +1351,8 @@ function paintDetail(){
   const scBar = `<div class="crm-scbar">${_stBadges||''}${(_stBadges&&_catBadges)?' ':''}${_catBadges||''}${(!_stBadges&&!_catBadges)?'<span class="small" style="color:var(--muted)">Kein Status · keine Kategorie – über „✎ Stammdaten" setzen</span>':''}${_statusLogHtml(e)}</div>`;
   const bodyByTab={
     allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
-    aufgaben: neuBtn + termineSec + vaSection + angeboteSec + aufgabenSec,
-    kommunikation: statusSec + kommSec,
+    aufgaben: neuBtn + termineSec + vaSection + aufgabenSec,
+    kommunikation: statusSec,
     statistik: statsSec,
     foerderungen: foerderungenSec
   };
@@ -2093,27 +2072,7 @@ function crmDeleteTermin(tid){
   paintDetail();
 }
 
-// ── Angebote ───────────────────────────────────────────────────────
-function crmAddAngebot(){
-  crmOpenModalShell();
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Angebot</h3>
-   <div class="crm-modal-field"><label>Titel *</label><input id="crm-af-titel"></div>
-   <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-af-note" rows="2"></textarea></div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveAngebot()">Hinzufügen</button></div>`);
-}
-function crmSaveAngebot(){
-  const titel=val('crm-af-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
-  mutateEntity(e=>{
-    if(!Array.isArray(e.angebote)) e.angebote=[];
-    e.angebote.push({ id:newId(), titel, note:val('crm-af-note') });
-  });
-  crmCloseModal(); paintDetail();
-}
-function crmDeleteAngebot(aid){
-  mutateEntity(e=>{ e.angebote=(e.angebote||[]).filter(x=>x.id!==aid); });
-  paintDetail();
-}
+// (Angebote-Bereich entfernt – v265)
 
 // ── Kontaktnotizen (früher „Status quo") mit echter History ────────
 // Jede Notiz wird gespeichert (nicht überschrieben): {id,ts,text,byKuerzel,byName}.
@@ -2159,7 +2118,8 @@ function kontaktnotizenSecHtml(e){
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
   const sharePicker = partners.length ? `<div class="crm-share-opts" style="margin:6px 0"><span class="small" style="color:var(--muted)">Gemeinsam mit:</span>${partners.map(p=>`<label><input type="checkbox" class="crm-kn-shareopt" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}"> ${esc(_entityName(p.tree,p.eid))}</label>`).join('')}</div>` : '';
-  const input=canEdit?`<textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz …"></textarea>
+  const input=canEdit?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="crm-mic" id="crm-mic-btn" onclick="crmDictate('crm-kn-new',this)">🎤 Diktat starten</button></div>
+      <textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz … (tippen oder diktieren)"></textarea>
       ${sharePicker}
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>`:'';
   const latestHtml = latest ? `<div class="crm-kn-latest">${noteHtml(latest)}</div>`
@@ -4518,7 +4478,6 @@ Object.assign(window, {
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin,
-  crmAddAngebot, crmSaveAngebot, crmDeleteAngebot,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
