@@ -52,6 +52,19 @@ function _ensureOverlay(){
       .me-sub{font-size:13px;color:#5b6b7d;margin:0 0 18px}
       .me-field{margin-bottom:13px}
       .me-field label{display:block;font-size:13px;font-weight:600;color:#33475b;margin-bottom:4px}
+      /* Feld-Paare (Vorname/Nachname, Mail/Telefon): auf breiten Screens 2-spaltig → weniger Scrollen im Querformat */
+      .me-row2{display:grid;grid-template-columns:1fr;gap:0}
+      @media(min-width:560px){
+        .me-wrap{max-width:640px}
+        .me-row2{grid-template-columns:1fr 1fr;column-gap:13px}
+      }
+      @media (orientation:landscape) and (max-height:600px){
+        .me-wrap{padding:10px 16px 44px}
+        .me-card{padding:16px 18px}
+        .me-h{font-size:19px}
+        .me-sub{margin-bottom:12px}
+        .me-btn{padding:12px}
+      }
       .me-field input,.me-field textarea{width:100%;padding:12px 13px;border:1.5px solid #cdd7e2;border-radius:10px;font-size:16px;background:#fff;color:#12283f}
       .me-field textarea{min-height:66px;resize:vertical}
       .me-req{color:#c0392b}
@@ -163,11 +176,15 @@ function _renderForm(msg){
     <div class="me-card">
       <div class="me-h">Kontakt aufnehmen</div>
       <div class="me-sub">Vielen Dank für Ihr Interesse! Bitte tragen Sie Ihre Daten ein. <span class="me-req">*</span> = Pflichtfeld.</div>
-      <div class="me-field"><label>Vorname <span class="me-req">*</span></label><input id="me-vorname" autocomplete="off"></div>
-      <div class="me-field"><label>Nachname <span class="me-req">*</span></label><input id="me-nachname" autocomplete="off"></div>
+      <div class="me-row2">
+        <div class="me-field"><label>Vorname <span class="me-req">*</span></label><input id="me-vorname" autocomplete="off"></div>
+        <div class="me-field"><label>Nachname <span class="me-req">*</span></label><input id="me-nachname" autocomplete="off"></div>
+      </div>
       <div class="me-field"><label>Organisation / Verein</label><input id="me-org" autocomplete="off" placeholder="optional, z. B. Segelclub Pitz"></div>
-      <div class="me-field"><label>E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder Telefon)</span></label><input id="me-email" type="email" autocomplete="off"></div>
-      <div class="me-field"><label>Telefon <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder E-Mail)</span></label><input id="me-tel" type="tel" autocomplete="off"></div>
+      <div class="me-row2">
+        <div class="me-field"><label>E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder Telefon)</span></label><input id="me-email" type="email" autocomplete="off"></div>
+        <div class="me-field"><label>Telefon <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder E-Mail)</span></label><input id="me-tel" type="tel" autocomplete="off"></div>
+      </div>
       <div class="me-field"><label>Adresse</label><input id="me-adresse" autocomplete="off"></div>
       <div class="me-field"><label>Notiz / Interesse</label><textarea id="me-note" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
       <button class="me-btn" onclick="messeSaveEntry(this)">✓ Speichern</button>

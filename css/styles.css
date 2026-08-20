@@ -613,3 +613,26 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .zt td input.t-inp{font-size:13px}
   .summary-grid{grid-template-columns:1fr}
 }
+
+/* ════════════════════════════════════════
+   QUERFORMAT bei GERINGER HÖHE
+   (Handy quer + kleine Tablets quer)
+   Nur hier aktiv → Desktop & Hochformat unberührt.
+   Ziel: Kopf/Leisten schrumpfen, Inhalt bekommt Platz,
+   Dialoge scrollen statt abgeschnitten zu werden.
+   ════════════════════════════════════════ */
+@media (orientation:landscape) and (max-height:600px){
+  .module-bar{padding:4px 10px}
+  #hdr-logo{height:34px!important}
+  .app-header{padding:0 12px}
+  .app-content{padding:8px 12px}
+  .app-nav{padding:3px 6px;gap:0}
+  .nav-tab{padding:8px 12px;font-size:13px;margin:2px}
+  .nav-stempel-mobile{padding:8px 14px!important;font-size:13px}
+  .month-nav h2{font-size:15px;min-width:120px}
+  .info-panel{padding:8px 12px;gap:10px}
+  .action-bar{padding:10px 12px}
+  /* Dialoge: von oben einblenden + scrollbar (sonst passen sie nicht in die niedrige Höhe) */
+  .modal-bg{align-items:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 0 24px}
+  .modal{max-height:none;margin:auto;width:min(96%,780px)}
+}

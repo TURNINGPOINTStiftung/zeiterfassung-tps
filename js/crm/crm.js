@@ -545,6 +545,13 @@ function injectStyles(){
   /* Hintergrund-Seite sperren, solange der Vorlagen-Editor offen ist → kein zweiter Scrollbalken */
   html.vb-lock, html.vb-lock body{overflow:hidden}
   @media(max-width:640px){ #crm-vboard .vb-nav{display:none!important} }
+  /* Querformat bei geringer Höhe: CRM-Leiste + Vorlagen-Editor kompakter */
+  @media (orientation:landscape) and (max-height:600px){
+    .crm-bar{padding:5px 10px}
+    #crm-vboard .vb-head{padding:6px 12px}
+    #crm-vboard .vb-hint{display:none}
+    #crm-vboard .vb-scroll{padding:10px 14px}
+  }
   /* Mehrfach-Eingabe (E-Mails/Telefon) im Kontaktformular */
   .crm-mf-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
   .crm-mf-row input{flex:1;min-width:0}
