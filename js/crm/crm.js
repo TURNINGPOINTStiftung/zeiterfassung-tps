@@ -2118,7 +2118,7 @@ function kontaktnotizenSecHtml(e){
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
   const sharePicker = partners.length ? `<div class="crm-share-opts" style="margin:6px 0"><span class="small" style="color:var(--muted)">Gemeinsam mit:</span>${partners.map(p=>`<label><input type="checkbox" class="crm-kn-shareopt" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}"> ${esc(_entityName(p.tree,p.eid))}</label>`).join('')}</div>` : '';
-  const input=canEdit?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="crm-mic" id="crm-mic-btn" onclick="crmDictate('crm-kn-new',this)">🎤 Diktat starten</button></div>
+  const input=canEdit?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="crm-mic" id="crm-mic-btn" onclick="crmDictate('crm-kn-new',this)">🎤 Diktat starten</button>${getAiEndpoint()?`<button type="button" class="btn-sm-crm" onclick="crmCleanNote(this)">🧠 Aufbereiten</button>`:''}</div>
       <textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz … (tippen oder diktieren)"></textarea>
       ${sharePicker}
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>`:'';
@@ -2142,6 +2142,26 @@ function crmDeleteKontaktnotiz(id){
   if(!confirm('Diese Kontaktnotiz löschen?')) return;
   mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen=(e.kontaktnotizen||[]).filter(x=>x.id!==id); });
   paintDetail();
+}
+// KI-Aufbereitung der Kontaktnotiz über den eigenen/lokalen Server (getAiEndpoint).
+// Prüfen-vor-Speichern: das Ergebnis landet im Notizfeld; gespeichert wird erst manuell.
+async function crmCleanNote(btn){
+  const ta=document.getElementById('crm-kn-new'); if(!ta) return;
+  const text=(ta.value||'').trim();
+  if(!text){ toast('Bitte zuerst etwas diktieren oder tippen.','err'); return; }
+  const endpoint=getAiEndpoint();
+  if(!endpoint){ toast('Kein KI-Server hinterlegt – in der Verwaltung unter CRM → „KI-Server" eintragen.','err'); return; }
+  const orig=btn?btn.innerHTML:''; if(btn){ btn.disabled=true; btn.innerHTML='⏳ …'; }
+  try{
+    const res=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ text, task:'kontaktnotiz' }) });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const cleaned=String((data&&(data.note||data.result||data.summary||data.text))||'').trim();
+    if(!cleaned) throw new Error('leere Antwort vom Server');
+    ta.value=cleaned;
+    toast('Aufbereitet – bitte prüfen und dann speichern.','ok');
+  }catch(e){ toast('KI-Aufbereitung fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML=orig; } }
 }
 // ── Projekte-Bereich eines Eintrags (mehrere parallel + History) ───
 function entityProjekteSectionHtml(e){
@@ -4028,8 +4048,17 @@ function paintVerwConfig(){
     <div class="small" style="color:var(--muted);margin-bottom:8px">Welche Infos auf den Kacheln der Eintragsliste erscheinen. Ohne Auswahl gilt die Standard-Anzeige (Status · Kontakte · offene Aufgaben). Änderungen werden sofort gespeichert.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label class="small" style="color:var(--muted)">Für:</label><select class="crm-tsel" onchange="crmCfgCardTree(this.value)">${cardTreeOpts}</select></div>
     <div class="vw-card-opts">${cardChecks}</div>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">🧠 KI-Server (Notiz-Aufbereitung)</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Optionale eigene/lokale KI, die diktierte oder getippte Kontaktnotizen sauber aufbereitet. Trage die <b>HTTPS-Adresse</b> eures Servers ein (leer = aus). Die aufbereitete Notiz wird immer erst zur <b>Prüfung angezeigt</b>, nicht automatisch gespeichert. Datenschutz: läuft nur gegen euren eigenen Server.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="cfg-ai-endpoint" placeholder="https://…/kontaktnotiz" value="${esc(getAiEndpoint())}" style="flex:1;min-width:220px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+      <button class="btn-sm-crm primary" onclick="crmCfgAiSave()">Speichern</button>
+    </div>
   </div>`;
 }
+function crmCfgAiSave(){ const v=(document.getElementById('cfg-ai-endpoint')?.value||'').trim(); setAiEndpoint(v); toast(v?'KI-Server gespeichert ✓':'KI-Server entfernt.','ok'); paintVerwConfig(); }
 function crmCfgCardTree(k){ window._cfgCardTree=k; paintVerwConfig(); }
 function crmCfgCardToggle(tree,key,on){
   const work=_cfgWork(); if(!work.cardFields||typeof work.cardFields!=='object') work.cardFields={};
@@ -4464,7 +4493,7 @@ Object.assign(window, {
   crmCfgCatEdit, crmCfgCatSave, crmCfgCatMove, crmCfgCatDel,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
-  crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmQuickRenameField, crmQuickRenameFunktion,
+  crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmCfgAiSave, crmCleanNote, crmQuickRenameField, crmQuickRenameFunktion,
   crmSwitchTree, crmSearch, crmOpenDetail, crmBackToList, crmCloseModal, crmDetailTab,
   crmSetStatus, crmToggleStatus, crmToggleCat, crmSetStatusFilter, crmToggleStatusFilter, crmToggleCatFilter, crmClearFilters, crmToggleFilterPop, crmCloseFilterPop, crmShowKontakte, crmSetSort, crmNeuToggle, crmNeuPick, crmNewAufgabeDialog, crmSaveNewAufgabe,
   crmTagSuggest, crmTagPick, crmTagHide,
