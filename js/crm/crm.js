@@ -540,7 +540,11 @@ function injectStyles(){
   #crm-vboard .vb-title-in:hover{border-color:var(--border);background:#fff}
   #crm-vboard .vb-title-in:focus{outline:none;border-color:var(--primary-l);background:#fff;box-shadow:0 0 0 3px rgba(32,56,105,.12)}
   #crm-vboard .vb-hint{flex-basis:100%;font-size:12.5px;color:var(--muted);line-height:1.5;padding:2px 2px 0}
-  #crm-vboard .vb-scroll{flex:1;overflow:auto;padding:18px 20px;-webkit-overflow-scrolling:touch}
+  #crm-vboard .vb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:18px 20px;-webkit-overflow-scrolling:touch}
+  #crm-vboard .vb-nav{z-index:5}
+  /* Hintergrund-Seite sperren, solange der Vorlagen-Editor offen ist → kein zweiter Scrollbalken */
+  html.vb-lock, html.vb-lock body{overflow:hidden}
+  @media(max-width:640px){ #crm-vboard .vb-nav{display:none!important} }
   /* Mehrfach-Eingabe (E-Mails/Telefon) im Kontaktformular */
   .crm-mf-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
   .crm-mf-row input{flex:1;min-width:0}
@@ -3481,11 +3485,35 @@ function paintVorlageEditor(id){
       <button class="btn-sm-crm primary" onclick="crmCloseVorlageEditor()">✓ Fertig</button>
       <div class="vb-hint">Bau die Vorlage wie ein Board: <b>Spalte</b> anlegen → <b>Aufgabe</b> (Enter) → <b>Unterpunkt</b> je Karte (Enter). Klick auf eine Aufgabe öffnet Notiz, Abhängigkeiten und Anlagen. Beim <b>Anwenden</b> werden alle Aufgaben in ein Projekt kopiert.</div>
     </div>
-    <div class="vb-scroll">${taskBoardHtml(v)}</div>`;
-  const n=document.getElementById('kb-nav'); if(n) n.style.display='none';   // schwebende Board-Pfeile gehören zum Haupt-Board
+    <div class="vb-scroll">${taskBoardHtml(v)}</div>
+    <button type="button" class="kb-nav-btn vb-nav" data-dir="-1" onclick="crmVbNav(-1)" aria-label="Board nach links">←</button>
+    <button type="button" class="kb-nav-btn vb-nav" data-dir="1" onclick="crmVbNav(1)" aria-label="Board nach rechts">→</button>`;
+  document.documentElement.classList.add('vb-lock');                          // Hintergrund nicht mitscrollen (zweiter Balken weg)
+  const n=document.getElementById('kb-nav'); if(n) n.style.display='none';    // Haupt-Board-Pfeile aus (Overlay hat eigene)
+  // Pfeil-Zustände (sichtbar nur bei Überlauf, Rand-Pfeil ausgegraut) an den Board-Scroll koppeln
+  const b=ov.querySelector('.kb-board'); if(b) b.addEventListener('scroll', _vbUpdateNav);
+  requestAnimationFrame(_vbUpdateNav);
+}
+// Seitliches Blättern im Vorlagen-Board – wie die ←/→-Knöpfe im normalen Kanban.
+function _vbUpdateNav(){
+  const ov=document.getElementById('crm-vboard'); if(!ov||ov.style.display==='none') return;
+  const b=ov.querySelector('.kb-board');
+  const can=!!b && (b.scrollWidth-b.clientWidth>4);
+  ov.querySelectorAll('.vb-nav').forEach(btn=>{ btn.style.display=can?'flex':'none'; });
+  if(can){
+    const l=ov.querySelector('.vb-nav[data-dir="-1"]'), r=ov.querySelector('.vb-nav[data-dir="1"]');
+    if(l) l.style.opacity=b.scrollLeft>4?'':'.35';
+    if(r) r.style.opacity=(b.scrollLeft<b.scrollWidth-b.clientWidth-4)?'':'.35';
+  }
+}
+function crmVbNav(dir){
+  const b=document.querySelector('#crm-vboard .kb-board'); if(!b) return;
+  b.scrollBy({ left: dir*Math.max(240, Math.round(b.clientWidth*0.8)), behavior:'smooth' });
+  setTimeout(_vbUpdateNav, 320);
 }
 function crmCloseVorlageEditor(){
   const ov=document.getElementById('crm-vboard'); if(ov) ov.style.display='none';
+  document.documentElement.classList.remove('vb-lock');
   window._crmTaskCtx=null; window._crmVorlageEditId=null; window._crmAfterTask='detail';
   try{ window._kbNavUpdate&&window._kbNavUpdate(); }catch(e){}
   crmOpenVorlagen();          // zurück zur Vorlagen-Liste
@@ -4450,7 +4478,7 @@ Object.assign(window, {
   crmOpenLinkedEntity,
   // Vorlagen (als großes Kanban-Board)
   crmOpenVorlagen, crmCreateVorlage, crmEditVorlage, crmDeleteVorlage,
-  paintVorlageEditor, crmCloseVorlageEditor, crmVorlageRename,
+  paintVorlageEditor, crmCloseVorlageEditor, crmVorlageRename, crmVbNav,
   // Kommunikation
   crmOpenNote, crmCancelNote, crmSaveNote, crmDictate, crmSummarizeNote, crmDeleteNote, crmConfigAi
 });
