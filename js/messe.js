@@ -23,12 +23,14 @@ function _newEid(){ return 'ev'+Date.now().toString(36)+Math.random().toString(3
 // Zustand laden + einmalige Migration vom alten flachen v262-Format {cats,catLabels,entries}.
 function _state(){
   let s=_loadRaw();
-  if(!s || typeof s!=='object') return { pin:'', events:[], activeId:'' };
+  if(!s || typeof s!=='object') return { events:[], activeId:'' };
   if(!Array.isArray(s.events)){
     const ev={ id:_newEid(), name:'Messe', cats:Array.isArray(s.cats)?s.cats:[], catLabels:s.catLabels||{}, entries:Array.isArray(s.entries)?s.entries:[] };
-    s={ pin:s.pin||'', events:[ev], activeId:ev.id };
+    s={ events:[ev], activeId:ev.id };
     _persist(s);
+    return s;
   }
+  if('pin' in s){ delete s.pin; _persist(s); }   // früher gespeicherte PIN entfernen (PIN wird pro Sitzung neu vergeben)
   return s;
 }
 function _active(s){ return (s.events||[]).find(e=>e.id===s.activeId) || null; }
@@ -82,31 +84,7 @@ function _ensureOverlay(){
 function _close(){ const o=_ov(); if(o) o.remove(); }
 
 // ── Einstiegspunkt (Personal, aus dem ☰-Modulmenü) ──
-function messeStart(){
-  _ensureOverlay();
-  const s=_state();
-  if(!s.pin){ _renderPin(); return; }
-  if(_active(s)) _renderForm();
-  else _renderPicker();
-}
-
-// ── PIN einmalig festlegen (geräteweit) ──
-function _renderPin(){
-  const o=_ensureOverlay(); const s=_state();
-  o.innerHTML=`<div class="me-wrap"><div class="me-card">
-    <div class="me-h">🎪 Messemodus</div>
-    <div class="me-sub">Lege einmal eine PIN fest. Damit kommst du später an die Verwaltung (Events, Liste, Übertragen) und zum Beenden.</div>
-    <div class="me-field"><label>PIN fürs Personal</label><input id="me-pin" type="tel" inputmode="numeric" placeholder="mind. 3 Zeichen" value="${_esc(s.pin||'')}"></div>
-    <button class="me-btn" onclick="messeSetPin()">Weiter →</button>
-    <button class="me-btn sec" onclick="messeClose()">Abbrechen</button>
-  </div></div>`;
-}
-function messeSetPin(){
-  const pin=(document.getElementById('me-pin')?.value||'').trim();
-  if(pin.length<3){ toast('Bitte eine PIN mit mindestens 3 Zeichen setzen.','err'); return; }
-  const s=_state(); s.pin=pin; _persist(s);
-  _renderPicker();
-}
+function messeStart(){ _ensureOverlay(); _renderPicker(); }   // Personal-Hub; PIN ist PRO Veranstaltung
 
 // ── Event-Auswahl / -Verwaltung (Personal) ──
 function _renderPicker(){
@@ -143,6 +121,7 @@ function messeEditEvent(id){
     <div class="me-h">${ev?'Veranstaltung bearbeiten':'Neue Veranstaltung'}</div>
     <div class="me-sub">Name + Kategorien, die jeder erfasste Kontakt automatisch bekommt.</div>
     <div class="me-field"><label>Name der Veranstaltung <span class="me-req">*</span></label><input id="me-evname" placeholder="z. B. Messe 26" value="${_esc(ev?ev.name:'')}"></div>
+    <div class="me-field"><label>PIN fürs Personal <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(schützt Liste &amp; Übertragen dieser Veranstaltung)</span></label><input id="me-evpin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="mind. 3 Zeichen" value="${_esc(ev?(ev.pin||''):'')}"></div>
     <div class="me-field"><label>Kategorien</label><div class="me-catrow" style="max-height:210px;overflow:auto;border:1.5px solid #cdd7e2;border-radius:10px;padding:2px 10px">${rows}</div></div>
     <button class="me-btn" onclick="messeSaveEvent('${ev?ev.id:''}')">Speichern</button>
     <button class="me-btn sec" onclick="messeManage()">Abbrechen</button>
@@ -151,11 +130,13 @@ function messeEditEvent(id){
 function messeSaveEvent(id){
   const name=(document.getElementById('me-evname')?.value||'').trim();
   if(!name){ toast('Bitte einen Namen für die Veranstaltung eingeben.','err'); return; }
+  const pin=(document.getElementById('me-evpin')?.value||'').trim();
+  if(pin.length<3){ toast('Bitte eine PIN mit mindestens 3 Zeichen für diese Veranstaltung setzen.','err'); return; }
   const boxes=[...document.querySelectorAll('.me-cat:checked')];
   const cats=boxes.map(b=>b.value); const catLabels={}; boxes.forEach(b=>{ catLabels[b.value]=b.getAttribute('data-label')||b.value; });
   const s=_state();
-  if(id){ const ev=s.events.find(e=>e.id===id); if(ev){ ev.name=name; ev.cats=cats; ev.catLabels=catLabels; } }
-  else { const ev={ id:_newEid(), name, cats, catLabels, entries:[] }; s.events.push(ev); s.activeId=ev.id; }
+  if(id){ const ev=s.events.find(e=>e.id===id); if(ev){ ev.name=name; ev.pin=pin; ev.cats=cats; ev.catLabels=catLabels; } }
+  else { const ev={ id:_newEid(), name, pin, cats, catLabels, entries:[] }; s.events.push(ev); s.activeId=ev.id; }
   _persist(s);
   _renderPicker();
 }
@@ -209,11 +190,22 @@ function messeSaveEntry(btn){
 }
 
 // ── Personal-Bereich (per PIN): Liste, Übertragen, Events, Beenden ──
-function messeStaff(){
-  const s=_state();
-  const pin=window.prompt('PIN eingeben:');
-  if(pin===null) return;
-  if((pin||'').trim()!==s.pin){ toast('Falsche PIN.','err'); return; }
+function messeStaff(){ const ev=_active(_state()); if(!ev || !ev.pin){ _renderStaff(); return; } _renderPinCheck(); }
+function _renderPinCheck(){
+  const o=_ensureOverlay();
+  o.innerHTML=`<div class="me-wrap"><div class="me-card">
+    <div class="me-h">🔒 Personal</div>
+    <div class="me-sub">Bitte PIN eingeben.</div>
+    <div class="me-field"><label>PIN</label><input id="me-pincheck" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
+    <button class="me-btn" onclick="messeStaffCheck()">Weiter →</button>
+    <button class="me-btn sec" onclick="messeBackToForm()">Abbrechen</button>
+  </div></div>`;
+  setTimeout(()=>{ const el=document.getElementById('me-pincheck'); if(el){ el.focus(); el.addEventListener('keydown',e=>{ if(e.key==='Enter') messeStaffCheck(); }); } },40);
+}
+function messeStaffCheck(){
+  const ev=_active(_state());
+  const pin=(document.getElementById('me-pincheck')?.value||'').trim();
+  if(!ev || !ev.pin || pin!==ev.pin){ toast('Falsche PIN.','err'); const el=document.getElementById('me-pincheck'); if(el){ el.value=''; el.focus(); } return; }
   _renderStaff();
 }
 function _pName(e){ return ((e.vorname||'')+' '+(e.nachname||'')).trim() || e.person || '(ohne Name)'; }
@@ -283,6 +275,6 @@ function messeClose(){ _close(); }
 
 export { messeStart };
 Object.assign(window, {
-  messeStart, messeSetPin, messeClose, messeEditEvent, messeSaveEvent, messeDeleteEvent, messeOpenEvent,
-  messeSaveEntry, messeStaff, messeDeleteEntry, messeBackToForm, messeManage, messeTransfer, messeEnd
+  messeStart, messeClose, messeEditEvent, messeSaveEvent, messeDeleteEvent, messeOpenEvent,
+  messeSaveEntry, messeStaff, messeStaffCheck, messeDeleteEntry, messeBackToForm, messeManage, messeTransfer, messeEnd
 });
