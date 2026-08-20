@@ -2,7 +2,7 @@
 // Strategie: netzwerk-first für frische Versionen, Antworten werden aber gecacht,
 // damit bei Netzwerk-Aussetzern die letzte gute Version statt "rohem HTML" kommt.
 // KEIN automatisches Neuladen offener Tabs mehr (verursachte stoerendes Aufblitzen).
-const CACHE = 'tps-ze-v273';
+const CACHE = 'tps-ze-v274';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -41,6 +41,10 @@ self.addEventListener('fetch', e => {
       url.includes('securetoken.google')) {
     return;
   }
+
+  // Manifest NIE aus dem Cache liefern → Änderungen (z. B. Orientierung) kommen
+  // sofort frisch an; sonst installiert Chrome die PWA mit dem alten Manifest.
+  if (url.includes('/manifest.json')) return;
 
   if (e.request.method !== 'GET') return;
 
