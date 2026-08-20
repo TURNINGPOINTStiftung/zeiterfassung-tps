@@ -7,7 +7,7 @@
   "scope": "/zeiterfassung-tps/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "theme_color": "#1a3a5c",
   "background_color": "#1a3a5c",
   "lang": "de",
