@@ -638,7 +638,7 @@ export async function saveNewUser(){
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>d.users.push(u)); }
-  catch(e){ toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':'Speichern fehlgeschlagen – bitte erneut versuchen.','err'); return; }
+  catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
   try{ window.provisionAuthAccount?.(u.id, _plainPw, u.email); }catch(e){}  // echtes Konto anlegen (best effort)
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
@@ -658,8 +658,10 @@ export async function saveEditUser(id){
     const existHist=Array.isArray(existing?.teamHistory)?existing.teamHistory:[];
     u.teamHistory=[...existHist.filter(h=>h.fromDate!==changeDate),{team:newTeam,fromDate:changeDate}]
       .sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
+  } else if(existing&&existing.teamHistory){
+    u.teamHistory=existing.teamHistory;
   } else {
-    u.teamHistory=existing?.teamHistory||u.teamHistory;
+    delete u.teamHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
   }
   // Parameter-Historie: bei Änderung von Stunden/Urlaub/Rolle etc. die ALTEN Werte mit
   // Gültig-ab bewahren, damit vergangene Monate weiter mit den damaligen Werten rechnen.
@@ -674,14 +676,16 @@ export async function saveEditUser(id){
     ph=ph.filter(h=>h.fromDate!==cd); ph.push(rec);
     ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
     u.paramHistory=ph;
+  } else if(existing&&existing.paramHistory){
+    u.paramHistory=existing.paramHistory;
   } else {
-    u.paramHistory=existing?.paramHistory||u.paramHistory;
+    delete u.paramHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
   }
   const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }
-  catch(e){ toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':'Speichern fehlgeschlagen – bitte erneut versuchen.','err'); return; }
+  catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }

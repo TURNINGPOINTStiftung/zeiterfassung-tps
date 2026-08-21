@@ -267,6 +267,11 @@ export function noteGoodData(d){
 // eingetragenen Tag. (set() hätte den ganzen Baum ersetzt und Unbekanntes gelöscht.)
 export function fbWriteMerge(d){
   const ref=window._fbRef; if(!ref||!d) return Promise.resolve();
+  // WICHTIG: Firebase .update() WIRFT synchron, sobald IRGENDWO ein undefined-Wert im Baum steht
+  // (häufige Falle, z. B. teamHistory/paramHistory ohne Vorwert beim Bearbeiten). Das ließ das
+  // ganze Speichern mit „Speichern fehlgeschlagen" scheitern. JSON-Roundtrip entfernt undefined
+  // zuverlässig (undefined-Objektschlüssel fallen weg). Firebase kann undefined ohnehin nicht speichern.
+  try{ d = JSON.parse(JSON.stringify(d)); }catch(e){}
   const upd={};
   for(const k of Object.keys(d)){
     if(k==='entries'){
