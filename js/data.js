@@ -296,14 +296,21 @@ export function saveRaw(d){
   // (Import/Wiederherstellung) setzen window._allowDataShrink=true.
   const nu=(d&&Array.isArray(d.users))?d.users.length:0;
   const nd=_dayCount(d);
-  const drasticUsers=_lastGoodUsers>=4 && nu < Math.ceil(_lastGoodUsers/2);
-  const drasticDays =_lastGoodDayCount>=20 && nd < Math.floor(_lastGoodDayCount/2);
+  // Vergleich gegen den zuletzt PERSISTIERTEN Stand auf DIESEM Gerät (localStorage) – das ist
+  // der echte "vorherige" Bestand. Ein In-Place-Edit (mutate) reduziert die Anzahl NICHT →
+  // `nu < prevUsers` ist dann false → NIE Fehlalarm (behebt: jeder Edit wurde blockiert, sobald
+  // die Baseline mal hoch stand). Ein Wipe (setDataCache(klein) + save) hat localStorage noch
+  // GROSS (wird erst weiter unten überschrieben) → wird weiterhin zuverlässig blockiert.
+  let prevUsers=0, prevDays=0;
+  try{ const _p=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(_p&&Array.isArray(_p.users)){ prevUsers=_p.users.length; prevDays=_dayCount(_p); } }catch(e){}
+  const drasticUsers=_lastGoodUsers>=4 && nu < Math.ceil(_lastGoodUsers/2) && nu < prevUsers;
+  const drasticDays =_lastGoodDayCount>=20 && nd < Math.floor(_lastGoodDayCount/2) && nd < prevDays;
   if((drasticUsers||drasticDays) && !window._allowDataShrink){
     const msg=`[Datenschutz] Schreibvorgang BLOCKIERT – würde den Bestand drastisch reduzieren `+
-      `(Nutzer ${_lastGoodUsers}→${nu}, erfasste Tage ${_lastGoodDayCount}→${nd}). `+
+      `(Nutzer ${prevUsers}→${nu}, erfasste Tage ${prevDays}→${nd}). `+
       `Nichts gespeichert. Falls wirklich gewollt: window._allowDataShrink=true setzen.`;
     console.error(msg);
-    try{ window.toast?.('⛔ Schreibvorgang blockiert (Schutz vor Datenverlust) – nichts gespeichert.','err'); }catch(e){}
+    try{ window.toast?.(`⛔ Nicht gespeichert – Schutz vor Datenverlust (Nutzer ${prevUsers}→${nu}). Bitte Seite neu laden.`,'err'); }catch(e){}
     return Promise.reject(new Error('data-shrink-guard'));
   }
   // Geräte-lokale 1-Schritt-Sicherung: den bisherigen guten Stand aufheben, BEVOR
