@@ -1,9 +1,9 @@
 {
-  "id": "/zeiterfassung-tps/",
+  "id": "/zeiterfassung-tps/?pwa2",
   "name": "TPS Zeiterfassung",
   "short_name": "Zeiterfassung",
   "description": "Arbeitszeiterfassung der TURNING POINT Stiftung",
-  "start_url": "/zeiterfassung-tps/",
+  "start_url": "/zeiterfassung-tps/?pwa2",
   "scope": "/zeiterfassung-tps/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
