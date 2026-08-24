@@ -9,7 +9,7 @@ desktop.ini
 *.swp
 *.swo
 
-# Local backups / Rettungs- und Hilfsdateien (nie veröffentlichen – enthalten ggf. Nutzerdaten)
+# Local backups / Rettungs- und Hilfsdateien (nie verÃ¶ffentlichen â€“ enthalten ggf. Nutzerdaten)
 *.bak
 *.backup
 *_backup.*
@@ -29,3 +29,8 @@ _t.html
 *.log
 .claude/
 _crm_backup.html
+*.keystore
+*.jks
+signing-key-info.txt
+apk/*.aab
+apk/signing*
