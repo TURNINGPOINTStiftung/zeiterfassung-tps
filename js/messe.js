@@ -114,7 +114,7 @@ function _renderPicker(){
       </div></div>`;
   }).join('') : '<div style="color:#5b6b7d;font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung. Lege eine an (z. B. „Messe 26").</div>';
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
-    <div class="me-h">🎪 Veranstaltungen</div>
+    <div class="me-h">Veranstaltungen</div>
     <div class="me-sub">Wähle eine Veranstaltung zum Erfassen – oder lege eine neue an. Mehrere parallel möglich.</div>
     ${rows}
     <button class="me-btn" onclick="messeEditEvent('')">＋ Neue Veranstaltung</button>
@@ -170,7 +170,7 @@ function _renderForm(msg){
   const pend=ev.entries.filter(e=>!e.uploaded).length;
   o.innerHTML=`<div class="me-wrap">
     <div class="me-top">
-      <span class="cnt">🎪 ${_esc(ev.name)} · ${ev.entries.length} erfasst${pend?` · ${pend} offen`:''}</span>
+      <span class="cnt">${_esc(ev.name)} · ${ev.entries.length} erfasst${pend?` · ${pend} offen`:''}</span>
       <button class="me-lock" onclick="messeStaff()">🔒 Personal</button>
     </div>
     <div class="me-card">
