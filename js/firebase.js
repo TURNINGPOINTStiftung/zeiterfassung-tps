@@ -7,12 +7,11 @@ import { addMin, diffMin, getHolidays } from './utils.js';
 // Bevorzugt die hinterlegte echte E-Mail; sonst technische E-Mail je ID
 // (damit der Name-Login erhalten bleibt und niemand ohne E-Mail aussteigt).
 function _accountEmail(id, email){
-  // Admin bekommt IMMER eine eigene technische Auth-Adresse. Sonst kollidiert er
-  // mit einer Person, die dieselbe E-Mail hinterlegt hat (z. B. Doppelfunktion) –
-  // beide würden auf EIN Firebase-Konto zeigen (Passwort-Konflikt).
-  if(String(id||'').toLowerCase()==='admin') return 'admin@tps.intern';
-  const e=String(email||'').trim().toLowerCase();
-  if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return e;
+  // Die Firebase-Konto-Adresse wird IMMER technisch aus der id abgeleitet
+  // (kein echtes E-Mail nötig). Vorteil: im öffentlichen loginDir stehen NUR
+  // Namen, keine Mitarbeiter-E-Mails (kein PII-Leak), und die Adresse ist für
+  // den Login-Client deterministisch berechenbar. (email-Param bleibt aus
+  // Kompatibilität in der Signatur, wird aber nicht mehr verwendet.)
   return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 }
 // Stabiles, APP-VERWALTETES Firebase-Passwort je Nutzer – bewusst UNABHÄNGIG vom Login-
@@ -73,30 +72,40 @@ export function provisionAuthAccount(id, pw, email){
 // und ohne Lese-Zugriff käme ein neues Gerät gar nicht mehr an die Nutzerliste. Kein
 // zusätzliches Sicherheitsrisiko: Wer den (öffentlichen) Code hat, könnte sich ohnehin ein
 // Firebase-Konto anlegen; die echte Zugangskontrolle macht die App über das gehashte u.pw.
-const _BOOT_ACCT='bootstrap@tps.intern';
-function _bootAuthPw(){ return _stableAuthPw('__bootstrap__'); }
+// ── Login-Verzeichnis (öffentlich lesbar: nur Namen) ──────────────────
+// SICHERHEIT (Umbau 2026-08): Vor dem Login liest der Client NICHT mehr die
+// ganze Datenbank. Die echten Daten sind per Firebase-Regeln auf angemeldete,
+// allowlistete Nutzer beschränkt und werden erst NACH dem Login geladen
+// (loadFullData). Für die Login-Maske genügt das öffentliche Namensverzeichnis
+// zeiterfassung/loginDir. Das frühere Bootstrap-Vollzugriffs-Konto entfällt.
+export function getLoginDirUsers(){ return Array.isArray(window._loginDir)?window._loginDir:[]; }
 
-// Bestehende Firebase-Sitzung wiederverwenden statt sie beim Start zu überschreiben. Wer sich
-// einmal echt angemeldet hat, läuft dauerhaft als echter Nutzer (Firebase persistiert die
-// Sitzung lokal). Nur wenn GAR KEINE Sitzung existiert, wird über das Bootstrap-Konto eine
-// nicht-anonyme Lese-Sitzung hergestellt (bei Bedarf einmalig angelegt). Alles fällt am Ende
-// sauber auf finish(null) zurück → dann greift wie bisher der Offline-Modus. Diese Verzweigung
-// läuft NIE, wenn schon eine Sitzung da ist – bestehende, funktionierende Geräte bleiben unberührt.
-function _ensureAuthSession(){
-  return new Promise(resolve=>{
-    let done=false; const finish=v=>{ if(!done){ done=true; resolve(v); } };
-    try{
-      const auth=firebase.auth();
-      const unsub=auth.onAuthStateChanged(u=>{
-        try{ unsub(); }catch(_){}
-        if(u){ finish(u); return; }                        // vorhandene Sitzung behalten
-        const boot=_bootAuthPw();
-        auth.signInWithEmailAndPassword(_BOOT_ACCT, boot)
-          .then(finish)
-          .catch(()=> auth.createUserWithEmailAndPassword(_BOOT_ACCT, boot).then(finish).catch(()=>finish(null)) );
-      }, ()=>finish(null));
-    }catch(e){ finish(null); }
-  });
+// Wartet einmalig, bis Firebase den (evtl. persistierten) Anmeldestatus geklärt hat.
+function _awaitAuthReady(){
+  return new Promise(res=>{ try{ const u=firebase.auth().onAuthStateChanged(()=>{ try{u();}catch(_){}; res(firebase.auth().currentUser||null); }); }catch(e){ res(null); } });
+}
+
+// Login mit sanfter Migration: 1) mit dem echten (getippten) Passwort anmelden;
+// 2) sonst Übergangs-Fallback über das Stabil-Passwort, dann Hash clientseitig
+// prüfen (verifyFn) und das Firebase-Konto-Passwort auf das echte umstellen.
+// Rückgabe {ok, migrated} bzw. {ok:false, reason}.
+export async function authenticate(id, email, typedPw, verifyFn){
+  const auth=firebase.auth();
+  const acct=_accountEmail(id, email);
+  try{ await auth.signInWithEmailAndPassword(acct, typedPw); return {ok:true, migrated:false}; }
+  catch(e){ /* evtl. noch nicht migriert → Fallback */ }
+  try{ await auth.signInWithEmailAndPassword(acct, _stableAuthPw(id)); }
+  catch(e){ return {ok:false, reason:'no-account'}; }
+  let users;
+  try{ const s=await firebase.database().ref('zeiterfassung/users').once('value'); users=s.val()||[]; }
+  catch(e){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'no-access'}; }
+  const arr=Array.isArray(users)?users:Object.values(users);
+  const u=arr.find(x=>x&&x.id===id);
+  if(!u){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'no-user'}; }
+  const v=await verifyFn(typedPw, u.pw);
+  if(!v||!v.ok){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'bad-pw'}; }
+  try{ await auth.currentUser.updatePassword(typedPw); }catch(e){ /* z.B. requires-recent-login – klappt beim nächsten Login */ }
+  return {ok:true, migrated:true};
 }
 
 export async function initFirebase(){
@@ -113,16 +122,36 @@ export async function initFirebase(){
   window._fbRef=_fbRef;
   window._offlineMode=false;
   window._pendingSync=false;
-  // Echte Konten (Phase 1): non-blocking im Hintergrund verfügbar machen.
   window.ensureRealAuth = ensureRealAuth;
   window.provisionAuthAccount = provisionAuthAccount;
+  window.loadFullData = loadFullData;
 
-  let fbData=null;
+  // Persistierten Anmeldestatus abwarten (für Auto-Login auf bekannten Geräten).
+  try{ await _awaitAuthReady(); }catch(e){}
+
+  // SICHERHEIT: Vor dem Login NUR das öffentliche Namensverzeichnis lesen (keine Daten).
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   try{
-    await Promise.race([_ensureAuthSession(),_timeout(5000)]);
-    const snap=await Promise.race([_fbRef.once('value'),_timeout(6000)]);
+    const snap=await Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(6000)]);
+    const dir=snap.val()||{};
+    window._loginDir=Object.keys(dir).map(id=>({id,name:(dir[id]&&dir[id].name)||id,email:(dir[id]&&dir[id].email)||''}));
+  }catch(e){
+    console.warn('loginDir nicht erreichbar:',e.message);
+    window._offlineMode=true;
+    try{ const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(ls&&Array.isArray(ls.users)) window._loginDir=ls.users.map(u=>({id:u.id,name:u.name,email:u.email||''})); }catch(_){}
+  }
+}
+
+// Nach erfolgreichem Login (allowlistete Sitzung): volle Daten laden, migrieren,
+// cachen und den Realtime-Listener starten. (Früher Teil von initFirebase.)
+export async function loadFullData(){
+  const _fbRef=window._fbRef||firebase.database().ref('zeiterfassung');
+  const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
+  let fbData=null;
+  try{
+    const snap=await Promise.race([_fbRef.once('value'),_timeout(8000)]);
     fbData=snap.val();
+    window._offlineMode=false;
   } catch(e){
     console.warn('Firebase nicht erreichbar, Offline-Modus:',e.message);
     window._offlineMode=true;

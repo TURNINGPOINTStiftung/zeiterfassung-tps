@@ -2,6 +2,7 @@ import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
          EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL } from './config.js';
 import { getData, getUser, mutate } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
+import { getLoginDirUsers, authenticate } from './firebase.js';
 
 // Zwischenspeicher für Login-Autocomplete
 let _loginUsers = [];
@@ -50,15 +51,15 @@ export async function verifyPw(pw,stored){
 
 // ── Login UI ──────────────────────────────────────────────────────
 export function populateLoginDropdown(){
-  // Benutzerliste für Autocomplete cachen
-  try{ _loginUsers=getData().users||[]; }catch(e){}
-  if(!_loginUsers.length) _loginUsers=DEFAULT_USERS.slice();
+  // Namensliste für Autocomplete aus dem öffentlichen Login-Verzeichnis (nicht mehr aus den Volldaten).
+  try{ _loginUsers=getLoginDirUsers(); }catch(e){}
+  if(!_loginUsers||!_loginUsers.length) _loginUsers=DEFAULT_USERS.map(u=>({id:u.id,name:u.name,email:u.email||''}));
 
-  // Gespeicherten Benutzer wiederherstellen
+  // Gespeicherten Benutzer wiederherstellen (Name aus dem Login-Verzeichnis)
   try{
     const rid=localStorage.getItem('tp_zt_remember');
     if(rid){
-      const ru=getUser(rid);
+      const ru=_loginUsers.find(u=>u.id===rid);
       if(ru){
         const inp=document.getElementById('login-user-input');
         if(inp&&!inp.value) inp.value=ru.name;
@@ -150,32 +151,44 @@ export async function doLogin(){
     errEl.textContent='Bitte einen Namen eingeben.';
     errEl.style.display='block'; return;
   }
-  let users=[];
-  try{ users=getData().users||[]; }catch(e){}
-  const u=users.find(x=>x.name.toLowerCase()===name.toLowerCase());
-  if(!u){
+  // Nutzer im öffentlichen Login-Verzeichnis finden (keine Daten/Hashes nötig).
+  const dir=getLoginDirUsers();
+  const du=dir.find(x=>String(x.name||'').toLowerCase()===name.toLowerCase());
+  if(!du){
     errEl.textContent='Benutzer nicht gefunden.';
     errEl.style.display='block'; return;
   }
   const pw=document.getElementById('login-pw').value;
-  const _v=await verifyPw(pw,u.pw);
-  const match=_v.ok;
-  // Erfolgreicher Login mit Alt-Format (SHA-256/Klartext) → still auf PBKDF2 hochstufen.
-  if(match&&_v.upgrade){ const h=await makePwRecord(pw); mutate(d=>{const x=d.users.find(y=>y.id===u.id);if(x)x.pw=h;}); }
-  if(!match){
-    errEl.textContent='Falsches Passwort.';
+  if(!pw){ errEl.textContent='Bitte Passwort eingeben.'; errEl.style.display='block'; return; }
+  errEl.textContent='Anmeldung läuft …'; errEl.style.display='block';
+  // Echte Firebase-Anmeldung (mit sanfter Migration über das Stabil-Passwort).
+  let res;
+  try{ res=await authenticate(du.id, du.email, pw, verifyPw); }
+  catch(e){ res={ok:false, reason:'error', msg:e&&e.message}; }
+  if(!res.ok){
+    errEl.textContent =
+      (res.reason==='no-account'||res.reason==='no-user') ? 'Kein Zugang – bitte an den Administrator wenden.' :
+      (res.reason==='no-access')                          ? 'Kein Zugriff – dieses Konto ist nicht freigeschaltet.' :
+      (res.reason==='bad-pw')                             ? 'Falsches Passwort.' :
+      ('Anmeldung fehlgeschlagen'+(res.msg?': '+res.msg:'.'));
     errEl.style.display='block'; return;
+  }
+  // Angemeldet + freigeschaltet → jetzt erst die vollen Daten laden.
+  try{ await window.loadFullData(); }catch(e){ console.error('loadFullData Fehler:',e); }
+  window.cu=getUser(du.id);
+  if(!window.cu){
+    errEl.textContent='Angemeldet, aber kein Nutzerprofil gefunden. Bitte an den Administrator wenden.';
+    errEl.style.display='block';
+    try{ await firebase.auth().signOut(); }catch(_){}
+    return;
   }
   // Angemeldet bleiben: Benutzer-ID speichern oder löschen
   try{
     const cb=document.getElementById('login-remember');
-    if(cb?.checked) localStorage.setItem('tp_zt_remember',u.id);
+    if(cb?.checked) localStorage.setItem('tp_zt_remember',du.id);
     else localStorage.removeItem('tp_zt_remember');
   }catch(e){}
-  window.cu=getUser(u.id);
-  // Echtes Firebase-Konto im Hintergrund anlegen/verwenden (non-blocking).
-  try{ window.ensureRealAuth?.(u.id, pw, u.email); }catch(e){}
-  try{ localStorage.setItem('tp_zt_session',u.id); }catch(e){}
+  try{ localStorage.setItem('tp_zt_session',du.id); }catch(e){}
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');

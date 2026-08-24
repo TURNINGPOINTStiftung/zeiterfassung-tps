@@ -639,7 +639,9 @@ export async function saveNewUser(){
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>d.users.push(u)); }
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
-  try{ window.provisionAuthAccount?.(u.id, _plainPw, u.email); }catch(e){}  // echtes Konto anlegen (best effort)
+  // Technisches Konto anlegen + im Login-Verzeichnis/Allowlist freischalten
+  // (runSecuritySetup ist idempotent: legt nur den neuen Nutzer an, Rest bleibt).
+  try{ await window.runSecuritySetup?.({log:()=>{}}); }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 
