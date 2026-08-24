@@ -313,7 +313,7 @@ initFirebase().then(async function(){
   // Einmaliges erzwungenes Neu-Anmelden (Umstellung auf echte Firebase-Konten).
   // Zahl hochsetzen, um erneut für alle einen Re-Login zu erzwingen.
   try{
-    const _RELOGIN_EPOCH='1';
+    const _RELOGIN_EPOCH='2';
     if(localStorage.getItem('tp_zt_relogin_epoch')!==_RELOGIN_EPOCH){
       localStorage.setItem('tp_zt_relogin_epoch',_RELOGIN_EPOCH);
       localStorage.removeItem('tp_zt_session');
