@@ -67,6 +67,9 @@ import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
 import './crm/crm.js';
 import './crm/auswertung.js';
 
+// ── Sicherheits-Setup (Cutover-Provisionierung: loginDir + allowed) ──
+import './admin-setup.js';
+
 // ══════════════════════════════════════════════════════════════════
 // Expose everything to window (for inline onclick handlers in HTML)
 // ══════════════════════════════════════════════════════════════════
@@ -302,7 +305,7 @@ try{ if(window.emailjs&&EMAILJS_PUBLIC_KEY) window.emailjs.init({publicKey:EMAIL
 initZoom();
 initAuthEvents();
 
-initFirebase().then(function(){
+initFirebase().then(async function(){
   document.getElementById('fb-loading').style.display='none';
   initFirebaseEvents();
   checkPasswordResetToken();
@@ -318,18 +321,22 @@ initFirebase().then(function(){
     }
   }catch(e){}
 
-  // Restore saved session (survives F5 reload)
+  // Auto-Login: bestehende (persistierte) Firebase-Sitzung + gemerkte Nutzer-ID.
+  // Erst wenn Firebase eine Sitzung hat, werden die vollen Daten geladen (Regeln!).
   try{
-    const savedUid=localStorage.getItem('tp_zt_session');
-    if(savedUid&&getUser(savedUid)){
-      window.cu=getUser(savedUid);
-      document.getElementById('login-screen').style.display='none';
-      document.getElementById('app').classList.add('visible');
-      try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
-      try{ updateAbBadge(); }catch(e){}
-      return;
+    const savedId=localStorage.getItem('tp_zt_session');
+    if(savedId && firebase.auth().currentUser){
+      await window.loadFullData();
+      if(getUser(savedId)){
+        window.cu=getUser(savedId);
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').classList.add('visible');
+        try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
+        try{ updateAbBadge(); }catch(e){}
+        return;
+      }
     }
-  }catch(e){}
+  }catch(e){ console.error('Auto-Login Fehler:',e); }
   try{ populateLoginDropdown(); }
   catch(e){
     const el=document.getElementById('login-user-list');
