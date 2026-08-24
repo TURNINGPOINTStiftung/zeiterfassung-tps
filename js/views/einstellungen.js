@@ -688,6 +688,10 @@ export async function saveEditUser(id){
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
+  // Login-Verzeichnis (loginDir) mit dem evtl. geänderten Namen synchronisieren – sonst zeigt/matcht
+  // der Anmelde-Bildschirm weiter den alten Namen (z. B. bei korrigierten Umlauten). Idempotent, für
+  // bestehende Nutzer ohne Konto-Anlage (nur Namens-Update im Verzeichnis).
+  try{ await window.runSecuritySetup?.({log:()=>{}}); }catch(e){ console.warn('Security-Setup (Edit):', e&&e.message); }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }
