@@ -9,6 +9,19 @@ import { vacDailyMin } from '../calc.js';
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
 const _canVerwaltung = cu => !!(cu && (cu.role==='admin' || hasPermission('zugriff_verwaltung', cu)));
 
+// Pfade für persönliche „Modul-Zugriff"-Ausnahmen (spiegelt die Zugriffs-Matrix im CRM).
+// u.perms['path_<key>']=true|false übersteuert die Rollen-Matrix für DIESE Person; fehlt = Standard.
+const _UF_PATHS=[
+  {key:'zeiterfassung', label:'Zeiterfassung', icon:'🕒'},
+  {key:'crm',           label:'CRM (Kontakte)', icon:'📇'},
+  {key:'kanban',        label:'Projektmanagement', icon:'🗂️'},
+  {key:'verteiler',     label:'Verteiler', icon:'✉️'},
+  {key:'ki',            label:'KI', icon:'🧠'},
+  {key:'auswertung',    label:'Auswertung', icon:'📊'},
+  {key:'messe',         label:'Messemodus', icon:'🎪'},
+  {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
+];
+
 export function renderSettings(){
   const cu=window.cu;
   const d=getData();
@@ -592,6 +605,13 @@ function userForm(u={}){
              return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${p.key}" ${on?'checked':''} style="width:auto;cursor:pointer"> ${esc(p.label)}</label>`;
            }).join('')}
          </div>`}
+    ${u.id==='admin' ? '' : `<div class="uf-section-head" style="margin-top:14px">🧭 Modul-Zugriff <span style="font-size:11px;color:var(--muted)">(persönliche Ausnahme)</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Standard = wie Rolle / Zugriffs-Matrix. „Ja"/„Nein" übersteuert nur für diese Person.</div>
+      <div style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;display:grid;grid-template-columns:1fr auto;gap:5px 12px;align-items:center">
+        ${_UF_PATHS.map(p=>{ const v=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_'+p.key))?(u.perms['path_'+p.key]?'ja':'nein'):'std';
+          return `<span style="font-size:13px">${p.icon} ${esc(p.label)}</span><select id="uf-path-${p.key}" style="font-size:13px;padding:3px 6px;width:auto"><option value="std"${v==='std'?' selected':''}>Standard</option><option value="ja"${v==='ja'?' selected':''}>Ja</option><option value="nein"${v==='nein'?' selected':''}>Nein</option></select>`;
+        }).join('')}
+      </div>`}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
 }
 
@@ -647,6 +667,8 @@ function collectUserForm(){
   // Pro-User-Berechtigungen (überschreiben die Rolle). Admin: keine Häkchen → leer.
   const perms={};
   PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
+  // Persönliche Modul-Zugriff-Ausnahmen: Standard → nichts setzen; Ja/Nein → explizit.
+  _UF_PATHS.forEach(p=>{ const sel=document.getElementById('uf-path-'+p.key); if(sel){ const v=sel.value; if(v==='ja') perms['path_'+p.key]=true; else if(v==='nein') perms['path_'+p.key]=false; } });
   const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
   const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
   const noTimesheet=!!(document.getElementById('uf-notimesheet')?.checked);

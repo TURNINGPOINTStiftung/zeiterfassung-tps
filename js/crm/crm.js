@@ -307,10 +307,14 @@ function _defaultPathAccess(key, cu){
 function canUsePath(key, cu){
   if(!cu) return false;
   if(cu.role==='admin') return true;
+  // 1. Persönliche Ausnahme (Mitarbeiter-Dialog) übersteuert alles.
+  if(cu.perms && Object.prototype.hasOwnProperty.call(cu.perms, 'path_'+key)) return !!cu.perms['path_'+key];
+  // 2. Rollen-Matrix (Verwaltung → Zugriffe).
   try{
     const c=getCrmConfig(); const row=c&&c.pathAccess&&c.pathAccess[key];
     if(row && Object.prototype.hasOwnProperty.call(row, cu.role)) return !!row[cu.role];
   }catch(e){}
+  // 3. Standard (= bisheriges Verhalten).
   return _defaultPathAccess(key, cu);
 }
 
