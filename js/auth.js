@@ -1,6 +1,6 @@
 import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
          EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL } from './config.js';
-import { getData, getUser, mutate } from './data.js';
+import { getData, getUser, mutate, setDataCache } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 import { getLoginDirUsers, authenticate } from './firebase.js';
 
@@ -173,8 +173,25 @@ export async function doLogin(){
       ('Anmeldung fehlgeschlagen'+(res.msg?': '+res.msg:'.'));
     errEl.style.display='block'; return;
   }
-  // Angemeldet + freigeschaltet → jetzt erst die vollen Daten laden.
-  try{ await window.loadFullData(); }catch(e){ console.error('loadFullData Fehler:',e); }
+  // Angemeldet + freigeschaltet → volle Daten laden.
+  // SCHNELLSTART auf bekannten Geräten: gibt es einen brauchbaren lokalen Stand mit genau
+  // diesem Nutzer, zeigen wir die App SOFORT daraus. loadFullData (Merge, Migration,
+  // Datenverlust-Schutz, Realtime-Listener) läuft dann im HINTERGRUND weiter und aktualisiert
+  // alles, sobald der echte Cloud-Stand da ist – es wird also kein Schritt übersprungen,
+  // nur nicht mehr blockierend abgewartet.
+  let _fastStart=false;
+  try{
+    const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+    if(ls&&Array.isArray(ls.users)&&ls.users.some(x=>x&&x.id===du.id)){
+      setDataCache(ls); _fastStart=true;
+    }
+  }catch(e){}
+  if(_fastStart){
+    // NICHT awaiten → App erscheint sofort; cu nach dem Hintergrund-Laden auffrischen.
+    window.loadFullData().then(()=>{ try{ window.cu=getUser(du.id); }catch(_){} }).catch(e=>console.error('loadFullData (Hintergrund):',e));
+  }else{
+    try{ await window.loadFullData(); }catch(e){ console.error('loadFullData Fehler:',e); }
+  }
   window.cu=getUser(du.id);
   if(!window.cu){
     errEl.textContent='Angemeldet, aber kein Nutzerprofil gefunden. Bitte an den Administrator wenden.';
