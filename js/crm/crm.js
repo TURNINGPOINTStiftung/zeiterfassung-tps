@@ -265,6 +265,8 @@ function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l=
 // Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5) darf das Verwaltungs-Modul nutzen.
 function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
+// Teil-Recht: darf NUR die CRM-Einstellungen verwalten (öffnet die Verwaltung, sieht dort nur den CRM-Reiter).
+function _canVerwCrm(){ if(_canVerw()) return true; const cu=window.cu; try{ return !!(cu && window.hasPermission && window.hasPermission('zugriff_verwaltung_crm', cu)); }catch(e){ return false; } }
 
 // ── Zugriff pro Pfad (Verwaltung: „Zugriffs-Matrix") ───────────────
 // Pfade der Modulleiste + Rollen-Spalten der Matrix.
@@ -298,7 +300,7 @@ function _defaultPathAccess(key, cu){
     case 'kanban': case 'crm': return hasCrm;
     case 'verteiler': return canViewCrm;
     case 'ki': case 'auswertung': return isMgr;
-    case 'verwaltung': return _canVerw();
+    case 'verwaltung': return _canVerwCrm();
     case 'messe': return (lvl==='admin'||lvl==='full');
     default: return false;
   }
@@ -3818,7 +3820,19 @@ function verwShowTab(name){
 }
 function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
-  if(document.getElementById('verw-users')) return;
+  const full=_canVerw();
+  const mode = full ? 'full' : 'crm';
+  if(root.getAttribute('data-verw-mode')===mode && document.getElementById('verw-crmcfg')) return;  // schon passend gemountet
+  root.setAttribute('data-verw-mode', mode);
+  if(!full){
+    // CRM-Verwalter (Teil-Recht zugriff_verwaltung_crm): NUR der CRM-Reiter. Keine sensiblen
+    // Bereiche (Mitarbeiter/Zugriffe/Daten), keine ZE-Umhängung → kein Datenleck.
+    root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung · CRM</span></div></div>
+     <div class="verw-tabs"><button class="verw-tab active" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button></div>
+     <div class="crm-body"><div class="verw-panel" id="verw-tab-crm"><div id="verw-crmcfg"></div></div></div>`;
+    verwShowTab('crm');
+    return;
+  }
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
    <div class="verw-tabs">
      <button class="verw-tab" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
@@ -3845,16 +3859,19 @@ function renderVerwaltung(){
   try{
     injectStyles();
     const root=document.getElementById('verw-root'); if(!root) return;
-    if(!_canVerw()){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
+    if(!_canVerwCrm()){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
     ensureCrmReady().then(()=>{
       try{
         ensureVerwMounted();
-        paintVerwUsers();
-        paintVerwImpExp();
-        paintVerwConfig();
-        paintVerwZugriff();
-        paintVerwHistory();
-        if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
+        paintVerwConfig();   // CRM-Einstellungen – für Voll-Admin UND CRM-Verwalter
+        if(_canVerw()){
+          // Sensible/übergreifende Bereiche nur für Voll-Admins.
+          paintVerwUsers();
+          paintVerwImpExp();
+          paintVerwZugriff();
+          paintVerwHistory();
+          if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien (Organisation)
+        }
       }catch(e){ console.error('Verwaltung:',e); }
     });
   }catch(e){ console.error('renderVerwaltung:',e); }
