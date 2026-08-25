@@ -331,9 +331,37 @@ export function showAddUser(){
 export function showEditUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
-  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword('${id}')">🔑 Einmal-Passwort</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
+}
+
+// Admin: Einmal-Passwort für einen Mitarbeiter erzeugen (setzt den Datensatz-Hash `u.pw`).
+// Funktioniert für Konten, die NOCH NICHT auf ein eigenes Firebase-Passwort migriert sind:
+// der Login nutzt dann den Stabil-PW-Fallback + diesen Hash und migriert automatisch.
+// Bereits migrierte Konten (Firebase-PW unbekannt, z. B. Jörg) brauchen einen Reset am
+// Firebase-Konto selbst – das kann die App prinzipbedingt nicht (offene Server-Phase).
+function _genTempPw(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const a=new Uint32Array(10); try{ (self.crypto||window.crypto).getRandomValues(a); }catch(e){}
+  let s=''; for(let i=0;i<10;i++){ s+=c[(a[i]||(i*7+3))%c.length]; }
+  return s;
+}
+export async function resetUserPassword(id){
+  const cu=window.cu;
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  const u=getUser(id); if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  if(!confirm('Einmal-Passwort für '+(u.name||id)+' erzeugen?\n\nDas bisherige Passwort wird ungültig. '+(u.name||'Die Person')+' meldet sich mit dem neuen Passwort an und ändert es danach im Profil.')) return;
+  let temp, hash;
+  try{ temp=_genTempPw(); hash=await makePwRecord(temp); }
+  catch(e){ toast('Fehler beim Erzeugen: '+((e&&e.message)||e),'err'); return; }
+  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; }); }
+  catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||e),'err'); return; }
+  openModal(`<h3>🔑 Einmal-Passwort</h3>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich weitergeben – Anmeldung mit <b>Name + diesem Passwort</b>, danach im Profil ändern.</p>
+    <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
+    <p style="font-size:12px;color:var(--muted);margin:12px 0 0">Klappt die Anmeldung damit nicht, ist das Konto bereits auf ein eigenes Firebase-Passwort „migriert" – dann ist ein Reset am Firebase-Konto nötig (Sonderfall, wie bei Jörg).</p>
+    <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
 }
 
 export function showEditDpw(id){
