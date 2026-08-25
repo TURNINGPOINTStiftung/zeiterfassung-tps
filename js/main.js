@@ -66,6 +66,7 @@ import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
 // Zeiterfassung (eigener Firebase-Ref, eigener Cache, Lazy-Init).
 import './crm/crm.js';
 import './crm/auswertung.js';
+import './crm/ki.js';
 
 // ── Sicherheits-Setup (Cutover-Provisionierung: loginDir + allowed) ──
 import './admin-setup.js';
