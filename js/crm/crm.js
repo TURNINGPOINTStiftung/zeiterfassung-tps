@@ -329,13 +329,14 @@ function injectStyles(){
   .crm-bell:active{transform:translateY(1px)}
   .crm-bell.has-new{box-shadow:0 0 0 3px rgba(229,72,77,.35)}
   .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
-  /* Suche + Glocke in der oberen (blauen) Modulleiste – dunkler Grund → helle Varianten */
+  /* Suche + Glocke in der oberen (blauen) Modulleiste – als sauberes Paar (gleiche Höhe:
+     Such-Pille + runder Glocken-Button), helle Varianten auf dunklem Grund. */
   #mb-crm-tools{display:flex;align-items:center;gap:8px}
   #mb-crm-tools:empty{display:none}
-  #module-bar .crm-search{margin-left:0;min-width:0;flex:0 1 220px;padding:7px 13px;font-size:13px}
-  #module-bar .crm-bell{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.5);color:#fff}
-  #module-bar .crm-bell:hover{background:rgba(255,255,255,.26);filter:none}
-  @media(max-width:640px){ #module-bar .crm-search{flex:0 1 128px;padding:6px 11px} }
+  #module-bar .crm-search{margin-left:0;min-width:0;flex:0 1 240px;height:36px;padding:0 15px;font-size:13px}
+  #module-bar .crm-bell{flex:none;width:36px;height:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;border-radius:999px;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);color:#fff}
+  #module-bar .crm-bell:hover{background:rgba(255,255,255,.28);filter:none}
+  @media(max-width:640px){ #module-bar .crm-search{flex:0 1 150px;height:34px} #module-bar .crm-bell{width:34px;height:34px} }
   .crm-notif-pop{position:fixed;z-index:60;width:440px;max-width:calc(100vw - 20px);max-height:72vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:6px}
   .crm-notif-head{font-size:13px;font-weight:700;color:var(--primary);padding:8px 10px 6px}
   .crm-notif-item{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
