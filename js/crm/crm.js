@@ -272,12 +272,14 @@ function crmSetupModuleBar(){
     const bar=document.getElementById('module-bar');
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
-      // Kanban + Kontakte-Pfad vorerst NUR für Personen mit CRM-Zugriff (Level != none).
+      // Projektmanagement + Kontakte-Pfad nur für Personen mit CRM-Zugriff (Level != none);
+      // Verteiler nur bei Voll-Sicht (zeigt ALLE Listen → nicht für verein-beschränkte Nutzer).
       // Fein-granulare Rechte pro Pfad kommen später in der Verwaltung. Tiefe der Sicht regelt das CRM selbst.
       const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
       const _lvl=(function(){ try{ return accessLevel(); }catch(e){ return 'none'; } })();
       const _hasCrm=_lvl!=='none';
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
+      const _canViewCrm=(_lvl==='admin'||_lvl==='full'||_lvl==='readonly');
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, verteiler:_canViewCrm, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -327,6 +329,13 @@ function injectStyles(){
   .crm-bell:active{transform:translateY(1px)}
   .crm-bell.has-new{box-shadow:0 0 0 3px rgba(229,72,77,.35)}
   .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
+  /* Suche + Glocke in der oberen (blauen) Modulleiste – dunkler Grund → helle Varianten */
+  #mb-crm-tools{display:flex;align-items:center;gap:8px}
+  #mb-crm-tools:empty{display:none}
+  #module-bar .crm-search{margin-left:0;min-width:0;flex:0 1 220px;padding:7px 13px;font-size:13px}
+  #module-bar .crm-bell{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.5);color:#fff}
+  #module-bar .crm-bell:hover{background:rgba(255,255,255,.26);filter:none}
+  @media(max-width:640px){ #module-bar .crm-search{flex:0 1 128px;padding:6px 11px} }
   .crm-notif-pop{position:fixed;z-index:60;width:440px;max-width:calc(100vw - 20px);max-height:72vh;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:6px}
   .crm-notif-head{font-size:13px;font-weight:700;color:var(--primary);padding:8px 10px 6px}
   .crm-notif-item{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:8px;cursor:pointer}
@@ -693,36 +702,64 @@ function injectStyles(){
 }
 
 // ── Einstieg ───────────────────────────────────────────────────────
-// Kanban (Projekte/Aufgaben) und Kontakte/Verteiler sind zwei eigene Modul-Pfade (☰),
-// teilen sich aber dieselbe CRM-Engine + #crm-root im #mod-crm-Rahmen. window._crmModule
-// steuert, WELCHE Reiter die Leiste zeigt und welcher ☰-Punkt aktiv ist; es wird bei jedem
-// Render aus dem aktuellen Modus abgeleitet (barHtml → _crmSyncModuleHighlight).
-//   Board-Modi   (Kanban):  meine · teams · veranstaltungen
-//   Kontakt-Modi (CRM):     kontakte · verteiler
+// Projektmanagement (intern „kanban"), Kontakte (CRM) und Verteiler sind drei eigene
+// Modul-Pfade (☰), teilen sich aber dieselbe CRM-Engine + #crm-root im #mod-crm-Rahmen.
+// window._crmModule steuert, WELCHE Reiter/Leiste gezeigt werden und welcher ☰-Punkt aktiv
+// ist; es wird bei jedem Render aus dem aktuellen Modus abgeleitet (_crmSyncModuleHighlight).
+//   Board-Modi (Projektmanagement): meine · teams · veranstaltungen
+//   Kontakt-Modus (CRM):            kontakte
+//   Verteiler-Modus (Verteiler):    verteiler
 const _CRM_BOARD_MODES=['meine','teams','veranstaltungen'];
-const _CRM_CONTACT_MODES=['kontakte','verteiler'];
+const _CRM_CONTACT_MODES=['kontakte'];
+function _crmModuleForMode(m){
+  if(_CRM_BOARD_MODES.includes(m)) return 'kanban';
+  if(m==='verteiler') return 'verteiler';
+  return 'crm';
+}
 function _crmNormalizeMode(){
   if(window._crmModule==='kanban'){
     if(!_CRM_BOARD_MODES.includes(window._crmMode)) window._crmMode = crmCanView() ? 'teams' : 'meine';
+  } else if(window._crmModule==='verteiler'){
+    window._crmMode = 'verteiler';
   } else {
     if(!_CRM_CONTACT_MODES.includes(window._crmMode)) window._crmMode = 'kontakte';
   }
 }
-// Hält ☰-Menü + Leiste im Gleichklang mit dem aktuellen Modus – egal wie er geändert wurde
-// (Reiter, Suche, Benachrichtigung, Task-Link). Nur wirksam, wenn der CRM/Kanban-Pfad aktiv ist.
+// Hält ☰-Menü + obere Leisten-Tools im Gleichklang mit dem aktuellen Modus – egal wie er
+// geändert wurde (Suche, Benachrichtigung, Task-Link). Nur wirksam, wenn ein CRM-Pfad aktiv ist.
 function _crmSyncModuleHighlight(){
   try{
-    if(window._activeModule!=='crm' && window._activeModule!=='kanban') return;
-    const isK = _CRM_BOARD_MODES.includes(window._crmMode||'');
-    const name = isK ? 'kanban' : 'crm';
+    const am=window._activeModule;
+    if(am!=='crm' && am!=='kanban' && am!=='verteiler') return;
+    const name = _crmModuleForMode(window._crmMode||'');
     window._crmModule = name; window._activeModule = name;
     try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
-    const cur=document.getElementById('mb-current'); if(cur) cur.textContent = isK?'Projektmanagement':'CRM';
+    const label = name==='kanban' ? 'Projektmanagement' : (name==='verteiler' ? 'Verteiler' : 'CRM');
+    const cur=document.getElementById('mb-current'); if(cur) cur.textContent = label;
     document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===name));
+    _crmUpdateTopTools();
   }catch(e){}
 }
+// Suche + Benachrichtigungsglocke leben in der OBEREN (blauen) Modulleiste (#mb-crm-tools) statt
+// in einer zweiten Leiste – nur in einem CRM-Pfad und nur für Voll-Sicht. Wird von switchModule
+// (Modulwechsel) und _crmSyncModuleHighlight (Modus-Wechsel im Pfad) aktuell gehalten.
+function _crmUpdateTopTools(){
+  try{
+    const slot=document.getElementById('mb-crm-tools'); if(!slot) return;
+    const am=window._activeModule;
+    const inCrm=(am==='crm'||am==='kanban'||am==='verteiler');
+    if(!inCrm || !crmCanView()){ slot.innerHTML=''; slot.style.display='none'; return; }
+    const bc=_crmNotifBadgeCount();
+    const bell=`<button id="crm-bell" class="crm-bell${bc?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
+    const search=`<input class="crm-search" type="search" placeholder="Im CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">`;
+    slot.style.display='';
+    slot.innerHTML = search + bell;
+  }catch(e){}
+}
+window.crmUpdateTopTools=_crmUpdateTopTools;
 export function renderCRM(){ window._crmModule='crm'; _crmRenderNow('CRM'); }
 export function renderKanban(){ window._crmModule='kanban'; _crmRenderNow('Projektmanagement'); }
+export function renderVerteiler(){ window._crmModule='verteiler'; _crmRenderNow('Verteiler'); }
 function _crmRenderNow(label){
   try{
     injectStyles();
@@ -913,45 +950,21 @@ function crmNotifGo(coll, recId){
 
 // ── Bar ────────────────────────────────────────────────────────────
 function barHtml(){
-  _crmSyncModuleHighlight();   // ☰-Menü + Leiste an den aktuellen Modus (Board vs. Kontakte) angleichen
-  const mode = window._crmMode || 'kontakte';
-  const full = crmFull();
+  _crmSyncModuleHighlight();   // Modul-Highlight + obere Leisten-Tools (Suche/Glocke) angleichen
   const view = crmCanView();
   const lvl  = accessLevel();
-  const isKanban = window._crmModule==='kanban';
-  // Projektmanagement-Pfad (intern „kanban"): die Reiter-Leiste ergibt hier keinen Sinn –
-  // es gibt nur EINEN Bereich, und die „Im ganzen CRM suchen"-Suche ist kontaktbezogen.
-  // Darum nur die 🔔-Glocke (nur Voll-Sicht); eingeschränkte Nutzer bekommen gar keine Leiste.
-  if(isKanban){
-    if(!view) return '';
-    const bcK=_crmNotifBadgeCount();
-    const bellK=`<button id="crm-bell" class="crm-bell${bcK?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bcK?'':' style="display:none"'}>${bcK?(bcK>99?'99+':bcK):''}</span></button>`;
-    return `<div class="crm-bar crm-bar-pm"><span style="margin-left:auto"></span>${bellK}</div>`;
-  }
-  const tabs = [];
-  if(view){
-    // Kontakte-Pfad: EIN gemeinsamer „Kontakte"-Reiter (Bereiche sind Kategorien im Filter) + Verteiler.
-    tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmShowKontakte()">📇 Kontakte</button>`);
-    tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
-  } else if(lvl==='verein'){
+  const mode = window._crmMode || 'kontakte';
+  // Suche + Glocke liegen jetzt in der oberen (blauen) Modulleiste (#mb-crm-tools). Für die
+  // Voll-Sicht gibt es hier KEINE zweite Leiste mehr (wirkte in Projektmanagement/Verteiler leer).
+  // Ausnahme: verein-beschränkte Nutzer bekommen ihre Vereins-Reiter (echte Navigation).
+  if(view) return '';
+  if(lvl==='verein'){
+    const tabs=[];
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
       tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
+    if(tabs.length) return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div><span style="margin-left:auto"></span></div>`;
   }
-  let right = '';
-  if(view){
-    const bc=_crmNotifBadgeCount();
-    const bell=`<button id="crm-bell" class="crm-bell${bc?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bc?'':' style="display:none"'}>${bc?(bc>99?'99+':bc):''}</span></button>`;
-    right = `<input class="crm-search" type="search" placeholder="Im ganzen CRM suchen …" value="${esc(window._crmSearch||'')}" oninput="crmSearchInput(this.value)">
-      ${(mode==='kontakte'&&full)?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
-      ${bell}`;
-  } else {
-    right = `<span style="margin-left:auto"></span>`;
-  }
-  // Vorlagen/Excel/KI wurden aus der CRM-Leiste entfernt (v221):
-  //  • Vorlagen bleiben in Projekten/Veranstaltungen erreichbar (📋 Vorlage → „Vorlagen verwalten").
-  //  • Excel liegt als Panel in der Verwaltung (📊 Import/Export, paintVerwImpExp).
-  //  • KI ist noch nicht fertig gebaut → vorerst nur ausgeblendet (crmConfigAi bleibt im Code).
-  return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div>${right}</div>`;
+  return '';
 }
 
 // ── Liste der Einträge ─────────────────────────────────────────────
@@ -1011,6 +1024,7 @@ function paintList(){
       ${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ zurücksetzen</button>`:''}
       <select class="crm-sortsel" onchange="crmSetSort(this.value)"><option value="az"${sort==='az'?' selected':''}>Name A–Z</option><option value="za"${sort==='za'?' selected':''}>Name Z–A</option></select>
       <span class="crm-filter-count">${items.length} Kontakt${items.length===1?'':'e'}</span>
+      ${crmFull()?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
     </div>` : '';
   const cards = items.map(e=>{
     const s=e.stamm||{};
@@ -1694,7 +1708,7 @@ function crmSearchInput(v){
   let panel=document.getElementById('crm-search-panel');
   if(!String(v||'').trim()){ if(panel) panel.remove(); return; }
   if(!panel){ panel=document.createElement('div'); panel.id='crm-search-panel'; panel.className='crm-search-panel'; root.appendChild(panel); }
-  const bar=root.querySelector('.crm-bar'); panel.style.top=(bar?bar.offsetHeight:56)+'px';
+  const bar=root.querySelector('.crm-bar'); panel.style.top=(bar?bar.offsetHeight:0)+'px';
   panel.innerHTML=crmSearchPanelHtml(v);
 }
 function crmGoEntry(tree,eid){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel=''; paintDetail(); }
@@ -4519,7 +4533,7 @@ async function crmImportXlsx(input){
 
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM, renderKanban, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
+  renderCRM, renderKanban, renderVerteiler, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
   crmUserAccess, crmSetUserAccess, crmVereinList,
   crmExportBlob: exportCrmBlob, crmRestoreBlob: restoreCrmBlob,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
