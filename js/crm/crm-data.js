@@ -163,8 +163,9 @@ export function ensureCrmReady(){
             const v = s.val();
             _cache = _normalize(v);
             _persistLocal();
-            // Re-Render nur, wenn CRM aktiv ist und kein Formular offen ist
-            if(window._activeModule === 'crm' && !window._crmModalOpen && _onChange){
+            // Re-Render nur, wenn CRM/Kanban aktiv ist und kein Formular offen ist
+            // (Kanban teilt sich die Engine mit dem CRM → beide Pfade müssen live nachziehen)
+            if((window._activeModule === 'crm' || window._activeModule === 'kanban') && !window._crmModalOpen && _onChange){
               _onChange();
             }
           }catch(e){ console.warn('CRM Snapshot Fehler (ignoriert):', e); }

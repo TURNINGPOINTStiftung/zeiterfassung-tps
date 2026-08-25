@@ -272,9 +272,11 @@ function crmSetupModuleBar(){
     const bar=document.getElementById('module-bar');
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
-      // CRM für ALLE (jede Person hat „Meine Aufgaben"); Tiefe der Sicht regelt das CRM selbst.
+      // Kanban für ALLE (jede Person hat „Meine Aufgaben"); Kontakte-Pfad nur, wenn man
+      // überhaupt Kontakte sehen darf (sonst leer). Tiefe der Sicht regelt das CRM selbst.
       const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, crm:true, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
+      const _lvl=(function(){ try{ return accessLevel(); }catch(e){ return 'none'; } })();
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:true, crm:_lvl!=='none', auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -690,17 +692,48 @@ function injectStyles(){
 }
 
 // ── Einstieg ───────────────────────────────────────────────────────
-export function renderCRM(){
+// Kanban (Projekte/Aufgaben) und Kontakte/Verteiler sind zwei eigene Modul-Pfade (☰),
+// teilen sich aber dieselbe CRM-Engine + #crm-root im #mod-crm-Rahmen. window._crmModule
+// steuert, WELCHE Reiter die Leiste zeigt und welcher ☰-Punkt aktiv ist; es wird bei jedem
+// Render aus dem aktuellen Modus abgeleitet (barHtml → _crmSyncModuleHighlight).
+//   Board-Modi   (Kanban):  meine · teams · veranstaltungen
+//   Kontakt-Modi (CRM):     kontakte · verteiler
+const _CRM_BOARD_MODES=['meine','teams','veranstaltungen'];
+const _CRM_CONTACT_MODES=['kontakte','verteiler'];
+function _crmNormalizeMode(){
+  if(window._crmModule==='kanban'){
+    if(!_CRM_BOARD_MODES.includes(window._crmMode)) window._crmMode = crmCanView() ? 'teams' : 'meine';
+  } else {
+    if(!_CRM_CONTACT_MODES.includes(window._crmMode)) window._crmMode = 'kontakte';
+  }
+}
+// Hält ☰-Menü + Leiste im Gleichklang mit dem aktuellen Modus – egal wie er geändert wurde
+// (Reiter, Suche, Benachrichtigung, Task-Link). Nur wirksam, wenn der CRM/Kanban-Pfad aktiv ist.
+function _crmSyncModuleHighlight(){
+  try{
+    if(window._activeModule!=='crm' && window._activeModule!=='kanban') return;
+    const isK = _CRM_BOARD_MODES.includes(window._crmMode||'');
+    const name = isK ? 'kanban' : 'crm';
+    window._crmModule = name; window._activeModule = name;
+    try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
+    const cur=document.getElementById('mb-current'); if(cur) cur.textContent = isK?'Kanban':'CRM';
+    document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===name));
+  }catch(e){}
+}
+export function renderCRM(){ window._crmModule='crm'; _crmRenderNow('CRM'); }
+export function renderKanban(){ window._crmModule='kanban'; _crmRenderNow('Kanban'); }
+function _crmRenderNow(label){
   try{
     injectStyles();
     const _trees=getTrees();
     if(!window._crmTree || !_trees.some(t=>t.key===window._crmTree)) window._crmTree = _trees[0].key;
     if(!window._crmMode) window._crmMode = 'kontakte';
+    _crmNormalizeMode();
     window._crmModalOpen = false;
     const root = document.getElementById('crm-root');
     if(!root) return;
     crmInitBoardScroll();   // schwebende ←/→-Knöpfe fürs Board (einmalig; blendet sich passend ein/aus)
-    root.innerHTML = '<div class="crm-empty">Lade CRM …</div>';
+    root.innerHTML = '<div class="crm-empty">Lade '+label+' …</div>';
     ensureCrmReady().then(()=>{
       try{
         const lvl=accessLevel();
@@ -709,6 +742,7 @@ export function renderCRM(){
           window._crmMode='kontakte'; window._crmTree='vereine';
           const vs=accessVereine(); if(!vs.includes(window._crmSelId)) window._crmSelId=vs[0]||'';
         }
+        _crmNormalizeMode();
         paint();
         crmLoadNotif(true);   // Benachrichtigungs-Glocke initial laden
       }catch(e){ console.error('CRM paint:',e); }
@@ -878,18 +912,21 @@ function crmNotifGo(coll, recId){
 
 // ── Bar ────────────────────────────────────────────────────────────
 function barHtml(){
+  _crmSyncModuleHighlight();   // ☰-Menü + Leiste an den aktuellen Modus (Board vs. Kontakte) angleichen
   const mode = window._crmMode || 'kontakte';
   const full = crmFull();
   const view = crmCanView();
   const lvl  = accessLevel();
+  const isKanban = window._crmModule==='kanban';
   const homeActive = (mode==='teams'||mode==='meine'||mode==='veranstaltungen');
   const homeLabel  = view ? '👥 Teams' : '🙋 Meine Aufgaben';
-  const tabs = [`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`];
-  if(view){
-    // EIN gemeinsamer „Kontakte"-Reiter statt der früheren Bereichs-Reiter (Vereine,
-    // Sozialakteure …). Die Bereiche sind jetzt Kategorien und stecken im Filter (paintList).
+  const tabs = [];
+  if(isKanban){
+    // Kanban-Pfad: nur die Board-Ansicht (Teams / Meine Aufgaben; Veranstaltungen sind hier integriert)
+    tabs.push(`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`);
+  } else if(view){
+    // Kontakte-Pfad: EIN gemeinsamer „Kontakte"-Reiter (Bereiche sind Kategorien im Filter) + Verteiler.
     tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmShowKontakte()">📇 Kontakte</button>`);
-    // Veranstaltungen sind unter „Teams" integriert (kein eigener Top-Reiter mehr)
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
   } else if(lvl==='verein'){
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
@@ -3676,7 +3713,7 @@ function crmConfigAi(){
   if(url===null) return;
   setAiEndpoint(url.trim());
   toast(url.trim()?'KI-Proxy gespeichert ✓':'KI-Proxy entfernt.','ok');
-  if(window._activeModule==='crm' && !window._crmModalOpen) paint();
+  if((window._activeModule==='crm'||window._activeModule==='kanban') && !window._crmModalOpen) paint();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -4477,7 +4514,7 @@ async function crmImportXlsx(input){
 
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
+  renderCRM, renderKanban, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
   crmUserAccess, crmSetUserAccess, crmVereinList,
   crmExportBlob: exportCrmBlob, crmRestoreBlob: restoreCrmBlob,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
