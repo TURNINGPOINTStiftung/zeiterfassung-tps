@@ -153,7 +153,12 @@ export async function doLogin(){
   }
   // Nutzer im öffentlichen Login-Verzeichnis finden (keine Daten/Hashes nötig).
   const dir=getLoginDirUsers();
-  const du=dir.find(x=>String(x.name||'').toLowerCase()===name.toLowerCase());
+  // Robuster Namensabgleich: Unicode normalisieren (NFC), Mehrfach-/Rand-Leerzeichen
+  // zusammenfassen, Groß/Klein egal → verhindert „Benutzer nicht gefunden" wegen Tippweise.
+  // (Beschädigte/fehlende Verzeichnis-Namen behebt „Zugänge reparieren" in der Verwaltung.)
+  const _norm=s=>String(s||'').normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase();
+  const nName=_norm(name);
+  const du=dir.find(x=>_norm(x.name)===nName);
   if(!du){
     errEl.textContent='Benutzer nicht gefunden.';
     errEl.style.display='block'; return;

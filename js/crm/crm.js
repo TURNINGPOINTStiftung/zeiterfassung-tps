@@ -4494,9 +4494,52 @@ function paintVerwImpExp(){
       <label class="btn-sm-crm" style="cursor:pointer">⬆️ Import aus Excel<input id="crm-ie-file" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="crmImportXlsx(this)"></label>
     </div>
     <div id="crm-ie-status" class="small" style="color:var(--muted);margin-top:8px"></div>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">🔑 Zugänge (Login) prüfen &amp; reparieren</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Prüft für ALLE Mitarbeiter, ob der Login-Eintrag stimmt (Name im Verzeichnis = Stammdaten). <b>Prüfen</b> liest nur; <b>Reparieren</b> gleicht Namen an und legt fehlende Zugänge an. Nutze das, wenn sich jemand nicht anmelden kann. Bestehende, funktionierende Logins bleiben unberührt.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-sm-crm" onclick="crmCheckLogins(this)">🔍 Prüfen (nur lesen)</button>
+      <button class="btn-sm-crm primary" onclick="crmRepairLogins(this)">🔧 Reparieren</button>
+    </div>
+    <pre id="verw-repair-out" class="small" style="display:none;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;max-height:280px;overflow:auto"></pre>
   </div>`;
 }
 function crmIeSelectAll(v){ document.querySelectorAll('.crm-ie-col').forEach(x=>{ x.checked=!!v; }); }
+function _repairLog(lines,m){ lines.push(String(m)); const out=document.getElementById('verw-repair-out'); if(out){ out.style.display=''; out.textContent=lines.join('\n'); } }
+// Nur-Lesen-Diagnose: Login-Verzeichnis (zeiterfassung/loginDir) mit den Stammdaten abgleichen.
+async function crmCheckLogins(btn){
+  const lines=[]; const log=m=>_repairLog(lines,m);
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    const norm=s=>String(s||'').normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase();
+    const dir=(await firebase.database().ref('zeiterfassung/loginDir').once('value')).val()||{};
+    const users=(getData().users||[]).filter(u=>u&&u.id);
+    const recIds=new Set(users.map(u=>u.id));
+    const missing=[], mismatch=[], orphans=[];
+    users.forEach(u=>{ const d=dir[u.id]; if(!d){ missing.push(u.name+' ('+u.id+')'); return; } if(norm(d.name)!==norm(u.name)) mismatch.push(u.name+' → Verzeichnis: "'+(d.name||'')+'"'); });
+    Object.keys(dir).forEach(id=>{ if(!recIds.has(id)) orphans.push((dir[id]&&dir[id].name||'?')+' ('+id+')'); });
+    log('Mitarbeiter: '+users.length+' · Verzeichnis-Einträge: '+Object.keys(dir).length);
+    log(missing.length?('❌ FEHLT im Login-Verzeichnis ('+missing.length+'): '+missing.join(', ')):'✓ Kein Mitarbeiter fehlt im Verzeichnis');
+    log(mismatch.length?('⚠ Name weicht ab ('+mismatch.length+'): '+mismatch.join('  |  ')):'✓ Alle Namen stimmen überein');
+    if(orphans.length) log('ℹ Verzeichnis-Einträge ohne Stammdatensatz: '+orphans.join(', '));
+    log((missing.length||mismatch.length)?'→ „Reparieren" gleicht das an.':'→ Alles in Ordnung.');
+  }catch(e){ log('Fehler beim Prüfen: '+((e&&e.message)||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔍 Prüfen (nur lesen)'; } }
+}
+// Reparatur: bestehendes, idempotentes runSecuritySetup (Namen angleichen + fehlende Zugänge anlegen).
+async function crmRepairLogins(btn){
+  const lines=[]; const log=m=>_repairLog(lines,m);
+  if(!window.runSecuritySetup){ toast('Reparatur-Funktion nicht verfügbar.','err'); return; }
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ läuft …'; }
+  try{
+    const sum=await window.runSecuritySetup({log});
+    log('— Fertig — Nutzer:'+sum.users+' · neu:'+sum.created+' · vorhanden:'+sum.existing+' · übersprungen:'+sum.skipped+' · Fehler:'+sum.failed);
+    if(sum.problems&&sum.problems.length){ log('Probleme:'); sum.problems.forEach(p=>log('  • '+p)); }
+    toast(sum.failed?('Fertig, aber '+sum.failed+' Problem(e) – siehe Protokoll.'):'Zugänge geprüft & aktualisiert ✓', sum.failed?'err':'ok');
+  }catch(e){ log('Fehler: '+((e&&e.message)||e)); toast('Reparatur fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔧 Reparieren'; } }
+}
 function _ieStatus(t){ const el=document.getElementById('crm-ie-status'); if(el) el.textContent=t||''; }
 async function crmExportXlsx(){
   const keys=Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value);
@@ -4552,7 +4595,7 @@ Object.assign(window, {
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
-  crmIeSelectAll, crmExportXlsx, crmImportXlsx,
+  crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmCheckLogins, crmRepairLogins,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgCatEdit, crmCfgCatSave, crmCfgCatMove, crmCfgCatDel,
