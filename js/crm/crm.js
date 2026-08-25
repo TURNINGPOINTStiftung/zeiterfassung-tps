@@ -279,7 +279,7 @@ function crmSetupModuleBar(){
       const _lvl=(function(){ try{ return accessLevel(); }catch(e){ return 'none'; } })();
       const _hasCrm=_lvl!=='none';
       const _canViewCrm=(_lvl==='admin'||_lvl==='full'||_lvl==='readonly');
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, verteiler:_canViewCrm, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, verteiler:_canViewCrm, ki:isMgr, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');

@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v290':'';
+  if(_hv) _hv.textContent=_showVer?'v291':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -72,12 +72,12 @@ export function initApp(){
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
   const _canVerw = isAdmin || hasPermission('zugriff_verwaltung',cu);
-  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || (isMgr && _lastMod==='auswertung') || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
 }
 
-const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',auswertung:'Auswertung',verwaltung:'Verwaltung'};
+const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
@@ -97,7 +97,7 @@ export function switchModule(name){
   if(main) main.style.display=isZE?'':'none';
   // Projektmanagement + Verteiler sind eigene ☰-Pfade, nutzen aber denselben #mod-crm-Rahmen (gemeinsame CRM-Engine).
   const frame = (name==='kanban'||name==='verteiler') ? 'crm' : name;
-  ['website','forum','crm','auswertung','verwaltung'].forEach(m=>{
+  ['website','forum','crm','auswertung','verwaltung','ki'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(frame===m)?'flex':'none';
   });
@@ -109,6 +109,7 @@ export function switchModule(name){
   if(name==='verteiler'){ try{ window.renderVerteiler&&window.renderVerteiler(); }catch(e){ console.error('Verteiler Render-Fehler (ignoriert):',e); } }
   if(name==='auswertung'){ try{ window.renderAuswertung&&window.renderAuswertung(); }catch(e){ console.error('Auswertung Render-Fehler (ignoriert):',e); } }
   if(name==='verwaltung'){ try{ window.renderVerwaltung&&window.renderVerwaltung(); }catch(e){ console.error('Verwaltung Render-Fehler (ignoriert):',e); } }
+  if(name==='ki'){ try{ window.renderKI&&window.renderKI(); }catch(e){ console.error('KI Render-Fehler (ignoriert):',e); } }
   // Suche/Glocke der oberen Leiste ans aktive Modul angleichen (in CRM-Pfaden füllen, sonst leeren)
   try{ window.crmUpdateTopTools&&window.crmUpdateTopTools(); }catch(e){}
 }
