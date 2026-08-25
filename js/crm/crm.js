@@ -4536,6 +4536,20 @@ async function crmRepairLogins(btn){
     const sum=await window.runSecuritySetup({log});
     log('— Fertig — Nutzer:'+sum.users+' · neu:'+sum.created+' · vorhanden:'+sum.existing+' · übersprungen:'+sum.skipped+' · Fehler:'+sum.failed);
     if(sum.problems&&sum.problems.length){ log('Probleme:'); sum.problems.forEach(p=>log('  • '+p)); }
+    // Verwaiste Verzeichnis-Einträge (kein Stammdatensatz) entfernen – räumt Mojibake-
+    // Duplikate wie „j�rg" weg. Sicher: der angemeldete Admin hat ALLE Datensätze geladen,
+    // ein Eintrag ohne passenden Datensatz ist damit definitiv veraltet. Der korrekte Eintrag
+    // wurde von runSecuritySetup zuvor bereits geschrieben → niemand wird unauffindbar.
+    try{
+      const dir2=(await firebase.database().ref('zeiterfassung/loginDir').once('value')).val()||{};
+      const recIds=new Set((getData().users||[]).map(u=>u&&u.id).filter(Boolean));
+      const orphans=Object.keys(dir2).filter(id=>!recIds.has(id));
+      if(orphans.length){
+        const upd={}; orphans.forEach(id=>{ upd[id]=null; });
+        await firebase.database().ref('zeiterfassung/loginDir').update(upd);
+        log('🧹 Verwaiste Einträge entfernt ('+orphans.length+'): '+orphans.map(id=>((dir2[id]&&dir2[id].name)||'?')+' ('+id+')').join(', '));
+      } else { log('Keine verwaisten Einträge.'); }
+    }catch(e){ log('Aufräumen übersprungen: '+((e&&e.message)||e)); }
     toast(sum.failed?('Fertig, aber '+sum.failed+' Problem(e) – siehe Protokoll.'):'Zugänge geprüft & aktualisiert ✓', sum.failed?'err':'ok');
   }catch(e){ log('Fehler: '+((e&&e.message)||e)); toast('Reparatur fehlgeschlagen: '+((e&&e.message)||e),'err'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔧 Reparieren'; } }
