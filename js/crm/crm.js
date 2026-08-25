@@ -265,6 +265,55 @@ function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l=
 // Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5) darf das Verwaltungs-Modul nutzen.
 function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
+
+// ── Zugriff pro Pfad (Verwaltung: „Zugriffs-Matrix") ───────────────
+// Pfade der Modulleiste + Rollen-Spalten der Matrix.
+const _PATH_DEFS=[
+  {key:'zeiterfassung', label:'Zeiterfassung', icon:'🕒'},
+  {key:'crm',           label:'CRM (Kontakte)', icon:'📇'},
+  {key:'kanban',        label:'Projektmanagement', icon:'🗂️'},
+  {key:'verteiler',     label:'Verteiler', icon:'✉️'},
+  {key:'ki',            label:'KI', icon:'🧠'},
+  {key:'auswertung',    label:'Auswertung', icon:'📊'},
+  {key:'messe',         label:'Messemodus', icon:'🎪'},
+  {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
+];
+const _ROLE_COLS=[
+  {key:'geschaeftsfuehrer', label:'GF'},
+  {key:'leitung',           label:'Leitung'},
+  {key:'mitarbeiter',       label:'Mitarbeiter'},
+  {key:'berater',           label:'Berater'},
+  {key:'freiberuflich',     label:'Freib.'},
+];
+// STANDARD-Verhalten (exakt wie bisher hartkodiert) – gilt, solange die Matrix „Standard" sagt.
+function _defaultPathAccess(key, cu){
+  const isAdmin=cu.role==='admin';
+  const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
+  let lvl='none'; try{ lvl=accessLevel(); }catch(e){}
+  const hasCrm=lvl!=='none';
+  const canViewCrm=(lvl==='admin'||lvl==='full'||lvl==='readonly');
+  switch(key){
+    case 'zeiterfassung': return !cu.crmOnly;
+    case 'website': case 'forum': return isAdmin;
+    case 'kanban': case 'crm': return hasCrm;
+    case 'verteiler': return canViewCrm;
+    case 'ki': case 'auswertung': return isMgr;
+    case 'verwaltung': return _canVerw();
+    case 'messe': return (lvl==='admin'||lvl==='full');
+    default: return false;
+  }
+}
+// Darf cu den Pfad sehen/nutzen? Admin immer; sonst explizite Matrix (Ja/Nein je Rolle) ODER Standard.
+function canUsePath(key, cu){
+  if(!cu) return false;
+  if(cu.role==='admin') return true;
+  try{
+    const c=getCrmConfig(); const row=c&&c.pathAccess&&c.pathAccess[key];
+    if(row && Object.prototype.hasOwnProperty.call(row, cu.role)) return !!row[cu.role];
+  }catch(e){}
+  return _defaultPathAccess(key, cu);
+}
+
 function crmSetupModuleBar(){
   try{
     const cu=window.cu; if(!cu) return;
@@ -272,14 +321,12 @@ function crmSetupModuleBar(){
     const bar=document.getElementById('module-bar');
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
-      // Projektmanagement + Kontakte-Pfad nur für Personen mit CRM-Zugriff (Level != none);
-      // Verteiler nur bei Voll-Sicht (zeigt ALLE Listen → nicht für verein-beschränkte Nutzer).
-      // Fein-granulare Rechte pro Pfad kommen später in der Verwaltung. Tiefe der Sicht regelt das CRM selbst.
-      const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
-      const _lvl=(function(){ try{ return accessLevel(); }catch(e){ return 'none'; } })();
-      const _hasCrm=_lvl!=='none';
-      const _canViewCrm=(_lvl==='admin'||_lvl==='full'||_lvl==='readonly');
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, verteiler:_canViewCrm, ki:isMgr, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
+      // Sichtbarkeit pro Pfad kommt jetzt aus der Zugriffs-Matrix (Verwaltung → Zugriffe):
+      // canUsePath() = Admin immer · explizite Matrix (Ja/Nein je Rolle) · sonst Standard
+      // (= exakt das bisherige Verhalten). So ändert sich ohne Konfiguration nichts.
+      const show={};
+      ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','verwaltung','messe']
+        .forEach(k=>{ show[k]=canUsePath(k, cu); });
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -3759,7 +3806,7 @@ function roleLbl(u){
 // Kategorien/Daten) EINMALIG hierher umhängen (gleiche Elemente/IDs →
 // renderSettings füllt sie am neuen Ort). Mitarbeiter rendern wir selbst
 // als breite Tabelle. Idempotent.
-function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
+function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','zugriff','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
 function verwShowTab(name){
   document.querySelectorAll('#verw-root .verw-panel').forEach(p=>{ p.style.display=(p.id==='verw-tab-'+name)?'':'none'; });
   document.querySelectorAll('#verw-root .verw-tab').forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-vtab')===name); });
@@ -3772,12 +3819,14 @@ function ensureVerwMounted(){
    <div class="verw-tabs">
      <button class="verw-tab" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
      <button class="verw-tab" data-vtab="org" onclick="verwShowTab('org')">🏢 Organisation</button>
+     <button class="verw-tab" data-vtab="zugriff" onclick="verwShowTab('zugriff')">🔐 Zugriffe</button>
      <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
      <button class="verw-tab" data-vtab="data" onclick="verwShowTab('data')">💾 Daten &amp; Backup</button>
    </div>
    <div class="crm-body">
      <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
      <div class="verw-panel" id="verw-tab-org" style="display:none"></div>
+     <div class="verw-panel" id="verw-tab-zugriff" style="display:none"><div id="verw-zugriff"></div></div>
      <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
      <div class="verw-panel" id="verw-tab-data" style="display:none"><div id="verw-impexp"></div><div id="verw-history"></div></div>
    </div>`;
@@ -3799,11 +3848,50 @@ function renderVerwaltung(){
         paintVerwUsers();
         paintVerwImpExp();
         paintVerwConfig();
+        paintVerwZugriff();
         paintVerwHistory();
         if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien
       }catch(e){ console.error('Verwaltung:',e); }
     });
   }catch(e){ console.error('renderVerwaltung:',e); }
+}
+// ── Zugriffs-Matrix (Verwaltung → Zugriffe) ────────────────────────
+function paintVerwZugriff(){
+  const host=document.getElementById('verw-zugriff'); if(!host) return;
+  const c=getCrmConfig(); const pa=(c&&c.pathAccess)||{};
+  const head=`<th style="text-align:left;padding:8px 10px">Pfad</th><th style="text-align:center;padding:8px 6px">Admin</th>`
+    + _ROLE_COLS.map(r=>`<th style="text-align:center;padding:8px 6px;min-width:96px">${esc(r.label)}</th>`).join('');
+  const rows=_PATH_DEFS.map(p=>{
+    const cells=_ROLE_COLS.map(r=>{
+      const row=pa[p.key]||{};
+      const cur = Object.prototype.hasOwnProperty.call(row, r.key) ? (row[r.key]?'ja':'nein') : 'std';
+      return `<td style="text-align:center;padding:4px 6px"><select class="crm-sortsel" onchange="crmSetPathAccess('${p.key}','${r.key}',this.value)">`
+        + `<option value="std"${cur==='std'?' selected':''}>Standard</option>`
+        + `<option value="ja"${cur==='ja'?' selected':''}>Ja</option>`
+        + `<option value="nein"${cur==='nein'?' selected':''}>Nein</option></select></td>`;
+    }).join('');
+    return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 10px;font-weight:600;white-space:nowrap">${p.icon} ${esc(p.label)}</td>`
+      + `<td style="text-align:center;color:var(--muted);font-size:12px">immer</td>${cells}</tr>`;
+  }).join('');
+  host.innerHTML=`<div class="crm-sec">
+    <h4><span class="ttl">🔐 Zugriff pro Pfad</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:12px">Wer welchen Menü-Pfad <b>sehen &amp; nutzen</b> darf.
+      <b>Standard</b> = bisheriges Verhalten (CRM-Pfade folgen der CRM-Zugriffsstufe pro Person; KI/Auswertung/Verwaltung der Rolle).
+      <b>Ja</b>/<b>Nein</b> übersteuert gezielt pro Rolle. Admin hat immer Zugriff. Änderungen wirken sofort (ggf. App neu laden).</div>
+    <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px">
+      <thead><tr style="background:var(--bg)">${head}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="small" style="color:var(--muted);margin-top:12px">Hinweis: „Ja" zeigt nur den <b>Menü-Pfad</b>; <b>wie viel</b> jemand im CRM sieht, regelt weiterhin die CRM-Zugriffsstufe pro Person (Reiter „Mitarbeiter"). Eigene (benutzerdefinierte) Rollen folgen „Standard".</div>
+  </div>`;
+}
+function crmSetPathAccess(pathKey, role, value){
+  const work=_cfgWork();
+  if(!work.pathAccess||typeof work.pathAccess!=='object') work.pathAccess={};
+  if(!work.pathAccess[pathKey]||typeof work.pathAccess[pathKey]!=='object') work.pathAccess[pathKey]={};
+  if(value==='std'){ delete work.pathAccess[pathKey][role]; if(!Object.keys(work.pathAccess[pathKey]).length) delete work.pathAccess[pathKey]; }
+  else work.pathAccess[pathKey][role]=(value==='ja');
+  saveCrmConfig(work);
+  toast('Zugriff gespeichert ✓','ok');
+  try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){}   // Modulleiste sofort aktualisieren
 }
 function paintVerwUsers(){
   const host=document.getElementById('verw-users'); if(!host) return;
@@ -4023,7 +4111,9 @@ function _cfgWork(){
     cardFields: (c&&c.cardFields&&typeof c.cardFields==='object') ? _clone(c.cardFields) : {},   // je Baum: welche Infos auf den Kacheln
     // Kategorien für den einheitlichen „Kontakte"-Filter. Fallback = aus den Bäumen abgeleitet
     // (die bisherigen Bereiche), damit ohne Konfiguration nichts verloren geht.
-    categories: (c&&Array.isArray(c.categories)&&c.categories.length) ? _clone(c.categories) : trees.map(t=>({ key:t.key, label:t.label, color:'', stats:t.key==='vereine' }))
+    categories: (c&&Array.isArray(c.categories)&&c.categories.length) ? _clone(c.categories) : trees.map(t=>({ key:t.key, label:t.label, color:'', stats:t.key==='vereine' })),
+    // Zugriffs-Matrix: pathAccess[pfad][rolle] = true|false (fehlt = „Standard"). MUSS hier erhalten bleiben.
+    pathAccess: (c&&c.pathAccess&&typeof c.pathAccess==='object') ? _clone(c.pathAccess) : {}
   };
 }
 function _slug(label, takenArr){
@@ -4603,7 +4693,7 @@ async function crmImportXlsx(input){
 
 // ── Window-Registrierung (für inline onclick) ──────────────────────
 Object.assign(window, {
-  renderCRM, renderKanban, renderVerteiler, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmVerwSetLevel, crmVerwToggleVerein,
+  renderCRM, renderKanban, renderVerteiler, crmSetupModuleBar, renderVerwaltung, verwShowTab, crmSetPathAccess, crmVerwSetLevel, crmVerwToggleVerein,
   crmUserAccess, crmSetUserAccess, crmVereinList,
   crmExportBlob: exportCrmBlob, crmRestoreBlob: restoreCrmBlob,
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
