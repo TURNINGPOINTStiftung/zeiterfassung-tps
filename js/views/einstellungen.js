@@ -182,6 +182,7 @@ const PERM_DEFS=[
   {key:'genehmigung_abwesenheit', label:'Funktion: Abwesenheiten genehmigen / ablehnen'},
   {key:'stempel',              label:'Funktion: Zeitstempel nutzen'},
   {key:'zugriff_verwaltung',   label:'🔑 Verwaltung (voller Admin-Zugriff aufs Verwaltungs-Modul)'},
+  {key:'zugriff_verwaltung_crm', label:'📇 CRM-Verwaltung (nur CRM-Einstellungen konfigurieren)'},
 ];
 const PERM_ROLES=[
   {key:'mitarbeiter',      label:'Mitarbeiter'},
