@@ -288,6 +288,18 @@ function crmSetupModuleBar(){
       });
       // ☰-Menü nur zeigen, wenn es mehr als ein Modul gibt
       const menuBtn=document.getElementById('mb-menu-btn'); if(menuBtn) menuBtn.style.display=count>1?'':'none';
+      // Sicherheitsnetz: Steht das AKTIVE Modul der Person gar nicht (mehr) zur Verfügung –
+      // z. B. „crm"/„kanban"/„verteiler" aus dem localStorage gemerkt, aber kein CRM-Zugriff –
+      // dann NICHT dort stranden: das ☰-Menü ist dann ausgeblendet → die Zeiterfassung wäre
+      // sonst gar nicht erreichbar. Zurück in ein erreichbares Modul (Zeiterfassung, sonst
+      // das erste sichtbare). Behebt „kommt nicht mehr in die Zeiterfassung".
+      try{
+        const active=window._activeModule;
+        if(active && show[active]===false && window.switchModule){
+          const fb = show.zeiterfassung ? 'zeiterfassung' : (Object.keys(show).find(m=>show[m] && m!=='messe') || 'zeiterfassung');
+          if(fb!==active) window.switchModule(fb);
+        }
+      }catch(e){}
       // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
       if(_canVerw()){ try{ ensureVerwMounted(); }catch(e){} }
     }).catch(()=>{});
