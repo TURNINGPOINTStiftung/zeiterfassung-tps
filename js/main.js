@@ -45,7 +45,7 @@ import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, s
          addCategory, removeCat, addTeamCat, removeTeamCat, moveTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleWerkstudentFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
-         saveNewUser, saveEditUser, fixApproverToLeitung } from './views/einstellungen.js';
+         saveNewUser, saveEditUser, resetUserPassword, fixApproverToLeitung } from './views/einstellungen.js';
 
 // ── Utility / print modules ────────────────────────────────────────
 import { printFull, printBuchhaltung, printTeamBuchhaltung,
@@ -224,6 +224,7 @@ window.toggleLeitungReport   = toggleLeitungReport;
 window.deleteUser            = deleteUser;
 window.saveNewUser           = saveNewUser;
 window.saveEditUser          = saveEditUser;
+window.resetUserPassword     = resetUserPassword;
 
 // Print
 window.printFull             = printFull;
