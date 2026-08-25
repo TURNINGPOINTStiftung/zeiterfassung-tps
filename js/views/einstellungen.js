@@ -331,7 +331,7 @@ export function showAddUser(){
 export function showEditUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
-  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword('${id}')">🔑 Einmal-Passwort</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword('${id}')">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull('${id}')" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
 }
@@ -362,6 +362,31 @@ export async function resetUserPassword(id){
     <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
     <p style="font-size:12px;color:var(--muted);margin:12px 0 0">Klappt die Anmeldung damit nicht, ist das Konto bereits auf ein eigenes Firebase-Passwort „migriert" – dann ist ein Reset am Firebase-Konto nötig (Sonderfall, wie bei Jörg).</p>
     <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+}
+
+// Kaputtes/gelöschtes Firebase-Login-Konto neu aufsetzen (Sonderfall, z. B. beschädigte
+// Umlaut-ID): legt das Konto neu an (Stabil-PW) + Verzeichnis + Allowlist und setzt gleich
+// ein Einmal-Passwort. Voraussetzung: das alte Konto ist in der Firebase-Konsole gelöscht.
+export async function reprovisionUserFull(id){
+  const cu=window.cu;
+  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  const u=getUser(id); if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  if(!window.reprovisionUser){ toast('Funktion nicht verfügbar.','err'); return; }
+  if(!confirm('Zugang für '+(u.name||id)+' NEU aufsetzen?\n\nNur nötig, wenn sich die Person trotz Einmal-Passwort nicht anmelden kann (kaputtes Login-Konto).\n\nWICHTIG: Das alte Login-Konto muss vorher in der Firebase-Konsole (Authentication) gelöscht sein.')) return;
+  try{
+    const r=await window.reprovisionUser(id);
+    const temp=_genTempPw(); const hash=await makePwRecord(temp);
+    await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; });
+    openModal(`<h3>🔧 Zugang neu aufgesetzt</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">${esc(r.note||'')} · <b>${esc(u.name||id)}</b>. Einmal-Passwort:</p>
+      <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
+      <p style="font-size:12px;color:var(--muted);margin:12px 0 0">Anmeldung: Name + dieses Passwort, danach im Profil ändern.</p>
+      <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+  }catch(e){
+    openModal(`<h3>Konnte nicht neu aufsetzen</h3>
+      <p style="font-size:13px;color:var(--danger);white-space:pre-wrap">${esc((e&&e.message)||String(e))}</p>
+      <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">OK</button></div>`);
+  }
 }
 
 export function showEditDpw(id){

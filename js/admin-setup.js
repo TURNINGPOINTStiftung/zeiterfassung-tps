@@ -70,5 +70,34 @@ export async function runSecuritySetup(opts){
   return summary;
 }
 
+// Einzelnen Nutzer neu provisionieren (Firebase-Konto + loginDir + allowed).
+// Für kaputte/gelöschte Konten (z. B. beschädigte Umlaut-ID): legt das Konto mit dem
+// Stabil-Passwort NEU an und trägt Verzeichnis + Allowlist ein. Existiert das Konto noch
+// mit UNBEKANNTEM Passwort, muss es zuerst in der Firebase-Konsole (Authentication)
+// gelöscht werden – dann liefert diese Funktion eine klare Meldung.
+export async function reprovisionUser(id){
+  const data=getData();
+  const u=(data.users||[]).find(x=>x&&x.id===id);
+  if(!u) throw new Error('Nutzer nicht gefunden.');
+  if(!firebase.auth().currentUser) throw new Error('Bitte zuerst als Admin anmelden.');
+  const sec=_secApp();
+  const em=_accountEmail(id), pw=_stableAuthPw(id);
+  let uid=null, note='';
+  try{ const c=await sec.auth().createUserWithEmailAndPassword(em, pw); uid=c.user.uid; note='Konto neu angelegt'; }
+  catch(e){
+    if(e && e.code==='auth/email-already-in-use'){
+      try{ const c=await sec.auth().signInWithEmailAndPassword(em, pw); uid=c.user.uid; note='Konto vorhanden (Stabil-PW ok)'; }
+      catch(e2){ try{ await sec.auth().signOut(); }catch(_){}
+        throw new Error('Das Login-Konto '+em+' existiert noch mit einem unbekannten Passwort. Bitte es zuerst in der Firebase-Konsole unter „Authentication" löschen und dann erneut „Zugang neu aufsetzen".'); }
+    } else { throw e; }
+  }
+  try{ await sec.auth().signOut(); }catch(_){}
+  const db=firebase.database();
+  await db.ref('zeiterfassung/loginDir').update({ [id]: { name: u.name||id } });
+  if(uid) await db.ref('zeiterfassung/allowed').update({ [uid]: true });
+  return { id, uid, email:em, note };
+}
+
 // Für Konsole/Button erreichbar machen.
 try{ window.runSecuritySetup = runSecuritySetup; }catch(_){}
+try{ window.reprovisionUser = reprovisionUser; }catch(_){}
