@@ -272,11 +272,12 @@ function crmSetupModuleBar(){
     const bar=document.getElementById('module-bar');
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
     ensureCrmReady().then(()=>{
-      // Kanban für ALLE (jede Person hat „Meine Aufgaben"); Kontakte-Pfad nur, wenn man
-      // überhaupt Kontakte sehen darf (sonst leer). Tiefe der Sicht regelt das CRM selbst.
+      // Kanban + Kontakte-Pfad vorerst NUR für Personen mit CRM-Zugriff (Level != none).
+      // Fein-granulare Rechte pro Pfad kommen später in der Verwaltung. Tiefe der Sicht regelt das CRM selbst.
       const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
       const _lvl=(function(){ try{ return accessLevel(); }catch(e){ return 'none'; } })();
-      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:true, crm:_lvl!=='none', auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
+      const _hasCrm=_lvl!=='none';
+      const show={ zeiterfassung:!cu.crmOnly, website:isAdmin, forum:isAdmin, kanban:_hasCrm, crm:_hasCrm, auswertung:isMgr, verwaltung:_canVerw(), messe:crmFull() };
       let count=0;
       Object.keys(show).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
@@ -716,12 +717,12 @@ function _crmSyncModuleHighlight(){
     const name = isK ? 'kanban' : 'crm';
     window._crmModule = name; window._activeModule = name;
     try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
-    const cur=document.getElementById('mb-current'); if(cur) cur.textContent = isK?'Kanban':'CRM';
+    const cur=document.getElementById('mb-current'); if(cur) cur.textContent = isK?'Projektmanagement':'CRM';
     document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===name));
   }catch(e){}
 }
 export function renderCRM(){ window._crmModule='crm'; _crmRenderNow('CRM'); }
-export function renderKanban(){ window._crmModule='kanban'; _crmRenderNow('Kanban'); }
+export function renderKanban(){ window._crmModule='kanban'; _crmRenderNow('Projektmanagement'); }
 function _crmRenderNow(label){
   try{
     injectStyles();
@@ -918,13 +919,17 @@ function barHtml(){
   const view = crmCanView();
   const lvl  = accessLevel();
   const isKanban = window._crmModule==='kanban';
-  const homeActive = (mode==='teams'||mode==='meine'||mode==='veranstaltungen');
-  const homeLabel  = view ? '👥 Teams' : '🙋 Meine Aufgaben';
-  const tabs = [];
+  // Projektmanagement-Pfad (intern „kanban"): die Reiter-Leiste ergibt hier keinen Sinn –
+  // es gibt nur EINEN Bereich, und die „Im ganzen CRM suchen"-Suche ist kontaktbezogen.
+  // Darum nur die 🔔-Glocke (nur Voll-Sicht); eingeschränkte Nutzer bekommen gar keine Leiste.
   if(isKanban){
-    // Kanban-Pfad: nur die Board-Ansicht (Teams / Meine Aufgaben; Veranstaltungen sind hier integriert)
-    tabs.push(`<button class="crm-tree-tab${homeActive?' active':''}" onclick="crmShowTeams()">${homeLabel}</button>`);
-  } else if(view){
+    if(!view) return '';
+    const bcK=_crmNotifBadgeCount();
+    const bellK=`<button id="crm-bell" class="crm-bell${bcK?' has-new':''}" title="Neu im CRM" onclick="crmToggleNotif(event)">🔔<span id="crm-bell-badge" class="crm-bell-badge"${bcK?'':' style="display:none"'}>${bcK?(bcK>99?'99+':bcK):''}</span></button>`;
+    return `<div class="crm-bar crm-bar-pm"><span style="margin-left:auto"></span>${bellK}</div>`;
+  }
+  const tabs = [];
+  if(view){
     // Kontakte-Pfad: EIN gemeinsamer „Kontakte"-Reiter (Bereiche sind Kategorien im Filter) + Verteiler.
     tabs.push(`<button class="crm-tree-tab${mode==='kontakte'?' active':''}" onclick="crmShowKontakte()">📇 Kontakte</button>`);
     tabs.push(`<button class="crm-tree-tab${mode==='verteiler'?' active':''}" onclick="crmShowVerteiler()">✉️ Verteiler</button>`);
