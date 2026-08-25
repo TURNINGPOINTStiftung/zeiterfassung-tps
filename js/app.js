@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v286':'';
+  if(_hv) _hv.textContent=_showVer?'v287':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -72,12 +72,12 @@ export function initApp(){
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
   const _canVerw = isAdmin || hasPermission('zugriff_verwaltung',cu);
-  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || (isMgr && _lastMod==='auswertung') || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || (isMgr && _lastMod==='auswertung') || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
 }
 
-const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',auswertung:'Auswertung',verwaltung:'Verwaltung'};
+const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Kanban',auswertung:'Auswertung',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
@@ -95,14 +95,17 @@ export function switchModule(name){
   const main=document.querySelector('.app-content');
   if(nav) nav.style.display=isZE?'':'none';
   if(main) main.style.display=isZE?'':'none';
+  // Kanban ist ein eigener ☰-Pfad, nutzt aber denselben #mod-crm-Rahmen (gemeinsame CRM-Engine).
+  const frame = (name==='kanban') ? 'crm' : name;
   ['website','forum','crm','auswertung','verwaltung'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
-    if(el) el.style.display=(name===m)?'flex':'none';
+    if(el) el.style.display=(frame===m)?'flex':'none';
   });
   closeModuleMenu();
-  // CRM/Auswertung/Verwaltung rendern sich selbst (isoliert). In try/catch, damit ein
+  // CRM/Kanban/Auswertung/Verwaltung rendern sich selbst (isoliert). In try/catch, damit ein
   // Fehler dort niemals das Umschalten oder die Zeiterfassung beeinträchtigt.
   if(name==='crm'){ try{ window.renderCRM&&window.renderCRM(); }catch(e){ console.error('CRM Render-Fehler (ignoriert):',e); } }
+  if(name==='kanban'){ try{ window.renderKanban&&window.renderKanban(); }catch(e){ console.error('Kanban Render-Fehler (ignoriert):',e); } }
   if(name==='auswertung'){ try{ window.renderAuswertung&&window.renderAuswertung(); }catch(e){ console.error('Auswertung Render-Fehler (ignoriert):',e); } }
   if(name==='verwaltung'){ try{ window.renderVerwaltung&&window.renderVerwaltung(); }catch(e){ console.error('Verwaltung Render-Fehler (ignoriert):',e); } }
 }
