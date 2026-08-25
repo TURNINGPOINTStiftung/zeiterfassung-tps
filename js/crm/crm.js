@@ -382,6 +382,8 @@ function injectStyles(){
   .verw-tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 15px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:8px 8px 0 0;transition:color .12s,background .12s}
   .verw-tab:hover{color:var(--primary);background:rgba(32,56,105,.05)}
   .verw-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+  .verw-tabsep{align-self:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 6px 0 12px;margin-left:6px;border-left:1px solid var(--border);white-space:nowrap}
+  .verw-tabsep.lead{border-left:none;margin-left:0;padding-left:2px}
   .crm-trees{display:flex;gap:6px;flex-wrap:wrap}
   .crm-tree-tab{background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:7px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .crm-tree-tab:hover{border-color:var(--primary-l);color:var(--primary);background:#f5f8fd}
@@ -3835,11 +3837,13 @@ function ensureVerwMounted(){
   }
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
    <div class="verw-tabs">
+     <span class="verw-tabsep lead">Übergreifend</span>
      <button class="verw-tab" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
      <button class="verw-tab" data-vtab="org" onclick="verwShowTab('org')">🏢 Organisation</button>
      <button class="verw-tab" data-vtab="zugriff" onclick="verwShowTab('zugriff')">🔐 Zugriffe</button>
-     <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
      <button class="verw-tab" data-vtab="data" onclick="verwShowTab('data')">💾 Daten &amp; Backup</button>
+     <span class="verw-tabsep">Bereiche</span>
+     <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
    </div>
    <div class="crm-body">
      <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
