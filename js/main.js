@@ -1,6 +1,6 @@
 // ── Core modules ──────────────────────────────────────────────────
-import { getUser } from './data.js';
-import { _TPS_LOGO, EMAILJS_PUBLIC_KEY } from './config.js';
+import { getUser, setDataCache } from './data.js';
+import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY } from './config.js';
 import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
@@ -306,12 +306,23 @@ initZoom();
 initAuthEvents();
 
 initFirebase().then(async function(){
-  document.getElementById('fb-loading').style.display='none';
+  // Splash NICHT sofort ausblenden – sonst blitzt der Login-Screen auf, während der Auto-Login
+  // noch lädt. Der Splash bleibt, bis entweder die App gezeigt wird ODER klar ist, dass keine
+  // (persistierte) Sitzung existiert.
   initFirebaseEvents();
   checkPasswordResetToken();
 
+  const _hideSplash=()=>{ try{ document.getElementById('fb-loading').style.display='none'; }catch(_){} };
+  const _showApp=(id)=>{
+    window.cu=getUser(id);
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').classList.add('visible');
+    _hideSplash();
+    try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
+    try{ updateAbBadge(); }catch(e){}
+  };
+
   // Einmaliges erzwungenes Neu-Anmelden (Umstellung auf echte Firebase-Konten).
-  // Zahl hochsetzen, um erneut für alle einen Re-Login zu erzwingen.
   try{
     const _RELOGIN_EPOCH='2';
     if(localStorage.getItem('tp_zt_relogin_epoch')!==_RELOGIN_EPOCH){
@@ -322,21 +333,28 @@ initFirebase().then(async function(){
   }catch(e){}
 
   // Auto-Login: bestehende (persistierte) Firebase-Sitzung + gemerkte Nutzer-ID.
-  // Erst wenn Firebase eine Sitzung hat, werden die vollen Daten geladen (Regeln!).
   try{
     const savedId=localStorage.getItem('tp_zt_session');
     if(savedId && firebase.auth().currentUser){
-      await window.loadFullData();
-      if(getUser(savedId)){
-        window.cu=getUser(savedId);
-        document.getElementById('login-screen').style.display='none';
-        document.getElementById('app').classList.add('visible');
-        try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
-        try{ updateAbBadge(); }catch(e){}
+      // Schnellstart: gibt es einen lokalen Stand mit genau diesem Nutzer, App SOFORT daraus zeigen
+      // (kein Login-Aufblitzen, kein Warten); volle Daten laufen im Hintergrund nach.
+      let fast=false;
+      try{
+        const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
+        if(ls&&Array.isArray(ls.users)&&ls.users.some(x=>x&&x.id===savedId)){ setDataCache(ls); fast=true; }
+      }catch(_){}
+      if(fast){
+        _showApp(savedId);
+        window.loadFullData().then(()=>{ try{ window.cu=getUser(savedId); }catch(_){} }).catch(e=>console.error('loadFullData (Hintergrund):',e));
         return;
       }
+      // Kein lokaler Stand → Splash bleibt an, volle Daten laden, dann App zeigen (kein Aufblitzen).
+      await window.loadFullData();
+      if(getUser(savedId)){ _showApp(savedId); return; }
     }
   }catch(e){ console.error('Auto-Login Fehler:',e); }
+  // Keine Sitzung → erst JETZT Splash weg und Login-Bildschirm zeigen.
+  _hideSplash();
   try{ populateLoginDropdown(); }
   catch(e){
     const el=document.getElementById('login-user-list');
