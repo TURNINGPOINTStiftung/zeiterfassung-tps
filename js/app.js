@@ -11,7 +11,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v287':'';
+  if(_hv) _hv.textContent=_showVer?'v288':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -77,7 +77,7 @@ export function initApp(){
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
 }
 
-const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Kanban',auswertung:'Auswertung',verwaltung:'Verwaltung'};
+const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',auswertung:'Auswertung',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
