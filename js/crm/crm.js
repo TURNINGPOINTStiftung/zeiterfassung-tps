@@ -4647,6 +4647,14 @@ function paintVerwImpExp(){
       <button class="btn-sm-crm primary" onclick="crmRepairLogins(this)">🔧 Reparieren</button>
     </div>
     <pre id="verw-repair-out" class="small" style="display:none;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;max-height:280px;overflow:auto"></pre>
+  </div>
+  <div class="crm-sec">
+    <h4><span class="ttl">🔤 Umlaut-IDs bereinigen</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Enthält eine Login-ID ein <b>ö/ä/ü/ß</b> (z. B. „jörg"), wird sie als Firebase-Schlüssel nicht zuverlässig gespeichert – Ursache des wiederkehrenden Login-Fehlers. Dieser Knopf benennt die ID im <b>gesamten Datenbestand</b> auf reines ASCII um (z. B. jörg→joerg): Zeiteinträge, Abwesenheiten, Berichte, Stempel, CRM-Zugriff und Login. Der <b>Anzeigename bleibt</b> („Jörg Aleith"). Bitte vorher <b>Backup ziehen</b> (Daten → Export); die Person muss sich danach einmal neu einloggen.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-sm-crm primary" onclick="crmMigrateUmlautIds(this)">🔤 Umlaut-IDs suchen &amp; umstellen</button>
+    </div>
+    <div class="small" style="color:var(--muted);margin-top:6px">Protokoll erscheint oben im selben Feld.</div>
   </div>`;
 }
 function crmIeSelectAll(v){ document.querySelectorAll('.crm-ie-col').forEach(x=>{ x.checked=!!v; }); }
@@ -4704,6 +4712,28 @@ async function crmRepairLogins(btn){
   }catch(e){ log('Fehler: '+((e&&e.message)||e)); toast('Reparatur fehlgeschlagen: '+((e&&e.message)||e),'err'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔧 Reparieren'; } }
 }
+// Umlaut-/Sonderzeichen-IDs auf reines ASCII umstellen (behebt die Ursache des „ö"-Login-Fehlers dauerhaft).
+async function crmMigrateUmlautIds(btn){
+  const lines=[]; const log=m=>_repairLog(lines,m);
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  try{
+    if(!window.migrateUserId){ log('Migrations-Funktion nicht verfügbar (App aktualisieren).'); return; }
+    const users=(getData().users||[]).filter(u=>u&&u.id);
+    const nonAscii=users.filter(u=>/[^\x00-\x7F]/.test(u.id));
+    if(!nonAscii.length){ log('✓ Keine Umlaut-/Sonderzeichen-IDs gefunden – nichts zu tun.'); return; }
+    const trans=id=>String(id).replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue').replace(/ß/g,'ss').replace(/[^A-Za-z0-9._-]/g,'').toLowerCase()||'u';
+    log('Gefunden: '+nonAscii.map(u=>u.id+' → '+trans(u.id)).join(', '));
+    for(const u of nonAscii){
+      const target=trans(u.id);
+      if(getData().users.find(x=>x&&x.id===target)){ log('⚠ '+u.id+' → '+target+' übersprungen (Ziel-ID existiert bereits).'); continue; }
+      if(!window.confirm('Login-ID von „'+(u.name||u.id)+'" von „'+u.id+'" auf „'+target+'" umstellen?\n\nVerschiebt ALLE Daten (Zeiten, Abwesenheiten, Berichte, Stempel, CRM, Login). Backup vorhanden?')){ log('Abgebrochen für '+u.id+'.'); continue; }
+      log('— Migriere '+u.id+' → '+target+' …');
+      await window.migrateUserId(u.id, target, {log});
+    }
+    toast('Umlaut-IDs bereinigt – siehe Protokoll.','ok');
+  }catch(e){ log('Fehler: '+((e&&e.message)||e)); toast('Fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔤 Umlaut-IDs suchen & umstellen'; } }
+}
 function _ieStatus(t){ const el=document.getElementById('crm-ie-status'); if(el) el.textContent=t||''; }
 async function crmExportXlsx(){
   const keys=Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value);
@@ -4759,7 +4789,7 @@ Object.assign(window, {
   crmRestrictedOpen, crmHistWindow, crmHistReload, crmHistRestore, crmHistToggle,
   _refreshVerwUsers: paintVerwUsers,
   // Import / Export (Excel)
-  crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmCheckLogins, crmRepairLogins,
+  crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmCheckLogins, crmRepairLogins, crmMigrateUmlautIds,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
   crmCfgCatEdit, crmCfgCatSave, crmCfgCatMove, crmCfgCatDel,
