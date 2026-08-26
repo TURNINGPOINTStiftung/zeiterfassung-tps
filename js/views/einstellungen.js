@@ -22,6 +22,17 @@ const _UF_PATHS=[
   {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
 ];
 
+// Zugriffs-Block im Mitarbeiter-Dialog: Segmentschalter Kein/Nutzen/Verwaltend auf-/zuklappen.
+// (Inline-<script> läuft bei innerHTML nicht → globaler Handler über onchange.)
+window.ufSetMod=function(key){
+  const radios=document.querySelectorAll('input[name="ufmod-'+key+'"]');
+  let v='kein';
+  radios.forEach(r=>{ if(r.checked) v=r.value; const o=r.closest('.uf-seg-opt'); if(o) o.classList.toggle('on', r.checked); });
+  const sub=document.getElementById('ufsub-'+key); if(sub) sub.style.display=(v==='kein')?'none':'';
+  const adm=document.getElementById('ufadm-'+key); if(adm) adm.style.display=(v==='verwaltend')?'':'none';
+  if(key==='crm'){ const lv=document.getElementById('uf-crmlevel'); const uv=document.getElementById('uf-crmverein'); if(uv) uv.style.display=(v!=='kein'&&lv&&lv.value==='verein')?'':'none'; }
+};
+
 export function renderSettings(){
   const cu=window.cu;
   const d=getData();
@@ -576,43 +587,42 @@ function userForm(u={}){
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
     </div>
-    ${u.id==='admin'?'':(()=>{
-      const acc=(window.crmUserAccess&&window.crmUserAccess(u.id))||{level:'none',vereinIds:[]};
+    ${(()=>{
+      if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>
+        <div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`;
+      const acc=(window.crmModuleAccess&&window.crmModuleAccess(u))||{};
+      const st=k=>acc[k]||'kein';
+      const crmAcc=(window.crmUserAccess&&window.crmUserAccess(u.id))||{level:'none',vereinIds:[]};
+      const accIds=crmAcc.vereinIds||[];
       const vereine=(window.crmVereinList&&window.crmVereinList())||[];
-      const accIds=acc.vereinIds||[];
       const vChecks=vereine.length
         ? vereine.map(v=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" class="uf-crmv" value="${esc(v.id)}"${accIds.includes(v.id)?' checked':''}> ${esc(v.name)}</label>`).join('')
         : '<span style="font-size:12px;color:var(--muted)">Keine Vereine im CRM angelegt.</span>';
-      const LV=[['none','Kein CRM-Zugriff'],['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
-      return `<div class="uf-section-head">📇 CRM-Zugriff</div>
-        <div class="form-group"><label>CRM-Zugriffsstufe</label>
-          <select id="uf-crmlevel" onchange="var v=document.getElementById('uf-crmverein'); if(v) v.style.display=this.value==='verein'?'':'none';">
-            ${LV.map(([L,t])=>`<option value="${L}"${acc.level===L?' selected':''}>${t}</option>`).join('')}
-          </select>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">Steuert, was diese Person im CRM sieht und darf. „Erweitert" = alles ansehen, aber nichts anlegen/löschen.</div>
-        </div>
-        <div class="form-group" id="uf-crmverein" style="display:${acc.level==='verein'?'':'none'}">
-          <label>Zugeordnete Vereine</label>
-          <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${vChecks}</div>
-        </div>`;
+      const TRI=[['kein','Kein'],['nutzen','Nutzen'],['verwaltend','Verwaltend']];
+      const seg=(key,cur)=>`<div class="uf-seg">${TRI.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod('${key}')" style="display:none">${o[1]}</label>`).join('')}</div>`;
+      const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${key!=='crm'?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).</div>`:''}</div></div>`;
+      const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
+      const crmBody=`<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">Umfang</label>
+          <select id="uf-crmlevel" onchange="ufSetMod('crm')">${LV.map(([L,t])=>`<option value="${L}"${acc.crmLevel===L?' selected':''}>${t}</option>`).join('')}</select></div>
+        <div class="form-group" id="uf-crmverein" style="display:${(st('crm')!=='kein'&&acc.crmLevel==='verein')?'':'none'}"><label style="font-size:12px">Zugeordnete Vereine</label>
+          <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:120px;overflow-y:auto">${vChecks}</div></div>
+        <div id="ufadm-crm" style="display:${st('crm')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf CRM-Einstellungen (Kategorien, Felder, Funktionen …) verwalten.</div>`;
+      const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen']];
+      const zeOn=k=>(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,k))?!!u.perms[k]:(DEFAULT_PERMISSIONS[k]?.includes(u.role||'mitarbeiter')??false);
+      const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span><span style="font-size:11px;color:var(--muted)">An/Aus oben bei den Arbeitszeiten</span></div>
+        <div class="uf-mod-body">${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 0 3px;cursor:pointer;font-size:13px;margin-top:4px;border-top:1px dashed var(--border)"><input type="checkbox" id="uf-perm-zugriff_verwaltung_ze" ${(u.perms&&u.perms['zugriff_verwaltung_ze'])?'checked':''} style="width:auto;cursor:pointer"> 🛠️ Verwalten – Zeiterfassungs-Einstellungen ändern</label></div></div>`;
+      return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
+        <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
+        ${zeBlock}
+        ${modBlock('crm','📇','CRM (Kontakte)',crmBody)}
+        ${modBlock('kanban','🗂️','Projektmanagement')}
+        ${modBlock('verteiler','✉️','Verteiler')}
+        ${modBlock('ki','🧠','KI')}
+        ${modBlock('messe','🎪','Messemodus')}
+        ${modBlock('auswertung','📊','Auswertung')}
+        <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}
-    <div class="uf-section-head">🔐 Berechtigungen <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
-    ${u.id==='admin'
-      ? `<div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`
-      : `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Häkchen = erlaubt. Überschreibt die Standardrechte der Rolle.</div>
-         <div id="uf-perms" style="padding:6px;border:1.5px solid var(--border);border-radius:6px">
-           ${PERM_DEFS.map(p=>{
-             const on=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,p.key))?!!u.perms[p.key]:(DEFAULT_PERMISSIONS[p.key]?.includes(u.role||'mitarbeiter')??false);
-             return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${p.key}" ${on?'checked':''} style="width:auto;cursor:pointer"> ${esc(p.label)}</label>`;
-           }).join('')}
-         </div>`}
-    ${u.id==='admin' ? '' : `<div class="uf-section-head" style="margin-top:14px">🧭 Modul-Zugriff <span style="font-size:11px;color:var(--muted)">(persönliche Ausnahme)</span></div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Standard = wie Rolle / Zugriffs-Matrix. „Ja"/„Nein" übersteuert nur für diese Person.</div>
-      <div style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;display:grid;grid-template-columns:1fr auto;gap:5px 12px;align-items:center">
-        ${_UF_PATHS.map(p=>{ const v=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_'+p.key))?(u.perms['path_'+p.key]?'ja':'nein'):'std';
-          return `<span style="font-size:13px">${p.icon} ${esc(p.label)}</span><select id="uf-path-${p.key}" style="font-size:13px;padding:3px 6px;width:auto"><option value="std"${v==='std'?' selected':''}>Standard</option><option value="ja"${v==='ja'?' selected':''}>Ja</option><option value="nein"${v==='nein'?' selected':''}>Nein</option></select>`;
-        }).join('')}
-      </div>`}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
 }
 
@@ -665,11 +675,19 @@ function collectUserForm(){
   // Aktive Slots + im Verlauf mitgeführte (abgelaufene) Zeiträume zusammenführen.
   const lecturePeriods=wsCollectPeriods('uf-lp',4);
   const lectureFreeDays=wsCollectPeriods('uf-lf',6);
-  // Pro-User-Berechtigungen (überschreiben die Rolle). Admin: keine Häkchen → leer.
+  // Zugriffe pro Person (neues Modell). Admin: keine Steuerelemente → leer (Admin darf ohnehin alles).
   const perms={};
-  PERM_DEFS.forEach(p=>{ const cb=document.getElementById('uf-perm-'+p.key); if(cb) perms[p.key]=!!cb.checked; });
-  // Persönliche Modul-Zugriff-Ausnahmen: Standard → nichts setzen; Ja/Nein → explizit.
-  _UF_PATHS.forEach(p=>{ const sel=document.getElementById('uf-path-'+p.key); if(sel){ const v=sel.value; if(v==='ja') perms['path_'+p.key]=true; else if(v==='nein') perms['path_'+p.key]=false; } });
+  // 1) Zeiterfassung-Feinrechte (Checkboxen) + ZE-Verwalten
+  ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel','zugriff_verwaltung_ze']
+    .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
+  // 2) Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
+  const _mod=k=>{ const r=document.querySelector('input[name="ufmod-'+k+'"]:checked'); return r?r.value:null; };
+  [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung']]
+    .forEach(([k,vk])=>{ const s=_mod(k); if(s===null) return; perms['path_'+k]=(s!=='kein'); if(s==='verwaltend') perms[vk]=true; });
+  // 3) CRM: „Verwaltend" → CRM-Verwalter-Recht (Umfang/Level separat via crmSetUserAccess)
+  if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;
+  // 4) System-Verwaltung (voller Admin)
+  const _sys=_mod('system'); if(_sys!==null) perms['zugriff_verwaltung']=(_sys==='ja');
   const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
   const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
   const noTimesheet=!!(document.getElementById('uf-notimesheet')?.checked);
@@ -710,7 +728,8 @@ export async function saveNewUser(){
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   const _plainPw=u.pw;  // Klartext vor dem Hashen für das Firebase-Konto
   u.pw=await makePwRecord(u.pw);
-  const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
+  const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
+  const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>d.users.push(u)); }
@@ -759,7 +778,8 @@ export async function saveEditUser(id){
   } else {
     delete u.paramHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
   }
-  const _crmLvl=document.getElementById('uf-crmlevel')?.value||'none';
+  const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
+  const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }

@@ -287,11 +287,13 @@ const _ROLE_COLS=[
   {key:'berater',           label:'Berater'},
   {key:'freiberuflich',     label:'Freib.'},
 ];
+// Zugriffsstufe für EINEN beliebigen Nutzer (nicht nur window.cu) – wie accessLevel(), aber parametrisch.
+function _accessLevelOf(u){ if(!u) return 'none'; if(u.role==='admin') return 'admin'; try{ const a=getAccess(u.id); return (a&&a.level)||'none'; }catch(e){ return 'none'; } }
 // STANDARD-Verhalten (exakt wie bisher hartkodiert) – gilt, solange die Matrix „Standard" sagt.
 function _defaultPathAccess(key, cu){
   const isAdmin=cu.role==='admin';
   const isMgr=isAdmin||cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
-  let lvl='none'; try{ lvl=accessLevel(); }catch(e){}
+  const lvl=_accessLevelOf(cu);
   const hasCrm=lvl!=='none';
   const canViewCrm=(lvl==='admin'||lvl==='full'||lvl==='readonly');
   switch(key){
@@ -319,6 +321,33 @@ function canUsePath(key, cu){
   // 3. Standard (= bisheriges Verhalten).
   return _defaultPathAccess(key, cu);
 }
+
+// Darf dieser Nutzer den Bereich VERWALTEN (Einstellungen ändern)? Pro Modul.
+function _canAdminFor(key, u){
+  if(!u) return false;
+  if(u.role==='admin') return true;
+  const p=u.perms||{};
+  if(p['zugriff_verwaltung']) return true;               // Voll-Admin darf alles verwalten
+  if(key==='crm')          return !!p['zugriff_verwaltung_crm'];
+  if(key==='zeiterfassung')return !!p['zugriff_verwaltung_ze'];
+  return !!p['verw_'+key];
+}
+
+// Effektiver Modul-Zugriff EINES Nutzers, je Modul 'kein'|'nutzen'|'verwaltend'
+// (+ crmLevel = Umfang bei CRM, + system = Voll-Verwaltung ja/kein).
+// Spiegelt exakt das aktuelle Verhalten wider → zum Vorbelegen des Mitarbeiter-Dialogs
+// UND als eine Quelle der Wahrheit. Reine Lese-Funktion, ändert nichts.
+function crmModuleAccess(u){
+  const out={};
+  ['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung'].forEach(k=>{
+    out[k] = !canUsePath(k, u) ? 'kein' : (_canAdminFor(k, u) ? 'verwaltend' : 'nutzen');
+  });
+  const lvl=_accessLevelOf(u);
+  out.crmLevel = (lvl==='none'||lvl==='admin') ? 'full' : lvl;   // Umfang, wenn CRM='nutzen'
+  out.system   = (u && (u.role==='admin' || (u.perms && u.perms['zugriff_verwaltung']))) ? 'ja' : 'kein';
+  return out;
+}
+window.crmModuleAccess = crmModuleAccess;
 
 function crmSetupModuleBar(){
   try{
