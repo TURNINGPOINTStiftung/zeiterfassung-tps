@@ -4660,9 +4660,12 @@ async function crmCheckLogins(btn){
     const dir=(await firebase.database().ref('zeiterfassung/loginDir').once('value')).val()||{};
     const users=(getData().users||[]).filter(u=>u&&u.id);
     const recIds=new Set(users.map(u=>u.id));
+    // Verzeichnis nach ECHTER id indizieren (aus dem Wert dir[k].id; Fallback = Schlüssel).
+    // Umlaut-Schlüssel sind verstümmelt (j?rg) → NICHT über den Schlüssel matchen.
+    const byId={}; Object.keys(dir).forEach(k=>{ const e=dir[k]||{}; byId[e.id||k]={name:e.name}; });
     const missing=[], mismatch=[], orphans=[];
-    users.forEach(u=>{ const d=dir[u.id]; if(!d){ missing.push(u.name+' ('+u.id+')'); return; } if(norm(d.name)!==norm(u.name)) mismatch.push(u.name+' → Verzeichnis: "'+(d.name||'')+'"'); });
-    Object.keys(dir).forEach(id=>{ if(!recIds.has(id)) orphans.push((dir[id]&&dir[id].name||'?')+' ('+id+')'); });
+    users.forEach(u=>{ const d=byId[u.id]; if(!d){ missing.push(u.name+' ('+u.id+')'); return; } if(norm(d.name)!==norm(u.name)) mismatch.push(u.name+' → Verzeichnis: "'+(d.name||'')+'"'); });
+    Object.keys(dir).forEach(k=>{ const e=dir[k]||{}; if(!recIds.has(e.id||k)) orphans.push((e.name||'?')+' ('+k+')'); });
     log('Mitarbeiter: '+users.length+' · Verzeichnis-Einträge: '+Object.keys(dir).length);
     log(missing.length?('❌ FEHLT im Login-Verzeichnis ('+missing.length+'): '+missing.join(', ')):'✓ Kein Mitarbeiter fehlt im Verzeichnis');
     log(mismatch.length?('⚠ Name weicht ab ('+mismatch.length+'): '+mismatch.join('  |  ')):'✓ Alle Namen stimmen überein');
@@ -4687,11 +4690,14 @@ async function crmRepairLogins(btn){
     try{
       const dir2=(await firebase.database().ref('zeiterfassung/loginDir').once('value')).val()||{};
       const recIds=new Set((getData().users||[]).map(u=>u&&u.id).filter(Boolean));
-      const orphans=Object.keys(dir2).filter(id=>!recIds.has(id));
+      // Waise = Eintrag, dessen ECHTE id (Wert dir2[k].id; Fallback Schlüssel) zu KEINEM
+      // Datensatz gehört. So bleibt der neue ASCII-Eintrag (id im Wert) erhalten, nur die
+      // verstümmelten Alt-Schlüssel (j?rg, ohne id-im-Wert) fliegen raus.
+      const orphans=Object.keys(dir2).filter(k=>{ const e=dir2[k]||{}; return !recIds.has(e.id||k); });
       if(orphans.length){
-        const upd={}; orphans.forEach(id=>{ upd[id]=null; });
+        const upd={}; orphans.forEach(k=>{ upd[k]=null; });
         await firebase.database().ref('zeiterfassung/loginDir').update(upd);
-        log('🧹 Verwaiste Einträge entfernt ('+orphans.length+'): '+orphans.map(id=>((dir2[id]&&dir2[id].name)||'?')+' ('+id+')').join(', '));
+        log('🧹 Verwaiste Einträge entfernt ('+orphans.length+'): '+orphans.map(k=>((dir2[k]&&dir2[k].name)||'?')+' ('+k+')').join(', '));
       } else { log('Keine verwaisten Einträge.'); }
     }catch(e){ log('Aufräumen übersprungen: '+((e&&e.message)||e)); }
     toast(sum.failed?('Fertig, aber '+sum.failed+' Problem(e) – siehe Protokoll.'):'Zugänge geprüft & aktualisiert ✓', sum.failed?'err':'ok');

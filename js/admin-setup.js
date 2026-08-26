@@ -14,6 +14,16 @@ import { getData } from './data.js';
 const _accountEmail = id => String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 const _stableAuthPw = id => 'tpsfb$'+String(id||'').toLowerCase()+'$'+_PW_SALT;
 
+// WICHTIG: Firebase verstümmelt Umlaute in DATENBANK-SCHLÜSSELN zu U+FFFD (Werte bleiben ok).
+// Deshalb wird das Login-Verzeichnis unter einem ASCII-Schlüssel abgelegt (ö→oe usw.), und die
+// ECHTE id steht im WERT ({id,name}). So bleibt der Schlüssel stabil (kein „j?rg"-Endlosfehler),
+// und beim Lesen wird die echte id aus dem Wert genommen (firebase.js getLoginDirUsers).
+const _dirKey = id => String(id||'')
+  .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+  .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+  .replace(/ß/g,'ss')
+  .replace(/[^A-Za-z0-9._-]/g,'') || 'u';
+
 // Liefert eine sekundäre App-Instanz (damit die Admin-Sitzung erhalten bleibt).
 function _secApp(){
   const cfg=firebase.app().options;
@@ -42,8 +52,9 @@ export async function runSecuritySetup(opts){
   for(const u of users){
     if(!u||!u.id) continue;
     const id=u.id;
-    loginDir[id]={ name:u.name||id };   // Name im Verzeichnis immer aktuell halten
-    if(existingDir[id]){ skipped++; log(`${id}: bereits eingerichtet (übersprungen)`); continue; }
+    const dk=_dirKey(id);
+    loginDir[dk]={ id, name:u.name||id };   // ASCII-Schlüssel + echte id im Wert (Umlaut-sicher)
+    if(existingDir[dk]){ skipped++; log(`${id}: bereits eingerichtet (übersprungen)`); continue; }
     const em=_accountEmail(id);
     const pw=_stableAuthPw(id);
     let uid=null;
@@ -93,7 +104,7 @@ export async function reprovisionUser(id){
   }
   try{ await sec.auth().signOut(); }catch(_){}
   const db=firebase.database();
-  await db.ref('zeiterfassung/loginDir').update({ [id]: { name: u.name||id } });
+  await db.ref('zeiterfassung/loginDir').update({ [_dirKey(id)]: { id, name: u.name||id } });
   if(uid) await db.ref('zeiterfassung/allowed').update({ [uid]: true });
   return { id, uid, email:em, note };
 }

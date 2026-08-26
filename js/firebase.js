@@ -134,7 +134,9 @@ export async function initFirebase(){
   try{
     const snap=await Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(6000)]);
     const dir=snap.val()||{};
-    window._loginDir=Object.keys(dir).map(id=>({id,name:(dir[id]&&dir[id].name)||id,email:(dir[id]&&dir[id].email)||''}));
+    // id kommt aus dem WERT (dir[k].id), NICHT aus dem Schlüssel: Umlaut-Schlüssel werden von
+    // Firebase verstümmelt (j?rg). Altbestand ohne id-im-Wert → Fallback auf den Schlüssel.
+    window._loginDir=Object.keys(dir).map(k=>({id:(dir[k]&&dir[k].id)||k,name:(dir[k]&&dir[k].name)||k,email:(dir[k]&&dir[k].email)||''}));
   }catch(e){
     console.warn('loginDir nicht erreichbar:',e.message);
     window._offlineMode=true;
