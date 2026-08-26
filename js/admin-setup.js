@@ -181,7 +181,10 @@ export async function migrateUserId(oldId, newId, opts){
   if(Object.keys(nd.entries||{}).length!==beforeEntries) throw new Error('Entry-Anzahl weicht ab – abgebrochen.');
   if(nd.users.length!==beforeUsers) throw new Error('Nutzer-Anzahl weicht ab – abgebrochen.');
   if(!nd.users.find(u=>u&&u.id===newId)||nd.users.find(u=>u&&u.id===oldId)) throw new Error('User-Datensatz nicht sauber umgestellt – abgebrochen.');
-  const rest=_scanForId(nd, oldId);
+  // NUR die Daten prüfen, die wir wirklich schreiben. loginDir/allowed/pwResetTokens werden
+  // separat behandelt (reprovisionUser + Login-Cleanup), NICHT über den Haupt-Write – daher hier ausklammern.
+  const scanTarget={}; ['users','entries','stamps','vacRequests','teamReports','yearReports','vertretungen'].forEach(kk=>{ if(nd[kk]!==undefined) scanTarget[kk]=nd[kk]; });
+  const rest=_scanForId(scanTarget, oldId);
   if(rest.length){ throw new Error('Nach Transform noch '+rest.length+'× "'+oldId+'": '+rest.slice(0,8).join(' , ')+' – NICHTS geschrieben.'); }
   log('Transform OK '+JSON.stringify(report)+' – keine Rest-Vorkommen von "'+oldId+'".');
   // Schreiben: betroffene Top-Level-Knoten KOMPLETT ersetzen (entfernt alte Schlüssel); Rest unberührt.
