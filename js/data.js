@@ -352,21 +352,59 @@ export function getEntry(uid,y,m){
   if(!d.entries[k].days) d.entries[k].days={};
   return d.entries[entryKey(uid,y,m)];
 }
+// ── Gezieltes Speichern (Mehrgeräte-sicher) ───────────────────────
+// Frühere Ursache für „eingetragen → kurz danach weg": JEDES Speichern schrieb den GESAMTEN
+// Bestand (alle Tage) zurück (mutate→saveRaw→fbWriteMerge). Ein zweites Gerät mit einem
+// veralteten Tag im Speicher überschrieb damit den frisch eingetragenen Tag des anderen Geräts.
+// Jetzt schreiben Tages-/Feld-Edits NUR den betroffenen Pfad – ein Gerät kann so nur noch den
+// Tag/das Feld ändern, das die Person bewusst bearbeitet hat, niemals fremde (veraltete) Tage.
+function _localPersist(d){
+  _dataCache=d;
+  try{ const prev=localStorage.getItem(STORAGE_KEY); if(prev) localStorage.setItem(STORAGE_KEY+'_prev', prev); }catch(e){}
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){}
+  noteGoodData(d);
+}
+function _cloudUpdate(upd){
+  // Cloud-Schutz wie in saveRaw: unbestätigt/offline → nur lokal, Rest per Listener/Reconnect.
+  if(window._cloudUnverified && !window._allowDataShrink) return Promise.resolve();
+  if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
+  const ref=window._fbRef; if(!ref) return Promise.resolve();
+  try{ upd=JSON.parse(JSON.stringify(upd)); }catch(e){}   // undefined entfernen (Firebase wirft sonst)
+  let p; try{ p=ref.update(upd); }catch(e){ window._pendingSync=true; return Promise.resolve(); }
+  return (p||Promise.resolve()).catch(e=>{ console.warn('Firebase scoped-sync error:',e); window._pendingSync=true; });
+}
+// Pfade eines KOMPLETTEN Entry (nur nötig, wenn der Entry neu ist – analog fbWriteMerge, aber nur DIESER Entry).
+function _entryPaths(k, entry){
+  const e=JSON.parse(JSON.stringify(entry)); const upd={};
+  for(const f of Object.keys(e)){
+    if(f==='days'){ const days=e.days||{}; if(!Object.keys(days).length){ upd['entries/'+k+'/days']={}; } else { for(const dd of Object.keys(days)) upd['entries/'+k+'/days/'+dd]=days[dd]; } }
+    else { upd['entries/'+k+'/'+f]=e[f]; }
+  }
+  return upd;
+}
 export function setDay(uid,y,m,ds,field,val){
-  mutate(d=>{
-    const k=entryKey(uid,y,m);
-    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-    if(!d.entries[k].days) d.entries[k].days={};
-    if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-    d.entries[k].days[ds][field]=val;
-  });
+  const d=getData(); const k=entryKey(uid,y,m);
+  const wasNew=!d.entries[k];
+  if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+  if(!d.entries[k].days) d.entries[k].days={};
+  if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
+  d.entries[k].days[ds][field]=val;
+  _localPersist(d);
+  const entry=d.entries[k];
+  // Neuer Entry → einmal komplett; sonst NUR der geänderte Tag.
+  const upd = wasNew ? _entryPaths(k, entry) : { ['entries/'+k+'/days/'+ds]: entry.days[ds] };
+  return _cloudUpdate(upd);
 }
 export function setEntryField(uid,y,m,field,val){
-  mutate(d=>{
-    const k=entryKey(uid,y,m);
-    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
-    d.entries[k][field]=val;
-  });
+  const d=getData(); const k=entryKey(uid,y,m);
+  const wasNew=!d.entries[k];
+  if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+  d.entries[k][field]=val;
+  _localPersist(d);
+  const entry=d.entries[k];
+  // Neuer Entry → einmal komplett; sonst NUR dieses Feld.
+  const upd = wasNew ? _entryPaths(k, entry) : { ['entries/'+k+'/'+field]: entry[field] };
+  return _cloudUpdate(upd);
 }
 export function getUser(id){ return getData().users.find(u=>u.id===id); }
 export function getCustomRoles(){ return getData().customRoles||[]; }
