@@ -1,6 +1,6 @@
 // ── Core modules ──────────────────────────────────────────────────
 import { getUser, setDataCache } from './data.js';
-import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY } from './config.js';
+import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY, DATA_EPOCH } from './config.js';
 import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
@@ -332,6 +332,18 @@ initFirebase().then(async function(){
       localStorage.setItem('tp_zt_relogin_epoch',_RELOGIN_EPOCH);
       localStorage.removeItem('tp_zt_session');
       localStorage.removeItem('tp_zt_remember');
+    }
+  }catch(e){}
+
+  // Daten-Cache-Epoche: bei Erhöhung den lokalen Datenspeicher EINMALIG wegwerfen, damit ein
+  // evtl. verstümmelter (Mojibake) Zwischenspeicher nicht wieder in die Cloud geschrieben wird.
+  // Das Gerät lädt dann den intakten Server-Stand frisch (Schnellstart entfällt genau einmal).
+  try{
+    if(localStorage.getItem('tp_zt_data_epoch')!==String(DATA_EPOCH)){
+      localStorage.setItem('tp_zt_data_epoch',String(DATA_EPOCH));
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY+'_prev');
+      localStorage.removeItem('tp_zt_guard');
     }
   }catch(e){}
 
