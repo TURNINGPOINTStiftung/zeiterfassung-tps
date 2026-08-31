@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY, _PW_SALT } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge, mergeIncoming } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -240,6 +240,9 @@ function _applyFirebaseSnap(val){
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
+  // Feld-genauer Merge: lokal NEUERE Tagesfelder (per _ts) überleben einen älteren Snapshot,
+  // damit eine gerade getippte, noch nicht zurückgespiegelte Eingabe nicht kurz „verschwindet".
+  mergeIncoming(getData(), migrated);
   setDataCache(migrated);
   noteGoodData(migrated); // Datenverlust-Schutz: vertrauenswürdigen Stand merken
   try{ localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated)); }catch(e){}
