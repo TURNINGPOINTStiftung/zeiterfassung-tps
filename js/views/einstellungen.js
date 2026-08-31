@@ -699,7 +699,14 @@ function collectUserForm(){
     noTimesheet,
     noReport,
     name:document.getElementById('uf-name').value.trim(),
-    id:document.getElementById('uf-id').value.trim().toLowerCase().replace(/\s+/g,'_'),
+    // Login-ID IMMER rein ASCII: Umlaute transliterieren (ö→oe …) und alle übrigen
+    // Nicht-ASCII-Zeichen entfernen. Grund: die ID wird zu Firebase-SCHLÜSSELN (entries,
+    // loginDir, stamps, vacRequests …) und zur Basis von Auth-Mail/Stabil-Passwort. Ein
+    // Umlaut in der ID (z. B. „jörg") wird auf manchen Wegen zu „j�rg" verstümmelt und
+    // sperrt den Login wiederkehrend aus. ASCII-Zwang schließt diese Ursache dauerhaft.
+    id:document.getElementById('uf-id').value.trim().toLowerCase()
+        .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+        .replace(/\s+/g,'_').replace(/[^a-z0-9._-]/g,'').replace(/^_+|_+$/g,''),
     email:document.getElementById('uf-email')?.value.trim()||'',
     pw:document.getElementById('uf-pw').value,
     role,

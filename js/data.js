@@ -7,6 +7,12 @@ function _clamp24(t){ if(!t||!t.includes(':')) return t; const p=t.split(':'); c
 // ── Internal state ────────────────────────────────────────────────
 let _dataCache = null;
 
+// Monotone Zeitmarke für Feld-Zeitstempel (_ts). Wanduhr, aber nie rückwärts/gleich
+// innerhalb der Sitzung → stabile "letzter gewinnt"-Ordnung pro Feld beim Merge.
+let _tsLast = 0;
+function _now(){ let t=Date.now(); if(t<=_tsLast) t=_tsLast+1; _tsLast=t; return t; }
+function _eqJSON(a,b){ try{ return JSON.stringify(a)===JSON.stringify(b); }catch(_){ return a===b; } }
+
 export function freshData(){
   return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{},yearReports:{},_fixes:{}};
 }
@@ -343,7 +349,99 @@ export function saveRaw(d){
   _w.catch(e=>{ console.warn('Firebase sync error:',e); window._pendingSync=true; });
   return Promise.resolve();
 }
-export function mutate(fn){ const d=getData(); fn(d); return saveRaw(d); }
+// ── Diff-basiertes Speichern (der Clobber-Fix) ────────────────────────────────
+// FRÜHER: jedes mutate() schrieb via saveRaw→fbWriteMerge den GESAMTEN Bestand zurück
+// (alle ~1500 Tage aus dem lokalen Cache). Ein Gerät mit auch nur EINEM veralteten Tag
+// überbügelte damit den frisch woanders eingetragenen Tag → „eingetragen, dann weg".
+// JETZT: mutate schreibt NUR die tatsächlich geänderten Blatt-Pfade (Diff vor/nach fn) –
+// feld-genau bei Tagen (entries/<k>/days/<ds>/<feld>) + eine Feld-Zeitmarke _ts. Dadurch:
+//  • verschiedene Geräte, die verschiedene Tage/Spalten bearbeiten, kollidieren NIE,
+//  • ein voller Save kann keinen fremden Tag mehr überschreiben,
+//  • pro Feld gilt „neuere Zeitmarke gewinnt" (siehe mergeIncoming beim Lesen).
+// Baut ein Firebase-update aus den Unterschieden. Tage feld-genau, entries/stamps/vac/
+// teamReports/yearReports pro Kind, alles Übrige (users[], teams, cats …) als ganzer Schlüssel.
+function _diffToUpdate(before, after){
+  const upd={}; const B=before||{}, A=after||{};
+  const _childDiff=(name)=>{ const bo=B[name]||{}, ao=A[name]||{};
+    for(const ck of new Set([...Object.keys(bo),...Object.keys(ao)])){
+      if(!_eqJSON(bo[ck],ao[ck])) upd[name+'/'+ck]= (ao[ck]===undefined? null : ao[ck]);
+    } };
+  for(const key of new Set([...Object.keys(B),...Object.keys(A)])){
+    if(key==='entries'){
+      const be=B.entries||{}, ae=A.entries||{};
+      for(const ek of new Set([...Object.keys(be),...Object.keys(ae)])){
+        const bo=be[ek], ao=ae[ek];
+        if(ao===undefined){ upd['entries/'+ek]=null; continue; }
+        if(bo===undefined){ Object.assign(upd,_entryPaths(ek,ao)); continue; }
+        for(const f of new Set([...Object.keys(bo),...Object.keys(ao)])){ if(f==='days') continue;
+          if(!_eqJSON(bo[f],ao[f])) upd['entries/'+ek+'/'+f]= (ao[f]===undefined? null : ao[f]); }
+        const bd=bo.days||{}, ad=ao.days||{};
+        for(const ds of new Set([...Object.keys(bd),...Object.keys(ad)])){
+          const bday=bd[ds], aday=ad[ds];
+          if(aday===undefined){ upd['entries/'+ek+'/days/'+ds]=null; continue; }
+          if(bday===undefined){ upd['entries/'+ek+'/days/'+ds]=aday; continue; }
+          for(const f of new Set([...Object.keys(bday),...Object.keys(aday)])){ if(f==='_ts') continue;
+            if(!_eqJSON(bday[f],aday[f])){
+              const base='entries/'+ek+'/days/'+ds+'/'+f;
+              upd[base]= (aday[f]===undefined? null : aday[f]);
+              const ts=_now(); if(!aday._ts) aday._ts={}; aday._ts[f]=ts;
+              upd['entries/'+ek+'/days/'+ds+'/_ts/'+f]=ts;
+            }
+          }
+        }
+      }
+    } else if(key==='stamps'||key==='vacRequests'||key==='teamReports'||key==='yearReports'){
+      _childDiff(key);
+    } else {
+      if(!_eqJSON(B[key],A[key])) upd[key]= (A[key]===undefined? null : A[key]);
+    }
+  }
+  return upd;
+}
+export function mutate(fn){
+  const d=getData();
+  let before; try{ before=JSON.parse(JSON.stringify(d)); }catch(e){ before=null; }
+  fn(d);
+  // Datenverlust-Schutz (wie saveRaw): drastischer Nutzer-Schwund ohne Opt-in → NICHT speichern.
+  if(before && Array.isArray(before.users) && Array.isArray(d.users)){
+    const drop=before.users.length - d.users.length;
+    if(_lastGoodUsers>=4 && d.users.length < Math.ceil(_lastGoodUsers/2) && drop>0 && !window._allowDataShrink){
+      console.error('[Datenschutz] mutate BLOCKIERT – Nutzer '+before.users.length+'→'+d.users.length);
+      try{ window.toast?.('⛔ Nicht gespeichert – Schutz vor Datenverlust. Bitte Seite neu laden.','err'); }catch(_){}
+      return Promise.reject(new Error('data-shrink-guard'));
+    }
+  }
+  _localPersist(d);
+  const upd = before ? _diffToUpdate(before, d) : null;
+  if(upd===null) return saveRaw(d);              // Fallback (Clone fehlgeschlagen): wie bisher
+  if(!Object.keys(upd).length) return Promise.resolve();
+  return _cloudUpdate(upd);
+}
+// ── Feld-genauer Merge eingehender Snapshots ──────────────────────────────────
+// Basis = incoming (Server-Wahrheit). Wo der LOKALE Cache ein Tagesfeld mit NEUERER
+// Zeitmarke (_ts) hat als der Snapshot, bleibt der lokale Wert erhalten – eine gerade
+// getippte, noch nicht zurückgespiegelte Änderung wird also nicht von einem älteren
+// Snapshot überbügelt. Es werden NUR Felder in Tagen geschützt, die in BEIDEN existieren;
+// fehlende/gelöschte Tage werden NIE wiederbelebt (Server-Löschung gewinnt).
+export function mergeIncoming(local, incoming){
+  if(!local||!incoming||!incoming.entries||!local.entries) return incoming;
+  for(const k of Object.keys(incoming.entries)){
+    const li=local.entries[k], ii=incoming.entries[k];
+    if(!li||!li.days||!ii||!ii.days) continue;
+    for(const ds of Object.keys(ii.days)){
+      const ld=li.days[ds], id=ii.days[ds];
+      if(!ld||!id||!ld._ts) continue;
+      for(const f of Object.keys(ld._ts)){
+        if((ld._ts[f]||0) > ((id._ts&&id._ts[f])||0) && (f in ld)){
+          id[f]=ld[f];
+          if(!id._ts) id._ts={};
+          id._ts[f]=ld._ts[f];
+        }
+      }
+    }
+  }
+  return incoming;
+}
 
 export function entryKey(uid,y,m){ return `${uid}_${y}_${String(m).padStart(2,'0')}`; }
 export function getEntry(uid,y,m){
@@ -388,11 +486,17 @@ export function setDay(uid,y,m,ds,field,val){
   if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
   if(!d.entries[k].days) d.entries[k].days={};
   if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
-  d.entries[k].days[ds][field]=val;
+  const day=d.entries[k].days[ds];
+  day[field]=val;
+  const ts=_now(); if(!day._ts) day._ts={}; day._ts[field]=ts;
   _localPersist(d);
   const entry=d.entries[k];
-  // Neuer Entry → einmal komplett; sonst NUR der geänderte Tag.
-  const upd = wasNew ? _entryPaths(k, entry) : { ['entries/'+k+'/days/'+ds]: entry.days[ds] };
+  // Neuer Entry → einmal komplett; sonst FELD-genau: nur dieses Feld + seine Zeitmarke.
+  // (Zwei Geräte, die am selben Tag verschiedene Spalten ändern, überleben so beide.)
+  const upd = wasNew ? _entryPaths(k, entry) : {
+    ['entries/'+k+'/days/'+ds+'/'+field]: val,
+    ['entries/'+k+'/days/'+ds+'/_ts/'+field]: ts
+  };
   return _cloudUpdate(upd);
 }
 export function setEntryField(uid,y,m,field,val){
