@@ -13,6 +13,19 @@ let _tsLast = 0;
 function _now(){ let t=Date.now(); if(t<=_tsLast) t=_tsLast+1; _tsLast=t; return t; }
 function _eqJSON(a,b){ try{ return JSON.stringify(a)===JSON.stringify(b); }catch(_){ return a===b; } }
 
+// Schreib-Schutz gegen Mojibake: liefert true, wenn der users-Array verstümmelt ist –
+// eine Nicht-ASCII-ID (z. B. „jörg"/„j?rg") ODER ein U+FFFD (?) im Namen. So ein Array wird
+// NICHT in die Cloud geschrieben, damit ein Gerät mit vergiftetem Cache den intakten
+// Server-Stand nicht überbügelt. (Login-IDs sind immer reines ASCII; ein Umlaut dort ist
+// definitiv Altlast/Korruption.)
+export function _usersPoisoned(users){
+  if(!Array.isArray(users)) return false;
+  return users.some(u=> u && (
+    (typeof u.id==='string' && /[^\x00-\x7F]/.test(u.id)) ||
+    (typeof u.name==='string' && /�/.test(u.name))
+  ));
+}
+
 export function freshData(){
   return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{},yearReports:{},_fixes:{}};
 }
@@ -295,6 +308,9 @@ export function fbWriteMerge(d){
           }
         }
       }
+    } else if(k==='users' && _usersPoisoned(d[k])){
+      // Schutz: verstümmelten users-Array NICHT hochschreiben (Server-Stand bleibt intakt).
+      console.warn('[Schutz] users nicht geschrieben (Mojibake erkannt) – Server-Stand bleibt.');
     } else {
       upd[k]=d[k];
     }
@@ -392,6 +408,9 @@ function _diffToUpdate(before, after){
       }
     } else if(key==='stamps'||key==='vacRequests'||key==='teamReports'||key==='yearReports'){
       _childDiff(key);
+    } else if(key==='users' && _usersPoisoned(A.users)){
+      // Schutz: verstümmelten users-Array NICHT schreiben (Server-Stand bleibt intakt).
+      console.warn('[Schutz] users-Diff nicht geschrieben (Mojibake erkannt).');
     } else {
       if(!_eqJSON(B[key],A[key])) upd[key]= (A[key]===undefined? null : A[key]);
     }

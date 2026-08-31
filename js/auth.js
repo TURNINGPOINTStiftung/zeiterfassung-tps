@@ -157,8 +157,17 @@ export async function doLogin(){
   // zusammenfassen, Groß/Klein egal → verhindert „Benutzer nicht gefunden" wegen Tippweise.
   // (Beschädigte/fehlende Verzeichnis-Namen behebt „Zugänge reparieren" in der Verwaltung.)
   const _norm=s=>String(s||'').normalize('NFC').replace(/\s+/g,' ').trim().toLowerCase();
+  // ASCII-Faltung als Fallback: entfernt Umlaute UND Mojibake (�) → gemeinsamer ASCII-Kern.
+  // So findet der Login den Nutzer auch, wenn der Verzeichnis-Name verstümmelt ist („J�rg")
+  // oder unterschiedlich kodiert wurde (NFC/NFD, Windows vs. Apple).
+  const _fold=s=>_norm(s).replace(/[^a-z0-9 ]/g,'');
   const nName=_norm(name);
-  const du=dir.find(x=>_norm(x.name)===nName);
+  let du=dir.find(x=>_norm(x.name)===nName);
+  if(!du){
+    const f=_fold(name);
+    const cand=f?dir.filter(x=>_fold(x.name)===f):[];
+    if(cand.length===1) du=cand[0];   // nur übernehmen, wenn EINDEUTIG
+  }
   if(!du){
     errEl.textContent='Benutzer nicht gefunden.';
     errEl.style.display='block'; return;

@@ -1,6 +1,11 @@
 export const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 export const DAYS   = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 export const STORAGE_KEY = 'tp_zt_v3';
+// Daten-Cache-Epoche: bei Erhöhung wirft JEDES Gerät beim nächsten Laden seinen lokalen
+// Datenspeicher weg und zieht den intakten Server-Stand frisch. Dient dazu, verstümmelte
+// (Mojibake) Zwischenspeicher geräteweit zu entgiften, damit sie nicht wieder hochgeschrieben
+// werden. Bei Bedarf (erneute Korruption) einfach erhöhen.
+export const DATA_EPOCH = 3;
 export const _STAMP_KEY = 'tp_zt_stamp';
 export const _PW_SALT = 'tp_zt_turning_point_2026_x9k';
 
