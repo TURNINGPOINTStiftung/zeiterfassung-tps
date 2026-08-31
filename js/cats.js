@@ -39,9 +39,12 @@ export function currentCatsForUser(user){
   return [...out];
 }
 
-export function catOptionsForUser(user,selected=''){
+export function catOptionsForUser(user,selected='',allowHalf=false){
   if(isFreelancer(user)) return catOptionsFree(selected);
-  const norm=normZuord(selected);
+  // Sonderwert „Urlaub½" = halber Urlaubstag (nur Block 1, nur wenn erlaubt). Für die
+  // Kategorie-Logik wie „Urlaub" behandeln; die halbe Option wird unten separat eingefügt.
+  const isHalf=selected==='Urlaub½';
+  const norm=normZuord(isHalf?'Urlaub':selected);
   // Team-Kategorien des Nutzers (mehrere Teams möglich)
   const userTeams=Array.isArray(user?.teams)&&user.teams.length
     ? user.teams : (user?.team ? [user.team] : []);
@@ -78,10 +81,14 @@ export function catOptionsForUser(user,selected=''){
   const _tail=['Arbeitszeitausgleich','Sonstiges','Veranstaltung Krank / AU','Urlaub','AU/Krank'];
   cats=[...cats.filter(c=>!_tail.includes(c)), ..._tail.filter(c=>cats.includes(c))];
 
+  const allowHalfOpt=allowHalf && user && user.allowHalfVac!==false;
   return `<option value=""></option>`+cats.map(c=>{
-    const sel=c===norm?' selected':'';
+    const sel=(c===norm&&!isHalf)?' selected':'';
     const mark=isLeitung&&teamCats.has(c);
     const style=mark?' style="background:#eaf7ea;color:#2e7d32;font-weight:600"':'';
-    return `<option value="${c}"${sel}${style}>${c}</option>`;
+    let opt=`<option value="${c}"${sel}${style}>${c}</option>`;
+    // Direkt nach „Urlaub" die halbe Variante anbieten (diskret, zählt 0,5 Tage).
+    if(c==='Urlaub'&&allowHalfOpt) opt+=`<option value="Urlaub½"${isHalf?' selected':''}>Urlaub ½ Tag</option>`;
+    return opt;
   }).join('');
 }

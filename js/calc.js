@@ -82,6 +82,18 @@ export function effUserAt(user,y,m){
   return clone;
 }
 
+// Jahres-Urlaubsanspruch (Tage) – bei unterjährigem Wechsel des Anspruchs (al) ANTEILIG
+// über die Monate gerechnet: Summe(effUserAt(m).al / 12). Ohne paramHistory = aktueller al
+// (unverändertes Verhalten). Beispiel Claudia: Jan–Jun al=6 (→3) + Jul–Dez al=12 (→6) = 9.
+export function annualVacDays(user,y){
+  if(!user) return 0;
+  const hist=Array.isArray(user.paramHistory)?user.paramHistory:null;
+  if(!hist||!hist.length||!y) return Number(user.al||0);
+  let total=0;
+  for(let m=1;m<=12;m++){ total += Number(effUserAt(user,y,m).al||0)/12; }
+  return Math.round(total*2)/2; // auf halbe Tage runden
+}
+
 export function monthSOLL(user,y,m){
   user=effUserAt(user,y,m);
   if(isFreelancer(user)) return 0;
