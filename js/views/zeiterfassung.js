@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt } from '../calc.js';
+import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays } from '../calc.js';
 import { fmtTs } from '../utils.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
@@ -191,7 +191,7 @@ export function renderZeiterfassung(){
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
       <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
-      <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,dd.b1zuord||'')}</select></td>
+      <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,(dd.halfDay&&(dd.b1zuord==='Urlaub'))?'Urlaub½':(dd.b1zuord||''),true)}</select></td>
       <td class="bem-col" title="${esc(dd.b1bem||'')}"><input id="bem_${ds}_b1" aria-label="${dateFmt} Bemerkung Block 1" title="${esc(dd.b1bem||'')}" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
@@ -290,9 +290,10 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
     const sk=sickDays(entry);
     const vacUpTo=vacUsedUpToMonth(uid,year,mon);   // bis einschl. aktuellem Monat
     const vacApproved=totalVacUsed(uid,year);       // ganzes Jahr (inkl. Zukunft)
-    const vacLeft=eu.al-vacUpTo;                    // Resturlaub bis hierher
+    const _annualVac=annualVacDays(user,year);      // Jahresanspruch (anteilig bei unterjährigem Wechsel)
+    const vacLeft=_annualVac-vacUpTo;               // Resturlaub bis hierher
     const vacFuture=Math.max(0,vacApproved-vacUpTo);// schon beantragt/genehmigt (später)
-    const vacUnbooked=Math.max(0,eu.al-vacApproved); // Jahresanspruch minus ALLES schon Beantragte/Genommene = noch nicht beantragt
+    const vacUnbooked=Math.max(0,_annualVac-vacApproved); // Jahresanspruch minus ALLES schon Beantragte/Genommene = noch nicht beantragt
     const sollDays=monthSOLLdays(user,year,mon);
     const sollSub=sollDays>0?`${sollDays} AT × ${hFmt(dailyMinutes(eu))}`:'4 × Wochenarbeitszeit';
     cards=[
@@ -300,7 +301,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:_open?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${eu.al} offen`},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${_annualVac} offen`},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(eu))+' h anteilig'},
     ];
   }
@@ -759,7 +760,11 @@ export function td_zuord(ds,field,val,wh,dpw){
   const uid=window.viewEmpId||window.cu.id;
   const cu=window.cu;
   const _oldZuord=((getEntry(uid,window.year,window.mon).days||{})[ds]||{}).b1zuord||'';
+  // Sonderwert „Urlaub½" (halber Urlaubstag) → als „Urlaub" speichern + halfDay-Marker (zählt 0,5).
+  const _half=(field==='b1zuord'&&val==='Urlaub½');
+  if(_half) val='Urlaub';
   setDay(uid,window.year,window.mon,ds,field,val);
+  if(field==='b1zuord') setDay(uid,window.year,window.mon,ds,'halfDay',_half);
 
   // „Sonstiges" → nur Bemerkung eintragen, keine Zeiteinträge
   if(val==='Sonstiges'){
@@ -770,9 +775,16 @@ export function td_zuord(ds,field,val,wh,dpw){
   // Urlaub / AU/Krank → Soll-Zeiten nur setzen, wenn der Tag NOCH KEINE Zeiten hat.
   // Verhindert, dass beim Durchblättern der Zuordnung mit der Tastatur bereits
   // eingetragene Start-/Endzeiten durch die festen Urlaubs-/AU-Zeiten überschrieben werden.
+  const u=getUser(uid)||cu;
   const _dNow=(getEntry(uid,window.year,window.mon).days||{})[ds]||{};
-  if((val==='Urlaub'||val==='AU/Krank')&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
-    const u=getUser(uid)||cu;
+  if(_half){
+    // Halber Urlaubstag: Standard-Stunden aus dem Profil (vacHoursPerDay), halbiert – immer setzen.
+    const halfMin=Math.max(1,Math.round(vacDailyMin(u)/2));
+    setDay(uid,window.year,window.mon,ds,'b1von','08:00');
+    setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',halfMin));
+    setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
+    setDay(uid,window.year,window.mon,ds,'ktmin','');
+  } else if((val==='Urlaub'||val==='AU/Krank')&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
     const dailyMin=Math.round(wh*60/(dpw||5))||480;
     // Urlaub: Teilzeit = 8h, Vollzeit/Leitung = Tagessoll (zentral in vacDailyMin).
     // AU/Krank: weiterhin Tagessoll aus wh/dpw.

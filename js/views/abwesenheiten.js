@@ -212,10 +212,14 @@ export function calcVrDays(){
   const hdWrap=document.getElementById('vr-halfday-wrap');
   const modeWrap=document.getElementById('vr-count-mode-wrap');
   const singleDay=f&&t&&f===t;
-  if(hdWrap) hdWrap.style.display=(type==='Urlaub')?'':'none';
+  // Halbe Urlaubstage nur, wenn beim betreffenden Mitarbeiter erlaubt (allowHalfVac).
+  const _vrEmpId0=document.getElementById('vr-emp')?.value||'';
+  const _vrU0=(_vrEmpId0?getData().users.find(u=>u.id===_vrEmpId0):null)||window.cu;
+  const _halfAllowed=!!(_vrU0&&_vrU0.allowHalfVac!==false);
+  if(hdWrap) hdWrap.style.display=(type==='Urlaub'&&_halfAllowed)?'':'none';
   if(modeWrap) modeWrap.style.display=(type==='Urlaub')?'block':'none';
   const cb=document.getElementById('vr-halfday');
-  if(cb&&!singleDay) cb.checked=false;
+  if(cb&&(!singleDay||!_halfAllowed)) cb.checked=false;
   if(!f||!t||f>t){ if(info) info.textContent=''; return; }
   const d2=getData();
   const empId=document.getElementById('vr-emp')?.value||'';

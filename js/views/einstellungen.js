@@ -564,6 +564,12 @@ function userForm(u={}){
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="uf-allowhalf" ${u.allowHalfVac!==false?' checked':''} style="width:auto;cursor:pointer">
+          Halbe Urlaubstage erlaubt
+        </label>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
           Feiertage = kein SOLL / kein Urlaubsabzug
         </label>
@@ -721,6 +727,7 @@ function collectUserForm(){
     al:isFree?0:parseFloat(document.getElementById('uf-al').value)||24,
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(vacDailyMin({wh,dpw,role})/60*10)/10),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
+    allowHalfVac:!!(document.getElementById('uf-allowhalf')?.checked),
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),
     maxHours:isFree?parseFloat(document.getElementById('uf-maxhours').value)||0:0,
     lecturePeriods,
