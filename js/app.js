@@ -3,6 +3,43 @@ import { getUser } from './data.js';
 import { isManagerRole, hasPermission, roleLabel } from './roles.js';
 import { dailyMinutes } from './calc.js';
 
+// Hat der Nutzer überhaupt IRGENDEINEN Bereich frei? (Modul-Zugriff, Übersicht/GF-Berichte,
+// Voll-Verwaltung). FAIL-OPEN: lässt sich der Zugriff nicht bestimmen (CRM-Modul noch nicht
+// geladen), gilt „Zugriff" – es wird NIEMALS jemand fälschlich ausgesperrt.
+function _hasAnyAccess(cu){
+  if(!cu) return true;
+  if(cu.role==='admin') return true;
+  try{
+    const ma = window.crmModuleAccess ? window.crmModuleAccess(cu) : null;
+    if(!ma) return true; // Zugriffslogik noch nicht bereit → nicht aussperren
+    if(['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung'].some(k=>ma[k]&&ma[k]!=='kein')) return true;
+    if(ma.system==='ja') return true;
+  }catch(e){ return true; }
+  try{ if(hasPermission('tab_uebersicht',cu)||hasPermission('tab_gfberichte',cu)||hasPermission('zugriff_verwaltung',cu)) return true; }catch(e){}
+  return false;
+}
+
+// Freundlicher „Noch nichts freigeschaltet"-Screen (nur Login + eigenes Profil).
+function _showNoAccessScreen(){
+  ['module-bar','app-nav'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  const main=document.querySelector('.app-content'); if(main) main.style.display='none';
+  ['website','forum','crm','auswertung','verwaltung','ki'].forEach(m=>{ const el=document.getElementById('mod-'+m); if(el) el.style.display='none'; });
+  let box=document.getElementById('no-access-screen');
+  if(!box){
+    box=document.createElement('div'); box.id='no-access-screen';
+    box.style.cssText='position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#f5f7fa;z-index:40';
+    box.innerHTML='<div style="font-size:44px">👋</div>'
+      +'<h2 style="margin:0;color:#203869">Willkommen, <span id="na-name"></span>!</h2>'
+      +'<p style="max-width:440px;color:#5a6572;font-size:15px;margin:0;line-height:1.5">Für dich ist aktuell noch <b>kein Bereich freigeschaltet</b>. Bitte wende dich an die Administration, damit deine Zugänge eingerichtet werden.</p>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px">'
+      +'<button class="btn btn-outline" onclick="openProfileModal()">👤 Mein Profil</button>'
+      +'<button class="btn btn-outline" onclick="doLogout()">Abmelden</button></div>';
+    (document.getElementById('app')||document.body).appendChild(box);
+  }
+  const nn=document.getElementById('na-name'); if(nn) nn.textContent=(window.cu&&window.cu.name)||'';
+  box.style.display='flex';
+}
+
 export function initApp(){
   const cu=window.cu;
   document.getElementById('hdr-name').textContent=cu.name;
@@ -11,7 +48,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v308':'';
+  if(_hv) _hv.textContent=_showVer?'v309':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -25,6 +62,16 @@ export function initApp(){
   window.year=now.getFullYear(); window.mon=now.getMonth()+1;
   window.abCalYear=window.year; window.abCalMon=window.mon;
   window.viewEmpId=cu.id;
+
+  // Evtl. vorherigen Null-Zugriff-Zustand zurücksetzen (Nutzerwechsel ohne Reload).
+  try{ const _na=document.getElementById('no-access-screen'); if(_na) _na.style.display='none'; }catch(e){}
+  const _mbEl=document.getElementById('module-bar'); if(_mbEl) _mbEl.style.display='flex';
+  const _navEl=document.getElementById('app-nav'); if(_navEl) _navEl.style.display='';
+  const _mainEl=document.querySelector('.app-content'); if(_mainEl) _mainEl.style.display='';
+
+  // Null-Zugriff: kein einziger Bereich freigeschaltet → freundlicher Hinweis + Profil,
+  // statt in einer leeren Zeiterfassung zu stranden.
+  if(!_hasAnyAccess(cu)){ _showNoAccessScreen(); return; }
 
   // Bereits gespeicherte Nachtschichten des eingeloggten Users einmalig erkennen.
   // (Die Erkennung läuft sonst nur bei Zeit-Eingaben – nicht beim Laden.)
