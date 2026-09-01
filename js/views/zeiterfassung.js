@@ -784,13 +784,20 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',halfMin));
     setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
     setDay(uid,window.year,window.mon,ds,'ktmin','');
-  } else if((val==='Urlaub'||val==='AU/Krank')&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
-    const dailyMin=Math.round(wh*60/(dpw||5))||480;
-    // Urlaub: Teilzeit = 8h, Vollzeit/Leitung = Tagessoll (zentral in vacDailyMin).
-    // AU/Krank: weiterhin Tagessoll aus wh/dpw.
-    const dMin=val==='Urlaub'?vacDailyMin(u):dailyMin;
+  } else if(val==='Urlaub'&&wh>0){
+    // Urlaub: IMMER den Profil-Wert (vacHoursPerDay via vacDailyMin) setzen – auch auf einem
+    // Tag, der schon Zeiten hatte. So ist ein Urlaubstag zuverlässig = der hinterlegte Wert (8h),
+    // egal was vorher drinstand (früher nur bei leerem Tag → „bleibt bei alten Zeiten").
+    const dMin=vacDailyMin(u);
     setDay(uid,window.year,window.mon,ds,'b1von','08:00');
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dMin));
+    setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
+    setDay(uid,window.year,window.mon,ds,'ktmin','');
+  } else if(val==='AU/Krank'&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
+    // AU/Krank: Tagessoll aus wh/dpw, weiterhin NUR auf noch leerem Tag (unverändert).
+    const dailyMin=Math.round(wh*60/(dpw||5))||480;
+    setDay(uid,window.year,window.mon,ds,'b1von','08:00');
+    setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dailyMin));
     setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   }
