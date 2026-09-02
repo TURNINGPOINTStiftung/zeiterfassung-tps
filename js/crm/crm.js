@@ -262,6 +262,28 @@ function crmFull(){ const l=accessLevel(); return l==='admin'||l==='full'; }
 // anlegen/löschen (Einträge, Projekte, Vorlagen, Verteiler) – nur Aufgaben bearbeiten.
 function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l==='readonly'; }
 
+// ── Kanban-Team-Zugriff (Projektmanagement) ────────────────────────
+// Ein Nutzer sieht im Kanban die Team-Boards SEINER Teams: die Zeiterfassungs-Teams (u.teams)
+// sind automatisch dabei, zusätzlich zugewiesene stehen in u.kanbanTeams. „Sanft": wer weder
+// ZE- noch zugewiesene Kanban-Teams hat, sieht alle (kein Aussperren). Voll/Admin/Kanban-Verwalter
+// sehen immer alle. Reine Kanban-Nutzer (Modulpfad 'kanban') sehen nur Team-Projekte, KEINE
+// CRM-Veranstaltungen/Kontakte (das bleibt an crmCanView() gekoppelt).
+function _kanbanAccess(u){ u=u||window.cu; if(!u) return false; try{ return !!canUsePath('kanban', u); }catch(e){ return false; } }
+function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+function kanbanTeamsFor(u){
+  u=u||window.cu; if(!u) return [];
+  const set=new Set();
+  (Array.isArray(u.teams)?u.teams:(u.team?[u.team]:[])).forEach(t=>{ if(t) set.add(t); });
+  (Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).forEach(t=>{ if(t) set.add(t); });
+  return zeTeams().filter(t=>set.has(t));
+}
+function visibleKanbanTeams(u){
+  u=u||window.cu;
+  if(_kanbanSeesAll(u)) return zeTeams();
+  const mine=kanbanTeamsFor(u);
+  return mine.length ? mine : zeTeams();   // sanft: nichts gesetzt ⇒ alle
+}
+
 // Modul-Leiste je nach Rechten ein-/ausblenden (von initApp aufgerufen).
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5) darf das Verwaltungs-Modul nutzen.
 function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
@@ -3047,10 +3069,22 @@ function crmBackToTeamProjekte(){
   else paintTeamDetail();
 }
 
-function teamCardHtml(tm, total, open){
+// Zählt eigene Team-Projekte eines Teams (ohne persönliche) + offene Aufgaben darin.
+function teamProjektCounts(team){
+  try{
+    const ps=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
+    let openN=0; ps.forEach(p=>{ openN+=flatTasks(p).filter(t=>t.status!=='erledigt').length; });
+    return { total:ps.length, open:openN };
+  }catch(e){ return { total:0, open:0 }; }
+}
+// view=true (CRM-Sicht) → Veranstaltungs-Zählung; sonst (reiner Kanban-Nutzer) → Projekt-Zählung.
+function teamCardHtml(tm, view){
+  let meta;
+  if(view){ const c=teamCounts(tm); meta=`<span class="crm-chip">${c.total} Veranstaltung${c.total===1?'':'en'}</span>${c.open?`<span class="crm-chip warn">${c.open} anstehend</span>`:''}`; }
+  else { const c=teamProjektCounts(tm); meta=`<span class="crm-chip">${c.total} Projekt${c.total===1?'':'e'}</span>${c.open?`<span class="crm-chip warn">${c.open} offen</span>`:''}`; }
   return `<div class="crm-card" onclick="crmOpenTeam('${encodeURIComponent(tm)}')">
     <h3>👥 ${esc(tm)}</h3>
-    <div class="meta"><span class="crm-chip">${total} Veranstaltung${total===1?'':'en'}</span>${open?`<span class="crm-chip warn">${open} anstehend</span>`:''}</div>
+    <div class="meta">${meta}</div>
   </div>`;
 }
 function paintTeamsList(){
@@ -3060,17 +3094,19 @@ function paintTeamsList(){
   const meine = meineSectionsHtml();
   // Veranstaltungen direkt GANZ OBEN in der Teams-Ansicht (kein eigener Reiter mehr)
   const vaBlock = crmCanView() ? veranstaltungenListHtml() : '';
-  // Teams-Kacheln für alle, die alles sehen dürfen (voll + erweitert)
+  // Team-Kacheln: für CRM-Betrachter ODER reine Kanban-Nutzer. Sichtbare Teams = visibleKanbanTeams
+  // (voll/admin/kanban-verwaltend sehen alle; sonst nur eigene Teams, sanft). Reine Kanban-Nutzer
+  // sehen Projekt-Zählung statt CRM-Veranstaltungen. „Ohne Team" nur für Sieht-alle.
   let teamsBlock='';
-  if(crmCanView()){
-    const cards=[];
-    zeTeams().forEach(tm=>{ const c=teamCounts(tm); cards.push(teamCardHtml(tm, c.total, c.open)); });
-    const cNo=teamCounts('Ohne Team');
-    if(cNo.total) cards.push(teamCardHtml('Ohne Team', cNo.total, cNo.open));
+  const _cu=window.cu;
+  const _view=crmCanView();
+  if(_view || _kanbanAccess(_cu)){
+    const cards=visibleKanbanTeams(_cu).map(tm=>teamCardHtml(tm, _view));
+    if(_kanbanSeesAll(_cu)){ const cNo=teamCounts('Ohne Team'); if(cNo.total) cards.push(teamCardHtml('Ohne Team', _view)); }
     teamsBlock = `<div class="crm-sec">
       <h4><span class="ttl">👥 Teams</span></h4>
       <div class="crm-list">${cards.join('')}</div>
-      <div class="small" style="color:var(--muted);margin-top:10px">Pro Team: Veranstaltungen und eigene Projekte.</div>
+      <div class="small" style="color:var(--muted);margin-top:10px">${_view?'Pro Team: Veranstaltungen und eigene Projekte.':'Pro Team: eigene Projekte.'}</div>
     </div>`;
   }
   root.innerHTML = barHtml() + `<div class="crm-body">${vaBlock}${meine}${teamsBlock}</div>`;
@@ -3079,6 +3115,12 @@ function paintTeamDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const team=window._crmTeamSel;
   window._crmTaskCtx=null;
+  const _view=crmCanView();
+  // Zugriffs-Guard: wer nicht alle Teams sieht, darf nur seine zugewiesenen Teams öffnen.
+  if(!_kanbanSeesAll(window.cu)){
+    const vis=visibleKanbanTeams(window.cu);
+    if(!vis.includes(team)){ crmBackToTeams(); return; }
+  }
   // Veranstaltungen des Teams
   const vs=teamVeranstaltungen(team);
   const vaCard=v=>`<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
@@ -3110,7 +3152,7 @@ function paintTeamDetail(){
       <button class="btn-sm-crm" onclick="crmBackToTeams()">← Teams</button>
       <h2>👥 ${esc(team)}</h2>
     </div>
-    ${vaSec}
+    ${_view?vaSec:''}
     ${projektSec}
   </div>`;
 }
