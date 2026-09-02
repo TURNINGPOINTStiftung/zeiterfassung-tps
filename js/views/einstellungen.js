@@ -453,44 +453,18 @@ function userForm(u={}){
     ['RP','Rheinland-Pfalz'],['SL','Saarland'],['SN','Sachsen'],['ST','Sachsen-Anhalt'],
     ['SH','Schleswig-Holstein'],['TH','Thüringen']];
   const blOpts=BL.map(([v,l])=>`<option value="${v}"${(u.bundesland||'')=== v?' selected':''}>${l}</option>`).join('');
-  return `
-    <div class="uf-section-head">👤 Zugangsdaten</div>
-    <div class="uf-grid2">
-      <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
-      <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
-    </div>
-    <div class="uf-grid2">
-      <div class="form-group"><label>E-Mail</label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
-      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben'}" autocomplete="new-password"></div>
-    </div>
-    <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
-    <div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label>
-      ${u.id==='admin'
-        ? `<input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div>`
-        : `<select id="uf-role" onchange="toggleFreelancerFields()">
-              <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
-              <option value="freiberuflich"${u.role==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
-              <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
-              <option value="leitung"${u.role==='leitung'?' selected':''}>Leitung</option>
-              <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
-           </select>`}
-    </div>
-    <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
-      ${(()=>{
-          const crs=getCustomRoles();
-          const userCRs=Array.isArray(u.customRoles)?u.customRoles:(u.customRole?[u.customRole]:[]);
-          if(!crs.length) return '<span style="font-size:12px;color:var(--muted)">Noch keine eigenen Rollen angelegt (Einstellungen → Rollen)</span>';
-          return '<div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:110px;overflow-y:auto">'
-            +crs.map((cr,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-cr-${i}" value="${esc(cr.id)}"${userCRs.includes(cr.id)?' checked':''} onchange="toggleWerkstudentFields()"> ${esc(cr.label)}</label>`).join('')
-            +'</div>';
-        })()}
-    </div>
-    <div class="uf-section-head">📍 Standort</div>
-    <div class="uf-grid2">
-    <div class="form-group"><label>Team(s) <span style="font-size:11px;color:var(--muted)">(aktuell)</span></label>
-      <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
-    </div>
-    ${u.id?(()=>{
+  const isAdminUser=u.id==='admin';
+  // Systemrolle & Team gehören zum Zeiterfassungs-Kontext → sie wandern in den 🕒 ZE-Block und
+  // erscheinen nur bei ZE≠Kein. Für Admin bleiben sie oben (Admin hat keinen ZE-Block). Beides
+  // hier als String vorbereitet und je nach Fall oben ODER im ZE-Block eingesetzt (einmalige IDs).
+  const roleSelectHtml=`<select id="uf-role" onchange="toggleFreelancerFields()">
+      <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
+      <option value="freiberuflich"${u.role==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
+      <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
+      <option value="leitung"${u.role==='leitung'?' selected':''}>Leitung</option>
+      <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
+    </select>`;
+  const teamHistHtml=u.id?(()=>{
       const hist=(u.teamHistory||[]).sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
       const histRows=hist.map((h,i)=>`
         <div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
@@ -514,8 +488,36 @@ function userForm(u={}){
           <button class="btn btn-ok btn-sm" onclick="addTeamHistEntry('${u.id}')">+ Eintrag</button>
         </div>
       </div>`;
-    })():''}
+    })():'';
+  const teamPickerHtml=`<div class="form-group"><label>Team(s) <span style="font-size:11px;color:var(--muted)">(aktuell)</span></label>
+      <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
+    </div>${teamHistHtml}`;
+  return `
+    <div class="uf-section-head">👤 Zugangsdaten</div>
+    <div class="uf-grid2">
+      <div class="form-group"><label>Name *</label><input id="uf-name" type="text" value="${esc(u.name||'')}"></div>
+      <div class="form-group"><label>Login-ID *</label><input id="uf-id" type="text" value="${esc(u.id||'')}" ${u.id?'disabled':''}></div>
     </div>
+    <div class="uf-grid2">
+      <div class="form-group"><label>E-Mail</label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
+      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben'}" autocomplete="new-password"></div>
+    </div>
+    <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
+    ${isAdminUser
+      ? `<div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
+      : `<div style="font-size:12px;color:var(--muted);margin:-2px 0 12px;padding:8px 10px;background:rgba(0,0,0,.03);border-radius:6px">🕒 <b>Systemrolle &amp; Team</b> legst du unten im Zeiterfassung-Block fest — sie erscheinen, sobald die Zeiterfassung auf „Nutzen" oder „Verwalten" steht.</div>`}
+    <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
+      ${(()=>{
+          const crs=getCustomRoles();
+          const userCRs=Array.isArray(u.customRoles)?u.customRoles:(u.customRole?[u.customRole]:[]);
+          if(!crs.length) return '<span style="font-size:12px;color:var(--muted)">Noch keine eigenen Rollen angelegt (Einstellungen → Rollen)</span>';
+          return '<div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:110px;overflow-y:auto">'
+            +crs.map((cr,i)=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-cr-${i}" value="${esc(cr.id)}"${userCRs.includes(cr.id)?' checked':''} onchange="toggleWerkstudentFields()"> ${esc(cr.label)}</label>`).join('')
+            +'</div>';
+        })()}
+    </div>
+    <div class="uf-section-head">📍 Standort</div>
+    ${isAdminUser?`<div class="uf-grid2">${teamPickerHtml}</div>`:''}
     <div class="uf-grid2">
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
       <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
@@ -621,7 +623,9 @@ function userForm(u={}){
         </div>`;
       const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span>${seg('zeiterfassung',st('zeiterfassung'))}</div>
         <div class="uf-mod-body" id="ufsub-zeiterfassung" style="display:${st('zeiterfassung')==='kein'?'none':''}">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Feinrechte innerhalb der Zeiterfassung:</div>
+          <div class="form-group" style="margin-bottom:8px"><label style="font-size:12px">Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label>${roleSelectHtml}</div>
+          ${teamPickerHtml}
+          <div style="font-size:12px;color:var(--muted);margin:10px 0 6px;border-top:1px dashed var(--border);padding-top:8px">Feinrechte innerhalb der Zeiterfassung:</div>
           ${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
           <div id="ufadm-zeiterfassung" style="display:${st('zeiterfassung')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf die Zeiterfassungs-Einstellungen verwalten (Teams, Rollen, Vorgaben ändern).</div>
           ${zeRoleOpts}
