@@ -3970,7 +3970,7 @@ function roleLbl(u){
 // Kategorien/Daten) EINMALIG hierher umhängen (gleiche Elemente/IDs →
 // renderSettings füllt sie am neuen Ort). Mitarbeiter rendern wir selbst
 // als breite Tabelle. Idempotent.
-function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','zugriff','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
+function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
 function verwShowTab(name){
   document.querySelectorAll('#verw-root .verw-panel').forEach(p=>{ p.style.display=(p.id==='verw-tab-'+name)?'':'none'; });
   document.querySelectorAll('#verw-root .verw-tab').forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-vtab')===name); });
@@ -3996,7 +3996,6 @@ function ensureVerwMounted(){
      <span class="verw-tabsep lead">Übergreifend</span>
      <button class="verw-tab" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
      <button class="verw-tab" data-vtab="org" onclick="verwShowTab('org')">🏢 Organisation</button>
-     <button class="verw-tab" data-vtab="zugriff" onclick="verwShowTab('zugriff')">🔐 Zugriffe</button>
      <button class="verw-tab" data-vtab="data" onclick="verwShowTab('data')">💾 Daten &amp; Backup</button>
      <span class="verw-tabsep">Bereiche</span>
      <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
@@ -4004,7 +4003,6 @@ function ensureVerwMounted(){
    <div class="crm-body">
      <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
      <div class="verw-panel" id="verw-tab-org" style="display:none"></div>
-     <div class="verw-panel" id="verw-tab-zugriff" style="display:none"><div id="verw-zugriff"></div></div>
      <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
      <div class="verw-panel" id="verw-tab-data" style="display:none"><div id="verw-impexp"></div><div id="verw-history"></div></div>
    </div>`;
