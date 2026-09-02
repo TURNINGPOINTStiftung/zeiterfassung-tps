@@ -475,25 +475,6 @@ function userForm(u={}){
               <option value="geschaeftsfuehrer"${u.role==='geschaeftsfuehrer'?' selected':''}>Geschäftsführung</option>
            </select>`}
     </div>
-    ${u.id==='admin'?'':`<div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="uf-gfcountersign" ${u.gfCountersign?'checked':''} style="width:auto;cursor:pointer">
-        ✍ Zeiterfassung vom GF gegenzeichnen lassen <span style="font-weight:400;color:var(--muted)">(nur für Leitung)</span>
-      </label>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Wenn aktiv, sieht die Geschäftsführung die <b>eingereichten</b> Monate dieser Leitung in der Mitarbeiterübersicht und zeichnet sie gegen. Ohne Haken bleibt die Leitung für den GF privat.</div>
-    </div>`}
-    ${u.id==='admin'?'':`<div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="uf-notimesheet" ${u.noTimesheet?'checked':''} style="width:auto;cursor:pointer">
-        ⏱ Zeiterfassung ausblenden <span style="font-weight:400;color:var(--muted)">(für Geschäftsführung ohne eigene Zeiterfassung)</span>
-      </label>
-    </div>
-    <div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="uf-noreport" ${u.noReport?'checked':''} style="width:auto;cursor:pointer">
-        🔒 Zeiterfassung privat <span style="font-weight:400;color:var(--muted)">(Leitung: kein Einreichen, GF hat keinen Zugriff)</span>
-      </label>
-    </div>`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
           const crs=getCustomRoles();
@@ -617,11 +598,33 @@ function userForm(u={}){
       // Zeiterfassung ist jetzt ein ECHTES Modul (Kein/Nutzen/Verwaltend) – wie CRM/Kanban.
       // „Kein"  = kein Zeiterfassungs-Zugang (ersetzt das frühere „Nur CRM"-Häkchen).
       // „Verwaltend" = darf zusätzlich die ZE-Einstellungen ändern (zugriff_verwaltung_ze).
+      // Rollen-Optionen (Gegenzeichnen/Privat = Leitung, Ausblenden = GF) liegen JETZT hier im
+      // ZE-Block statt oben und tauchen nur bei passender Rolle auf (_ufSyncZeRoleOpts via
+      // toggleFreelancerFields). Der ZE-Body blendet bei „Kein" ohnehin komplett aus → passt,
+      // da diese Optionen nur bei aktiver Zeiterfassung Sinn ergeben.
+      const _cbLbl='display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px';
+      const _cbHint='font-size:11px;color:var(--muted);margin:2px 0 0 26px';
+      const zeRoleOpts=`<div id="uf-ze-roleopts" style="display:none;margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Rollen-Optionen:</div>
+          <div id="uf-ze-opt-countersign" style="display:none;margin-bottom:8px">
+            <label style="${_cbLbl}"><input type="checkbox" id="uf-gfcountersign" ${u.gfCountersign?'checked':''} style="width:auto;cursor:pointer"> ✍ Zeiterfassung vom GF gegenzeichnen lassen</label>
+            <div style="${_cbHint}">Wenn aktiv, sieht die GF die <b>eingereichten</b> Monate dieser Leitung und zeichnet sie gegen. Ohne Haken bleibt die Leitung für den GF privat.</div>
+          </div>
+          <div id="uf-ze-opt-noreport" style="display:none;margin-bottom:8px">
+            <label style="${_cbLbl}"><input type="checkbox" id="uf-noreport" ${u.noReport?'checked':''} style="width:auto;cursor:pointer"> 🔒 Zeiterfassung privat</label>
+            <div style="${_cbHint}">Leitung: kein Einreichen, GF hat keinen Zugriff.</div>
+          </div>
+          <div id="uf-ze-opt-notimesheet" style="display:none">
+            <label style="${_cbLbl}"><input type="checkbox" id="uf-notimesheet" ${u.noTimesheet?'checked':''} style="width:auto;cursor:pointer"> ⏱ Eigene Zeiterfassung ausblenden</label>
+            <div style="${_cbHint}">Für Geschäftsführung ohne eigene Zeiterfassung (behält Berichte/Übersicht).</div>
+          </div>
+        </div>`;
       const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span>${seg('zeiterfassung',st('zeiterfassung'))}</div>
         <div class="uf-mod-body" id="ufsub-zeiterfassung" style="display:${st('zeiterfassung')==='kein'?'none':''}">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Feinrechte innerhalb der Zeiterfassung:</div>
           ${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
           <div id="ufadm-zeiterfassung" style="display:${st('zeiterfassung')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf die Zeiterfassungs-Einstellungen verwalten (Teams, Rollen, Vorgaben ändern).</div>
+          ${zeRoleOpts}
         </div></div>`;
       return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
@@ -668,6 +671,13 @@ export function toggleFreelancerFields(){
   fields.style.display=(role==='freiberuflich'||role==='admin'||zeKein)?'none':'';
   const ff=document.getElementById('uf-freelancer-fields');
   if(ff) ff.style.display=role==='freiberuflich'?'':'none';
+  // ZE-Rollen-Optionen (im ZE-Block): Gegenzeichnen/Privat nur für Leitung, Ausblenden nur für GF.
+  const _setD=(id,show)=>{ const el=document.getElementById(id); if(el) el.style.display=show?'':'none'; };
+  const isLtg=role==='leitung', isGf=role==='geschaeftsfuehrer';
+  _setD('uf-ze-roleopts', isLtg||isGf);
+  _setD('uf-ze-opt-countersign', isLtg);
+  _setD('uf-ze-opt-noreport', isLtg);
+  _setD('uf-ze-opt-notimesheet', isGf);
   // Alle Rollen zeigen Multi-Team-Auswahl (uf-team-single wurde entfernt)
   toggleWerkstudentFields();
 }
