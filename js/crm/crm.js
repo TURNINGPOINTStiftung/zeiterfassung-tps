@@ -3040,6 +3040,36 @@ function teamMainTasks(team){
   });
   return out;
 }
+// Offene Team-Aufgaben (Hauptaufgaben) eines Teams – QUELLÜBERGREIFEND, je mit Herkunft:
+//   📅 Veranstaltungen des Teams (v.team) · 📇 CRM-Eintrag-Projekte (Top-Aufgabe mit Team-Tag) ·
+//   📂 Team-Projekte (p.team). Reine Lese-Funktion für die Team-Aufgaben-Ansicht. Unzugewiesen zuerst.
+function teamTasks(team){
+  const out=[]; const ohne=(team==='Ohne Team');
+  try{ listVeranstaltungen().forEach(v=>{ if(v.closed) return;
+    const match = ohne ? !v.team : (v.team===team); if(!match) return; normTasks(v);
+    (v.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
+      out.push({kind:'veranstaltung', id:v.id, origin:(v.titel||'Veranstaltung'), oicon:'📅', node:m}); }); }); }catch(e){}
+  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
+    (e.projekte||[]).forEach(p=>{ if(p.closed) return; (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
+      const tg=m.teams||[]; const match = ohne ? !tg.length : tg.includes(team); if(!match) return;
+      out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag'), oicon:'📇', node:m}); }); }); })); }catch(e){}
+  try{ listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed).forEach(p=>{ normTasks(p);
+    (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
+      out.push({kind:'teamprojekt', id:p.id, origin:(p.name||'Projekt'), oicon:'📂', node:m}); }); }); }catch(e){}
+  out.sort((a,b)=>{ const au=a.node.assigneeId?1:0, bu=b.node.assigneeId?1:0; if(au!==bu) return au-bu;
+    return String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')); });
+  return out;
+}
+// Team-Aufgabe öffnen: NUR die Aufgabe (Task-Modal), Rücksprung in die Team-Ansicht. Öffnet KEINE
+// CRM-Detailseite → auch für reine Kanban-Nutzer unbedenklich (Herkunft nur als Text, nicht klickbar).
+function _teamTaskSetCtx(kind,tree,id,tid){
+  if(kind==='teamprojekt'){ window._crmTaskCtx={kind:'teamprojekt',id}; }
+  else if(kind==='veranstaltung'){ window._crmTaskCtx={kind:'veranstaltung',id}; }
+  else { const e=getEntity(tree,id); let pid=''; if(e){ migEntityProjekte(e); const p=_projForNode(e,tid); if(p) pid=p.id; } window._crmTaskCtx={kind:'entity',tree,eid:id,pid}; }
+  window._crmAfterTask='teamdetail';
+}
+function crmTeamTaskOpen(kind,tree,id,tid){ _teamTaskSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
+window.crmTeamTaskOpen=crmTeamTaskOpen;
 // Veranstaltungen eines Teams (Ohne Team = ohne team-Zuordnung / übergeordnet)
 function teamVeranstaltungen(team){
   return listVeranstaltungen().filter(v=> team==='Ohne Team' ? !v.team : (v.team===team));
@@ -3147,11 +3177,27 @@ function paintTeamDetail(){
     ${openP.length?`<div class="crm-list">${openP.map(projCardHtml).join('')}</div>`:`<div class="small" style="color:var(--muted)">Noch keine eigenen Projekte.</div>`}
     ${closedP.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedP.length})</summary><div class="crm-list" style="margin-top:8px">${closedP.map(projCardHtml).join('')}</div></details>`:''}
   </div>`;
+  // Team-Aufgaben: offene Hauptaufgaben des Teams quellübergreifend (Veranstaltung/CRM-Eintrag/Projekt).
+  // Herkunft nur als Text; „Öffnen" zeigt NUR die Aufgabe (keine CRM-Detailseite). Unzugewiesen zuerst.
+  const teamTaskSec=(()=>{
+    const rows=teamTasks(team).map(a=>{
+      const t=a.node; const st=taskStatusByKey(t.status);
+      const who = t.assigneeName ? '👤 '+esc(t.assigneeName) : '<span style="color:var(--accent);font-weight:600">＋ noch frei</span>';
+      const meta=[a.oicon+' '+esc(a.origin), who, t.due?('📅 '+esc(fmtDate(Date.parse(t.due)))):''].filter(Boolean).join(' · ');
+      return `<div class="crm-task">
+        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+        <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div></div>
+        <button class="btn-sm-crm" onclick="crmTeamTaskOpen('${a.kind}','${a.tree||''}','${a.id}','${t.id}')">Öffnen</button>
+      </div>`;
+    }).join('');
+    return `<div class="crm-sec"><h4><span class="ttl">📋 Team-Aufgaben</span></h4>${rows||'<div class="small" style="color:var(--muted)">Keine offenen Team-Aufgaben.</div>'}</div>`;
+  })();
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeams()">← Teams</button>
       <h2>👥 ${esc(team)}</h2>
     </div>
+    ${teamTaskSec}
     ${_view?vaSec:''}
     ${projektSec}
   </div>`;
