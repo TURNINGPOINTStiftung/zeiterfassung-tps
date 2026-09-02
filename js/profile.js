@@ -1,4 +1,4 @@
-import { getUser, getData, mutate } from './data.js';
+import { getUser, getData, setUserFields } from './data.js';
 import { verifyPw, makePwRecord } from './auth.js';
 import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods } from './utils.js';
 
@@ -86,10 +86,13 @@ export async function saveProfile(){
     lecturePeriods=wsCollectPeriods('prof-lp',4);
     lectureFreeDays=wsCollectPeriods('prof-lf',6);
   }
-  await mutate(d=>{
-    const u=d.users.find(x=>x.id===cu.id);
-    if(u){ u.email=email; u.city=city; u.bundesland=bl; if(newPwHash) u.pw=newPwHash; if(lecturePeriods) u.lecturePeriods=lecturePeriods; if(lectureFreeDays) u.lectureFreeDays=lectureFreeDays; }
-  });
+  // Nur die eigenen Selbstbedienungs-Felder gezielt schreiben (users/<idx>/<feld>) – passt zur
+  // Owner-Regel und rührt den restlichen users-Array (role/teams/… = Admin-only) nicht an.
+  const patch={ email, city, bundesland };
+  if(newPwHash) patch.pw=newPwHash;
+  if(lecturePeriods) patch.lecturePeriods=lecturePeriods;
+  if(lectureFreeDays) patch.lectureFreeDays=lectureFreeDays;
+  await setUserFields(cu.id, patch);
   window.cu=getUser(cu.id);
   closeModal();
   toast('Profil gespeichert. ✓','ok');

@@ -1,6 +1,6 @@
 import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
          EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL } from './config.js';
-import { getData, getUser, mutate, setDataCache } from './data.js';
+import { getData, getUser, mutate, setUserFields, setDataCache } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 import { getLoginDirUsers, authenticate } from './firebase.js';
 
@@ -373,7 +373,8 @@ export async function saveResetPassword(token,uid){
   if(pw1.length<8){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 8 Zeichen.</div>'; return; }
   if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
   const hash=await makePwRecord(pw1);
-  await mutate(d=>{ const u=d.users.find(x=>x.id===uid); if(u) u.pw=hash; });
+  // Nur das eigene pw gezielt schreiben (users/<idx>/pw) – passt zur Owner-Regel.
+  await setUserFields(uid, { pw:hash });
   await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).remove().catch(()=>{});
   closeModal();
   toast('✅ Passwort gespeichert. Du kannst dich jetzt einloggen.','ok');
