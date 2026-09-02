@@ -225,8 +225,8 @@
         <div class="title">Prüfvermerk (Leitung)</div>
         <textarea id="review-note" placeholder="Anmerkungen zur Zeiterfassung…"></textarea>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn-ok" onclick="doApprove()">✓ Genehmigen</button>
-          <button class="btn btn-danger" onclick="doReject()">✗ Ablehnen</button>
+          <button class="btn btn-ok" id="btn-approve" onclick="doApprove()">✓ Genehmigen</button>
+          <button class="btn btn-danger" id="btn-reject" onclick="doReject()">✗ Ablehnen</button>
           <button class="btn btn-outline" id="btn-reset-draft" onclick="doResetToDraft()">↩ Zurück zu Entwurf</button>
         </div>
       </div>
@@ -438,6 +438,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=219"></script>
+<script type="module" src="js/main.js?v=220"></script>
 </body>
 </html>
