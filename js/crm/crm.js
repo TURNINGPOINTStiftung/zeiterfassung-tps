@@ -96,6 +96,9 @@ function isEntityCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind=
 // Eine Aufgaben-Vorlage ist ein ganz normaler Board-Container (Knoten in .todos),
 // damit sie mit derselben Kanban-Engine gebaut werden kann wie ein Projekt.
 function _isVorlageCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='vorlage'); }
+// Kontexte, in denen eine TOP-Aufgabe ein eigenes Mehrfach-Team-Feld (node.teams) bekommt:
+// CRM-Eintrag, Veranstaltung und Vorlage. (Team-Projekte NICHT – die hängen an EINEM festen Team.)
+function _ctxAllowsTeams(){ const k=window._crmTaskCtx&&window._crmTaskCtx.kind; return k==='entity'||k==='veranstaltung'||k==='vorlage'; }
 function curContainer(){
   const ctx=window._crmTaskCtx; if(!ctx) return null;
   if(ctx.kind==='teamprojekt'){ const c=getTeamProjekt(ctx.id); if(c) normTasks(c); return c; }
@@ -1413,7 +1416,7 @@ function kbCardHtml(c, n){
   }).join('');
   const cdone=!vo&&n.status==='erledigt';
   const st=vo?null:taskStatusByKey(n.status);
-  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')">
+  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${n.id}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')" ondragend="crmDragEnd(event)">
     <div class="kb-card-top">
       <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse('${n.id}')">${collapsed?'▸':'▾'}</button>
       ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">`}
@@ -1454,7 +1457,7 @@ function taskBoardHtml(c){
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
       <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card','${top.id}')">
-      <div class="kb-cards">${cards}</div>
+      <div class="kb-cards" ondragover="crmDragOver(event)" ondrop="crmDropInCards(event,'${top.id}')">${cards}</div>
       <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,'${top.id}')"></div>
     </div>`;
   }).join('');
@@ -1494,6 +1497,35 @@ function crmDropOnColumn(ev,topId){
   }
   repaintContainer();
 }
+function crmDragEnd(ev){ window._crmDragId=null; window._crmDragKind=null; }   // Sicherheitsnetz nach Abbruch
+// Karte POSITIONSGENAU einsortieren: vertikal umsortieren (innerhalb der Spalte) UND horizontal in
+// eine andere Spalte verschieben. Zielposition = vor welcher Karte (Maus-Y). Spalten-Reorder wird
+// weitergereicht (kind!=='card' → an .kb-col/crmDropOnColumn via Bubbling).
+function crmDropInCards(ev, colId){
+  if(window._crmDragKind!=='card') return;
+  ev.preventDefault(); ev.stopPropagation();
+  const dragId=window._crmDragId; window._crmDragId=null; window._crmDragKind=null;
+  if(!dragId) return;
+  let refId=null;
+  try{
+    const kids=Array.from(ev.currentTarget.querySelectorAll(':scope > .kb-card'));
+    for(const c of kids){ if(c.getAttribute('data-id')===dragId) continue; const r=c.getBoundingClientRect();
+      if(ev.clientY < r.top + r.height/2){ refId=c.getAttribute('data-id'); break; } }
+  }catch(e){}
+  mutateContainer(c=>{
+    const f=findNode(c,dragId); if(!f) return;
+    const target=findNode(c,colId); if(!target) return;
+    if(flatNodes([f.node]).some(x=>x.id===colId)) return;     // nicht in eigenen Teilbaum
+    const i=f.arr.indexOf(f.node); if(i<0) return;
+    f.arr.splice(i,1);
+    if(!Array.isArray(target.node.children)) target.node.children=[];
+    let idx = refId ? target.node.children.findIndex(x=>x.id===refId) : target.node.children.length;
+    if(idx<0) idx=target.node.children.length;
+    target.node.children.splice(idx,0,f.node);
+  });
+  repaintContainer();
+}
+window.crmDropInCards=crmDropInCards; window.crmDragEnd=crmDragEnd;
 
 // ── Detail eines Eintrags ──────────────────────────────────────────
 function paintDetail(){
@@ -2839,13 +2871,19 @@ function nodeModal(o){
   const n=o.node||{}; const tp=!isEntityCtx(); const vo=_isVorlageCtx();
   crmOpenModalShell();
   const statusOpts=getTaskStatus().map(s=>`<option value="${s.key}" ${n.status===s.key?'selected':''}>${esc(s.label)}</option>`).join('');
+  // Team-Zuweisung (mehrere) als EIGENER Bereich für Top-Aufgaben – jetzt auch in Veranstaltungen
+  // & Vorlagen (nicht nur CRM-Einträgen). Darunter die davon abhängige Zuständig-Auswahl.
+  const allowTeams = o.isTop && _ctxAllowsTeams();
   let teamRow;
-  if(vo){ teamRow=''; }
-  else if(o.isTop && !tp){
-    const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${(n.teams||[]).includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
+  if(allowTeams){
+    // Neue Aufgabe in einer Veranstaltung: deren Team vorbelegen (die Veranstaltung gehört einem Team).
+    const ctxTeam = (window._crmTaskCtx&&window._crmTaskCtx.kind==='veranstaltung'&&e.team)?[e.team]:[];
+    const preTeams = (Array.isArray(n.teams)&&n.teams.length)?n.teams:ctxTeam;
+    const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${preTeams.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
-     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(n.teams||[], n.assigneeId||'')}</select></div>`;
-  } else {
+     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
+  } else if(vo){ teamRow=''; }   // Vorlage-Unterpunkt: keine Einzel-Zuweisung
+  else {
     const it = tp ? (e.team?[e.team]:[]) : (o.inheritTeam||[]);
     const itLabel = it.join(', ');
     teamRow=`<div class="crm-modal-field"><label>Zuständig${itLabel?' ('+esc(itLabel)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
@@ -2892,7 +2930,7 @@ function _readNodeForm(e, isTop){
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
-  if(isTop && isEntityCtx()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe
+  if(isTop && _ctxAllowsTeams()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe (Eintrag/Veranstaltung/Vorlage)
   return rec;
 }
 function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
@@ -2902,7 +2940,7 @@ function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
   mutateContainer(en=>{
     if(!Array.isArray(en.todos)) en.todos=[];
     if(tid){ const f=findNode(en, tid); if(f){ Object.assign(f.node, rec); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
-    else { en.todos.push({ id:newId(), children:[], teams: isEntityCtx()?(rec.teams||[]):[], ...rec }); }
+    else { en.todos.push({ id:newId(), children:[], teams: _ctxAllowsTeams()?(rec.teams||[]):[], ...rec }); }
   });
   crmCloseModal(); repaintContainer();
 }
@@ -3006,7 +3044,8 @@ function _applyVorlageCore(id){
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
       attachments:(n.attachments||[]).map(a=>({ ...a, id:newId() })),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
-    if(depth===0) node.teams = isEntityCtx()?(n.team?[n.team]:[]):[];
+    // Team(s) der Vorlagen-Top-Aufgabe in die Instanz übernehmen (mehrere; Legacy n.team als Fallback).
+    if(depth===0) node.teams = _ctxAllowsTeams() ? ((Array.isArray(n.teams)&&n.teams.length)?n.teams.slice():(n.team?[n.team]:[])) : [];
     return node;
   };
   const mains=(v.todos||[]).map(n=>build(n,0));
