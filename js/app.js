@@ -19,6 +19,18 @@ function _hasAnyAccess(cu){
   return false;
 }
 
+// Ist die Zeiterfassung für diesen Nutzer freigeschaltet? Jetzt über den Modul-Zugriff
+// (path_zeiterfassung via crmModuleAccess) statt nur über das Legacy-Feld cu.crmOnly.
+// FAIL-SAFE: ist die Zugriffslogik noch nicht geladen, greift der bisherige Fallback (!crmOnly),
+// damit sich für Bestandsnutzer nichts ändert und niemand fälschlich ausgesperrt wird.
+function _zeActive(cu){
+  try{
+    const ma = window.crmModuleAccess ? window.crmModuleAccess(cu) : null;
+    if(ma && ma.zeiterfassung) return ma.zeiterfassung!=='kein';
+  }catch(e){}
+  return !cu.crmOnly;
+}
+
 // Freundlicher „Noch nichts freigeschaltet"-Screen (nur Login + eigenes Profil).
 function _showNoAccessScreen(){
   ['module-bar','app-nav'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -48,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v312':'';
+  if(_hv) _hv.textContent=_showVer?'v313':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -80,7 +92,7 @@ export function initApp(){
   // noTimesheet: ZE komplett weg (GF-Konzept)
   // noReport: ZE bleibt, aber privat — kein Einreichen, GF hat keinen Zugriff (Leitungs-Konzept)
   const gfNoZE=isGF&&!!cu.noTimesheet;
-  const crmOnly=!!cu.crmOnly;   // Nutzer ohne Zeiterfassung (nur CRM)
+  const crmOnly=!_zeActive(cu);   // „ZE aus" – jetzt über Modul-Zugriff (path_zeiterfassung), nicht mehr nur cu.crmOnly
   const role=cu.role;
   const tabZE=document.querySelector('[data-view="zeiterfassung"]');
   if(tabZE) tabZE.style.display=(isAdmin||gfNoZE||crmOnly)?'none':'';

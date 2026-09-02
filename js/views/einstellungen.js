@@ -31,6 +31,9 @@ window.ufSetMod=function(key){
   const sub=document.getElementById('ufsub-'+key); if(sub) sub.style.display=(v==='kein')?'none':'';
   const adm=document.getElementById('ufadm-'+key); if(adm) adm.style.display=(v==='verwaltend')?'':'none';
   if(key==='crm'){ const lv=document.getElementById('uf-crmlevel'); const uv=document.getElementById('uf-crmverein'); if(uv) uv.style.display=(v!=='kein'&&lv&&lv.value==='verein')?'':'none'; }
+  // Zeiterfassung ist ein echtes Modul: „Kein" blendet zusätzlich die Arbeitszeit/Urlaub-Felder aus
+  // (früher am „Nur CRM"-Häkchen). toggleFreelancerFields ist die eine Quelle dieser Sichtbarkeit.
+  if(key==='zeiterfassung'){ try{ window.toggleFreelancerFields&&window.toggleFreelancerFields(); }catch(e){} }
 };
 
 export function renderSettings(){
@@ -474,14 +477,6 @@ function userForm(u={}){
     </div>
     ${u.id==='admin'?'':`<div class="form-group">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="uf-crmonly" ${u.crmOnly?'checked':''} style="width:auto;cursor:pointer"
-          onchange="var f=document.getElementById('uf-employed-fields'); if(f) f.style.display=this.checked?'none':'';">
-        🚫 Nur CRM-Zugang – keine Zeiterfassung
-      </label>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Für externe/zusätzliche Personen, die nur das CRM nutzen. Der Zeiterfassungs-Bereich wird für sie ausgeblendet. Die CRM-Zugriffsstufe stellst du weiter unten ein.</div>
-    </div>`}
-    ${u.id==='admin'?'':`<div class="form-group">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
         <input type="checkbox" id="uf-gfcountersign" ${u.gfCountersign?'checked':''} style="width:auto;cursor:pointer">
         ✍ Zeiterfassung vom GF gegenzeichnen lassen <span style="font-weight:400;color:var(--muted)">(nur für Leitung)</span>
       </label>
@@ -544,7 +539,7 @@ function userForm(u={}){
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
       <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     </div>
-    <div id="uf-employed-fields"${u.crmOnly?' style="display:none"':''}>
+    <div id="uf-employed-fields"${(u.crmOnly||!u.id)?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
       <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
         <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
@@ -597,7 +592,11 @@ function userForm(u={}){
       if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>
         <div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`;
       const acc=(window.crmModuleAccess&&window.crmModuleAccess(u))||{};
-      const st=k=>acc[k]||'kein';
+      // NULL-START beim Anlegen: ein NEUER Nutzer (noch keine u.id) startet auf „nichts freigeschaltet"
+      // (alle Module „Kein"), unabhängig von der Rolle. Zugänge werden bewusst einzeln vergeben.
+      // Bestehende Nutzer: effektiver Ist-Zustand (crmModuleAccess), damit sich ohne Klick nichts ändert.
+      const isNewUser=!u.id;
+      const st=k=>isNewUser?'kein':(acc[k]||'kein');
       const crmAcc=(window.crmUserAccess&&window.crmUserAccess(u.id))||{level:'none',vereinIds:[]};
       const accIds=crmAcc.vereinIds||[];
       const vereine=(window.crmVereinList&&window.crmVereinList())||[];
@@ -615,9 +614,15 @@ function userForm(u={}){
         <div id="ufadm-crm" style="display:${st('crm')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf CRM-Einstellungen (Kategorien, Felder, Funktionen …) verwalten.</div>`;
       const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen']];
       const zeOn=k=>(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,k))?!!u.perms[k]:(DEFAULT_PERMISSIONS[k]?.includes(u.role||'mitarbeiter')??false);
-      const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span><span style="font-size:11px;color:var(--muted)">An/Aus oben bei den Arbeitszeiten</span></div>
-        <div class="uf-mod-body">${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
-          <label style="display:flex;align-items:center;gap:8px;padding:8px 0 3px;cursor:pointer;font-size:13px;margin-top:4px;border-top:1px dashed var(--border)"><input type="checkbox" id="uf-perm-zugriff_verwaltung_ze" ${(u.perms&&u.perms['zugriff_verwaltung_ze'])?'checked':''} style="width:auto;cursor:pointer"> 🛠️ Verwalten – Zeiterfassungs-Einstellungen ändern</label></div></div>`;
+      // Zeiterfassung ist jetzt ein ECHTES Modul (Kein/Nutzen/Verwaltend) – wie CRM/Kanban.
+      // „Kein"  = kein Zeiterfassungs-Zugang (ersetzt das frühere „Nur CRM"-Häkchen).
+      // „Verwaltend" = darf zusätzlich die ZE-Einstellungen ändern (zugriff_verwaltung_ze).
+      const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span>${seg('zeiterfassung',st('zeiterfassung'))}</div>
+        <div class="uf-mod-body" id="ufsub-zeiterfassung" style="display:${st('zeiterfassung')==='kein'?'none':''}">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Feinrechte innerhalb der Zeiterfassung:</div>
+          ${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
+          <div id="ufadm-zeiterfassung" style="display:${st('zeiterfassung')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf die Zeiterfassungs-Einstellungen verwalten (Teams, Rollen, Vorgaben ändern).</div>
+        </div></div>`;
       return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
@@ -658,7 +663,9 @@ export function toggleFreelancerFields(){
   const fields=document.getElementById('uf-employed-fields');
   if(!fields) return;
   const role=_resolveUfRole();
-  fields.style.display=(role==='freiberuflich'||role==='admin')?'none':'';
+  // Arbeitszeit/Urlaub nur zeigen, wenn ZE genutzt wird (ZE-Modul ≠ „Kein") und keine Sonderrolle.
+  const zeKein=(document.querySelector('input[name="ufmod-zeiterfassung"]:checked')?.value)==='kein';
+  fields.style.display=(role==='freiberuflich'||role==='admin'||zeKein)?'none':'';
   const ff=document.getElementById('uf-freelancer-fields');
   if(ff) ff.style.display=role==='freiberuflich'?'':'none';
   // Alle Rollen zeigen Multi-Team-Auswahl (uf-team-single wurde entfernt)
@@ -683,18 +690,28 @@ function collectUserForm(){
   const lectureFreeDays=wsCollectPeriods('uf-lf',6);
   // Zugriffe pro Person (neues Modell). Admin: keine Steuerelemente → leer (Admin darf ohnehin alles).
   const perms={};
-  // 1) Zeiterfassung-Feinrechte (Checkboxen) + ZE-Verwalten
-  ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel','zugriff_verwaltung_ze']
-    .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
-  // 2) Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
   const _mod=k=>{ const r=document.querySelector('input[name="ufmod-'+k+'"]:checked'); return r?r.value:null; };
+  // 1) Zeiterfassung als ECHTES Modul (Kein/Nutzen/Verwaltend): Pfad-Sichtbarkeit + ZE-Verwalten.
+  //    „Verwaltend" ⇒ zugriff_verwaltung_ze (die frühere separate Checkbox ist entfallen).
+  const zeState=_mod('zeiterfassung');
+  if(zeState!==null){
+    perms['path_zeiterfassung']=(zeState!=='kein');
+    if(zeState==='verwaltend') perms['zugriff_verwaltung_ze']=true;
+  }
+  // ZE-Feinrechte (Checkboxen im ZE-Block) – nur wirksam, solange ZE genutzt wird.
+  ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel']
+    .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
+  // 2) Weitere Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
   [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung']]
     .forEach(([k,vk])=>{ const s=_mod(k); if(s===null) return; perms['path_'+k]=(s!=='kein'); if(s==='verwaltend') perms[vk]=true; });
   // 3) CRM: „Verwaltend" → CRM-Verwalter-Recht (Umfang/Level separat via crmSetUserAccess)
   if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;
   // 4) System-Verwaltung (voller Admin)
   const _sys=_mod('system'); if(_sys!==null) perms['zugriff_verwaltung']=(_sys==='ja');
-  const crmOnly=!!(document.getElementById('uf-crmonly')?.checked);
+  // „Nur CRM / keine Zeiterfassung" wird jetzt ALLEIN über ZE=Kein ausgedrückt (eine Quelle der
+  // Wahrheit). crmOnly bleibt als daraus ABGELEITETES Legacy-Feld erhalten – viele Stellen lesen
+  // noch cu.crmOnly (app.js, uebersicht.js, crm.js _defaultPathAccess). So bleibt beides konsistent.
+  const crmOnly=(zeState==='kein');
   const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
   const noTimesheet=!!(document.getElementById('uf-notimesheet')?.checked);
   const noReport=!!(document.getElementById('uf-noreport')?.checked);
