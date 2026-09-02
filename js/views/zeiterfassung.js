@@ -420,7 +420,25 @@ function renderReviewPanel(uid,entry,isLeiter){
   if(isBerater(viewedUser)&&cu.role==='leitung'){ panel.style.display='none'; return; }
   if(entry.status==='draft'){ panel.style.display='none'; return; }
   panel.style.display='block';
-  document.getElementById('review-note').value=entry.managerNote||'';
+  const noteEl=document.getElementById('review-note');
+  const bApprove=document.getElementById('btn-approve');
+  const bReject=document.getElementById('btn-reject');
+  // Nach abgeschlossener Prüfung (genehmigt/abgelehnt) ist der Vorgang erledigt:
+  // Feld leeren + ausgrauen und die Prüf-Buttons sperren → keine versehentliche
+  // zweite Prüfung/Doppel-Kommentar. Der Kommentar bleibt dauerhaft im
+  // „Einreich-/Prüf-Verlauf" (statusLog) erhalten.
+  const _reviewed=entry.status==='approved'||entry.status==='rejected';
+  if(_reviewed){
+    noteEl.value=''; noteEl.disabled=true;
+    if(bApprove) bApprove.disabled=true;
+    if(bReject) bReject.disabled=true;
+  } else {
+    noteEl.disabled=false;
+    if(bApprove) bApprove.disabled=false;
+    if(bReject) bReject.disabled=false;
+    // Feld nicht überschreiben, während die Leitung gerade tippt (Hintergrund-Sync).
+    if(document.activeElement!==noteEl) noteEl.value=entry.managerNote||'';
+  }
   // "Zurück zu Entwurf" ist nur für den Admin. Die Leitung soll genehmigen
   // oder mit Begründung ablehnen – nicht still in den Entwurf zurücksetzen.
   const _rd=document.getElementById('btn-reset-draft');
