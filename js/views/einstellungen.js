@@ -630,11 +630,22 @@ function userForm(u={}){
           <div id="ufadm-zeiterfassung" style="display:${st('zeiterfassung')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf die Zeiterfassungs-Einstellungen verwalten (Teams, Rollen, Vorgaben ändern).</div>
           ${zeRoleOpts}
         </div></div>`;
+      // Kanban-Team-Zuweisung: ZE-Teams des Nutzers sind automatisch dabei (gesperrt, angehakt),
+      // weitere frei zuweisbar → in u.kanbanTeams gespeichert (nur die zusätzlichen). Sichtbar nur
+      // bei Kanban≠Kein (steht im ufsub-kanban-Body). Effektiv sichtbar = ZE-Teams ∪ zugewiesene.
+      const _kbTeams=getTeams();
+      const _kbZe=new Set(Array.isArray(u.teams)?u.teams:(u.team?[u.team]:[]));
+      const _kbExtra=new Set(Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]);
+      const kanbanBody=!_kbTeams.length
+        ? '<div style="font-size:12px;color:var(--muted)">Noch keine Teams angelegt (Teams &amp; Rollen).</div>'
+        : `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Team-Boards, die diese Person im Projektmanagement sieht. Die <b>Zeiterfassungs-Teams</b> sind automatisch dabei; hier zusätzliche <b>zuweisen</b>. (Verwalten / CRM-Vollzugriff sieht alle.)</div>`
+          +_kbTeams.map(t=>{ const inZe=_kbZe.has(t); const on=inZe||_kbExtra.has(t);
+            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;${inZe?'opacity:.65':'cursor:pointer'}"><input type="checkbox" class="uf-kbteam" value="${esc(t)}" data-ze="${inZe?'1':'0'}" ${on?'checked':''} ${inZe?'disabled':''} style="width:auto;cursor:${inZe?'default':'pointer'}"> ${esc(t)}${inZe?' <span style="font-size:11px;color:var(--muted)">(aus Zeiterfassung – automatisch)</span>':''}</label>`; }).join('');
       return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
         ${modBlock('crm','📇','CRM (Kontakte)',crmBody)}
-        ${modBlock('kanban','🗂️','Projektmanagement')}
+        ${modBlock('kanban','🗂️','Projektmanagement',kanbanBody)}
         ${modBlock('verteiler','✉️','Verteiler')}
         ${modBlock('ki','🧠','KI')}
         ${modBlock('messe','🎪','Messemodus')}
@@ -729,6 +740,11 @@ function collectUserForm(){
   const gfCountersign=!!(document.getElementById('uf-gfcountersign')?.checked);
   const noTimesheet=!!(document.getElementById('uf-notimesheet')?.checked);
   const noReport=!!(document.getElementById('uf-noreport')?.checked);
+  // Kanban-Team-Zuweisung: nur die ZUSÄTZLICHEN Teams speichern (die ZE-Teams sind gesperrte
+  // Checkboxen data-ze="1" und laufen zur Laufzeit automatisch über u.teams). Kein Kanban-Block
+  // (Admin) → leer.
+  const kanbanTeams=Array.from(document.querySelectorAll('.uf-kbteam:checked'))
+    .filter(cb=>cb.dataset.ze!=='1').map(cb=>cb.value);
   return {
     perms,
     crmOnly,
@@ -751,6 +767,7 @@ function collectUserForm(){
     customRoles, // alle ausgewählten Bezeichnungen
     team:teams[0]||'',   // primäres Team (Rückwärtskompatibilität)
     teams,
+    kanbanTeams,   // zusätzliche Kanban-Team-Zuweisungen (ZE-Teams sind automatisch dabei)
     city:document.getElementById('uf-city').value.trim(),
     bundesland:document.getElementById('uf-bl').value,
     wh,
