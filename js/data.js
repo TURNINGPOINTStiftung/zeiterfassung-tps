@@ -26,6 +26,25 @@ export function _usersPoisoned(users){
   ));
 }
 
+// ── Schreibrechte-Trennung nach Datenklasse (spiegelt die Server-Regeln) ──────────
+// Ziel: „festgeschriebene" Config-Daten dürfen NICHT von altem Cache/normalen Nutzern
+// überschrieben werden. Die Server-Regeln erlauben Config-Knoten nur Admins; ein
+// Voll-Blob-Schreiber (fbWriteMerge) eines Nicht-Admins würde sonst an der Regel scheitern
+// und – weil Firebase-update() ATOMAR ist – ALLE Pfade des Schreibvorgangs mitreißen.
+// Deshalb filtert der Client hier passend vor:
+//  • CONFIG_NODES:    nur schreiben, wenn der aktuelle Nutzer Admin/Verwaltung ist.
+//  • NEVER_BLOB_NODES: Sicherheits-/Identitäts-Knoten – NIE aus einem Voll-Blob schreiben
+//                      (nur gezielt über das Sicherheits-Setup, admin-setup.js). Schützt
+//                      loginDir/allowed vor versehentlichem Clobber aus einem Cache und
+//                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
+const _CONFIG_NODES     = new Set(['users','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
+const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','uidUser']);
+function _isAdminLike(){
+  const cu=window.cu; if(!cu) return false;
+  if(cu.role==='admin') return true;
+  try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(_){ return false; }
+}
+
 export function freshData(){
   return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{},yearReports:{},_fixes:{}};
 }
@@ -291,8 +310,14 @@ export function fbWriteMerge(d){
   // ganze Speichern mit „Speichern fehlgeschlagen" scheitern. JSON-Roundtrip entfernt undefined
   // zuverlässig (undefined-Objektschlüssel fallen weg). Firebase kann undefined ohnehin nicht speichern.
   try{ d = JSON.parse(JSON.stringify(d)); }catch(e){}
+  const adminLike=_isAdminLike();
   const upd={};
   for(const k of Object.keys(d)){
+    // Sicherheits-/Identitäts-Knoten nie aus dem Blob schreiben (nur das Setup pflegt sie).
+    if(_NEVER_BLOB_NODES.has(k)) continue;
+    // Config-Knoten nur als Admin/Verwaltung – sonst würde die atomare update()-Operation an
+    // der Server-Regel scheitern und ALLE (auch die erlaubten) Pfade mitreißen.
+    if(_CONFIG_NODES.has(k) && !adminLike) continue;
     if(k==='entries'){
       const es=d.entries||{};
       for(const ek of Object.keys(es)){
@@ -354,14 +379,14 @@ export function saveRaw(d){
   if(window._cloudUnverified && !window._allowDataShrink){ return Promise.resolve(); }
   noteGoodData(d);
   if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
-  // Normale Bearbeitung: MERGEN via update() – löscht NICHTS, was dieses Gerät nicht kennt
-  // (behebt: veraltetes Handy löscht am PC eingetragene Tage). Nur beim expliziten
-  // Wiederherstellen/Import (window._allowDataShrink) wird der ganze Baum ersetzt (set()).
-  // Cloud-Write im HINTERGRUND (best effort). Die Oberfläche wartet NICHT auf den Server-Roundtrip,
-  // sonst bliebe ein „Speichern" bei langsamer/instabiler Verbindung sichtbar hängen (Dialog schließt
-  // nie, Button bleibt ausgegraut). Der lokale Stand ist oben bereits gesichert; der Realtime-Listener
-  // gleicht mit der Cloud ab. saveRaw meldet sich also fertig, sobald LOKAL gespeichert wurde.
-  const _w = window._allowDataShrink ? (window._fbRef?.set(d)||Promise.resolve()) : fbWriteMerge(d);
+  // Immer knoten-bewusst MERGEN via fbWriteMerge (update()) – löscht NICHTS, was dieses Gerät
+  // nicht kennt. FRÜHER ersetzte der Import/Restore-Pfad (window._allowDataShrink) den ganzen
+  // Baum per set(); das ist unter den neuen Regeln gefährlich: ein Restore eines ALTEN Backups
+  // (ohne die Sicherheits-Knoten loginDir/allowed/admins/…) würde die Allowlist löschen und das
+  // ganze Team aussperren. fbWriteMerge lässt _NEVER_BLOB_NODES komplett unangetastet → die
+  // Sicherheits-Knoten bleiben immer erhalten, App-Daten werden aus dem Backup übernommen.
+  // Cloud-Write im HINTERGRUND (best effort). Die Oberfläche wartet NICHT auf den Server-Roundtrip.
+  const _w = fbWriteMerge(d);
   _w.catch(e=>{ console.warn('Firebase sync error:',e); window._pendingSync=true; });
   return Promise.resolve();
 }
@@ -527,6 +552,27 @@ export function setEntryField(uid,y,m,field,val){
   const entry=d.entries[k];
   // Neuer Entry → einmal komplett; sonst NUR dieses Feld.
   const upd = wasNew ? _entryPaths(k, entry) : { ['entries/'+k+'/'+field]: entry[field] };
+  return _cloudUpdate(upd);
+}
+// ── Gezieltes Schreiben einzelner Felder EINES Nutzers (users/<idx>/<feld>) ────────
+// Nötig, seit die Server-Regeln den ganzen users-Array nur noch Admins erlauben. Die
+// Selbstbedienungs-Felder (pw, email, city, bundesland, Werkstudent-Zeiten) darf der/die
+// Eigentümer:in einzeln schreiben – exakt passend zur Owner-Regel users/$i/<feld>. Es wird
+// NUR das jeweilige Feld als eigener Pfad geschrieben (kein Voll-Array-Write) → kein Clobber
+// fremder Nutzer-Datensätze und keine Kollision mit parallelen Änderungen anderer Geräte.
+export function setUserFields(id, patch){
+  const d=getData();
+  const idx=(d.users||[]).findIndex(u=>u&&u.id===id);
+  if(idx<0) return Promise.resolve();
+  const u=d.users[idx];
+  const upd={};
+  for(const [f,v] of Object.entries(patch||{})){
+    if(v===undefined) continue;
+    u[f]=v;
+    upd['users/'+idx+'/'+f]=v;
+  }
+  _localPersist(d);
+  if(!Object.keys(upd).length) return Promise.resolve();
   return _cloudUpdate(upd);
 }
 export function getUser(id){ return getData().users.find(u=>u.id===id); }

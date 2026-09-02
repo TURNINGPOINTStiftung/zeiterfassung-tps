@@ -751,6 +751,9 @@ export async function saveNewUser(){
   // Technisches Konto anlegen + im Login-Verzeichnis/Allowlist freischalten
   // (runSecuritySetup ist idempotent: legt nur den neuen Nutzer an, Rest bleibt).
   try{ await window.runSecuritySetup?.({log:()=>{}}); }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); }
+  // Berechtigungs-Allowlisten (admins/gfAdmins) an die Rolle des neuen Nutzers angleichen.
+  // Best effort: no-op/Fehler solange uidUser noch nicht geseedet ist (vor dem Regel-Cutover).
+  try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (neuer Nutzer):', e&&e.message); }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 
@@ -802,6 +805,9 @@ export async function saveEditUser(id){
   // der Anmelde-Bildschirm weiter den alten Namen (z. B. bei korrigierten Umlauten). Idempotent, für
   // bestehende Nutzer ohne Konto-Anlage (nur Namens-Update im Verzeichnis).
   try{ await window.runSecuritySetup?.({log:()=>{}}); }catch(e){ console.warn('Security-Setup (Edit):', e&&e.message); }
+  // Nach einer möglichen Rollen-/Rechte-Änderung admins/gfAdmins autoritativ neu berechnen
+  // (recomputet aus uidUser + aktuellen Rollen). Best effort: no-op vor dem Cutover-Seeding.
+  try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (Edit):', e&&e.message); }
   closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }
