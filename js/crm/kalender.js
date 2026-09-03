@@ -56,7 +56,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   const el=document.createElement('style'); el.id='kal-styles';
   el.textContent=`
   #kalender-root{flex:1;min-height:0;overflow:auto;background:var(--bg,#eef2f7);padding:18px 18px 60px}
-  .kal-wrap{max-width:1240px;margin:0 auto;width:100%}
+  .kal-wrap{max-width:none;margin:0;width:100%}
   .kal-h{font-family:var(--ci-serif,Georgia,serif);font-size:1.5rem;font-weight:800;color:var(--text,#15263a);margin:0 0 2px}
   .kal-sub{color:var(--muted,#5d7086);font-size:.9rem;margin:0 0 16px;max-width:70ch;line-height:1.5}
   .kal-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
