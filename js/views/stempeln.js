@@ -281,7 +281,7 @@ function _round15(t){
 // Stempelzeiten werden auf 15 Min gerundet. Anschließend wird – wie bei der
 // manuellen Eingabe – die fehlende Pflichtpause auf die letzte Abfahrtszeit
 // aufgeschlagen (Abfahrt = Netto-Ende + Pause). Der Abzug erfolgt im Gesamt.
-function _recomputeFromSessions(day){
+export function _recomputeFromSessions(day){
   const sessions=day.stampSessions||[];
   if(!sessions.length) return;
   const sorted=[...sessions].sort((a,b)=>b.min-a.min);
@@ -360,6 +360,13 @@ export function stopZeitstempel(bisOverride){
     if(!d.entries[k].days) d.entries[k].days={};
     if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
     const day=d.entries[k].days[ds];
+    // Verwaiste Stempel-Sessions verwerfen: Hat der Tag sichtbar KEINE Blockzeiten (mehr) –
+    // z.B. weil der Eintrag zuvor manuell gelöscht wurde – liegen aber noch alte Sessions herum,
+    // sind diese veraltet. Sonst käme ein gelöschter Durchlauf beim erneuten Stempeln als
+    // zweiter Block zurück (gemeldeter Doppel-Eintrag).
+    if(Array.isArray(day.stampSessions)&&day.stampSessions.length&&!day.b1von&&!day.b1bis&&!day.b2von&&!day.b2bis){
+      day.stampSessions=[];
+    }
     // Session aufzeichnen
     if(!Array.isArray(day.stampSessions)) day.stampSessions=[];
     day.stampSessions.push({von,bis,min:durationMin,zuord:zuord||'',note:note||''});

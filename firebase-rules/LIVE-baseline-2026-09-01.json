@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "zeiterfassung": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      "loginDir": {
+        ".read": true,
+        "$key": { ".validate": "!newData.exists() || $key.matches(/^[A-Za-z0-9._-]+$/)" }
+      },
+      "users": {
+        "$i": {
+          "id": { ".validate": "!newData.exists() || newData.val().matches(/^[A-Za-z0-9._-]+$/)" }
+        }
+      }
+    },
+    "crm": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true"
+    },
+    "crm_history": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".indexOn": ["ts"]
+    }
+  }
+}
