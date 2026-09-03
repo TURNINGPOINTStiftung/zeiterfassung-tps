@@ -44,8 +44,10 @@ function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{}
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
   return vs.filter(v=>v&&v.start).map(v=>({titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||''})); }
-// Nur Mitarbeiter MIT Zeiterfassung: Admin sowie „nur CRM"/„ZE ausgeblendet" (crmOnly/noTimesheet) raus.
-function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.noTimesheet); }
+// Wer erscheint im Kalender: interne Mitarbeiter. Raus fliegen nur Admin und EXTERNE
+// „nur CRM"-Nutzer (crmOnly). Die GF (noTimesheet = keine EIGENE Zeiterfassung) bleibt
+// bewusst drin – sie nimmt Urlaub/Abwesenheiten, die für die Planung relevant sind.
+function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
 function empName(id){ const d=getData()||{}; const u=(d.users||[]).find(x=>x&&x.id===id); return u?u.name:id; }
