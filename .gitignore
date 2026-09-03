@@ -34,3 +34,6 @@ _crm_backup.html
 signing-key-info.txt
 apk/*.aab
 apk/signing*
+# OneDrive-Konfliktkopien nicht committen
+*# Name clash *
+*(# Name clash*
