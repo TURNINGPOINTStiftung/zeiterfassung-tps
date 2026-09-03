@@ -57,8 +57,12 @@ function kalOpenVeranstaltung(id){
     const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null;
     const target=(ma&&ma.kanban&&ma.kanban!=='kein')?'kanban':((ma&&ma.crm&&ma.crm!=='kein')?'crm':null);
     if(!target) return;
+    // NUR den Ziel-Zustand setzen (nicht sofort malen – CRM ist evtl. noch nicht geladen und
+    // würde die Auswahl zurücksetzen). Der asynchrone Board-Aufbau nach dem Moduswechsel
+    // (ensureCrmReady → paint) sieht _crmMode='veranstaltungen' + _crmVaSel und öffnet sie direkt.
+    window._crmSearch=''; window._crmVaReturn=null;
+    window._crmMode='veranstaltungen'; window._crmVaSel=id;
     if(window.switchModule) window.switchModule(target);
-    if(window.crmOpenVeranstaltung) window.crmOpenVeranstaltung(id);
   }catch(e){ console.error('kalOpenVeranstaltung:',e); }
 }
 // Einmaliges Mouseover-Tooltip (funktioniert auch bei winzigen Jahres-Markern).
