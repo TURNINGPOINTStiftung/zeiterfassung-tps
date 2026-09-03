@@ -25,6 +25,9 @@ const DOW=['Mo','Di','Mi','Do','Fr','Sa','So'];
 const MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const MON_ABBR=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
 const overlap=(a1,b1,a2,b2)=>a1<=b2&&a2<=b1;   // ISO-Strings vergleichbar (YYYY-MM-DD)
+// Events, die sich datumsmäßig überlappen, auf getrennte Spuren (Lanes) verteilen → Stapeln.
+// Setzt e._lane und liefert die Anzahl belegter Spuren.
+function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von).localeCompare(String(b.von))).forEach(e=>{ let L=0; while(lanes[L]&&lanes[L].some(x=>overlap(x.von,x.bis,e.von,e.bis))) L++; if(!lanes[L]) lanes[L]=[]; lanes[L].push(e); e._lane=L; }); return lanes.length; }
 
 // ── Abwesenheits-Typen ──
 const AB={ 'Urlaub':{k:'u',c:'#2b8a5a',lbl:'Urlaub'}, 'AU/Krank':{k:'k',c:'#c8442f',lbl:'Krank'}, 'Arbeitszeitausgleich':{k:'a',c:'#2f6f9f',lbl:'AZA'} };
@@ -91,8 +94,9 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-bar-seg{grid-row:1;align-self:stretch;margin:4px 3px 4px 0;border-radius:5px;display:flex;align-items:center;padding:0 6px;font-size:.7rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.16)}
   .kal-track{grid-column:2 / -1;grid-row:1;position:relative;min-height:32px}
   .kal-seg-abs{position:absolute;top:5px;bottom:5px;border-radius:4px;min-width:3px;display:flex;align-items:center;padding:0 5px;font-size:.68rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.16)}
-  .kal-ev{align-self:stretch;margin:2px 3px;border-radius:5px;display:flex;align-items:center;gap:4px;padding:0 7px;font-size:.72rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-  .kal-ev-mark{position:absolute;top:4px;bottom:4px;border-radius:4px;min-width:5px;display:flex;align-items:center;gap:4px;padding:0 5px;font-size:.68rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2}
+  .kal-ev{align-self:stretch;margin:2px 3px;border-radius:5px;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:.76rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .kal-evband .kal-cell{min-height:0}
+  .kal-ev-mark{position:absolute;top:4px;height:20px;border-radius:4px;min-width:5px;display:flex;align-items:center;gap:4px;padding:0 6px;font-size:.7rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2}
   .kal-ev.cf,.kal-ev-mark.cf{outline:2px solid #f0a92e;outline-offset:1px}
   .kal-wline{position:absolute;top:0;bottom:0;width:1px;background:rgba(120,140,170,.18);z-index:0}
   .kal-today-line{position:absolute;top:0;bottom:0;width:2px;background:#e8892b;z-index:4}
@@ -128,10 +132,13 @@ function _dayGrid(days){
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">Mitarbeiter</div>';
   days.forEach((dd,i)=>{ const isMon=dd.dow===0; const kw=(isMon||i===0)?_isoWeek(_parse(dd.iso)):null; h+='<div class="kal-dh'+(dd.we?' we':'')+(isMon?' mon':'')+'" style="grid-column:'+(i+2)+'">'+(kw!=null?'<span class="kal-kw">KW'+kw+'</span>':'')+'<span class="dow">'+DOW[dd.dow]+'</span><span class="dn">'+dd.dom+'</span></div>'; });
   h+='</div>';
-  // Veranstaltungs-Band
-  h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>';
-  days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
-  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev'+(cfl?' cf':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';background:#7b3fb3" title="'+esc(e.titel)+(e.uhr?(' '+esc(e.uhr)):'')+'">📅 '+esc(e.titel)+'</div>'; });
+  // Veranstaltungs-Band – mehrere Events am selben Tag werden gestapelt (Spuren);
+  // die Zeile wächst mit, einzelne Events sind größer, bei vielen etwas flacher.
+  const laneN=Math.max(1,_laneAssign(evs));
+  const laneH=laneN===1?32:(laneN===2?26:22);
+  h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#7b3fb3;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
+  days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
+  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev'+(cfl?' cf':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(e._lane+1)+';background:#7b3fb3" title="'+esc(e.titel)+(e.uhr?(' '+esc(e.uhr)):'')+'">📅 '+esc(e.titel)+'</div>'; });
   h+='</div>';
   // Mitarbeiter nach Team
   _teamsOrdered(emps).forEach(t=>{
@@ -171,9 +178,10 @@ function _yearGrid(year){
   h+='</div>';
   h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
   // Event-Band
+  const yevs=evs.filter(e=>inYear(e.von,e.bis)); const ylN=Math.max(1,_laneAssign(yevs)); const mH=22; const trkH=ylN*mH+6;
   h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>'+mcells();
-  h+='<div class="kal-track">'+wlines+todayLine;
-  evs.filter(e=>inYear(e.von,e.bis)).forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev-mark'+(cfl?' cf':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;background:#7b3fb3" title="'+esc(e.titel)+' ('+e.von+')">📅 '+esc(e.titel)+'</div>'; });
+  h+='<div class="kal-track" style="min-height:'+trkH+'px">'+wlines+todayLine;
+  yevs.forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev-mark'+(cfl?' cf':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;top:'+(3+e._lane*mH)+'px;height:'+(mH-3)+'px;background:#7b3fb3" title="'+esc(e.titel)+' ('+e.von+')">📅 '+esc(e.titel)+'</div>'; });
   h+='</div></div>';
   // Mitarbeiter
   _teamsOrdered(emps).forEach(t=>{
