@@ -55,7 +55,7 @@ function _termine(){ const out=[]; try{
     const crm=getCrm()||{};
     Object.keys(crm).forEach(tk=>{ if(_RESERVED.has(tk)) return; const ents=crm[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; const ts=(e&&e.termine)||[]; if(!Array.isArray(ts)) return;
-        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'' }); });
+        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'', tree:tk, eid:eid }); });
       });
     });
   }catch(e){}
@@ -77,6 +77,22 @@ function kalOpenVeranstaltung(id){
     window._crmMode='veranstaltungen'; window._crmVaSel=id;
     if(window.switchModule) window.switchModule(target);
   }catch(e){ console.error('kalOpenVeranstaltung:',e); }
+}
+// Sprung zu einem CRM-Termin: Kontakt öffnen und den Termin direkt aufklappen
+// (Infos ansehen; Leitung/GF kann dort Mitarbeiter zuweisen).
+function kalOpenTermin(tree,eid,tid){
+  if(!tree||!eid) return;
+  try{
+    window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel='';
+    window._crmDetailTab='aufgaben'; window._crmOpenTerminId=tid||'';
+    if(window.switchModule) window.switchModule('crm');
+  }catch(e){ console.error('kalOpenTermin:',e); }
+}
+// Klick-Attribute für einen Eintrag: Veranstaltung → Detail, Termin → Kontakt+Termin.
+function _clk(it){
+  if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"' };
+  if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\',\''+esc(it.id)+'\')"' };
+  return { cls:'', on:'' };
 }
 // Einmaliges Mouseover-Tooltip (funktioniert auch bei winzigen Jahres-Markern).
 let _tipEl=null;
@@ -148,10 +164,10 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-tip{position:fixed;z-index:99999;background:#15263a;color:#fff;font-size:12px;font-weight:600;padding:6px 9px;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;max-width:300px;white-space:normal;line-height:1.35;display:none}
   .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
   .kal-termin{border:1.5px dashed rgba(255,255,255,.65)}
-  .kal-asg{align-self:center;height:9px;margin:0 2px;border-radius:3px;min-width:4px;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.22)}
-  .kal-asg.cf{outline:2px solid #f0a92e;outline-offset:1px;height:11px}
-  .kal-yasg{position:absolute;height:7px;border-radius:3px;min-width:3px;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.2)}
-  .kal-yasg.cf{outline:2px solid #f0a92e;outline-offset:1px}
+  .kal-asg{margin:2px;border-radius:4px;min-width:4px;z-index:1}
+  .kal-asg.cf{outline:2px solid #f0a92e;outline-offset:-2px}
+  .kal-yasg{position:absolute;border-radius:4px;min-width:3px;z-index:1}
+  .kal-yasg.cf{outline:2px solid #f0a92e;outline-offset:-2px}
   .kal-row.kal-me{box-shadow:inset 0 0 0 2px rgba(18,179,71,.6);position:relative;z-index:1}
   .kal-name.kal-me{background:#eafbef;box-shadow:inset 3px 0 0 #12b347;font-weight:700}
   .kal-cf{padding:2px 0}
@@ -180,16 +196,16 @@ function _dayGrid(days){
   const namedBar=(it)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
     const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a'; const ic=isVa?'📅':'•';
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
-    const clk=isVa&&it.id;
-    return '<div class="kal-ev'+(clk?' kal-clickable':'')+(it.typ==='termin'?' kal-termin':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(it._lane+1)+';background:'+col+'" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"'):'')+'>'+ic+' '+esc(it.titel)+'</div>';
+    const c=_clk(it);
+    return '<div class="kal-ev'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(it._lane+1)+';background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+ic+' '+esc(it.titel)+'</div>';
   };
-  // Schmaler Zuweisungs-Marker auf der Personenzeile (nur Farbe, kein Text – Name steht oben)
-  const asgBar=(it,row,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a';
+  // Zuweisungs-Balken auf der Personenzeile: volle Zeilenhöhe, heller Ton, kein Text (Name steht oben)
+  const asgBar=(it,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
+    const isVa=it.typ==='va'; const col=isVa?'#bd9fd9':'#86c5c5';
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
-    const clk=isVa&&it.id;
-    return '<div class="kal-asg'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+row+';background:'+col+'" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"'):'')+'></div>';
+    const c=_clk(it);
+    return '<div class="kal-asg'+(cfl?' cf':'')+c.cls+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:1 / -1;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
   let h='<div class="kal-grid" style="min-width:'+(180+N*34)+'px">';
   // Kopf
@@ -213,15 +229,14 @@ function _dayGrid(days){
       const myAbs=abs.filter(a=>a.emp===u.id);
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0);
       const absLanes=myAbs.length?_laneAssign(myAbs):0;
-      const gN=myAsg.length?_laneAssign(myAsg):0;
-      const aRows=Math.max(absLanes, gN?0:1);
-      const rows=[]; for(let i=0;i<aRows;i++) rows.push('22px'); for(let i=0;i<gN;i++) rows.push('12px'); if(!rows.length) rows.push('22px');
-      const rowsCss='grid-template-rows:'+rows.join(' ')+';';
+      const aRows=Math.max(absLanes,1);
+      const laneH=(30/aRows).toFixed(2);   // alle Zeilen gleich hoch (30px); überlappende Abwesenheiten teilen sich die Höhe
+      const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
       const isMe=u.id===myId;
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(u.name)+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
+      myAsg.forEach(it=>{ h+=asgBar(it, myAbs); });   // heller Balken (volle Höhe) zuerst – Abwesenheit liegt darüber
       myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(a._lane+1)+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
-      myAsg.forEach(it=>{ h+=asgBar(it, (aRows+it._lane+1), myAbs); });
       h+='</div>';
     });
   });
@@ -250,17 +265,17 @@ function _yearGrid(year){
   // benannter Marker oben im Band „Veranstaltungen"
   const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a'; const w=spanPct(it.von,it.bis);
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
-    const clk=isVa&&it.id;
-    return '<div class="kal-ev-mark'+(clk?' kal-clickable':'')+(it.typ==='termin'?' kal-termin':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+(3+it._lane*mH)+'px;height:'+(mH-3)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"'):'')+'>'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>';
+    const c=_clk(it);
+    return '<div class="kal-ev-mark'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+(3+it._lane*mH)+'px;height:'+(mH-3)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>';
   };
   // benannte Abwesenheit auf der Personenzeile
-  const absMark=(a,nm)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*mH)+'px;height:'+(mH-4)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
+  const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
-  const asgMark=(it,top,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a'; const w=spanPct(it.von,it.bis);
+  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#bd9fd9':'#86c5c5'; const w=spanPct(it.von,it.bis);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
-    const clk=isVa&&it.id;
-    return '<div class="kal-yasg'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+top+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"'):'')+'></div>';
+    const c=_clk(it);
+    return '<div class="kal-yasg'+(cfl?' cf':'')+c.cls+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:3px;height:'+(rowH-6)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
   let h='<div class="kal-grid" style="min-width:1500px">';
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">Mitarbeiter · '+year+'</div>';
@@ -284,14 +299,14 @@ function _yearGrid(year){
       const myAbs=abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis));
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0&&inYear(it.von,it.bis));
       const absLanes=myAbs.length?_laneAssign(myAbs):0;
-      const gN=myAsg.length?_laneAssign(myAsg):0;
-      const topBase=absLanes*mH;
-      const rowH=Math.max(topBase+(gN?gN*9+3:0)+6, mH+2);
+      const aL=Math.max(absLanes,1);
+      const rowH=30;                 // alle Zeilen gleich hoch
+      const segH=(rowH-6)/aL;        // Abwesenheits-Spuren teilen sich die Höhe
       const isMe=u.id===myId;
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(u.name)+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
-      myAbs.forEach(a=>{ h+=absMark(a, u.name); });
-      myAsg.forEach(it=>{ h+=asgMark(it, (3+topBase+it._lane*9), myAbs); });
+      myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs); });   // heller Balken volle Höhe (z1)
+      myAbs.forEach(a=>{ h+=absMark(a, u.name, segH); });    // Abwesenheit darüber (z2)
       h+='</div></div>';
     });
   });
@@ -362,7 +377,7 @@ export function renderKalender(){
       <div class="kal-legend">
         <span class="kal-lg"><span class="kal-sw" style="background:#7b3fb3"></span>Veranstaltung</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#0d8a8a;border:1.5px dashed #fff"></span>Termin</span>
-        <span class="kal-lg"><span class="kal-sw" style="height:5px;background:#7b3fb3"></span>eingeplant (schmaler Streifen auf der Zeile)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#bd9fd9"></span>eingeplant (helle Fläche auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#2b8a5a"></span>Urlaub</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#2f6f9f"></span>Arbeitszeitausgleich</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>
