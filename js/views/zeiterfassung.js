@@ -948,16 +948,19 @@ export function td_tchange(ds,field,val){
   const uid=window.viewEmpId||window.cu.id;
 
   // ── Stempel-Synchronisation ────────────────────────────────────
-  // Nur für den eingeloggten User, nur heute, nur beim Block-1-Start
-  if(field==='b1von'&&uid===window.cu?.id){
+  // Nur eingeloggter User, nur heute. Ein laufender Stempel gehört zu genau EINEM Block
+  // (stamp.block = b1/b2). Wird die Startzeit GENAU DIESES Blocks manuell korrigiert, muss der
+  // laufende Stempel mitgezogen werden – sonst überschreibt er beim Ausstempeln die Korrektur.
+  // (Früher nur b1von → eine Nachmittags-Korrektur an b2von kam nicht am Stempel an.)
+  if((field==='b1von'||field==='b2von')&&uid===window.cu?.id){
     const today=new Date().toISOString().slice(0,10);
     if(ds===today){
       const normV=_normTime(val);
       const stamp=window.getStamp?.();
-      // Laufender Stempel → Startzeit synchronisieren (immer sinnvoll)
-      if(normV&&stamp&&stamp.uid===window.cu.id&&stamp.startDate===today){
+      // Laufender Stempel → Startzeit DES ZUM STEMPEL GEHÖRENDEN Blocks synchronisieren
+      if(normV&&stamp&&stamp.uid===window.cu.id&&stamp.startDate===today&&field===((stamp.block||'b1')+'von')){
         window.syncStempelVon?.(normV);
-      } else if(normV&&!stamp){
+      } else if(field==='b1von'&&normV&&!stamp){
         // Auto-Stempel NUR wenn: gerade jetzt angefangen (Zeit ≈ jetzt, ±15 Min)
         // UND der Tag noch keine Endzeit / 2. Block / Abwesenheit hat
         const entry0=getEntry(uid,window.year,window.mon);
@@ -976,7 +979,7 @@ export function td_tchange(ds,field,val){
             if(!window.getStamp?.()&&!dd0.b1bis) window.startZeitstempelAt?.(normV);
           },30000);
         }
-      } else if(!normV){
+      } else if(field==='b1von'&&!normV){
         clearTimeout(window._ztAutoStampTimer);
       }
     }
