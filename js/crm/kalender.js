@@ -177,6 +177,33 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .kal-chip{font-size:.76rem;font-weight:600;padding:2px 9px;border-radius:999px;color:#fff}
   .kal-badge{font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;align-self:center}
+  /* ── Persönliche Ansicht („Nur ich"): klassische Layouts ── */
+  .kal-pm{display:flex;flex-direction:column}
+  .kal-pm-head{display:grid;grid-template-columns:repeat(7,1fr);background:var(--primary,#1a3a5c);color:#fff;border-radius:8px 8px 0 0;overflow:hidden}
+  .kal-pm-hc{padding:7px 9px;font-size:.8rem;font-weight:700;border-left:1px solid rgba(255,255,255,.14)}
+  .kal-pm-hc:first-child{border-left:none} .kal-pm-hc.we{background:rgba(0,0,0,.16)}
+  .kal-pm-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border,#dce3ec);border-top:none}
+  .kal-pm-cell{min-height:94px;border-right:1px solid var(--border,#e6ebf2);border-bottom:1px solid var(--border,#e6ebf2);padding:4px 5px;overflow:hidden}
+  .kal-pm-cell:nth-child(7n){border-right:none}
+  .kal-pm-cell.we{background:#f7f9fc} .kal-pm-cell.out{background:#fafbfd} .kal-pm-cell.today{background:#fff3e0}
+  .kal-pm-dn{font-size:.8rem;font-weight:700;color:var(--muted,#5d7086);margin-bottom:3px} .kal-pm-cell.out .kal-pm-dn{color:#c2ccd8} .kal-pm-cell.today .kal-pm-dn{color:#e8892b}
+  .kal-pm-items{display:flex;flex-direction:column;gap:3px}
+  .kal-pchip{font-size:.72rem;font-weight:600;padding:2px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+  .kal-pchip.kal-clickable{cursor:pointer} .kal-pchip.kal-clickable:hover{filter:brightness(1.07)}
+  .kal-pabs{font-size:.72rem;font-weight:700;color:#fff;padding:2px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kal-pw{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;min-height:440px}
+  .kal-pw-col{border-left:1px solid var(--border,#e6ebf2);display:flex;flex-direction:column} .kal-pw-col:first-child{border-left:none}
+  .kal-pw-col.we{background:#f7f9fc} .kal-pw-col.today{background:#fff8ef}
+  .kal-pw-h{background:var(--row-alt,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:8px;font-size:.82rem;font-weight:700;color:var(--text,#15263a);text-align:center}
+  .kal-pw-col.today .kal-pw-h{color:#e8892b}
+  .kal-pw-body{display:flex;flex-direction:column;gap:4px;padding:6px}
+  .kal-py{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;font-size:11px}
+  .kal-py-corner{background:var(--primary,#1a3a5c)}
+  .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:5px 0;border-left:1px solid rgba(255,255,255,.14)}
+  .kal-py-dl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;border-top:1px solid var(--border,#eef2f7)}
+  .kal-py-cell{min-height:15px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;align-items:center;justify-content:center;position:relative}
+  .kal-py-cell.empty{background:#fafbfd} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
+  .kal-py-dot{width:7px;height:7px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
   `;
   document.head.appendChild(el);
 }
@@ -343,6 +370,77 @@ function _conflictList(from,to){
   return h+'</div>';
 }
 
+// ═══ Persönliche Ansicht („Nur ich"): klassische Kalender-Layouts ═══
+// Zeigt ALLE Veranstaltungen/Termine (eigene hervorgehoben) + NUR die eigenen Abwesenheiten.
+function _persItems(){ return _events().concat(_termine()); }
+function _persMine(it){ const myId=(window.cu&&window.cu.id)||''; return (it.mitarbeiter||[]).indexOf(myId)>=0; }
+function _persMyAbs(){ const myId=(window.cu&&window.cu.id)||''; return _abs().filter(a=>a.emp===myId); }
+function _persChip(it){
+  const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#7b3fb3':'#0d8a8a'; const c=_clk(it);
+  const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'')+(mine?' · dir zugewiesen':'');
+  const style=mine?('background:'+base+';color:#fff'):('background:#fff;color:'+base+';border:1px solid '+base);
+  return '<div class="kal-pchip'+c.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅':'•')+' '+esc(it.titel)+(it.uhr?(' '+esc(it.uhr)):'')+'</div>';
+}
+function _persAbsChip(a){ const m=KMETA[a.type]; return '<div class="kal-pabs" style="background:'+m.c+'" data-tip="'+esc(m.lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''))+'">'+m.lbl+'</div>'; }
+function _persDayEntries(iso){
+  const abs=_persMyAbs().filter(a=>overlap(a.von,a.bis,iso,iso)).map(_persAbsChip);
+  const its=_persItems().filter(it=>overlap(it.von,it.bis,iso,iso)).sort((x,y)=>(_persMine(y)?1:0)-(_persMine(x)?1:0));
+  return abs.concat(its.map(_persChip)).join('');
+}
+const _DOWLONG=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+function _persMonth(y,m){
+  const first=new Date(y,m-1,1,12); const startDow=_dowMon(first); const dim=_daysInMonth(y,m);
+  const cells=[];
+  for(let i=0;i<startDow;i++) cells.push({dt:_addDays(first,-(startDow-i)),out:true});
+  for(let d=1;d<=dim;d++) cells.push({dt:new Date(y,m-1,d,12),out:false});
+  while(cells.length%7!==0){ const last=cells[cells.length-1].dt; cells.push({dt:_addDays(last,1),out:true}); }
+  let h='<div class="kal-pm"><div class="kal-pm-head">'+_DOWLONG.map((d,i)=>'<div class="kal-pm-hc'+(i>=5?' we':'')+'">'+d+'</div>').join('')+'</div><div class="kal-pm-grid">';
+  cells.forEach(c=>{ const iso=_iso(c.dt); const dow=_dowMon(c.dt); const today=iso===_todayISO();
+    h+='<div class="kal-pm-cell'+(c.out?' out':'')+(dow>=5?' we':'')+(today?' today':'')+'"><div class="kal-pm-dn">'+c.dt.getDate()+'</div><div class="kal-pm-items">'+(c.out?'':_persDayEntries(iso))+'</div></div>';
+  });
+  return h+'</div></div>';
+}
+function _persWeek(ws){
+  let h='<div class="kal-pw">';
+  for(let i=0;i<7;i++){ const dt=_addDays(ws,i); const iso=_iso(dt); const dow=_dowMon(dt); const today=iso===_todayISO();
+    h+='<div class="kal-pw-col'+(dow>=5?' we':'')+(today?' today':'')+'"><div class="kal-pw-h">'+DOW[dow]+' '+dt.getDate()+'.'+(dt.getMonth()+1)+'.</div><div class="kal-pw-body">'+_persDayEntries(iso)+'</div></div>';
+  }
+  return h+'</div>';
+}
+function _persYear(year){
+  const ITEMS=_persItems(), MYABS=_persMyAbs();   // einmal berechnen (statt 372×)
+  let h='<div class="kal-py" style="grid-template-columns:34px repeat(12,1fr)"><div class="kal-py-corner"></div>';
+  for(let m=0;m<12;m++) h+='<div class="kal-py-mh">'+MON_ABBR[m]+'</div>';
+  for(let d=1;d<=31;d++){
+    h+='<div class="kal-py-dl">'+d+'</div>';
+    for(let m=1;m<=12;m++){
+      if(d>_daysInMonth(year,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
+      const dt=new Date(year,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
+      const myAbs=MYABS.filter(a=>overlap(a.von,a.bis,iso,iso));
+      const its=ITEMS.filter(it=>overlap(it.von,it.bis,iso,iso));
+      let bg=''; if(myAbs.length) bg='background:'+KMETA[myAbs[0].type].c+';'; else if(dow>=5) bg='background:#eef1f5;';
+      let dot=''; if(its.length){ const hasVa=its.some(i=>i.typ==='va'); const hasMine=its.some(_persMine); dot='<span class="kal-py-dot" style="background:'+(hasVa?'#7b3fb3':'#0d8a8a')+(hasMine?'':';opacity:.4')+'"></span>'; }
+      const parts=[]; myAbs.forEach(a=>parts.push(KMETA[a.type].lbl)); its.forEach(it=>parts.push((it.typ==='va'?'📅 ':'• ')+it.titel+(_persMine(it)?' (zugew.)':'')));
+      const tip=parts.length?(_deDate(iso)+': '+parts.join(', ')):'';
+      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+'" style="'+bg+'"'+(tip?(' data-tip="'+esc(tip)+'"'):'')+'>'+dot+'</div>';
+    }
+  }
+  return h+'</div>';
+}
+function _persConflict(from,to){
+  const myId=(window.cu&&window.cu.id)||''; const myAbs=_abs().filter(a=>a.emp===myId);
+  const mine=_persItems().filter(it=>_persMine(it)&&overlap(it.von,it.bis,from,to)).sort((a,b)=>a.von<b.von?-1:1);
+  if(!mine.length) return '<div class="kal-empty">Dir sind in diesem Zeitraum keine Veranstaltungen oder Termine zugewiesen.</div>';
+  let h='<div class="kal-cf">';
+  mine.forEach(e=>{ const ic=e.typ==='va'?'📅':'•'; const clash=myAbs.filter(a=>overlap(a.von,a.bis,e.von,e.bis)); const cnt=clash.length;
+    const dl=e.von===e.bis?_deDate(e.von):(_deDate(e.von)+' – '+_deDate(e.bis));
+    h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
+    h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#2b8a5a')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
+  });
+  return h+'</div>';
+}
+
 // ── Periodenbezeichnung + Board ──
 function _periodLabel(){
   if(V==='monat') return MONTHS[curM-1]+' '+curY;
@@ -351,11 +449,12 @@ function _periodLabel(){
   return String(curY);
 }
 function _boardHtml(){
-  if(V==='monat'){ const n=_daysInMonth(curY,curM); const days=[]; for(let d=1;d<=n;d++){ const dt=new Date(curY,curM-1,d,12); const iso=_iso(dt); days.push({iso,dom:d,dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
-  if(V==='woche'){ const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(weekStart,i); const iso=_iso(dt); days.push({iso,dom:dt.getDate(),dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
-  if(V==='jahr'){ return _yearGrid(curY); }
+  const personal = curTeam==='@me';   // „Nur ich" → klassische persönliche Ansicht
+  if(V==='monat'){ if(personal) return _persMonth(curY,curM); const n=_daysInMonth(curY,curM); const days=[]; for(let d=1;d<=n;d++){ const dt=new Date(curY,curM-1,d,12); const iso=_iso(dt); days.push({iso,dom:d,dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
+  if(V==='woche'){ if(personal) return _persWeek(weekStart); const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(weekStart,i); const iso=_iso(dt); days.push({iso,dom:dt.getDate(),dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
+  if(V==='jahr'){ return personal?_persYear(curY):_yearGrid(curY); }
   // konflikt
-  return _conflictList(curY+'-01-01', curY+'-12-31');
+  return personal ? _persConflict(curY+'-01-01', curY+'-12-31') : _conflictList(curY+'-01-01', curY+'-12-31');
 }
 
 export function renderKalender(){
@@ -364,10 +463,11 @@ export function renderKalender(){
     const root=document.getElementById('kalender-root'); if(!root) return;
     _bindTips(root);
     const tabs=[['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
-    const emps=_emps(); const teamOpts=['<option value="">Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
+    const emps=_emps(); const personal=curTeam==='@me';
+    const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>','<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=`<div class="kal-wrap">
       <div class="kal-h">📅 Kalender</div>
-      <p class="kal-sub">Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.</p>
+      <p class="kal-sub">${personal?'Deine persönliche Ansicht: alle Veranstaltungen &amp; Termine (deine hervorgehoben) plus deine Abwesenheiten.':'Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.'}</p>
       <div class="kal-bar">
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView('${t[0]}')">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
@@ -377,10 +477,14 @@ export function renderKalender(){
       <div class="kal-legend">
         <span class="kal-lg"><span class="kal-sw" style="background:#7b3fb3"></span>Veranstaltung</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#0d8a8a;border:1.5px dashed #fff"></span>Termin</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#bd9fd9"></span>eingeplant (helle Fläche auf der Zeile)</span>
+        ${personal
+          ? `<span class="kal-lg"><span class="kal-sw" style="background:#fff;border:1px solid #7b3fb3"></span>nicht dir zugewiesen (nur Umriss)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#2b8a5a"></span>Urlaub</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#2f6f9f"></span>Arbeitszeitausgleich</span>`
+          : `<span class="kal-lg"><span class="kal-sw" style="background:#bd9fd9"></span>eingeplant (helle Fläche auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#2b8a5a"></span>Urlaub</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#2f6f9f"></span>Arbeitszeitausgleich</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
       ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll">${_boardHtml()}</div></div>`}
     </div>`;
