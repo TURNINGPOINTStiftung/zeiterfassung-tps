@@ -2343,6 +2343,7 @@ function crmAddTermin(){
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort"></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note"></div>
+   <div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml([], 'crm-tf')}</div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTermin()">Hinzufügen</button></div>`);
 }
@@ -2352,7 +2353,7 @@ function crmSaveTermin(){
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note') });
+    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:readStaffPicker('crm-tf') });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal(); paintDetail();
@@ -3533,6 +3534,7 @@ function paintVeranstaltungDetail(){
         ${v.team?`<div class="crm-field"><label>Team</label><div class="v">${esc(v.team)}</div></div>`:''}
       </div>
       <div style="margin-top:12px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">Beteiligte Einträge</label><div style="display:flex;gap:6px;flex-wrap:wrap">${teiln}</div></div>
+      <div style="margin-top:12px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">👥 Zugewiesene Mitarbeiter</label><div style="display:flex;gap:6px;flex-wrap:wrap">${(v.mitarbeiter&&v.mitarbeiter.length)?staffNames(v.mitarbeiter).map(nm=>`<span class="crm-chip" style="font-size:12px">${esc(nm)}</span>`).join(''):'<span class="small" style="color:var(--muted)">Niemand zugewiesen.</span>'}</div></div>
       ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
     </div>
     <div class="crm-sec">
@@ -3571,6 +3573,17 @@ function crmVaAddTeiln(){
   const box=document.getElementById('crm-va-teiln'); if(box) box.innerHTML=vaTeilnEditHtml();
 }
 function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTeiln.splice(idx,1); const box=document.getElementById('crm-va-teiln'); if(box) box.innerHTML=vaTeilnEditHtml(); }
+// ── Mitarbeiter-Auswahl (Zuweisung an Veranstaltung/Termin – getrennt von den Aufgaben) ──
+// Zuweisbar = interne Mitarbeiter (kein Admin, keine externen crmOnly). Mehrfach/alle möglich.
+function _assignableStaff(){ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
+function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=>{ const u=us.find(x=>x&&x.id===id); return u?u.name:id; }); }
+function staffPickerHtml(selIds, idp){
+  const sel=new Set(selIds||[]);
+  const rows=_assignableStaff().map(u=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;cursor:pointer;border:1px solid var(--border);border-radius:999px"><input type="checkbox" class="${idp}-ma" value="${esc(u.id)}"${sel.has(u.id)?' checked':''} style="width:auto"> ${esc(u.name)}</label>`).join('') || '<span class="small" style="color:var(--muted)">Keine Mitarbeiter vorhanden.</span>';
+  return `<div style="display:flex;gap:8px;margin-bottom:6px"><button type="button" class="btn-sm-crm" onclick="crmStaffAll('${idp}',true)">Alle</button><button type="button" class="btn-sm-crm" onclick="crmStaffAll('${idp}',false)">Keine</button></div><div style="max-height:150px;overflow:auto;display:flex;flex-wrap:wrap;gap:5px">${rows}</div>`;
+}
+function readStaffPicker(idp){ return Array.from(document.querySelectorAll('.'+idp+'-ma:checked')).map(x=>x.value); }
+function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(cb=>{ cb.checked=!!on; }); }
 function veranstaltungFormHtml(v,isNew){
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${v.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Veranstaltung':'✎ Veranstaltung'}</h3>
@@ -3587,6 +3600,7 @@ function veranstaltungFormHtml(v,isNew){
      <div id="crm-va-teiln" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${vaTeilnEditHtml()}</div>
      <select id="crm-va-add" onchange="crmVaAddTeiln()">${entityLinkOptions('')}</select>
    </div>
+   <div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -3603,7 +3617,7 @@ function crmSaveVeranstaltung(isNew){
   const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:val('crm-va-uhrzeit'),
     online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
     ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'),
-    teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
+    teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})), mitarbeiter:readStaffPicker('crm-va') };
   if(isNew){
     const id=newId();
     saveVeranstaltung({ id, ...rec, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
@@ -4934,7 +4948,7 @@ Object.assign(window, {
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
-  crmAddTermin, crmSaveTermin, crmDeleteTermin,
+  crmAddTermin, crmSaveTermin, crmDeleteTermin, crmStaffAll,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
