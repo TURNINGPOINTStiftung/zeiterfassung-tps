@@ -48,15 +48,16 @@ function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{}
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
   return vs.filter(v=>v&&v.start).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||''})); }
-// Darf der aktuelle Nutzer Veranstaltungen öffnen? (CRM ODER Projektmanagement freigeschaltet)
-let _canOpenVA=false;
 // Sprung zur Veranstaltung im passenden Modul (Projektmanagement bevorzugt, sonst CRM).
 function kalOpenVeranstaltung(id){
   if(!id) return;
   try{
-    const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null;
-    const target=(ma&&ma.kanban&&ma.kanban!=='kein')?'kanban':((ma&&ma.crm&&ma.crm!=='kein')?'crm':null);
-    if(!target) return;
+    // Veranstaltungen leben im Projektmanagement (kanban) → Standard-Ziel. Nur wenn der Nutzer
+    // sicher KEIN kanban, aber CRM hat, ins CRM. crmModuleAccess NICHT als Sperre nutzen (kann
+    // vor dem CRM-Laden „kein" liefern); nur als Hinweis. Das eigentliche Laden/Öffnen macht
+    // switchModule → renderKanban → ensureCrmReady → paint.
+    let target='kanban';
+    try{ const ma=window.crmModuleAccess&&window.crmModuleAccess(window.cu); if(ma && (!ma.kanban||ma.kanban==='kein') && ma.crm && ma.crm!=='kein') target='crm'; }catch(e){}
     // NUR den Ziel-Zustand setzen (nicht sofort malen – CRM ist evtl. noch nicht geladen und
     // würde die Auswahl zurücksetzen). Der asynchrone Board-Aufbau nach dem Moduswechsel
     // (ensureCrmReady → paint) sieht _crmMode='veranstaltungen' + _crmVaSel und öffnet sie direkt.
@@ -167,7 +168,7 @@ function _dayGrid(days){
   const laneH=laneN===1?32:(laneN===2?26:22);
   h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#7b3fb3;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
   days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
-  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=_canOpenVA&&e.id; h+='<div class="kal-ev'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(e._lane+1)+';background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
+  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=!!e.id; h+='<div class="kal-ev'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(e._lane+1)+';background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
   h+='</div>';
   // Mitarbeiter nach Team
   _teamsOrdered(emps).forEach(t=>{
@@ -210,7 +211,7 @@ function _yearGrid(year){
   const yevs=evs.filter(e=>inYear(e.von,e.bis)); const ylN=Math.max(1,_laneAssign(yevs)); const mH=22; const trkH=ylN*mH+6;
   h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>'+mcells();
   h+='<div class="kal-track" style="min-height:'+trkH+'px">'+wlines+todayLine;
-  yevs.forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=_canOpenVA&&e.id; h+='<div class="kal-ev-mark'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;top:'+(3+e._lane*mH)+'px;height:'+(mH-3)+'px;background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
+  yevs.forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=!!e.id; h+='<div class="kal-ev-mark'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;top:'+(3+e._lane*mH)+'px;height:'+(mH-3)+'px;background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
   h+='</div></div>';
   // Mitarbeiter
   _teamsOrdered(emps).forEach(t=>{
@@ -264,8 +265,6 @@ export function renderKalender(){
     _styles();
     const root=document.getElementById('kalender-root'); if(!root) return;
     _bindTips(root);
-    const _ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null;
-    _canOpenVA = !!(_ma && ((_ma.crm&&_ma.crm!=='kein')||(_ma.kanban&&_ma.kanban!=='kein')));
     const tabs=[['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
     const emps=_emps(); const teamOpts=['<option value="">Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=`<div class="kal-wrap">
