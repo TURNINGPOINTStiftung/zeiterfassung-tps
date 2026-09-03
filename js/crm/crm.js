@@ -327,6 +327,7 @@ function _defaultPathAccess(key, cu){
     case 'kanban': case 'crm': return hasCrm;
     case 'verteiler': return canViewCrm;
     case 'ki': case 'auswertung': return isMgr;
+    case 'kalender': return true;   // Standard: ALLE sehen den Kalender (pro Person übersteuerbar)
     case 'verwaltung': return _canVerwCrm();
     case 'messe': return (lvl==='admin'||lvl==='full');
     default: return false;
@@ -364,7 +365,7 @@ function _canAdminFor(key, u){
 // UND als eine Quelle der Wahrheit. Reine Lese-Funktion, ändert nichts.
 function crmModuleAccess(u){
   const out={};
-  ['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung'].forEach(k=>{
+  ['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung','kalender'].forEach(k=>{
     out[k] = !canUsePath(k, u) ? 'kein' : (_canAdminFor(k, u) ? 'verwaltend' : 'nutzen');
   });
   const lvl=_accessLevelOf(u);
@@ -385,7 +386,7 @@ function crmSetupModuleBar(){
       // canUsePath() = Admin immer · explizite Matrix (Ja/Nein je Rolle) · sonst Standard
       // (= exakt das bisherige Verhalten). So ändert sich ohne Konfiguration nichts.
       const show={};
-      ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','verwaltung','messe']
+      ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','kalender','verwaltung','messe']
         .forEach(k=>{ show[k]=canUsePath(k, cu); });
       let count=0;
       Object.keys(show).forEach(mod=>{

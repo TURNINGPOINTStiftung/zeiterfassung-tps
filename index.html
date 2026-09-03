@@ -92,6 +92,7 @@
         <button class="mb-mod" data-mod="ki" onclick="switchModule('ki')" style="display:none">KI</button>
         <button class="mb-mod" data-mod="messe" onclick="closeModuleMenu();messeStart()" style="display:none">Messemodus</button>
         <button class="mb-mod" data-mod="auswertung" onclick="switchModule('auswertung')" style="display:none">Auswertung</button>
+        <button class="mb-mod" data-mod="kalender" onclick="switchModule('kalender')" style="display:none">Kalender</button>
         <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
       </div>
     </div>
@@ -393,6 +394,10 @@
 
   <div id="mod-ki" class="mod-frame" style="display:none">
     <div id="ki-root"></div>
+  </div>
+
+  <div id="mod-kalender" class="mod-frame" style="display:none">
+    <div id="kalender-root"></div>
   </div>
 
   <div id="mod-verwaltung" class="mod-frame" style="display:none">

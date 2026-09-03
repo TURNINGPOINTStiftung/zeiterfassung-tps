@@ -67,6 +67,7 @@ import { getTeams, catOptions, catOptionsFree, getCatsForTeam,
 import './crm/crm.js';
 import './crm/auswertung.js';
 import './crm/ki.js';
+import './crm/kalender.js';
 
 // ── Sicherheits-Setup (Cutover-Provisionierung: loginDir + allowed) ──
 import './admin-setup.js';
