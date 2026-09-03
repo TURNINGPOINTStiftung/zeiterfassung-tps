@@ -44,7 +44,8 @@ function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{}
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
   return vs.filter(v=>v&&v.start).map(v=>({titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||''})); }
-function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'); }
+// Nur Mitarbeiter MIT Zeiterfassung: Admin sowie „nur CRM"/„ZE ausgeblendet" (crmOnly/noTimesheet) raus.
+function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.noTimesheet); }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
 function empName(id){ const d=getData()||{}; const u=(d.users||[]).find(x=>x&&x.id===id); return u?u.name:id; }
@@ -82,6 +83,9 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-teamrow{background:var(--row-alt,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:5px 12px;font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#5d7086);position:sticky;left:0;z-index:2}
   .kal-cell{grid-row:1;border-right:1px solid var(--border,#e6ebf2);min-height:32px;position:relative} .kal-cell.we{background:#eef1f5} .kal-cell.today{background:#fff3e0}
   .kal-cell.cf{background:rgba(240,169,46,.14)}
+  .kal-cell.mon{border-left:2px solid rgba(120,140,170,.32)}
+  .kal-dh.mon{border-left:2px solid rgba(255,255,255,.32)}
+  .kal-kw{font-size:8px;font-weight:700;letter-spacing:.02em;opacity:.85;line-height:1;margin-bottom:1px}
   .kal-bar-seg{grid-row:1;align-self:stretch;margin:4px 3px 4px 0;border-radius:5px;display:flex;align-items:center;padding:0 6px;font-size:.7rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.16)}
   .kal-track{grid-column:2 / -1;grid-row:1;position:relative;min-height:32px}
   .kal-seg-abs{position:absolute;top:5px;bottom:5px;border-radius:4px;min-width:3px;display:flex;align-items:center;padding:0 5px;font-size:.68rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.16)}
@@ -120,11 +124,11 @@ function _dayGrid(days){
   let h='<div class="kal-grid" style="min-width:'+(180+N*34)+'px">';
   // Kopf
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">Mitarbeiter</div>';
-  days.forEach((dd,i)=>{ h+='<div class="kal-dh'+(dd.we?' we':'')+'" style="grid-column:'+(i+2)+'"><span class="dow">'+DOW[dd.dow]+'</span><span class="dn">'+dd.dom+'</span></div>'; });
+  days.forEach((dd,i)=>{ const isMon=dd.dow===0; const kw=(isMon||i===0)?_isoWeek(_parse(dd.iso)):null; h+='<div class="kal-dh'+(dd.we?' we':'')+(isMon?' mon':'')+'" style="grid-column:'+(i+2)+'">'+(kw!=null?'<span class="kal-kw">KW'+kw+'</span>':'')+'<span class="dow">'+DOW[dd.dow]+'</span><span class="dn">'+dd.dom+'</span></div>'; });
   h+='</div>';
   // Veranstaltungs-Band
   h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>';
-  days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
+  days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
   evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev'+(cfl?' cf':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';background:#7b3fb3" title="'+esc(e.titel)+(e.uhr?(' '+esc(e.uhr)):'')+'">📅 '+esc(e.titel)+'</div>'; });
   h+='</div>';
   // Mitarbeiter nach Team
@@ -133,7 +137,7 @@ function _dayGrid(days){
     h+='<div class="kal-teamrow">'+esc(t)+'</div>';
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" title="'+esc(u.name)+'">'+esc(u.name)+'</div>';
-      days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
+      days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
       abs.filter(a=>a.emp===u.id).forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';background:'+m.c+'" title="'+m.lbl+' '+a.von+'–'+a.bis+(a.half?' (½)':'')+'">'+(wide?m.lbl:'')+'</div>'; });
       h+='</div>';
     });
@@ -186,7 +190,8 @@ function _yearGrid(year){
 
 // ── Konflikte-Liste ──
 function _conflictList(from,to){
-  const abs=_abs(), evs=_events().filter(e=>overlap(e.von,e.bis,from,to)).sort((a,b)=>a.von<b.von?-1:1);
+  const zeIds=new Set(_emps().map(u=>u.id));   // nur Mitarbeiter mit Zeiterfassung
+  const abs=_abs().filter(a=>zeIds.has(a.emp)), evs=_events().filter(e=>overlap(e.von,e.bis,from,to)).sort((a,b)=>a.von<b.von?-1:1);
   if(!evs.length) return '<div class="kal-empty">Keine Veranstaltungen in diesem Zeitraum.</div>';
   let h='<div class="kal-cf">';
   evs.forEach(e=>{
