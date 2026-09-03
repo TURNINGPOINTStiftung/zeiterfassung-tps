@@ -2343,7 +2343,7 @@ function crmAddTermin(){
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort"></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note"></div>
-   <div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml([], 'crm-tf')}</div>
+   ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml([], 'crm-tf')}</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTermin()">Hinzufügen</button></div>`);
 }
@@ -2353,7 +2353,7 @@ function crmSaveTermin(){
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:readStaffPicker('crm-tf') });
+    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[] });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal(); paintDetail();
@@ -3576,6 +3576,8 @@ function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTei
 // ── Mitarbeiter-Auswahl (Zuweisung an Veranstaltung/Termin – getrennt von den Aufgaben) ──
 // Zuweisbar = interne Mitarbeiter (kein Admin, keine externen crmOnly). Mehrfach/alle möglich.
 function _assignableStaff(){ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
+// Zuweisen dürfen nur Leitung/GF (+ Admin). Andere sehen die Zuweisung nur als Chips (read-only).
+function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; return r==='admin'||r==='leitung'||r==='geschaeftsfuehrer'; }
 function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=>{ const u=us.find(x=>x&&x.id===id); return u?u.name:id; }); }
 function staffPickerHtml(selIds, idp){
   const sel=new Set(selIds||[]);
@@ -3600,7 +3602,9 @@ function veranstaltungFormHtml(v,isNew){
      <div id="crm-va-teiln" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${vaTeilnEditHtml()}</div>
      <select id="crm-va-add" onchange="crmVaAddTeiln()">${entityLinkOptions('')}</select>
    </div>
-   <div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>
+   ${_canAssignStaff()
+     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
+     : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -3617,10 +3621,11 @@ function crmSaveVeranstaltung(isNew){
   const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:val('crm-va-uhrzeit'),
     online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
     ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'),
-    teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})), mitarbeiter:readStaffPicker('crm-va') };
+    teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
+  if(_canAssignStaff()) rec.mitarbeiter=readStaffPicker('crm-va');   // sonst bestehende Zuweisung NICHT überschreiben
   if(isNew){
     const id=newId();
-    saveVeranstaltung({ id, ...rec, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
+    saveVeranstaltung({ id, mitarbeiter:[], ...rec, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
     window._crmVaSel=id; crmCloseModal(); paintVeranstaltungDetail(); toast('Veranstaltung angelegt ✓','ok');
   } else {
     const v=getVeranstaltung(window._crmVaSel); if(!v) return;
