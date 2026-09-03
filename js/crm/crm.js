@@ -1567,12 +1567,14 @@ function paintDetail(){
     const start=t.datum||''; const end=t.bis||'';
     const dateStr = (end && end!==start) ? `${fmtDate(Date.parse(start))} – ${fmtDate(Date.parse(end))}`
                                          : (start?fmtDate(Date.parse(start)):'');
-    return `<div class="crm-row">
+    const asg=(t.mitarbeiter&&t.mitarbeiter.length)?`<div class="small" style="color:var(--muted)">👥 ${esc(staffNames(t.mitarbeiter).join(', '))}</div>`:'';
+    return `<div class="crm-row" style="cursor:pointer" onclick="crmEditTermin('${t.id}')" title="Öffnen">
       <div class="grow"><span class="name">${esc(t.titel)}</span>
         <div class="small">${[dateStr, t.ort].filter(Boolean).map(esc).join(' · ')}</div>
         ${t.note?`<div class="small">${linkify(t.note)}</div>`:''}
+        ${asg}
       </div>
-      <button class="crm-x" title="Entfernen" onclick="crmDeleteTermin('${t.id}')">✕</button>
+      <button class="crm-x" title="Entfernen" onclick="event.stopPropagation();crmDeleteTermin('${t.id}')">✕</button>
     </div>`;
   };
   const allTermine=(e.termine||[]).slice().sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
@@ -1661,6 +1663,9 @@ function paintDetail(){
     ${subbar}
     ${bodyByTab[dt]||''}
   </div>`;
+  // Aus dem Kalender angeklickter Termin: nach dem Laden direkt öffnen (einmalig).
+  if(window._crmOpenTerminId){ const _tid=window._crmOpenTerminId; window._crmOpenTerminId=null;
+    if((e.termine||[]).some(x=>x.id===_tid)) setTimeout(()=>{ try{ crmEditTermin(_tid); }catch(_e){} }, 30); }
 }
 // Schwebende horizontale Scrollleiste fürs Kanban-Board: eine dünne Leiste, die per
 // position:sticky immer am unteren Rand des CRM-Bereichs sichtbar bleibt und .kb-board
@@ -2361,6 +2366,37 @@ function crmSaveTermin(){
 function crmDeleteTermin(tid){
   mutateEntity(e=>{ e.termine=(e.termine||[]).filter(x=>x.id!==tid); });
   paintDetail();
+}
+// Bestehenden Termin öffnen: Infos ansehen/ändern; Mitarbeiter zuweisen nur Leitung/GF.
+function crmEditTermin(tid){
+  const e=curEntity(); if(!e){ toast('Kein Kontakt geöffnet.','err'); return; }
+  const t=(e.termine||[]).find(x=>x.id===tid); if(!t){ toast('Termin nicht gefunden.','err'); return; }
+  const canAsg=_canAssignStaff();
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📅 Termin / Training</h3>
+   <div class="crm-modal-field"><label>Titel *</label><input id="crm-te-titel" value="${esc(t.titel||'')}"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von</label><input id="crm-te-datum" type="date" value="${esc(t.datum||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-te-bis" type="date" value="${esc(t.bis||'')}"></div>
+   </div>
+   <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"></div>
+   <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"></div>
+   ${canAsg
+     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
+     : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+   <button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button></div>`);
+}
+function crmSaveTerminEdit(tid){
+  const titel=val('crm-te-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
+  const datum=val('crm-te-datum'); let bis=val('crm-te-bis'); if(bis && datum && bis<datum) bis=datum;
+  const canAsg=_canAssignStaff();
+  mutateEntity(e=>{ const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
+    t.titel=titel; t.datum=datum; t.bis=bis; t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
+    if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
+    (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
+  });
+  crmCloseModal(); paintDetail(); toast('Termin gespeichert ✓','ok');
 }
 
 // (Angebote-Bereich entfernt – v265)
@@ -4953,7 +4989,7 @@ Object.assign(window, {
   crmAddMember, crmEditMember, crmSaveMember, crmDeleteMember, crmMemberDetail, crmDeleteMemberConfirm,
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
-  crmAddTermin, crmSaveTermin, crmDeleteTermin, crmStaffAll,
+  crmAddTermin, crmSaveTermin, crmDeleteTermin, crmEditTermin, crmSaveTerminEdit, crmStaffAll,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
