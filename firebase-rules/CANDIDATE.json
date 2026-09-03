@@ -1,0 +1,45 @@
+{
+  "rules": {
+    "zeiterfassung": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/admins').child(auth.uid).val() === true",
+
+      "loginDir": {
+        ".read": true,
+        "$key": { ".validate": "!newData.exists() || $key.matches(/^[A-Za-z0-9._-]+$/)" }
+      },
+
+      "users": {
+        "$i": {
+          "id": { ".validate": "!newData.exists() || newData.val().matches(/^[A-Za-z0-9._-]+$/)" },
+          "pw":              { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" },
+          "email":           { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" },
+          "city":            { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" },
+          "bundesland":      { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" },
+          "lecturePeriods":  { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" },
+          "lectureFreeDays": { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val())" }
+        }
+      },
+
+      "entries":       { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "stamps":        { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "vacRequests":   { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "teamReports":   { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "yearReports":   { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "_fixes":        { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+      "pwResetTokens": { ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true" },
+
+      "vertretungen":  { ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/gfAdmins').child(auth.uid).val() === true)" }
+    },
+
+    "crm": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true"
+    },
+    "crm_history": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".indexOn": ["ts"]
+    }
+  }
+}
