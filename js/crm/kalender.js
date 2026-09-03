@@ -19,6 +19,7 @@ const _addDays=(dt,n)=>{ const x=new Date(dt); x.setDate(x.getDate()+n); return 
 const _daysInMonth=(y,m)=>new Date(y,m,0).getDate();               // m = 1..12
 const _dowMon=dt=>((dt.getDay()+6)%7);                              // 0=Mo .. 6=So
 const _todayISO=()=>_iso(new Date());
+const _deDate=iso=>{ const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'):iso; };
 const _mondayOf=dt=>_addDays(dt,-_dowMon(dt));
 const _isoWeek=dt=>{ const t=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())); const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3); const ft=new Date(Date.UTC(t.getUTCFullYear(),0,4)); const fd=(ft.getUTCDay()+6)%7; ft.setUTCDate(ft.getUTCDate()-fd+3); return 1+Math.round((t-ft)/6048e5); };
 const DOW=['Mo','Di','Mi','Do','Fr','Sa','So'];
@@ -46,7 +47,29 @@ function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{}
     out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay, note:r.note||''}); });
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
-  return vs.filter(v=>v&&v.start).map(v=>({titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||''})); }
+  return vs.filter(v=>v&&v.start).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||''})); }
+// Darf der aktuelle Nutzer Veranstaltungen öffnen? (CRM ODER Projektmanagement freigeschaltet)
+let _canOpenVA=false;
+// Sprung zur Veranstaltung im passenden Modul (Projektmanagement bevorzugt, sonst CRM).
+function kalOpenVeranstaltung(id){
+  if(!id) return;
+  try{
+    const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null;
+    const target=(ma&&ma.kanban&&ma.kanban!=='kein')?'kanban':((ma&&ma.crm&&ma.crm!=='kein')?'crm':null);
+    if(!target) return;
+    if(window.switchModule) window.switchModule(target);
+    if(window.crmOpenVeranstaltung) window.crmOpenVeranstaltung(id);
+  }catch(e){ console.error('kalOpenVeranstaltung:',e); }
+}
+// Einmaliges Mouseover-Tooltip (funktioniert auch bei winzigen Jahres-Markern).
+let _tipEl=null;
+function _tip(){ if(_tipEl) return _tipEl; _tipEl=document.createElement('div'); _tipEl.className='kal-tip'; document.body.appendChild(_tipEl); return _tipEl; }
+function _bindTips(root){
+  if(root._tipsBound) return; root._tipsBound=true;
+  root.addEventListener('mouseover', e=>{ const t=e.target.closest('[data-tip]'); if(!t) return; const el=_tip(); el.textContent=t.getAttribute('data-tip'); el.style.display='block'; });
+  root.addEventListener('mousemove', e=>{ if(!_tipEl||_tipEl.style.display==='none') return; const pad=14, w=_tipEl.offsetWidth, h=_tipEl.offsetHeight; let x=e.clientX+pad, y=e.clientY+pad; if(x+w>window.innerWidth) x=e.clientX-w-pad; if(y+h>window.innerHeight) y=e.clientY-h-pad; _tipEl.style.left=Math.max(4,x)+'px'; _tipEl.style.top=Math.max(4,y)+'px'; });
+  root.addEventListener('mouseout', e=>{ if(e.target.closest('[data-tip]')&&_tipEl) _tipEl.style.display='none'; });
+}
 // Wer erscheint im Kalender: interne Mitarbeiter. Raus fliegen nur Admin und EXTERNE
 // „nur CRM"-Nutzer (crmOnly). Die GF (noTimesheet = keine EIGENE Zeiterfassung) bleibt
 // bewusst drin – sie nimmt Urlaub/Abwesenheiten, die für die Planung relevant sind.
@@ -105,6 +128,8 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-kwtrack{grid-column:2 / -1;grid-row:1;position:relative;min-height:18px}
   .kal-kwlab{position:absolute;top:3px;font-size:9px;font-weight:600;color:#8598ab;padding-left:2px}
   .kal-empty{padding:26px;text-align:center;color:var(--muted,#5d7086);font-size:.92rem}
+  .kal-tip{position:fixed;z-index:99999;background:#15263a;color:#fff;font-size:12px;font-weight:600;padding:6px 9px;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;max-width:300px;white-space:normal;line-height:1.35;display:none}
+  .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
   .kal-cf{padding:2px 0}
   .kal-cfitem{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border,#dce3ec)} .kal-cfitem:last-child{border-bottom:none}
   .kal-cfdate{font-weight:700;font-size:.82rem;color:var(--primary,#1a3a5c);min-width:120px;padding-top:2px}
@@ -138,7 +163,7 @@ function _dayGrid(days){
   const laneH=laneN===1?32:(laneN===2?26:22);
   h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#7b3fb3;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
   days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
-  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev'+(cfl?' cf':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(e._lane+1)+';background:#7b3fb3" title="'+esc(e.titel)+(e.uhr?(' '+esc(e.uhr)):'')+'">📅 '+esc(e.titel)+'</div>'; });
+  evs.forEach(e=>{ const cc=clampCols(e.von,e.bis); if(!cc) return; const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=_canOpenVA&&e.id; h+='<div class="kal-ev'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(e._lane+1)+';background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
   h+='</div>';
   // Mitarbeiter nach Team
   _teamsOrdered(emps).forEach(t=>{
@@ -147,7 +172,7 @@ function _dayGrid(days){
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" title="'+esc(u.name)+'">'+esc(u.name)+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+'"></div>'; });
-      abs.filter(a=>a.emp===u.id).forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';background:'+m.c+'" title="'+m.lbl+' '+a.von+'–'+a.bis+(a.half?' (½)':'')+'">'+(wide?m.lbl:'')+'</div>'; });
+      abs.filter(a=>a.emp===u.id).forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
       h+='</div>';
     });
   });
@@ -181,7 +206,7 @@ function _yearGrid(year){
   const yevs=evs.filter(e=>inYear(e.von,e.bis)); const ylN=Math.max(1,_laneAssign(yevs)); const mH=22; const trkH=ylN*mH+6;
   h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>'+mcells();
   h+='<div class="kal-track" style="min-height:'+trkH+'px">'+wlines+todayLine;
-  yevs.forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); h+='<div class="kal-ev-mark'+(cfl?' cf':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;top:'+(3+e._lane*mH)+'px;height:'+(mH-3)+'px;background:#7b3fb3" title="'+esc(e.titel)+' ('+e.von+')">📅 '+esc(e.titel)+'</div>'; });
+  yevs.forEach(e=>{ const cfl=abs.some(a=>overlap(a.von,a.bis,e.von,e.bis)); const tip='📅 '+e.titel+' · '+_deDate(e.von)+(e.bis!==e.von?('–'+_deDate(e.bis)):'')+(e.uhr?(' '+e.uhr):''); const clk=_canOpenVA&&e.id; h+='<div class="kal-ev-mark'+(cfl?' cf':'')+(clk?' kal-clickable':'')+'" style="left:'+leftPct(e.von)+'%;width:'+spanPct(e.von,e.bis)+'%;top:'+(3+e._lane*mH)+'px;height:'+(mH-3)+'px;background:#7b3fb3" data-tip="'+esc(tip)+'"'+(clk?(' onclick="kalOpenVeranstaltung(\''+esc(e.id)+'\')"'):'')+'>📅 '+esc(e.titel)+'</div>'; });
   h+='</div></div>';
   // Mitarbeiter
   _teamsOrdered(emps).forEach(t=>{
@@ -190,7 +215,7 @@ function _yearGrid(year){
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" title="'+esc(u.name)+'">'+esc(u.name)+'</div>'+mcells();
       h+='<div class="kal-track">'+wlines+todayLine;
-      abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis)).forEach(a=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); h+='<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;background:'+m.c+'" title="'+m.lbl+' '+a.von+'–'+a.bis+'">'+(w>1.6?m.lbl:'')+'</div>'; });
+      abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis)).forEach(a=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis); h+='<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>1.6?m.lbl:'')+'</div>'; });
       h+='</div></div>';
     });
   });
@@ -234,6 +259,9 @@ export function renderKalender(){
   try{
     _styles();
     const root=document.getElementById('kalender-root'); if(!root) return;
+    _bindTips(root);
+    const _ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null;
+    _canOpenVA = !!(_ma && ((_ma.crm&&_ma.crm!=='kein')||(_ma.kanban&&_ma.kanban!=='kein')));
     const tabs=[['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
     const emps=_emps(); const teamOpts=['<option value="">Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=`<div class="kal-wrap">
@@ -266,4 +294,4 @@ function kalNav(dir){
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
-Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav });
+Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung });
