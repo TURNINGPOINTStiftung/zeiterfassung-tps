@@ -536,6 +536,11 @@ function injectStyles(){
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
   .crm-ac-item:hover,.crm-ac-item.on{background:var(--row-alt,#f4f7fb)} .crm-ac-tree{color:var(--muted);font-size:11px}
   .crm-ac-empty{padding:10px 13px;color:var(--muted);font-size:13px}
+  .crm-type-toggle{display:flex;gap:8px;margin:0 0 8px}
+  .crm-tt-btn{flex:1;padding:11px 12px;border:1.5px solid var(--border);border-radius:11px;background:#fff;color:var(--text);font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:all .12s}
+  .crm-tt-btn:hover{border-color:var(--primary-l)}
+  .crm-tt-btn.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .crm-tt-hint{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.4}
   .crm-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
   .btn-sm-crm{padding:8px 15px;font-size:13px;border-radius:9px;border:1.5px solid var(--border);background:#fff;color:var(--primary);font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .btn-sm-crm:hover{border-color:var(--primary-l);background:#f5f8fd;box-shadow:0 2px 6px rgba(32,56,105,.08)}
@@ -1634,14 +1639,15 @@ function paintDetail(){
   const canCreate=crmFull()||crmRestricted();
   // EIN Anlege-Knopf mit Auswahl (Aufgabe/Termin/Veranstaltung) – bündelt die Wege,
   // ohne Funktionen zu entfernen (Board + Inline-Anlegen bleiben voll erhalten).
-  const neuBtn = canCreate ? `<div class="crm-neu-bar"><div class="crm-neu-wrap">
+  const canEvents=_canManageEvents();   // Termine/Veranstaltungen anlegen = CRM „verwaltend"
+  const neuBtn = (canCreate||canEvents) ? `<div class="crm-neu-bar"><div class="crm-neu-wrap">
       <button class="btn-sm-crm primary" onclick="crmNeuToggle(event)">＋ Neu ▾</button>
       <div class="crm-neu-menu" id="crm-neu-menu">
-        <button type="button" onclick="crmNeuPick('aufgabe')">✓ Aufgabe</button>
-        <button type="button" onclick="crmNeuPick('termin')">📅 Termin</button>
-        ${crmFull()?`<button type="button" onclick="crmNeuPick('veranstaltung')">🎪 Veranstaltung</button>`:''}
+        ${canCreate?`<button type="button" onclick="crmNeuPick('aufgabe')">✓ Aufgabe</button>`:''}
+        ${canEvents?`<button type="button" onclick="crmNeuPick('termin')">📅 Termin</button>
+        <button type="button" onclick="crmNeuPick('veranstaltung')">🎪 Veranstaltung</button>`:''}
       </div>
-    </div><span class="small" style="color:var(--muted)">Aufgabe, Termin oder Veranstaltung – hier wählen.</span></div>` : '';
+    </div><span class="small" style="color:var(--muted)">${canEvents?'Aufgabe, Termin oder Veranstaltung – hier wählen.':'Aufgabe anlegen.'}</span></div>` : '';
   // Status + Kategorie werden jetzt im „✎ Stammdaten"-Dialog geändert; hier oben nur kompakt als Badges.
   const _stBadges=crmStatusBadges(e), _catBadges=crmCatBadges(e, window._crmTree);
   const scBar = `<div class="crm-scbar">${_stBadges||''}${(_stBadges&&_catBadges)?' ':''}${_catBadges||''}${(!_stBadges&&!_catBadges)?'<span class="small" style="color:var(--muted)">Kein Status · keine Kategorie – über „✎ Stammdaten" setzen</span>':''}${_statusLogHtml(e)}</div>`;
@@ -1750,8 +1756,8 @@ function crmNeuToggle(ev){ if(ev){ ev.stopPropagation(); } const m=document.getE
 }
 function _crmNeuClose(){ const m=document.getElementById('crm-neu-menu'); if(m) m.style.display='none'; document.removeEventListener('click', _crmNeuClose); }
 function crmNeuPick(kind){ _crmNeuClose();
-  if(kind==='termin') return crmAddTermin();
-  if(kind==='veranstaltung') return crmNewVeranstaltungFor();
+  if(kind==='termin') return crmNewItem('termin');            // Einheits-Fenster, Termin vorgewählt
+  if(kind==='veranstaltung') return crmNewItem('veranstaltung');
   return crmNewAufgabeDialog();
 }
 // Aufgabe anlegen: volle Felder + Wahl der Spalte (oder neue Spalte). Unteraufgaben/
@@ -2405,7 +2411,7 @@ function crmSaveTermin(){
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[] });
+    e.termine.push({ id:newId(), titel, datum, bis, uhr:val('crm-tf-uhr'), datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[] });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal();
@@ -2423,21 +2429,25 @@ function crmEditTermin(tid){
   const e=curEntity(); if(!e){ toast('Kein Kontakt geöffnet.','err'); return; }
   const t=(e.termine||[]).find(x=>x.id===tid); if(!t){ toast('Termin nicht gefunden.','err'); return; }
   const canAsg=_canAssignStaff();
+  const canEdit=_canManageEvents();     // CRM „nutzen" darf nur ansehen (read-only)
+  const ro = canEdit?'':' disabled';
   crmOpenModalShell();
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📅 Termin / Training</h3>
-   <div class="crm-modal-field"><label>Titel *</label><input id="crm-te-titel" value="${esc(t.titel||'')}"></div>
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📅 Termin / Training${canEdit?'':' <span style="font-size:12px;font-weight:600;color:var(--muted)">· nur ansehen</span>'}</h3>
+   <div class="crm-modal-field"><label>Titel *</label><input id="crm-te-titel" value="${esc(t.titel||'')}"${ro}></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von</label><input id="crm-te-datum" type="date" value="${esc(t.datum||'')}"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-te-bis" type="date" value="${esc(t.bis||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Von</label><input id="crm-te-datum" type="date" value="${esc(t.datum||'')}"${ro}></div>
+     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Bis (optional)</label><input id="crm-te-bis" type="date" value="${esc(t.bis||'')}"${ro}></div>
+     <div class="crm-modal-field" style="flex:1;min-width:110px"><label>Uhrzeit (optional)</label><input id="crm-te-uhr" type="time" value="${esc(t.uhr||'')}"${ro}></div>
    </div>
-   <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"></div>
-   <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"></div>
+   <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"${ro}></div>
+   <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"${ro}></div>
    ${canAsg
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+   ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa('${tid}')" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
    ${(window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoTermin()">Zum Termin ↗</button>`:''}
-   <button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button></div>`);
+   ${canEdit?`<button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button>`:''}</div>`);
 }
 function crmSaveTerminEdit(tid){
   const backToKal=(window._crmModalReturn==='kalender');
@@ -2445,7 +2455,7 @@ function crmSaveTerminEdit(tid){
   const datum=val('crm-te-datum'); let bis=val('crm-te-bis'); if(bis && datum && bis<datum) bis=datum;
   const canAsg=_canAssignStaff();
   mutateEntity(e=>{ const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
-    t.titel=titel; t.datum=datum; t.bis=bis; t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
+    t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=val('crm-te-uhr'); t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
     if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
     (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
@@ -3615,7 +3625,7 @@ function paintVeranstaltungDetail(){
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Zurück</button>
       <h2>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
-      ${crmFull()?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
+      ${_canManageEvents()?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditVeranstaltung()">✎ Bearbeiten</button>
       <button class="btn-sm-crm danger" onclick="crmDeleteVeranstaltungC()">Löschen</button>`:''}
     </div>
@@ -3669,7 +3679,10 @@ function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTei
 // Zuweisbar = interne Mitarbeiter (kein Admin, keine externen crmOnly). Mehrfach/alle möglich.
 function _assignableStaff(){ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
 // Zuweisen dürfen nur Leitung/GF (+ Admin). Andere sehen die Zuweisung nur als Chips (read-only).
-function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; if(r==='admin'||r==='leitung'||r==='geschaeftsfuehrer') return true; try{ return crmModuleAccess(window.cu).kalender==='verwaltend'; }catch(e){ return false; } }
+function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; return r==='admin'||r==='leitung'||r==='geschaeftsfuehrer'; }
+// Neue Termine/Veranstaltungen anlegen UND deren Infos bearbeiten = CRM-Zugriff „verwaltend".
+// (CRM „nutzen" darf ansehen + Kanban voll nutzen, aber die Termin-/VA-Infos NICHT bearbeiten.)
+function _canManageEvents(){ try{ return crmModuleAccess(window.cu).crm==='verwaltend'; }catch(e){ return false; } }
 // Hat der Nutzer CRM/PM-Zugang? (für den „Zum Termin/Zur Veranstaltung ↗"-Sprung aus dem Kalender-Modal)
 function _kalHasCrm(){ try{ const ma=crmModuleAccess(window.cu); return (ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'); }catch(e){ return false; } }
 function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=>{ const u=us.find(x=>x&&x.id===id); return u?u.name:id; }); }
@@ -3680,10 +3693,11 @@ function staffPickerHtml(selIds, idp){
 }
 function readStaffPicker(idp){ return Array.from(document.querySelectorAll('.'+idp+'-ma:checked')).map(x=>x.value); }
 function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(cb=>{ cb.checked=!!on; }); }
-function veranstaltungFormHtml(v,isNew){
+// Nur die Veranstaltungs-FELDER (ohne h3/Aktionen) – wiederverwendbar im Einheits-Fenster.
+function _vaFieldsHtml(v){
+  v=v||{};
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${v.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
-  return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Veranstaltung':'✎ Veranstaltung'}</h3>
-   <div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
+  return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von *</label><input id="crm-va-start" type="date" value="${esc(v.start||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-va-ende" type="date" value="${esc(v.ende||'')}"></div>
@@ -3699,14 +3713,79 @@ function veranstaltungFormHtml(v,isNew){
    ${_canAssignStaff()
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
-   <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
+   <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>`;
+}
+// Nur die Termin-FELDER (ohne h3/Aktionen/Kontakt-Picker) – wiederverwendbar im Einheits-Fenster.
+function _terminFieldsHtml(t){
+  t=t||{};
+  return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-tf-titel" value="${esc(t.titel||'')}" placeholder="z. B. Training, Treffen …"></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Von</label><input id="crm-tf-datum" type="date" value="${esc(t.datum||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Bis (optional)</label><input id="crm-tf-bis" type="date" value="${esc(t.bis||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:110px"><label>Uhrzeit (optional)</label><input id="crm-tf-uhr" type="time" value="${esc(t.uhr||'')}"></div>
+   </div>
+   <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort" value="${esc(t.ort||'')}"></div>
+   <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note" value="${esc(t.note||'')}"></div>
+   ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter||[], 'crm-tf')}</div>`:''}`;
+}
+function veranstaltungFormHtml(v,isNew){
+  return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Veranstaltung':'✎ Veranstaltung'}</h3>
+   ${_vaFieldsHtml(v)}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">${isNew?'Abbrechen':'Schließen'}</button>
    ${(!isNew&&window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoVeranstaltung(window._crmVaSel)">Zur Veranstaltung ↗</button>`:''}
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
+// ── Einheitliches Anlegen: EIN Fenster, Umschalter Termin (Default) / Veranstaltung ──
+// Termin = kurzer Eintrag an einem Kontakt. Veranstaltung = großes Vorhaben mit eigenem Kanban.
+// Beim Umschalten bleiben gemeinsame Felder (Titel/Von/Bis) erhalten → Termin leicht „hochstufbar".
+function crmNewItem(initialType){ injectStyles(); window._crmNewType=(initialType==='veranstaltung')?'veranstaltung':'termin'; window._vaTeiln=[]; window._crmVaReturn=null; crmOpenModalShell(); openModal(_newItemHtml()); }
+function _newItemHtml(){
+  const type=window._crmNewType||'termin';
+  const fromKal=(window._crmModalReturn==='kalender');
+  return `<h3 style="color:var(--primary);margin:0 0 12px">＋ Neu anlegen</h3>
+   <div class="crm-type-toggle">
+     <button type="button" class="crm-tt-btn${type==='termin'?' on':''}" id="crm-tt-termin" onclick="crmNewType('termin')">📅 Termin</button>
+     <button type="button" class="crm-tt-btn${type==='veranstaltung'?' on':''}" id="crm-tt-va" onclick="crmNewType('veranstaltung')">🎪 Veranstaltung</button>
+   </div>
+   <p class="crm-tt-hint" id="crm-tt-hint">${type==='termin'?'Kurzer Termin/Training – wird an einem CRM-Kontakt geführt. Kann später zur Veranstaltung (mit Kanban) umgewandelt werden.':'Größeres Vorhaben mit Beteiligten, Team und eigenem Kanban-Board.'}</p>
+   <div id="crm-new-termin"${type==='termin'?'':' style="display:none"'}>${fromKal?contactPickerHtml():''}${_terminFieldsHtml({})}</div>
+   <div id="crm-new-va"${type==='veranstaltung'?'':' style="display:none"'}>${_vaFieldsHtml({})}</div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+     <button class="btn-sm-crm primary" onclick="crmSaveNewItem()">Anlegen</button></div>`;
+}
+function crmNewType(t){
+  window._crmNewType=t;
+  // Gemeinsame Felder beim Umschalten übernehmen, damit nichts verloren geht.
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const s=(id,v)=>{ const el=document.getElementById(id); if(el&&v&&!el.value) el.value=v; };
+  if(t==='veranstaltung'){ s('crm-va-titel',g('crm-tf-titel')); s('crm-va-start',g('crm-tf-datum')); s('crm-va-ende',g('crm-tf-bis')); s('crm-va-ort',g('crm-tf-ort')); s('crm-va-besch',g('crm-tf-note')); }
+  else { s('crm-tf-titel',g('crm-va-titel')); s('crm-tf-datum',g('crm-va-start')); s('crm-tf-bis',g('crm-va-ende')); s('crm-tf-ort',g('crm-va-ort')); s('crm-tf-note',g('crm-va-besch')); }
+  const dt=document.getElementById('crm-new-termin'); if(dt) dt.style.display=(t==='termin')?'':'none';
+  const dv=document.getElementById('crm-new-va'); if(dv) dv.style.display=(t==='veranstaltung')?'':'none';
+  const bt=document.getElementById('crm-tt-termin'); if(bt) bt.classList.toggle('on',t==='termin');
+  const bv=document.getElementById('crm-tt-va'); if(bv) bv.classList.toggle('on',t==='veranstaltung');
+  const hint=document.getElementById('crm-tt-hint'); if(hint) hint.textContent=(t==='termin')?'Kurzer Termin/Training – wird an einem CRM-Kontakt geführt. Kann später zur Veranstaltung (mit Kanban) umgewandelt werden.':'Größeres Vorhaben mit Beteiligten, Team und eigenem Kanban-Board.';
+}
+function crmSaveNewItem(){ if(!_canManageEvents()){ toast('Dafür fehlt die Berechtigung (CRM „verwaltend").','err'); return; } if((window._crmNewType||'termin')==='veranstaltung') crmSaveVeranstaltung(true); else crmSaveTermin(); }
+// Termin → Veranstaltung (mit Kanban) umwandeln: neue Veranstaltung aus den Termindaten
+// anlegen (Kontakt als Beteiligter), dann den Termin am Kontakt entfernen.
+function crmTerminToVa(tid){
+  const e=curEntity(); if(!e) return; const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
+  const backToKal=(window._crmModalReturn==='kalender');
+  const tree=window._crmTree, eid=window._crmSelId;
+  const id=newId();
+  saveVeranstaltung({ id, titel:t.titel||'', start:t.datum||'', ende:t.bis||'', uhrzeit:'', online:false, ortOderLink:t.ort||'', team:'', beschreibung:t.note||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], teilnehmer:(tree&&eid)?[{tree,eid}]:[], todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
+  mutateEntity(x=>{ x.termine=(x.termine||[]).filter(y=>y.id!==tid); });
+  window._crmVaSel=id;
+  crmCloseModal();
+  if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(_e){} }
+  else { window._crmMode='veranstaltungen'; paintVeranstaltungDetail(); }
+  toast('In Veranstaltung umgewandelt ✓','ok');
+}
 function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
 function crmEditVeranstaltung(){
   injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
+  if(!_canManageEvents()){ toast('Nur ansehen – Bearbeiten braucht CRM „verwaltend".','err'); return; }
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
   crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false));
@@ -5058,6 +5137,7 @@ Object.assign(window, {
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin, crmEditTermin, crmSaveTerminEdit, crmStaffAll,
   crmContactFilter, crmContactPick, crmCanCreateItems,
+  crmNewItem, crmNewType, crmSaveNewItem, crmTerminToVa,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
