@@ -163,7 +163,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-kwtrack{grid-column:2 / -1;grid-row:1;position:relative;min-height:22px}
   .kal-kwlab{position:absolute;top:4px;font-size:10px;font-weight:600;color:#8598ab;padding-left:2px}
   .kal-empty{padding:26px;text-align:center;color:var(--muted,#5d7086);font-size:.92rem}
-  .kal-tip{position:fixed;z-index:99999;background:#15263a;color:#fff;font-size:12px;font-weight:600;padding:6px 9px;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;max-width:300px;white-space:normal;line-height:1.35;display:none}
+  .kal-tip{position:fixed;z-index:99999;background:#15263a;color:#fff;font-size:15.5px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
   .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
   .kal-termin{border:1.5px dashed rgba(255,255,255,.65)}
   .kal-asg{margin:2px;border-radius:4px;min-width:4px;z-index:1}
