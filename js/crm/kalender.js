@@ -57,7 +57,7 @@ function _termine(){ const out=[]; try{
     const crm=getCrm()||{};
     Object.keys(crm).forEach(tk=>{ if(_RESERVED.has(tk)) return; const ents=crm[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; const ts=(e&&e.termine)||[]; if(!Array.isArray(ts)) return;
-        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'', tree:tk, eid:eid }); });
+        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:t.uhr||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'', tree:tk, eid:eid }); });
       });
     });
   }catch(e){}
@@ -101,17 +101,18 @@ function kalGotoTermin(tree,eid){
   window._crmMode='kontakte'; window._crmDetailTab='aufgaben';
   if(window.switchModule) window.switchModule('crm');
 }
-// Kalender-Rechte: verwaltend = anlegen/bearbeiten/zuweisen (In-Place-Modal + „+Neu");
-// nur nutzen + CRM = Klick springt ins CRM; nutzen ohne CRM = kein Klick, nur Tooltip.
+// Klickverhalten im Kalender hängt am CRM-Zugriff:
+//  CRM verwaltend  → Termin/VA anlegen + Infos bearbeiten (In-Place-Modal + „+Neu")
+//  CRM nutzen/kanban → Klick springt ins CRM (Infos ansehen, Kanban voll nutzen)
+//  weder noch      → kein Klick, nur Mouseover-Tooltip
 function _kalAccess(){
   let ma={}; try{ if(window.crmModuleAccess) ma=window.crmModuleAccess(window.cu)||{}; }catch(e){}
   const hasCrm=((ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'));
-  return { verwaltend: ma.kalender==='verwaltend', hasCrm:!!hasCrm };
+  return { verwaltend: ma.crm==='verwaltend', hasCrm:!!hasCrm };
 }
-// „+ Neu" im Kalender: gleiches Modal wie im CRM, aber bleibt im Kalender. Beim Termin wird
-// der CRM-Kontakt per Such-Dropdown gewählt (crmAddTermin zeigt ihn bei Kalender-Herkunft).
-function kalNewTermin(){ window._crmModalReturn='kalender'; if(window.crmAddTermin) window.crmAddTermin(); }
-function kalNewVeranstaltung(){ window._crmModalReturn='kalender'; if(window.crmNewVeranstaltung) window.crmNewVeranstaltung(); }
+// „+ Neu" im Kalender: EIN Fenster mit Umschalter Termin/Veranstaltung (Termin vorgewählt),
+// bleibt im Kalender. Beim Termin wird der CRM-Kontakt per Such-Dropdown gewählt.
+function kalNewItem(){ window._crmModalReturn='kalender'; if(window.crmNewItem) window.crmNewItem('termin'); }
 // Klick-Attribute für einen Eintrag – abhängig von den Kalender-Rechten:
 //  verwaltend      → Bearbeiten-Modal (kalOpen*)
 //  nutzen + CRM    → Sprung ins CRM (kalGoto*)
@@ -227,12 +228,15 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pchip{font-size:.82rem;font-weight:600;padding:3px 7px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 1px rgba(0,0,0,.08)}
   .kal-pchip.kal-clickable{cursor:pointer} .kal-pchip.kal-clickable:hover{filter:brightness(1.07)}
   .kal-pabs{font-size:.82rem;font-weight:700;color:#fff;padding:3px 7px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .kal-pw{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;min-height:440px}
-  .kal-pw-col{border-left:1px solid var(--border,#e6ebf2);display:flex;flex-direction:column} .kal-pw-col:first-child{border-left:none}
-  .kal-pw-col.we{background:#f7f9fc} .kal-pw-col.today{background:#fff8ef}
-  .kal-pw-h{background:var(--row-alt,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:10px;font-size:.92rem;font-weight:700;color:var(--text,#15263a);text-align:center}
-  .kal-pw-col.today .kal-pw-h{color:#e8892b}
-  .kal-pw-body{display:flex;flex-direction:column;gap:4px;padding:6px}
+  .kal-pw{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden}
+  .kal-pw-corner{background:var(--primary,#1a3a5c);border-radius:8px 0 0 0}
+  .kal-pw-dh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;font-size:.86rem;padding:8px 6px;text-align:center;border-left:1px solid rgba(255,255,255,.14)}
+  .kal-pw-dh.we{background:rgba(0,0,0,.16)} .kal-pw-dh.today{box-shadow:inset 0 -3px 0 #e8892b}
+  .kal-pw-tl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-size:.78rem;font-weight:700;padding:4px 8px;border-top:1px solid var(--border,#e6ebf2);display:flex;align-items:center;justify-content:flex-end}
+  .kal-pw-ad{border-left:1px solid var(--border,#e6ebf2);border-top:1px solid var(--border,#e6ebf2);min-height:34px;padding:4px;display:flex;flex-direction:column;gap:4px}
+  .kal-pw-ad.we{background:#f7f9fc} .kal-pw-ad.today{background:#fff8ef}
+  .kal-pw-hc{border-left:1px solid var(--border,#e6ebf2);border-top:1px solid var(--border,#e6ebf2);min-height:34px;padding:3px;display:flex;flex-direction:column;gap:3px}
+  .kal-pw-hc.we{background:#f7f9fc} .kal-pw-hc.today{background:#fff8ef}
   .kal-py{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;font-size:12px}
   .kal-py-corner{background:var(--primary,#1a3a5c)}
   .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:7px 0;font-size:.84rem;border-left:1px solid rgba(255,255,255,.14)}
@@ -445,10 +449,28 @@ function _persMonth(y,m){
   }
   return h+'</div></div>';
 }
+// Wochenansicht „Nur ich": Stundenraster 6–22 Uhr (1h) + „ganztägig"-Zeile oben.
+// Einträge mit Uhrzeit landen in ihrer Stunde, alles andere (mehrtägig/ohne Zeit/Abwesenheit) ganztägig.
 function _persWeek(ws){
-  let h='<div class="kal-pw">';
-  for(let i=0;i<7;i++){ const dt=_addDays(ws,i); const iso=_iso(dt); const dow=_dowMon(dt); const today=iso===_todayISO();
-    h+='<div class="kal-pw-col'+(dow>=5?' we':'')+(today?' today':'')+'"><div class="kal-pw-h">'+DOW[dow]+' '+dt.getDate()+'.'+(dt.getMonth()+1)+'.</div><div class="kal-pw-body">'+_persDayEntries(iso)+'</div></div>';
+  const H0=6, H1=22;
+  const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(ws,i); days.push({dt,iso:_iso(dt),dow:_dowMon(dt),today:_iso(dt)===_todayISO()}); }
+  const items=_persItems(), myAbs=_persMyAbs();
+  const parseHour=u=>{ if(!u) return null; const m=String(u).match(/(\d{1,2})[:.](\d{2})/)||String(u).match(/^(\d{1,2})$/); if(!m) return null; const hh=+m[1]; return isNaN(hh)?null:hh; };
+  const dd=days.map(d=>{
+    const abs=myAbs.filter(a=>overlap(a.von,a.bis,d.iso,d.iso));
+    const timed=[], allday=[];
+    items.filter(it=>overlap(it.von,it.bis,d.iso,d.iso)).forEach(it=>{ const hh=(it.von===it.bis)?parseHour(it.uhr):null; if(hh!=null&&hh>=H0&&hh<=H1) timed.push({it,hh}); else allday.push(it); });
+    return {abs,timed,allday};
+  });
+  const cs='grid-template-columns:64px repeat(7,1fr);';
+  let h='<div class="kal-pw" style="'+cs+'">';
+  h+='<div class="kal-pw-corner"></div>';
+  days.forEach(d=>{ h+='<div class="kal-pw-dh'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+DOW[d.dow]+' '+d.dt.getDate()+'.'+(d.dt.getMonth()+1)+'.</div>'; });
+  h+='<div class="kal-pw-tl">ganztägig</div>';
+  days.forEach((d,i)=>{ h+='<div class="kal-pw-ad'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+dd[i].abs.map(_persAbsChip).join('')+dd[i].allday.map(_persChip).join('')+'</div>'; });
+  for(let hh=H0; hh<=H1; hh++){
+    h+='<div class="kal-pw-tl">'+String(hh).padStart(2,'0')+':00</div>';
+    days.forEach((d,i)=>{ h+='<div class="kal-pw-hc'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+dd[i].timed.filter(x=>x.hh===hh).map(x=>_persChip(x.it)).join('')+'</div>'; });
   }
   return h+'</div>';
 }
@@ -530,7 +552,7 @@ export function renderKalender(){
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView('${t[0]}')">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
         <span class="kal-spacer"></span>
-        ${kalCanManage?`<button class="kal-new" onclick="kalNewVeranstaltung()">＋ Veranstaltung</button><button class="kal-new" onclick="kalNewTermin()">＋ Termin</button>`:''}
+        ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
         <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend">
@@ -554,4 +576,4 @@ function kalNav(dir){
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
-Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewTermin, kalNewVeranstaltung });
+Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
