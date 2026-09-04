@@ -1890,7 +1890,7 @@ function crmOpenMyVerein(){ window._crmMode='kontakte'; window._crmTree='vereine
 function crmRestrictedOpen(vid){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=vid; paintDetail(); }
 
 function crmOpenModalShell(){ window._crmModalOpen=true; }
-function crmCloseModal(){ window._crmModalOpen=false; closeModal(); }
+function crmCloseModal(){ window._crmModalOpen=false; window._crmModalReturn=null; closeModal(); }
 
 // ── Neu anlegen / Stammdaten bearbeiten ────────────────────────────
 function stammFormHtml(s, flbls){
@@ -2369,6 +2369,7 @@ function crmDeleteTermin(tid){
 }
 // Bestehenden Termin öffnen: Infos ansehen/ändern; Mitarbeiter zuweisen nur Leitung/GF.
 function crmEditTermin(tid){
+  injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
   const e=curEntity(); if(!e){ toast('Kein Kontakt geöffnet.','err'); return; }
   const t=(e.termine||[]).find(x=>x.id===tid); if(!t){ toast('Termin nicht gefunden.','err'); return; }
   const canAsg=_canAssignStaff();
@@ -2385,9 +2386,11 @@ function crmEditTermin(tid){
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+   ${window._crmModalReturn==='kalender'?`<button class="btn-sm-crm" onclick="kalGotoTermin('${tid}')">Zum Termin ↗</button>`:''}
    <button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button></div>`);
 }
 function crmSaveTerminEdit(tid){
+  const backToKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-te-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
   const datum=val('crm-te-datum'); let bis=val('crm-te-bis'); if(bis && datum && bis<datum) bis=datum;
   const canAsg=_canAssignStaff();
@@ -2396,7 +2399,10 @@ function crmSaveTerminEdit(tid){
     if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
     (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
-  crmCloseModal(); paintDetail(); toast('Termin gespeichert ✓','ok');
+  crmCloseModal();
+  if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(e){} }   // aus dem Kalender geöffnet → dort bleiben
+  else paintDetail();
+  toast('Termin gespeichert ✓','ok');
 }
 
 // (Angebote-Bereich entfernt – v265)
@@ -3642,16 +3648,19 @@ function veranstaltungFormHtml(v,isNew){
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">${isNew?'Abbrechen':'Schließen'}</button>
+   ${(!isNew&&window._crmModalReturn==='kalender')?`<button class="btn-sm-crm" onclick="kalGotoVeranstaltung(window._crmVaSel)">Zur Veranstaltung ↗</button>`:''}
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
 function crmNewVeranstaltung(){ window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
 function crmEditVeranstaltung(){
+  injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
   crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false));
 }
 function crmSaveVeranstaltung(isNew){
+  const backToKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-va-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
   const start=val('crm-va-start'); if(!start){ toast('Bitte ein Startdatum wählen.','err'); return; }
   const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:val('crm-va-uhrzeit'),
@@ -3666,7 +3675,10 @@ function crmSaveVeranstaltung(isNew){
   } else {
     const v=getVeranstaltung(window._crmVaSel); if(!v) return;
     Object.assign(v, rec); v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
-    saveVeranstaltung(v); crmCloseModal(); paintVeranstaltungDetail(); toast('Gespeichert ✓','ok');
+    saveVeranstaltung(v); crmCloseModal();
+    if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(e){} }   // aus dem Kalender geöffnet → dort bleiben
+    else paintVeranstaltungDetail();
+    toast('Gespeichert ✓','ok');
   }
 }
 function crmDeleteVeranstaltungC(){
