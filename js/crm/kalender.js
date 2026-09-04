@@ -203,10 +203,12 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-py-corner{background:var(--primary,#1a3a5c)}
   .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:5px 0;border-left:1px solid rgba(255,255,255,.14)}
   .kal-py-dl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;border-top:1px solid var(--border,#eef2f7)}
-  .kal-py-cell{min-height:19px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;flex-direction:column;justify-content:center;padding:2px 4px;position:relative}
+  .kal-py-cell{min-height:20px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;flex-direction:column;justify-content:flex-start;padding:2px 3px;position:relative}
   .kal-py-cell.empty{background:#fafbfd} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
   .kal-py-bars{display:flex;flex-direction:column;gap:1.5px}
-  .kal-py-bar{height:4px;border-radius:2px;width:100%;display:block;box-shadow:0 0 0 .5px rgba(255,255,255,.55)}
+  .kal-py-bar{height:4px;border-radius:2px;width:100%;display:block;box-shadow:0 0 0 .5px rgba(255,255,255,.55);margin-bottom:1px}
+  .kal-py-chip{font-size:9px;line-height:1.3;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px}
+  .kal-py-chip.kal-clickable{cursor:pointer} .kal-py-chip.kal-clickable:hover{filter:brightness(1.07)}
   `;
   document.head.appendChild(el);
 }
@@ -411,50 +413,36 @@ function _persWeek(ws){
   return h+'</div>';
 }
 function _persYear(year){
-  // Drei beschriftete Zeitleisten-Spuren: Veranstaltungen · Termine · Abwesend.
-  // Jeder Eintrag = EIN Balken mit Name (mehrtägig spannt durch, nicht pro Tag wiederholt).
-  const items=_persItems(), myAbs=_persMyAbs();
-  const MD=[]; for(let m=1;m<=12;m++) MD.push(_daysInMonth(year,m));
-  const YLEN=MD.reduce((s,x)=>s+x,0); const CUM=[0]; for(let i=0;i<12;i++) CUM.push(CUM[i]+MD[i]);
-  const Y0=year+'-01-01', Y1=year+'-12-31';
-  const doy=iso=>{ const[,m,d]=iso.split('-').map(Number); return CUM[m-1]+(d-1); };
-  const leftPct=iso=>{ let x=iso<Y0?Y0:(iso>Y1?Y1:iso); return doy(x)/YLEN*100; };
-  const spanPct=(v,b)=>{ let a=v<Y0?Y0:v, c=b>Y1?Y1:b; return (doy(c)-doy(a)+1)/YLEN*100; };
-  const inYear=(v,b)=>overlap(v,b,Y0,Y1);
-  const weeks=[]; for(let dy=0;dy<YLEN;dy++){ const c=_addDays(new Date(year,0,1,12),dy); if(dy===0||_dowMon(c)===0) weeks.push({doy:dy,kw:_isoWeek(c)}); }
-  const wlines=weeks.filter(w=>w.doy>0).map(w=>'<div class="kal-wline" style="left:'+(w.doy/YLEN*100)+'%"></div>').join('');
-  const tISO=_todayISO(); const todayLine=(tISO>=Y0&&tISO<=Y1)?'<div class="kal-today-line" style="left:'+leftPct(tISO)+'%"></div>':'';
-  const cs='grid-template-columns:180px '+MD.map(d=>d+'fr').join(' ')+';';
-  const mcells=()=>{ let s=''; for(let i=0;i<12;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
-  const mH=22;
-  const MIN_DAYS=15;   // „Reservierung" pro Balken, damit der Name Platz hat
-  const _padBis=o=>{ const p=_iso(_addDays(_parse(o.von),MIN_DAYS)); return o.bis>p?o.bis:p; };
-  const laneP=arr=>{ const lanes=[]; arr.slice().sort((a,b)=>String(a.von).localeCompare(String(b.von))).forEach(e=>{ const eE=_padBis(e); let L=0; while(lanes[L]&&lanes[L].some(x=>overlap(x.von,_padBis(x),e.von,eE))) L++; if(!lanes[L])lanes[L]=[]; lanes[L].push(e); e._lane=L; }); return lanes.length; };
-  const bar=(o)=>{ const w=spanPct(o.von,o.bis), left=leftPct(o.von);
-    let bg,fg,txt,cls='',on='',border='';
-    if(o.kind==='abw'){ bg='#2563eb'; fg='#fff'; txt=o.lbl; }
-    else { if(o.kind==='va'){ bg=o.mine?'#dc2626':'#fde0e0'; fg=o.mine?'#fff':'#b42318'; if(!o.mine) border=';border:1px solid #dc2626'; }
-           else { bg=o.mine?'#d97706':'#fdecc8'; fg=o.mine?'#fff':'#9a5a00'; if(!o.mine) border=';border:1px solid #d97706'; }
-           txt=o.titel; const c=_clk(o.it); cls=c.cls; on=c.on; }
-    const tip=(o.kind==='va'?'📅 ':o.kind==='termin'?'• ':'')+txt+(o.entity?(' · '+o.entity):'')+' · '+_deDate(o.von)+(o.bis!==o.von?('–'+_deDate(o.bis)):'')+(o.kind!=='abw'&&o.mine?' · dir zugewiesen':'');
-    return '<div class="kal-ev-mark'+cls+'" style="left:'+left+'%;width:'+w+'%;min-width:46px;top:'+(3+o._lane*mH)+'px;height:'+(mH-3)+'px;background:'+bg+';color:'+fg+border+'" data-tip="'+esc(tip)+'"'+on+'>'+esc(txt)+'</div>';
-  };
-  const vaRow=items.filter(it=>it.typ==='va'&&inYear(it.von,it.bis)).map(it=>({kind:'va',von:it.von,bis:it.bis,titel:it.titel,mine:_persMine(it),it,entity:it.entity}));
-  const tRow =items.filter(it=>it.typ==='termin'&&inYear(it.von,it.bis)).map(it=>({kind:'termin',von:it.von,bis:it.bis,titel:it.titel,mine:_persMine(it),it,entity:it.entity}));
-  const aRow =myAbs.filter(a=>inYear(a.von,a.bis)).map(a=>({kind:'abw',von:a.von,bis:a.bis,lbl:KMETA[a.type].lbl}));
-  const rows=[['📅 Veranstaltungen','#dc2626',vaRow],['• Termine','#d97706',tRow],['Abwesend','#2563eb',aRow]];
-  let h='<div class="kal-grid" style="min-width:1500px">';
-  h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+year+'</div>';
-  for(let i=0;i<12;i++) h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+MON_ABBR[i]+'</div>';
-  h+='</div>';
-  h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
-  rows.forEach(r=>{ const label=r[0], col=r[1], data=r[2]; const rN=Math.max(1,laneP(data));
-    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:'+col+';font-weight:700">'+label+'</div>'+mcells();
-    h+='<div class="kal-track" style="min-height:'+(rN*mH+6)+'px">'+wlines+todayLine;
-    if(!data.length) h+='<div style="position:absolute;left:8px;top:5px;font-size:.72rem;color:var(--muted,#8a97a7)">—</div>';
-    data.forEach(o=>{ h+=bar(o); });
-    h+='</div></div>';
-  });
+  // „Schöner" Wandkalender: 12 Monatsspalten × Tagezeilen 1–31. Einträge werden am
+  // Starttag BESCHRIFTET (Name); mehrtägige laufen an Folgetagen als schmaler farbiger
+  // Balken weiter (kein doppelter/dreifacher Name). Nur eigene Abwesenheiten; alle
+  // Events/Termine (eigene gefüllt, fremde als heller Umriss). Klick öffnet den Eintrag.
+  const ITEMS=_persItems(), MYABS=_persMyAbs();
+  let h='<div class="kal-py" style="grid-template-columns:34px repeat(12,1fr)"><div class="kal-py-corner"></div>';
+  for(let m=0;m<12;m++) h+='<div class="kal-py-mh">'+MON_ABBR[m]+'</div>';
+  for(let d=1;d<=31;d++){
+    h+='<div class="kal-py-dl">'+d+'</div>';
+    for(let m=1;m<=12;m++){
+      if(d>_daysInMonth(year,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
+      const dt=new Date(year,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
+      const myAbs=MYABS.filter(a=>overlap(a.von,a.bis,iso,iso));
+      const its=ITEMS.filter(it=>overlap(it.von,it.bis,iso,iso));
+      let bg=''; if(myAbs.length) bg='background:'+(KMETA[myAbs[0].type].light||'#eef1f5')+';'; else if(dow>=5) bg='background:#f2f5f9;';
+      let c='';
+      // Abwesenheit: am Starttag beschriften (blau); an Folgetagen zeigt der helle Tint den Block
+      myAbs.forEach(a=>{ if(a.von===iso) c+='<div class="kal-py-chip" style="background:#2563eb;color:#fff" data-tip="'+esc(KMETA[a.type].lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis))+'">'+esc(KMETA[a.type].lbl)+'</div>'; });
+      // Events/Termine: Starttag = Name-Chip, Folgetage = schmaler Balken
+      its.forEach(it=>{ const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#dc2626':'#d97706';
+        if(it.von===iso){ const cl=_clk(it); const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(mine?' · dir zugewiesen':'');
+          const style=mine?('background:'+base+';color:#fff'):('background:#fff;color:'+base+';border:1px solid '+base);
+          c+='<div class="kal-py-chip'+cl.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+cl.on+'>'+esc(it.titel)+'</div>';
+        } else {
+          c+='<div class="kal-py-bar" style="background:'+base+(mine?'':';opacity:.4')+'"></div>';
+        }
+      });
+      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+'" style="'+bg+'">'+c+'</div>';
+    }
+  }
   return h+'</div>';
 }
 function _persConflict(from,to){
