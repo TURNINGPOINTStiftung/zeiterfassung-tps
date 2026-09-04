@@ -203,12 +203,12 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-py-corner{background:var(--primary,#1a3a5c)}
   .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:5px 0;border-left:1px solid rgba(255,255,255,.14)}
   .kal-py-dl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;border-top:1px solid var(--border,#eef2f7)}
-  .kal-py-cell{min-height:20px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;flex-direction:column;justify-content:flex-start;padding:2px 3px;position:relative}
-  .kal-py-cell.empty{background:#fafbfd} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
-  .kal-py-bars{display:flex;flex-direction:column;gap:1.5px}
-  .kal-py-bar{height:4px;border-radius:2px;width:100%;display:block;box-shadow:0 0 0 .5px rgba(255,255,255,.55);margin-bottom:1px}
-  .kal-py-chip{font-size:9px;line-height:1.3;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px}
-  .kal-py-chip.kal-clickable{cursor:pointer} .kal-py-chip.kal-clickable:hover{filter:brightness(1.07)}
+  .kal-py-cell{min-height:30px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;padding:0;position:relative;overflow:hidden}
+  .kal-py-cell.empty{background:repeating-linear-gradient(45deg,#d3dae4,#d3dae4 3px,#e7ecf2 3px,#e7ecf2 7px)} .kal-py-cell.we{background:#f2f5f9} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
+  .kal-py-segs{flex:1;display:grid;gap:1px;grid-auto-rows:minmax(26px,1fr)}
+  .kal-py-seg{min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .kal-py-seg.kal-clickable{cursor:pointer} .kal-py-seg.kal-clickable:hover{filter:brightness(1.08)}
+  .kal-py-lbl{font-size:9.5px;font-weight:700;color:#fff;padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center;line-height:1.15}
   `;
   document.head.appendChild(el);
 }
@@ -233,7 +233,7 @@ function _dayGrid(days){
   };
   // Zuweisungs-Balken auf der Personenzeile: volle Zeilenhöhe, heller Ton, kein Text (Name steht oben)
   const asgBar=(it,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#f2b8b8':'#f0c58a';
+    const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706';
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -303,7 +303,7 @@ function _yearGrid(year){
   // benannte Abwesenheit auf der Personenzeile
   const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
-  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#f2b8b8':'#f0c58a'; const w=spanPct(it.von,it.bis);
+  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706'; const w=spanPct(it.von,it.bis);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -383,7 +383,7 @@ function _persMyAbs(){ const myId=(window.cu&&window.cu.id)||''; return _abs().f
 function _persChip(it){
   const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#dc2626':'#d97706'; const c=_clk(it);
   const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'')+(mine?' · dir zugewiesen':'');
-  const style=mine?('background:'+base+';color:#fff'):('background:#fff;color:'+base+';border:1px solid '+base);
+  const style='background:'+base+';color:#fff';   // volle Farbe für alle (kein „hell"/Umriss mehr)
   return '<div class="kal-pchip'+c.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅':'•')+' '+esc(it.titel)+(it.uhr?(' '+esc(it.uhr)):'')+'</div>';
 }
 function _persAbsChip(a){ const m=KMETA[a.type]; return '<div class="kal-pabs" style="background:'+m.c+'" data-tip="'+esc(m.lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''))+'">'+m.lbl+'</div>'; }
@@ -413,34 +413,32 @@ function _persWeek(ws){
   return h+'</div>';
 }
 function _persYear(year){
-  // „Schöner" Wandkalender: 12 Monatsspalten × Tagezeilen 1–31. Einträge werden am
-  // Starttag BESCHRIFTET (Name); mehrtägige laufen an Folgetagen als schmaler farbiger
-  // Balken weiter (kein doppelter/dreifacher Name). Nur eigene Abwesenheiten; alle
-  // Events/Termine (eigene gefüllt, fremde als heller Umriss). Klick öffnet den Eintrag.
+  // Wandkalender: 12 Monatsspalten × Tagezeilen 1–31. Jeder Tag wird von seinen Einträgen
+  // VOLL ausgefüllt (volle Höhe/Breite, kräftige Farben – kein „hell", keine dünnen Balken).
+  // Mehrere Einträge an einem Tag stehen NEBENEINANDER; ab 3 zusätzlich UNTEREINANDER (2er-
+  // Raster) → die Zeile wird dafür höher. Name am Starttag; Folgetage bleiben in der Farbe
+  // (kein doppelter Name). Nur eigene Abwesenheiten; alle Events/Termine; Klick öffnet.
   const ITEMS=_persItems(), MYABS=_persMyAbs();
-  let h='<div class="kal-py" style="grid-template-columns:34px repeat(12,1fr)"><div class="kal-py-corner"></div>';
+  const CVA='#dc2626', CTE='#d97706', CAB='#2563eb';
+  let h='<div class="kal-py" style="grid-template-columns:36px repeat(12,1fr)"><div class="kal-py-corner"></div>';
   for(let m=0;m<12;m++) h+='<div class="kal-py-mh">'+MON_ABBR[m]+'</div>';
   for(let d=1;d<=31;d++){
     h+='<div class="kal-py-dl">'+d+'</div>';
     for(let m=1;m<=12;m++){
       if(d>_daysInMonth(year,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
       const dt=new Date(year,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
-      const myAbs=MYABS.filter(a=>overlap(a.von,a.bis,iso,iso));
-      const its=ITEMS.filter(it=>overlap(it.von,it.bis,iso,iso));
-      let bg=''; if(myAbs.length) bg='background:'+(KMETA[myAbs[0].type].light||'#eef1f5')+';'; else if(dow>=5) bg='background:#f2f5f9;';
-      let c='';
-      // Abwesenheit: am Starttag beschriften (blau); an Folgetagen zeigt der helle Tint den Block
-      myAbs.forEach(a=>{ if(a.von===iso) c+='<div class="kal-py-chip" style="background:#2563eb;color:#fff" data-tip="'+esc(KMETA[a.type].lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis))+'">'+esc(KMETA[a.type].lbl)+'</div>'; });
-      // Events/Termine: Starttag = Name-Chip, Folgetage = schmaler Balken
-      its.forEach(it=>{ const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#dc2626':'#d97706';
-        if(it.von===iso){ const cl=_clk(it); const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(mine?' · dir zugewiesen':'');
-          const style=mine?('background:'+base+';color:#fff'):('background:#fff;color:'+base+';border:1px solid '+base);
-          c+='<div class="kal-py-chip'+cl.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+cl.on+'>'+esc(it.titel)+'</div>';
-        } else {
-          c+='<div class="kal-py-bar" style="background:'+base+(mine?'':';opacity:.4')+'"></div>';
-        }
-      });
-      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+'" style="'+bg+'">'+c+'</div>';
+      const segs=[];
+      ITEMS.filter(it=>it.typ==='va'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CVA,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'📅 '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
+      ITEMS.filter(it=>it.typ==='termin'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CTE,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'• '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
+      MYABS.filter(a=>overlap(a.von,a.bis,iso,iso)).forEach(a=>segs.push({col:CAB,start:a.von===iso,label:KMETA[a.type].lbl,tip:KMETA[a.type].lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis)}));
+      let inner='';
+      if(segs.length){ const cols=segs.length===1?'1fr':'1fr 1fr';
+        inner='<div class="kal-py-segs" style="grid-template-columns:'+cols+'">'+segs.map((s,i)=>{
+          const span=(segs.length>1&&segs.length%2===1&&i===segs.length-1)?';grid-column:1 / -1':'';
+          return '<div class="kal-py-seg'+(s.cls||'')+'" style="background:'+s.col+span+'" data-tip="'+esc(s.tip)+'"'+(s.on||'')+'>'+(s.start?('<span class="kal-py-lbl">'+esc(s.label)+'</span>'):'')+'</div>';
+        }).join('')+'</div>';
+      }
+      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+(!segs.length&&dow>=5?' we':'')+'">'+inner+'</div>';
     }
   }
   return h+'</div>';
@@ -495,12 +493,8 @@ export function renderKalender(){
       <div class="kal-legend">
         <span class="kal-lg"><span class="kal-sw" style="background:#dc2626"></span>Veranstaltung</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#d97706;border:1.5px dashed #fff"></span>Termin</span>
-        ${personal
-          ? `<span class="kal-lg"><span class="kal-sw" style="background:#fff;border:1px solid #dc2626"></span>nicht dir zugewiesen (nur Umriss)</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2563eb"></span>Abwesend (Urlaub/AZA)</span>`
-          : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (helle Fläche auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:#2563eb"></span>Abwesend (Urlaub/AZA)</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
+        ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
       ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll">${_boardHtml()}</div></div>`}
     </div>`;
