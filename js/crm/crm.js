@@ -2358,60 +2358,39 @@ function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
     });
   }catch(e){}
   return out.sort((a,b)=>a.name.localeCompare(b.name,'de')); }
-function contactPickerHtml(){
-  return `<div class="crm-modal-field" style="position:relative">
-    <label>CRM-Kontakt * <span style="font-size:11px;color:var(--muted)">(hier wird der Termin angelegt)</span></label>
-    <input id="crm-kt-in" autocomplete="off" placeholder="Kontakt suchen …" oninput="crmContactFilter(this.value)" onfocus="crmContactFilter(this.value)">
-    <input type="hidden" id="crm-kt-tree"><input type="hidden" id="crm-kt-eid">
-    <div id="crm-kt-dd" class="crm-ac-dd" style="display:none"></div>
-  </div>`;
-}
-function crmContactFilter(v){
-  const dd=document.getElementById('crm-kt-dd'); if(!dd) return;
-  const q=(v||'').trim().toLowerCase();
-  if(!q){ dd.style.display='none'; return; }
-  const list=_kalContacts().filter(c=>c.name.toLowerCase().includes(q)).slice(0,60);
-  if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
-  dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree;
-    return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" data-n="${esc(c.name)}" onclick="crmContactPick(this.dataset.t,this.dataset.e,this.dataset.n)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
-  dd.style.display='block';
-}
-function crmContactPick(tree,eid,name){
-  const i=document.getElementById('crm-kt-in'); if(i) i.value=name;
-  const t=document.getElementById('crm-kt-tree'); if(t) t.value=tree;
-  const e=document.getElementById('crm-kt-eid'); if(e) e.value=eid;
-  const dd=document.getElementById('crm-kt-dd'); if(dd) dd.style.display='none';
-}
-function crmAddTermin(){
-  injectStyles();
-  const fromKal=(window._crmModalReturn==='kalender');
-  crmOpenModalShell();
-  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Termin / Training</h3>
-   ${fromKal?contactPickerHtml():''}
-   <div class="crm-modal-field"><label>Titel *</label><input id="crm-tf-titel" placeholder="z. B. Training, Treffen …"></div>
-   <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von</label><input id="crm-tf-datum" type="date"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-tf-bis" type="date"></div>
-   </div>
-   <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort"></div>
-   <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note"></div>
-   ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml([], 'crm-tf')}</div>`:''}
-   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveTermin()">Hinzufügen</button></div>`);
-}
+// ── Multi-Kontakt-Picker (Suche → Chips) – für Termin UND Veranstaltung, mehrere möglich ──
+// Auswahl je idp: 'crm-va' nutzt window._vaTeiln (bestehend); sonst window._crmKp[idp]. Einträge {tree,eid}.
+function _kpList(idp){ if(idp==='crm-va'){ if(!Array.isArray(window._vaTeiln)) window._vaTeiln=[]; return window._vaTeiln; } window._crmKp=window._crmKp||{}; if(!Array.isArray(window._crmKp[idp])) window._crmKp[idp]=[]; return window._crmKp[idp]; }
+function _kpSet(idp,arr){ arr=(arr||[]).map(o=>({tree:o.tree,eid:o.eid})); if(idp==='crm-va') window._vaTeiln=arr; else { window._crmKp=window._crmKp||{}; window._crmKp[idp]=arr; } }
+function _kpName(o){ try{ const e=getEntity(o.tree,o.eid); return (e&&e.stamm&&e.stamm.name)||o.eid; }catch(x){ return o.eid; } }
+function crmKpChips(idp,ro){ const l=_kpList(idp); if(!l.length) return '<span class="small" style="color:var(--muted)">Noch keine ausgewählt.</span>'; return l.map((o,i)=>`<span class="crm-chip">${esc(_kpName(o))}${ro?'':` <span onclick="crmKpRemove('${idp}',${i})" title="Entfernen" style="cursor:pointer;font-weight:800;margin-left:4px">✕</span>`}</span>`).join(''); }
+function crmKpHtml(idp,label,hint,ro){ return `<div class="crm-modal-field" style="position:relative"><label>${label}${hint?` <span style="font-size:11px;color:var(--muted)">${hint}</span>`:''}</label>
+   <div id="${idp}-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${crmKpChips(idp,ro)}</div>
+   ${ro?'':`<input id="${idp}-in" autocomplete="off" placeholder="Kontakt suchen … (mehrere möglich)" oninput="crmKpSearch('${idp}',this.value)" onfocus="crmKpSearch('${idp}',this.value)">
+   <div id="${idp}-dd" class="crm-ac-dd" style="display:none"></div>`}</div>`; }
+function crmKpSearch(idp,v){ const dd=document.getElementById(idp+'-dd'); if(!dd) return; const q=(v||'').trim().toLowerCase(); if(!q){ dd.style.display='none'; return; }
+   const has=new Set(_kpList(idp).map(o=>o.tree+'::'+o.eid));
+   const list=_kalContacts().filter(c=>c.name.toLowerCase().includes(q)&&!has.has(c.tree+'::'+c.eid)).slice(0,60);
+   if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
+   dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd('${idp}',this.dataset.t,this.dataset.e)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
+   dd.style.display='block'; }
+function crmKpAdd(idp,tree,eid){ const l=_kpList(idp); if(!l.some(o=>o.tree===tree&&o.eid===eid)) l.push({tree,eid}); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); const i=document.getElementById(idp+'-in'); if(i) i.value=''; const dd=document.getElementById(idp+'-dd'); if(dd) dd.style.display='none'; }
+function crmKpRemove(idp,i){ const l=_kpList(idp); l.splice(i,1); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); }
+function readMultiKontakt(idp){ return _kpList(idp).map(o=>({tree:o.tree,eid:o.eid})); }
+function crmAddTermin(){ crmNewItem('termin'); }   // → Einheits-Fenster (Termin vorgewählt)
 function crmSaveTermin(){
   const fromKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-tf-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
-  if(fromKal){   // aus dem Kalender: Kontakt aus dem Such-Dropdown übernehmen
-    const tree=val('crm-kt-tree'), eid=val('crm-kt-eid');
-    if(!tree||!eid){ toast('Bitte einen CRM-Kontakt wählen.','err'); return; }
-    window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid;
-  }
+  // Mehrere CRM-Kontakte möglich: der ERSTE ist der Ablageort (dort liegt der Termin),
+  // die weiteren werden als Beteiligte (teilnehmer) mitgeführt.
+  const kontakte=readMultiKontakt('crm-tf');
+  if(kontakte.length){ const home=kontakte[0]; window._crmMode='kontakte'; window._crmTree=home.tree; window._crmSelId=home.eid; }
+  else if(!curEntity()){ toast('Bitte mindestens einen CRM-Kontakt wählen.','err'); return; }
   const datum=val('crm-tf-datum'); let bis=val('crm-tf-bis');
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, uhr:val('crm-tf-uhr'), datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[] });
+    e.termine.push({ id:newId(), titel, datum, bis, uhr:_joinUhr(val('crm-tf-uhrvon'),val('crm-tf-uhrbis')), datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[], teilnehmer:kontakte.slice(1) });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal();
@@ -2431,6 +2410,7 @@ function crmEditTermin(tid){
   const canAsg=_canAssignStaff();
   const canEdit=_canManageEvents();     // CRM „nutzen" darf nur ansehen (read-only)
   const ro = canEdit?'':' disabled';
+  _kpSet('crm-te', Array.isArray(t.teilnehmer)?t.teilnehmer:[]);   // weitere beteiligte Kontakte
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📅 Termin / Training${canEdit?'':' <span style="font-size:12px;font-weight:600;color:var(--muted)">· nur ansehen</span>'}</h3>
    <div class="crm-modal-field"><label>Titel *</label><input id="crm-te-titel" value="${esc(t.titel||'')}"${ro}></div>
@@ -2441,6 +2421,7 @@ function crmEditTermin(tid){
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"${ro}></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"${ro}></div>
+   ${(canEdit||(t.teilnehmer&&t.teilnehmer.length))?crmKpHtml('crm-te','Weitere beteiligte Kontakte','optional',!canEdit):''}
    ${canAsg
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
@@ -2455,7 +2436,8 @@ function crmSaveTerminEdit(tid){
   const datum=val('crm-te-datum'); let bis=val('crm-te-bis'); if(bis && datum && bis<datum) bis=datum;
   const canAsg=_canAssignStaff();
   mutateEntity(e=>{ const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
-    t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=val('crm-te-uhr'); t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
+    t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=_joinUhr(val('crm-te-uhrvon'),val('crm-te-uhrbis')); t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
+    t.teilnehmer=readMultiKontakt('crm-te');
     if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
     (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
@@ -3696,33 +3678,36 @@ function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(c
 // Nur die Veranstaltungs-FELDER (ohne h3/Aktionen) – wiederverwendbar im Einheits-Fenster.
 function _vaFieldsHtml(v){
   v=v||{};
+  const uv=_splitUhr(v.uhrzeit);
   const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${v.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
   return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von *</label><input id="crm-va-start" type="date" value="${esc(v.start||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Bis (optional)</label><input id="crm-va-ende" type="date" value="${esc(v.ende||'')}"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:120px"><label>Uhrzeit</label><input id="crm-va-uhrzeit" value="${esc(v.uhrzeit||'')}" placeholder="14:00–16:00"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>Uhrzeit von</label><input id="crm-va-uhrvon" type="time" value="${esc(uv.von)}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>bis</label><input id="crm-va-uhrbis" type="time" value="${esc(uv.bis)}"></div>
    </div>
    <div class="crm-modal-field"><label style="display:inline-flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:var(--text)"><input type="checkbox" id="crm-va-online" ${v.online?'checked':''} style="width:auto"> 💻 Online-Treffen</label></div>
    <div class="crm-modal-field"><label>Ort / Link</label><input id="crm-va-ort" value="${esc(v.ortOderLink||'')}" placeholder="Adresse oder Meeting-Link"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-va-team">${teamOpts}</select></div>
-   <div class="crm-modal-field"><label>Beteiligte Einträge <span style="font-size:11px;color:var(--muted)">(beliebig viele, aus allen Bäumen)</span></label>
-     <div id="crm-va-teiln" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${vaTeilnEditHtml()}</div>
-     <select id="crm-va-add" onchange="crmVaAddTeiln()">${entityLinkOptions('')}</select>
-   </div>
+   ${crmKpHtml('crm-va','Beteiligte CRM-Kontakte','beliebig viele, per Suche')}
    ${_canAssignStaff()
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>`;
 }
+// Uhrzeit als „von–bis"-String speichern; Formulare nutzen zwei time-Inputs.
+function _splitUhr(s){ s=String(s||''); const m=s.split(/[–-]/); return { von:(m[0]||'').trim(), bis:(m[1]||'').trim() }; }
+function _joinUhr(von,bis){ von=(von||'').trim(); bis=(bis||'').trim(); return von ? (bis? von+'–'+bis : von) : ''; }
 // Nur die Termin-FELDER (ohne h3/Aktionen/Kontakt-Picker) – wiederverwendbar im Einheits-Fenster.
 function _terminFieldsHtml(t){
-  t=t||{};
+  t=t||{}; const u=_splitUhr(t.uhr);
   return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-tf-titel" value="${esc(t.titel||'')}" placeholder="z. B. Training, Treffen …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Von</label><input id="crm-tf-datum" type="date" value="${esc(t.datum||'')}"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Bis (optional)</label><input id="crm-tf-bis" type="date" value="${esc(t.bis||'')}"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:110px"><label>Uhrzeit (optional)</label><input id="crm-tf-uhr" type="time" value="${esc(t.uhr||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:120px"><label>Von</label><input id="crm-tf-datum" type="date" value="${esc(t.datum||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:120px"><label>Bis (optional)</label><input id="crm-tf-bis" type="date" value="${esc(t.bis||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>Uhrzeit von</label><input id="crm-tf-uhrvon" type="time" value="${esc(u.von)}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>bis</label><input id="crm-tf-uhrbis" type="time" value="${esc(u.bis)}"></div>
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort" value="${esc(t.ort||'')}"></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note" value="${esc(t.note||'')}"></div>
@@ -3738,7 +3723,11 @@ function veranstaltungFormHtml(v,isNew){
 // ── Einheitliches Anlegen: EIN Fenster, Umschalter Termin (Default) / Veranstaltung ──
 // Termin = kurzer Eintrag an einem Kontakt. Veranstaltung = großes Vorhaben mit eigenem Kanban.
 // Beim Umschalten bleiben gemeinsame Felder (Titel/Von/Bis) erhalten → Termin leicht „hochstufbar".
-function crmNewItem(initialType){ injectStyles(); window._crmNewType=(initialType==='veranstaltung')?'veranstaltung':'termin'; window._vaTeiln=[]; window._crmVaReturn=null; crmOpenModalShell(); openModal(_newItemHtml()); }
+function crmNewItem(initialType){ injectStyles(); window._crmNewType=(initialType==='veranstaltung')?'veranstaltung':'termin'; window._crmVaReturn=null;
+  _kpSet('crm-va', []);
+  const fromKal=(window._crmModalReturn==='kalender');
+  _kpSet('crm-tf', (!fromKal && window._crmTree && window._crmSelId && curEntity())?[{tree:window._crmTree,eid:window._crmSelId}]:[]);   // im CRM mit aktuellem Kontakt vorbelegen
+  crmOpenModalShell(); openModal(_newItemHtml()); }
 function _newItemHtml(){
   const type=window._crmNewType||'termin';
   const fromKal=(window._crmModalReturn==='kalender');
@@ -3748,7 +3737,7 @@ function _newItemHtml(){
      <button type="button" class="crm-tt-btn${type==='veranstaltung'?' on':''}" id="crm-tt-va" onclick="crmNewType('veranstaltung')">🎪 Veranstaltung</button>
    </div>
    <p class="crm-tt-hint" id="crm-tt-hint">${type==='termin'?'Kurzer Termin/Training – wird an einem CRM-Kontakt geführt. Kann später zur Veranstaltung (mit Kanban) umgewandelt werden.':'Größeres Vorhaben mit Beteiligten, Team und eigenem Kanban-Board.'}</p>
-   <div id="crm-new-termin"${type==='termin'?'':' style="display:none"'}>${fromKal?contactPickerHtml():''}${_terminFieldsHtml({})}</div>
+   <div id="crm-new-termin"${type==='termin'?'':' style="display:none"'}>${crmKpHtml('crm-tf','CRM-Kontakt(e) *','erster = Ablageort, weitere als Beteiligte')}${_terminFieldsHtml({})}</div>
    <div id="crm-new-va"${type==='veranstaltung'?'':' style="display:none"'}>${_vaFieldsHtml({})}</div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
      <button class="btn-sm-crm primary" onclick="crmSaveNewItem()">Anlegen</button></div>`;
@@ -3758,8 +3747,10 @@ function crmNewType(t){
   // Gemeinsame Felder beim Umschalten übernehmen, damit nichts verloren geht.
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const s=(id,v)=>{ const el=document.getElementById(id); if(el&&v&&!el.value) el.value=v; };
-  if(t==='veranstaltung'){ s('crm-va-titel',g('crm-tf-titel')); s('crm-va-start',g('crm-tf-datum')); s('crm-va-ende',g('crm-tf-bis')); s('crm-va-ort',g('crm-tf-ort')); s('crm-va-besch',g('crm-tf-note')); }
-  else { s('crm-tf-titel',g('crm-va-titel')); s('crm-tf-datum',g('crm-va-start')); s('crm-tf-bis',g('crm-va-ende')); s('crm-tf-ort',g('crm-va-ort')); s('crm-tf-note',g('crm-va-besch')); }
+  if(t==='veranstaltung'){ s('crm-va-titel',g('crm-tf-titel')); s('crm-va-start',g('crm-tf-datum')); s('crm-va-ende',g('crm-tf-bis')); s('crm-va-ort',g('crm-tf-ort')); s('crm-va-besch',g('crm-tf-note'));
+    if(!_kpList('crm-va').length && _kpList('crm-tf').length){ _kpSet('crm-va', _kpList('crm-tf')); const c=document.getElementById('crm-va-chips'); if(c) c.innerHTML=crmKpChips('crm-va'); } }
+  else { s('crm-tf-titel',g('crm-va-titel')); s('crm-tf-datum',g('crm-va-start')); s('crm-tf-bis',g('crm-va-ende')); s('crm-tf-ort',g('crm-va-ort')); s('crm-tf-note',g('crm-va-besch'));
+    if(!_kpList('crm-tf').length && _kpList('crm-va').length){ _kpSet('crm-tf', _kpList('crm-va')); const c=document.getElementById('crm-tf-chips'); if(c) c.innerHTML=crmKpChips('crm-tf'); } }
   const dt=document.getElementById('crm-new-termin'); if(dt) dt.style.display=(t==='termin')?'':'none';
   const dv=document.getElementById('crm-new-va'); if(dv) dv.style.display=(t==='veranstaltung')?'':'none';
   const bt=document.getElementById('crm-tt-termin'); if(bt) bt.classList.toggle('on',t==='termin');
@@ -3794,7 +3785,7 @@ function crmSaveVeranstaltung(isNew){
   const backToKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-va-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
   const start=val('crm-va-start'); if(!start){ toast('Bitte ein Startdatum wählen.','err'); return; }
-  const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:val('crm-va-uhrzeit'),
+  const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:_joinUhr(val('crm-va-uhrvon'),val('crm-va-uhrbis')),
     online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
     ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'),
     teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
@@ -5136,7 +5127,7 @@ Object.assign(window, {
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin, crmEditTermin, crmSaveTerminEdit, crmStaffAll,
-  crmContactFilter, crmContactPick, crmCanCreateItems,
+  crmKpSearch, crmKpAdd, crmKpRemove, crmCanCreateItems,
   crmNewItem, crmNewType, crmSaveNewItem, crmTerminToVa,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
