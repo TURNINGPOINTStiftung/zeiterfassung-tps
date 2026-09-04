@@ -41,6 +41,14 @@ const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
 // ── Zustand ──
 let V='monat';                         // woche | monat | jahr | konflikt
 let curTeam='';
+let curSaison='';                      // '' = ganzes Jahr | 'sommer' (Apr–Sep) | 'winter' (Okt–Mär)
+// Monatsliste für die Jahres-/Saison-Ansicht: [{y,m}, …]
+function _saisonMonths(){
+  if(curSaison==='sommer') return [4,5,6,7,8,9].map(m=>({y:curY,m}));
+  if(curSaison==='winter') return [{y:curY,m:10},{y:curY,m:11},{y:curY,m:12},{y:curY+1,m:1},{y:curY+1,m:2},{y:curY+1,m:3}];
+  return [1,2,3,4,5,6,7,8,9,10,11,12].map(m=>({y:curY,m}));
+}
+function _saisonLabel(){ if(curSaison==='sommer') return 'Sommer '+curY+' (Apr–Sep)'; if(curSaison==='winter') return 'Winter '+curY+'/'+String(curY+1).slice(2)+' (Okt–Mär)'; return String(curY); }
 const _now=new Date();
 let curY=_now.getFullYear(), curM=_now.getMonth()+1;   // Monat
 let weekStart=_mondayOf(_now);                          // Woche
@@ -316,23 +324,26 @@ function _dayGrid(days){
   return h;
 }
 
-// ── Jahres-Raster (Monate + KW) ──
-function _yearGrid(year){
+// ── Jahres-/Saison-Raster (Monate + KW) – months=[{y,m},…] (12 = ganzes Jahr, 6 = Saison) ──
+function _yearGrid(months, title){
   const emps=_emps(); if(!emps.length) return '<div class="kal-empty">Keine Mitarbeiter vorhanden.</div>';
   const abs=_abs(); const items=_events().concat(_termine());
   const myId=(window.cu&&window.cu.id)||'';
-  const MD=[]; for(let m=1;m<=12;m++) MD.push(_daysInMonth(year,m));
-  const YLEN=MD.reduce((s,x)=>s+x,0); const CUM=[0]; for(let i=0;i<12;i++) CUM.push(CUM[i]+MD[i]);
-  const Y0=year+'-01-01', Y1=year+'-12-31';
-  const doy=iso=>{ const[,m,d]=iso.split('-').map(Number); return CUM[m-1]+(d-1); };
+  const MD=months.map(o=>_daysInMonth(o.y,o.m));
+  const YLEN=MD.reduce((s,x)=>s+x,0); const CUM=[0]; for(let i=0;i<months.length;i++) CUM.push(CUM[i]+MD[i]);
+  const _mIdx=(y,m)=>months.findIndex(o=>o.y===y&&o.m===m);
+  const _first=months[0], _last=months[months.length-1];
+  const start0=new Date(_first.y,_first.m-1,1,12);
+  const Y0=_iso(start0), Y1=_iso(new Date(_last.y,_last.m-1,_daysInMonth(_last.y,_last.m),12));
+  const doy=iso=>{ const[y,m,d]=iso.split('-').map(Number); const idx=_mIdx(y,m); if(idx<0) return iso<Y0?0:(YLEN-1); return CUM[idx]+(d-1); };
   const leftPct=iso=>{ let x=iso<Y0?Y0:(iso>Y1?Y1:iso); return doy(x)/YLEN*100; };
   const spanPct=(v,b)=>{ let a=v<Y0?Y0:v, c=b>Y1?Y1:b; return (doy(c)-doy(a)+1)/YLEN*100; };
   const inYear=(v,b)=>overlap(v,b,Y0,Y1);
-  const weeks=[]; { let dt=new Date(year,0,1,12); weeks.push({doy:0,kw:_isoWeek(dt)}); for(let dy=1;dy<YLEN;dy++){ const c=_addDays(new Date(year,0,1,12),dy); if(_dowMon(c)===0) weeks.push({doy:dy,kw:_isoWeek(c)}); } }
+  const weeks=[]; { weeks.push({doy:0,kw:_isoWeek(start0)}); for(let dy=1;dy<YLEN;dy++){ const c=_addDays(start0,dy); if(_dowMon(c)===0) weeks.push({doy:dy,kw:_isoWeek(c)}); } }
   const wlines=weeks.filter(w=>w.doy>0).map(w=>'<div class="kal-wline" style="left:'+(w.doy/YLEN*100)+'%"></div>').join('');
   const tISO=_todayISO(); const todayLine=(tISO>=Y0&&tISO<=Y1)?'<div class="kal-today-line" style="left:'+leftPct(tISO)+'%"></div>':'';
   const cs='grid-template-columns:180px '+MD.map(d=>d+'fr').join(' ')+';';
-  const mcells=()=>{ let s=''; for(let i=0;i<12;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
+  const mcells=()=>{ let s=''; for(let i=0;i<months.length;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
   const mH=28;
   // benannter Marker oben im Band „Veranstaltungen"
   const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706'; const w=spanPct(it.von,it.bis);
@@ -349,9 +360,9 @@ function _yearGrid(year){
     const c=_clk(it);
     return '<div class="kal-yasg'+(cfl?' cf':'')+c.cls+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:3px;height:'+(rowH-6)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
-  let h='<div class="kal-grid" style="min-width:1500px">';
-  h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">Mitarbeiter · '+year+'</div>';
-  for(let i=0;i<12;i++) h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+MON_ABBR[i]+'</div>';
+  let h='<div class="kal-grid" style="min-width:'+(180+months.length*(months.length<=6?150:110))+'px">';
+  h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+esc(title||'Mitarbeiter')+'</div>';
+  months.forEach((o,i)=>{ const lbl=MON_ABBR[o.m-1]+(o.y!==_first.y?(" '"+String(o.y).slice(2)):''); h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+lbl+'</div>'; });
   h+='</div>';
   h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
   // Band = ALLE Events/Termine, benannt
@@ -474,21 +485,22 @@ function _persWeek(ws){
   }
   return h+'</div>';
 }
-function _persYear(year){
-  // Wandkalender: 12 Monatsspalten × Tagezeilen 1–31. Jeder Tag wird von seinen Einträgen
+function _persYear(months){
+  // Wand-/Saison-Kalender: Monatsspalten (12 oder 6) × Tagezeilen 1–31. Jeder Tag wird von seinen Einträgen
   // VOLL ausgefüllt (volle Höhe/Breite, kräftige Farben – kein „hell", keine dünnen Balken).
   // Mehrere Einträge an einem Tag stehen NEBENEINANDER; ab 3 zusätzlich UNTEREINANDER (2er-
   // Raster) → die Zeile wird dafür höher. Name am Starttag; Folgetage bleiben in der Farbe
   // (kein doppelter Name). Nur eigene Abwesenheiten; alle Events/Termine; Klick öffnet.
   const ITEMS=_persItems(), MYABS=_persMyAbs();
   const CVA='#dc2626', CTE='#d97706', CAB='#2563eb';
-  let h='<div class="kal-py" style="grid-template-columns:36px repeat(12,1fr)"><div class="kal-py-corner"></div>';
-  for(let m=0;m<12;m++) h+='<div class="kal-py-mh">'+MON_ABBR[m]+'</div>';
+  const first=months[0];
+  let h='<div class="kal-py" style="grid-template-columns:36px repeat('+months.length+',1fr)"><div class="kal-py-corner"></div>';
+  months.forEach(o=>{ h+='<div class="kal-py-mh">'+MON_ABBR[o.m-1]+(o.y!==first.y?(" '"+String(o.y).slice(2)):'')+'</div>'; });
   for(let d=1;d<=31;d++){
     h+='<div class="kal-py-dl">'+d+'</div>';
-    for(let m=1;m<=12;m++){
-      if(d>_daysInMonth(year,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
-      const dt=new Date(year,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
+    for(let mi=0;mi<months.length;mi++){ const y=months[mi].y, m=months[mi].m;
+      if(d>_daysInMonth(y,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
+      const dt=new Date(y,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
       const segs=[];
       ITEMS.filter(it=>it.typ==='va'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CVA,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'📅 '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
       ITEMS.filter(it=>it.typ==='termin'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CTE,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'• '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
@@ -524,14 +536,14 @@ function _persConflict(from,to){
 function _periodLabel(){
   if(V==='monat') return MONTHS[curM-1]+' '+curY;
   if(V==='woche'){ const e=_addDays(weekStart,6); const kw=_isoWeek(weekStart); return 'KW '+kw+' · '+weekStart.getDate()+'.'+(weekStart.getMonth()+1)+'. – '+e.getDate()+'.'+(e.getMonth()+1)+'. '+e.getFullYear(); }
-  if(V==='jahr') return String(curY);
+  if(V==='jahr') return _saisonLabel();
   return String(curY);
 }
 function _boardHtml(){
   const personal = curTeam==='@me';   // „Nur ich" → klassische persönliche Ansicht
   if(V==='monat'){ if(personal) return _persMonth(curY,curM); const n=_daysInMonth(curY,curM); const days=[]; for(let d=1;d<=n;d++){ const dt=new Date(curY,curM-1,d,12); const iso=_iso(dt); days.push({iso,dom:d,dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
   if(V==='woche'){ if(personal) return _persWeek(weekStart); const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(weekStart,i); const iso=_iso(dt); days.push({iso,dom:dt.getDate(),dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
-  if(V==='jahr'){ return personal?_persYear(curY):_yearGrid(curY); }
+  if(V==='jahr'){ const months=_saisonMonths(); return personal?_persYear(months):_yearGrid(months, 'Mitarbeiter · '+_saisonLabel()); }
   // konflikt
   return personal ? _persConflict(curY+'-01-01', curY+'-12-31') : _conflictList(curY+'-01-01', curY+'-12-31');
 }
@@ -551,6 +563,7 @@ export function renderKalender(){
       <div class="kal-bar">
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView('${t[0]}')">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
+        ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
         <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
@@ -570,10 +583,11 @@ export function renderKalender(){
 function kalSetView(v){ V=v; renderKalender(); }
 function kalSetTeam(t){ curTeam=t; renderKalender(); }
 function kalToday(){ const n=new Date(); curY=n.getFullYear(); curM=n.getMonth()+1; weekStart=_mondayOf(n); renderKalender(); }
+function kalSetSaison(s){ curSaison=s; renderKalender(); }
 function kalNav(dir){
   if(V==='monat'){ curM+=dir; if(curM<1){curM=12;curY--;} if(curM>12){curM=1;curY++;} }
   else if(V==='woche'){ weekStart=_addDays(weekStart,7*dir); }
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
-Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
+Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
