@@ -62,33 +62,41 @@ function _termine(){ const out=[]; try{
     });
   }catch(e){}
   return out; }
-// Sprung zur Veranstaltung im passenden Modul (Projektmanagement bevorzugt, sonst CRM).
+// Klick auf Veranstaltung im Kalender → kleines Bearbeiten-Modal ÜBER dem Kalender (Daten
+// ändern + Mitarbeiter zuweisen); Speichern bleibt im Kalender. Der „Zur Veranstaltung ↗"-
+// Button im Modal (nur bei Kalender-Herkunft) springt erst wirklich ins Projektmanagement/CRM.
 function kalOpenVeranstaltung(id){
   if(!id) return;
   try{
-    // Veranstaltungen leben im Projektmanagement (kanban) → Standard-Ziel. Nur wenn der Nutzer
-    // sicher KEIN kanban, aber CRM hat, ins CRM. crmModuleAccess NICHT als Sperre nutzen (kann
-    // vor dem CRM-Laden „kein" liefern); nur als Hinweis. Das eigentliche Laden/Öffnen macht
-    // switchModule → renderKanban → ensureCrmReady → paint.
-    let target='kanban';
-    try{ const ma=window.crmModuleAccess&&window.crmModuleAccess(window.cu); if(ma && (!ma.kanban||ma.kanban==='kein') && ma.crm && ma.crm!=='kein') target='crm'; }catch(e){}
-    // NUR den Ziel-Zustand setzen (nicht sofort malen – CRM ist evtl. noch nicht geladen und
-    // würde die Auswahl zurücksetzen). Der asynchrone Board-Aufbau nach dem Moduswechsel
-    // (ensureCrmReady → paint) sieht _crmMode='veranstaltungen' + _crmVaSel und öffnet sie direkt.
     window._crmSearch=''; window._crmVaReturn=null;
     window._crmMode='veranstaltungen'; window._crmVaSel=id;
-    if(window.switchModule) window.switchModule(target);
+    window._crmModalReturn='kalender';
+    if(window.crmEditVeranstaltung) window.crmEditVeranstaltung();   // Modal ohne Modulwechsel
+    else kalGotoVeranstaltung(id);                                   // Fallback: doch navigieren
   }catch(e){ console.error('kalOpenVeranstaltung:',e); }
 }
-// Sprung zu einem CRM-Termin: Kontakt öffnen und den Termin direkt aufklappen
-// (Infos ansehen; Leitung/GF kann dort Mitarbeiter zuweisen).
+function kalGotoVeranstaltung(id){
+  try{ window._crmModalReturn=null; if(window.crmCloseModal) window.crmCloseModal(); }catch(e){}
+  let target='kanban';
+  try{ const ma=window.crmModuleAccess&&window.crmModuleAccess(window.cu); if(ma && (!ma.kanban||ma.kanban==='kein') && ma.crm && ma.crm!=='kein') target='crm'; }catch(e){}
+  window._crmMode='veranstaltungen'; window._crmVaSel=id||window._crmVaSel;
+  if(window.switchModule) window.switchModule(target);
+}
+// Klick auf Termin im Kalender → kleines Bearbeiten-Modal über dem Kalender; Speichern bleibt
+// im Kalender. „Zum Termin ↗" öffnet den Kontakt im CRM.
 function kalOpenTermin(tree,eid,tid){
   if(!tree||!eid) return;
   try{
     window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel='';
-    window._crmDetailTab='aufgaben'; window._crmOpenTerminId=tid||'';
-    if(window.switchModule) window.switchModule('crm');
+    window._crmModalReturn='kalender';
+    if(window.crmEditTermin) window.crmEditTermin(tid);             // Modal ohne Modulwechsel
+    else kalGotoTermin(tid);                                        // Fallback
   }catch(e){ console.error('kalOpenTermin:',e); }
+}
+function kalGotoTermin(tid){
+  try{ window._crmModalReturn=null; if(window.crmCloseModal) window.crmCloseModal(); }catch(e){}
+  window._crmMode='kontakte'; window._crmDetailTab='aufgaben';      // _crmTree/_crmSelId sind gesetzt
+  if(window.switchModule) window.switchModule('crm');
 }
 // Klick-Attribute für einen Eintrag: Veranstaltung → Detail, Termin → Kontakt+Termin.
 function _clk(it){
@@ -520,4 +528,4 @@ function kalNav(dir){
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
-Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin });
+Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin });
