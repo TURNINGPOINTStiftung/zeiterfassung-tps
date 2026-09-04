@@ -90,18 +90,41 @@ function kalOpenTermin(tree,eid,tid){
     window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmProjSel='';
     window._crmModalReturn='kalender';
     if(window.crmEditTermin) window.crmEditTermin(tid);             // Modal ohne Modulwechsel
-    else kalGotoTermin(tid);                                        // Fallback
+    else kalGotoTermin(tree,eid);                                   // Fallback
   }catch(e){ console.error('kalOpenTermin:',e); }
 }
-function kalGotoTermin(tid){
+// Sprung ins CRM zum Kontakt (Nutzen+CRM-Klick oder „Zum Termin ↗"). tree/eid optional
+// (aus dem Modal sind sie bereits in window gesetzt).
+function kalGotoTermin(tree,eid){
+  if(tree) window._crmTree=tree; if(eid) window._crmSelId=eid;
   try{ window._crmModalReturn=null; if(window.crmCloseModal) window.crmCloseModal(); }catch(e){}
-  window._crmMode='kontakte'; window._crmDetailTab='aufgaben';      // _crmTree/_crmSelId sind gesetzt
+  window._crmMode='kontakte'; window._crmDetailTab='aufgaben';
   if(window.switchModule) window.switchModule('crm');
 }
-// Klick-Attribute für einen Eintrag: Veranstaltung → Detail, Termin → Kontakt+Termin.
+// Kalender-Rechte: verwaltend = anlegen/bearbeiten/zuweisen (In-Place-Modal + „+Neu");
+// nur nutzen + CRM = Klick springt ins CRM; nutzen ohne CRM = kein Klick, nur Tooltip.
+function _kalAccess(){
+  let ma={}; try{ if(window.crmModuleAccess) ma=window.crmModuleAccess(window.cu)||{}; }catch(e){}
+  const hasCrm=((ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'));
+  return { verwaltend: ma.kalender==='verwaltend', hasCrm:!!hasCrm };
+}
+// „+ Neu" im Kalender: gleiches Modal wie im CRM, aber bleibt im Kalender. Beim Termin wird
+// der CRM-Kontakt per Such-Dropdown gewählt (crmAddTermin zeigt ihn bei Kalender-Herkunft).
+function kalNewTermin(){ window._crmModalReturn='kalender'; if(window.crmAddTermin) window.crmAddTermin(); }
+function kalNewVeranstaltung(){ window._crmModalReturn='kalender'; if(window.crmNewVeranstaltung) window.crmNewVeranstaltung(); }
+// Klick-Attribute für einen Eintrag – abhängig von den Kalender-Rechten:
+//  verwaltend      → Bearbeiten-Modal (kalOpen*)
+//  nutzen + CRM    → Sprung ins CRM (kalGoto*)
+//  nutzen ohne CRM → kein Klick (nur Tooltip via data-tip bleibt)
 function _clk(it){
-  if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"' };
-  if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\',\''+esc(it.id)+'\')"' };
+  const a=_kalAccess();
+  if(a.verwaltend){
+    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"' };
+    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\',\''+esc(it.id)+'\')"' };
+  } else if(a.hasCrm){
+    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalGotoVeranstaltung(\''+esc(it.id)+'\')"' };
+    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalGotoTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\')"' };
+  }
   return { cls:'', on:'' };
 }
 // Einmaliges Mouseover-Tooltip (funktioniert auch bei winzigen Jahres-Markern).
@@ -137,6 +160,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-nav{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:var(--text,#15263a);min-width:210px}
   .kal-nav button{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border,#c3cedb);background:var(--white,#fff);color:var(--text,#15263a);cursor:pointer;font-size:1rem}
   .kal-today{padding:9px 14px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--white,#fff);color:var(--text,#15263a);font:inherit;font-weight:600;font-size:.94rem;cursor:pointer}
+  .kal-new{padding:9px 14px;border:none;border-radius:9px;background:var(--primary,#1a3a5c);color:#fff;font:inherit;font-weight:700;font-size:.94rem;cursor:pointer} .kal-new:hover{filter:brightness(1.1)}
   .kal-sel{font:inherit;font-size:.98rem;padding:9px 12px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--white,#fff);color:var(--text,#15263a)}
   .kal-spacer{flex:1}
   .kal-legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:.9rem;color:var(--muted,#5d7086);margin:0 0 14px}
@@ -497,6 +521,7 @@ export function renderKalender(){
     _bindTips(root);
     const tabs=[['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
     const emps=_emps(); const personal=curTeam==='@me';
+    const kalCanManage=_kalAccess().verwaltend;   // nur „Verwaltend" darf anlegen
     const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>','<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=`<div class="kal-wrap">
       <div class="kal-h">📅 Kalender</div>
@@ -505,6 +530,7 @@ export function renderKalender(){
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView('${t[0]}')">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
         <span class="kal-spacer"></span>
+        ${kalCanManage?`<button class="kal-new" onclick="kalNewVeranstaltung()">＋ Veranstaltung</button><button class="kal-new" onclick="kalNewTermin()">＋ Termin</button>`:''}
         <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend">
@@ -528,4 +554,4 @@ function kalNav(dir){
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
-Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin });
+Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewTermin, kalNewVeranstaltung });

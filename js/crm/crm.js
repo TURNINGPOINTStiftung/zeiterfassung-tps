@@ -532,6 +532,10 @@ function injectStyles(){
   .crm-modal-field input,.crm-modal-field select,.crm-modal-field textarea{width:100%;box-sizing:border-box;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:#fff;color:var(--text);transition:border-color .15s,box-shadow .15s}
   .crm-modal-field input::placeholder,.crm-modal-field textarea::placeholder{color:#aab2bd}
   .crm-modal-field input:focus,.crm-modal-field select:focus,.crm-modal-field textarea:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
+  .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
+  .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
+  .crm-ac-item:hover,.crm-ac-item.on{background:var(--row-alt,#f4f7fb)} .crm-ac-tree{color:var(--muted);font-size:11px}
+  .crm-ac-empty{padding:10px 13px;color:var(--muted);font-size:13px}
   .crm-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
   .btn-sm-crm{padding:8px 15px;font-size:13px;border-radius:9px;border:1.5px solid var(--border);background:#fff;color:var(--primary);font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .btn-sm-crm:hover{border-color:var(--primary-l);background:#f5f8fd;box-shadow:0 2px 6px rgba(32,56,105,.08)}
@@ -2338,9 +2342,46 @@ function crmImportContactsFile(inp){
 }
 
 // ── Termine ────────────────────────────────────────────────────────
+// Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
+function crmCanCreateItems(){ return { termin: (crmFull()||crmRestricted()), va: crmFull() }; }
+// Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
+const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows']);
+function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
+    Object.keys(d).forEach(tk=>{ if(_KAL_RESERVED.has(tk)) return; const ents=d[tk]; if(!ents||typeof ents!=='object') return;
+      Object.keys(ents).forEach(eid=>{ const e=ents[eid]; if(!e||typeof e!=='object') return; out.push({tree:tk, eid, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); });
+    });
+  }catch(e){}
+  return out.sort((a,b)=>a.name.localeCompare(b.name,'de')); }
+function contactPickerHtml(){
+  return `<div class="crm-modal-field" style="position:relative">
+    <label>CRM-Kontakt * <span style="font-size:11px;color:var(--muted)">(hier wird der Termin angelegt)</span></label>
+    <input id="crm-kt-in" autocomplete="off" placeholder="Kontakt suchen …" oninput="crmContactFilter(this.value)" onfocus="crmContactFilter(this.value)">
+    <input type="hidden" id="crm-kt-tree"><input type="hidden" id="crm-kt-eid">
+    <div id="crm-kt-dd" class="crm-ac-dd" style="display:none"></div>
+  </div>`;
+}
+function crmContactFilter(v){
+  const dd=document.getElementById('crm-kt-dd'); if(!dd) return;
+  const q=(v||'').trim().toLowerCase();
+  if(!q){ dd.style.display='none'; return; }
+  const list=_kalContacts().filter(c=>c.name.toLowerCase().includes(q)).slice(0,60);
+  if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
+  dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree;
+    return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" data-n="${esc(c.name)}" onclick="crmContactPick(this.dataset.t,this.dataset.e,this.dataset.n)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
+  dd.style.display='block';
+}
+function crmContactPick(tree,eid,name){
+  const i=document.getElementById('crm-kt-in'); if(i) i.value=name;
+  const t=document.getElementById('crm-kt-tree'); if(t) t.value=tree;
+  const e=document.getElementById('crm-kt-eid'); if(e) e.value=eid;
+  const dd=document.getElementById('crm-kt-dd'); if(dd) dd.style.display='none';
+}
 function crmAddTermin(){
+  injectStyles();
+  const fromKal=(window._crmModalReturn==='kalender');
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Termin / Training</h3>
+   ${fromKal?contactPickerHtml():''}
    <div class="crm-modal-field"><label>Titel *</label><input id="crm-tf-titel" placeholder="z. B. Training, Treffen …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von</label><input id="crm-tf-datum" type="date"></div>
@@ -2353,7 +2394,13 @@ function crmAddTermin(){
    <button class="btn-sm-crm primary" onclick="crmSaveTermin()">Hinzufügen</button></div>`);
 }
 function crmSaveTermin(){
+  const fromKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-tf-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
+  if(fromKal){   // aus dem Kalender: Kontakt aus dem Such-Dropdown übernehmen
+    const tree=val('crm-kt-tree'), eid=val('crm-kt-eid');
+    if(!tree||!eid){ toast('Bitte einen CRM-Kontakt wählen.','err'); return; }
+    window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid;
+  }
   const datum=val('crm-tf-datum'); let bis=val('crm-tf-bis');
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
@@ -2361,7 +2408,10 @@ function crmSaveTermin(){
     e.termine.push({ id:newId(), titel, datum, bis, datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[] });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
-  crmCloseModal(); paintDetail();
+  crmCloseModal();
+  if(fromKal){ try{ window.renderKalender&&window.renderKalender(); }catch(e){} }
+  else paintDetail();
+  toast('Termin angelegt ✓','ok');
 }
 function crmDeleteTermin(tid){
   mutateEntity(e=>{ e.termine=(e.termine||[]).filter(x=>x.id!==tid); });
@@ -2386,7 +2436,7 @@ function crmEditTermin(tid){
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
-   ${window._crmModalReturn==='kalender'?`<button class="btn-sm-crm" onclick="kalGotoTermin('${tid}')">Zum Termin ↗</button>`:''}
+   ${(window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoTermin()">Zum Termin ↗</button>`:''}
    <button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button></div>`);
 }
 function crmSaveTerminEdit(tid){
@@ -3619,7 +3669,9 @@ function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTei
 // Zuweisbar = interne Mitarbeiter (kein Admin, keine externen crmOnly). Mehrfach/alle möglich.
 function _assignableStaff(){ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
 // Zuweisen dürfen nur Leitung/GF (+ Admin). Andere sehen die Zuweisung nur als Chips (read-only).
-function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; return r==='admin'||r==='leitung'||r==='geschaeftsfuehrer'; }
+function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; if(r==='admin'||r==='leitung'||r==='geschaeftsfuehrer') return true; try{ return crmModuleAccess(window.cu).kalender==='verwaltend'; }catch(e){ return false; } }
+// Hat der Nutzer CRM/PM-Zugang? (für den „Zum Termin/Zur Veranstaltung ↗"-Sprung aus dem Kalender-Modal)
+function _kalHasCrm(){ try{ const ma=crmModuleAccess(window.cu); return (ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'); }catch(e){ return false; } }
 function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=>{ const u=us.find(x=>x&&x.id===id); return u?u.name:id; }); }
 function staffPickerHtml(selIds, idp){
   const sel=new Set(selIds||[]);
@@ -3649,10 +3701,10 @@ function veranstaltungFormHtml(v,isNew){
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">${isNew?'Abbrechen':'Schließen'}</button>
-   ${(!isNew&&window._crmModalReturn==='kalender')?`<button class="btn-sm-crm" onclick="kalGotoVeranstaltung(window._crmVaSel)">Zur Veranstaltung ↗</button>`:''}
+   ${(!isNew&&window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoVeranstaltung(window._crmVaSel)">Zur Veranstaltung ↗</button>`:''}
    <button class="btn-sm-crm primary" onclick="crmSaveVeranstaltung(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
-function crmNewVeranstaltung(){ window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
+function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
 function crmEditVeranstaltung(){
   injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
@@ -3671,7 +3723,10 @@ function crmSaveVeranstaltung(isNew){
   if(isNew){
     const id=newId();
     saveVeranstaltung({ id, mitarbeiter:[], ...rec, todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
-    window._crmVaSel=id; crmCloseModal(); paintVeranstaltungDetail(); toast('Veranstaltung angelegt ✓','ok');
+    window._crmVaSel=id; crmCloseModal();
+    if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(e){} }
+    else paintVeranstaltungDetail();
+    toast('Veranstaltung angelegt ✓','ok');
   } else {
     const v=getVeranstaltung(window._crmVaSel); if(!v) return;
     Object.assign(v, rec); v.updatedByKuerzel=curKuerzel(); v.updatedByName=curName();
@@ -5002,6 +5057,7 @@ Object.assign(window, {
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin, crmEditTermin, crmSaveTerminEdit, crmStaffAll,
+  crmContactFilter, crmContactPick, crmCanCreateItems,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
