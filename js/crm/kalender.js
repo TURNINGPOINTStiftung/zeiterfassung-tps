@@ -33,7 +33,7 @@ function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von)
 
 // ── Abwesenheits-Typen ──
 // Krankheit (AU) wird im Kalender BEWUSST NICHT gezeigt (sensibel, für alle sichtbar).
-const AB={ 'Urlaub':{k:'u',c:'#2b8a5a',lbl:'Urlaub'}, 'Arbeitszeitausgleich':{k:'a',c:'#2f6f9f',lbl:'AZA'} };
+const AB={ 'Urlaub':{k:'u',c:'#16a34a',light:'#d6f0dd',lbl:'Urlaub'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'AZA'} };
 const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
 
 // ── Zustand ──
@@ -201,9 +201,10 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-py-corner{background:var(--primary,#1a3a5c)}
   .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:5px 0;border-left:1px solid rgba(255,255,255,.14)}
   .kal-py-dl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;border-top:1px solid var(--border,#eef2f7)}
-  .kal-py-cell{min-height:15px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;align-items:center;justify-content:center;position:relative}
+  .kal-py-cell{min-height:19px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;flex-direction:column;justify-content:center;padding:2px 4px;position:relative}
   .kal-py-cell.empty{background:#fafbfd} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
-  .kal-py-dot{width:7px;height:7px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+  .kal-py-bars{display:flex;flex-direction:column;gap:1.5px}
+  .kal-py-bar{height:4px;border-radius:2px;width:100%;display:block;box-shadow:0 0 0 .5px rgba(255,255,255,.55)}
   `;
   document.head.appendChild(el);
 }
@@ -221,14 +222,14 @@ function _dayGrid(days){
   const clampCols=(von,bis)=>{ let a=von<isoList[0]?isoList[0]:von, b=bis>isoList[N-1]?isoList[N-1]:bis; const ca=colOf(a), cb=colOf(b); if(ca<0||cb<0) return null; return [ca,cb]; };
   // Benannter Balken oben im Band „Veranstaltungen" (einmal je Eintrag – gilt für alle)
   const namedBar=(it)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a'; const ic=isVa?'📅':'•';
+    const isVa=it.typ==='va'; const col=isVa?'#7c3aed':'#0891b2'; const ic=isVa?'📅':'•';
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
     const c=_clk(it);
     return '<div class="kal-ev'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(it._lane+1)+';background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+ic+' '+esc(it.titel)+'</div>';
   };
   // Zuweisungs-Balken auf der Personenzeile: volle Zeilenhöhe, heller Ton, kein Text (Name steht oben)
   const asgBar=(it,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#bd9fd9':'#86c5c5';
+    const isVa=it.typ==='va'; const col=isVa?'#c4b5fd':'#86c5c5';
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -243,7 +244,7 @@ function _dayGrid(days){
   if(items.length){
     const laneN=Math.max(1,_laneAssign(items));
     const laneH=laneN===1?32:(laneN===2?27:23);
-    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#7b3fb3;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
+    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#7c3aed;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
     days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
     items.forEach(it=>{ h+=namedBar(it); });
     h+='</div>';
@@ -290,7 +291,7 @@ function _yearGrid(year){
   const mcells=()=>{ let s=''; for(let i=0;i<12;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
   const mH=22;
   // benannter Marker oben im Band „Veranstaltungen"
-  const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=isVa?'#7b3fb3':'#0d8a8a'; const w=spanPct(it.von,it.bis);
+  const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=isVa?'#7c3aed':'#0891b2'; const w=spanPct(it.von,it.bis);
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
     const c=_clk(it);
     return '<div class="kal-ev-mark'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+(3+it._lane*mH)+'px;height:'+(mH-3)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>';
@@ -298,7 +299,7 @@ function _yearGrid(year){
   // benannte Abwesenheit auf der Personenzeile
   const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
-  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#bd9fd9':'#86c5c5'; const w=spanPct(it.von,it.bis);
+  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#c4b5fd':'#86c5c5'; const w=spanPct(it.von,it.bis);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -313,7 +314,7 @@ function _yearGrid(year){
   const yItems=items.filter(it=>inYear(it.von,it.bis));
   if(yItems.length){
     const bN=Math.max(1,_laneAssign(yItems));
-    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7b3fb3">Veranstaltungen</div>'+mcells();
+    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#7c3aed">Veranstaltungen</div>'+mcells();
     h+='<div class="kal-track" style="min-height:'+(bN*mH+6)+'px">'+wlines+todayLine;
     yItems.forEach(it=>{ h+=namedMark(it); });
     h+='</div></div>';
@@ -365,7 +366,7 @@ function _conflictList(from,to){
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+sub+'</div>';
     if(cnt) h+='<div class="kal-chips">'+absentList.map(a=>{const m=KMETA[a.type];return '<span class="kal-chip" style="background:'+m.c+'">'+esc(empName(a.emp))+' · '+m.lbl+'</span>';}).join('')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#2b8a5a')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#16a34a')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
   });
   return h+'</div>';
 }
@@ -376,7 +377,7 @@ function _persItems(){ return _events().concat(_termine()); }
 function _persMine(it){ const myId=(window.cu&&window.cu.id)||''; return (it.mitarbeiter||[]).indexOf(myId)>=0; }
 function _persMyAbs(){ const myId=(window.cu&&window.cu.id)||''; return _abs().filter(a=>a.emp===myId); }
 function _persChip(it){
-  const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#7b3fb3':'#0d8a8a'; const c=_clk(it);
+  const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#7c3aed':'#0891b2'; const c=_clk(it);
   const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'')+(mine?' · dir zugewiesen':'');
   const style=mine?('background:'+base+';color:#fff'):('background:#fff;color:'+base+';border:1px solid '+base);
   return '<div class="kal-pchip'+c.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅':'•')+' '+esc(it.titel)+(it.uhr?(' '+esc(it.uhr)):'')+'</div>';
@@ -418,11 +419,13 @@ function _persYear(year){
       const dt=new Date(year,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
       const myAbs=MYABS.filter(a=>overlap(a.von,a.bis,iso,iso));
       const its=ITEMS.filter(it=>overlap(it.von,it.bis,iso,iso));
-      let bg=''; if(myAbs.length) bg='background:'+KMETA[myAbs[0].type].c+';'; else if(dow>=5) bg='background:#eef1f5;';
-      let dot=''; if(its.length){ const hasVa=its.some(i=>i.typ==='va'); const hasMine=its.some(_persMine); dot='<span class="kal-py-dot" style="background:'+(hasVa?'#7b3fb3':'#0d8a8a')+(hasMine?'':';opacity:.4')+'"></span>'; }
+      let bg=''; if(myAbs.length) bg='background:'+(KMETA[myAbs[0].type].light||'#eef1f5')+';'; else if(dow>=5) bg='background:#f2f5f9;';
+      let bars=''; const vaIts=its.filter(i=>i.typ==='va'), tIts=its.filter(i=>i.typ==='termin');
+      if(vaIts.length){ const mine=vaIts.some(_persMine); bars+='<span class="kal-py-bar" style="background:#7c3aed'+(mine?'':';opacity:.4')+'"></span>'; }
+      if(tIts.length){ const mine=tIts.some(_persMine); bars+='<span class="kal-py-bar" style="background:#0891b2'+(mine?'':';opacity:.4')+'"></span>'; }
       const parts=[]; myAbs.forEach(a=>parts.push(KMETA[a.type].lbl)); its.forEach(it=>parts.push((it.typ==='va'?'📅 ':'• ')+it.titel+(_persMine(it)?' (zugew.)':'')));
       const tip=parts.length?(_deDate(iso)+': '+parts.join(', ')):'';
-      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+'" style="'+bg+'"'+(tip?(' data-tip="'+esc(tip)+'"'):'')+'>'+dot+'</div>';
+      h+='<div class="kal-py-cell'+(iso===_todayISO()?' today':'')+'" style="'+bg+'"'+(tip?(' data-tip="'+esc(tip)+'"'):'')+'>'+(bars?('<span class="kal-py-bars">'+bars+'</span>'):'')+'</div>';
     }
   }
   return h+'</div>';
@@ -436,7 +439,7 @@ function _persConflict(from,to){
     const dl=e.von===e.bis?_deDate(e.von):(_deDate(e.von)+' – '+_deDate(e.bis));
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#2b8a5a')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#16a34a')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
   });
   return h+'</div>';
 }
@@ -475,15 +478,15 @@ export function renderKalender(){
         <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend">
-        <span class="kal-lg"><span class="kal-sw" style="background:#7b3fb3"></span>Veranstaltung</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#0d8a8a;border:1.5px dashed #fff"></span>Termin</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#7c3aed"></span>Veranstaltung</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#0891b2;border:1.5px dashed #fff"></span>Termin</span>
         ${personal
-          ? `<span class="kal-lg"><span class="kal-sw" style="background:#fff;border:1px solid #7b3fb3"></span>nicht dir zugewiesen (nur Umriss)</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2b8a5a"></span>Urlaub</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2f6f9f"></span>Arbeitszeitausgleich</span>`
-          : `<span class="kal-lg"><span class="kal-sw" style="background:#bd9fd9"></span>eingeplant (helle Fläche auf der Zeile)</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2b8a5a"></span>Urlaub</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2f6f9f"></span>Arbeitszeitausgleich</span>
+          ? `<span class="kal-lg"><span class="kal-sw" style="background:#fff;border:1px solid #7c3aed"></span>nicht dir zugewiesen (nur Umriss)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#16a34a"></span>Urlaub</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#2563eb"></span>Arbeitszeitausgleich</span>`
+          : `<span class="kal-lg"><span class="kal-sw" style="background:#c4b5fd"></span>eingeplant (helle Fläche auf der Zeile)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#16a34a"></span>Urlaub</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:#2563eb"></span>Arbeitszeitausgleich</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
       ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll">${_boardHtml()}</div></div>`}
