@@ -422,11 +422,33 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('service-worker.js').then(function(reg){
       try{ reg.update(); }catch(e){} // beim Laden einmal auf neue Version pruefen
+      // Stündlich auf allen Geräten nach einer neuen Version fragen (offene Tabs/PWA laufen sonst tagelang alt).
+      setInterval(function(){ try{ reg.update(); }catch(e){} }, 60*60*1000);
     }).catch(function(){});
   });
-  // KEIN automatisches Neuladen mehr – das verursachte das stoerende Aufblitzen
-  // ("rohes HTML" oben). Frische Dateien kommen beim naechsten normalen Laden,
-  // da der Service-Worker netzwerk-first liefert.
+  // Neuladen NUR, wenn eine neue Version da ist UND es niemanden stört (kein Aufblitzen mitten
+  // in der Arbeit): Tab im Hintergrund, oder ≥2 Min. keine Eingabe, kein offenes Formular/Modal.
+  (function(){
+    // Neuer SW hat übernommen (alte Caches sind dann gelöscht) → Neuladen vormerken.
+    // Nicht bei der Erst-Installation (vorher gab es keinen Controller).
+    var hadCtrl=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){ if(hadCtrl) window._tpsUpdatePending=true; hadCtrl=true; });
+    var lastAct=Date.now();
+    ['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){ window.addEventListener(ev,function(){ lastAct=Date.now(); },{passive:true,capture:true}); });
+    function busy(){
+      var a=document.activeElement;
+      if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable)) return true;
+      var m=document.querySelectorAll('.modal-bg.show, .crm-modal-actions');
+      for(var i=0;i<m.length;i++){ if(m[i].getClientRects().length) return true; }
+      return false;
+    }
+    function tryReload(){
+      if(!window._tpsUpdatePending) return;
+      if(document.hidden || (Date.now()-lastAct>2*60*1000 && !busy())){ window._tpsUpdatePending=false; location.reload(); }
+    }
+    setInterval(tryReload, 30*1000);
+    document.addEventListener('visibilitychange',tryReload);
+  })();
 }
 // Globaler Fehler-Auffang: zeigt bei Modul-/Syntaxfehlern eine klare Meldung
 // statt eines weißen Bildschirms, mit Button zum harten Neuladen.

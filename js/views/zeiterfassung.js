@@ -5,6 +5,7 @@ import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWee
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays } from '../calc.js';
 import { fmtTs } from '../utils.js';
+import { fileGfApproval, unfileGfReport } from './gfberichte.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
 function _hhmmToMin(t){ const p=String(t||'').split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
@@ -1296,7 +1297,13 @@ export function doApprove(){
   setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
   setEntryField(uid,year,mon,'reviewedBy',cu.id);
   logEntryStatus(uid,year,mon,'approved',note);
-  toast('Zeiterfassung genehmigt.','ok'); renderZeiterfassung(); window.renderOverview?.();
+  // Vom GF direkt geprüft + gegengezeichnet → sofort als eingereichter Bericht in die
+  // Buchhaltungsversion (kein separates „Bericht einreichen" mehr nötig).
+  if(cu.role==='geschaeftsfuehrer'){
+    try{ fileGfApproval(uid,year,mon); }catch(e){ console.error('GF-Bericht ablegen fehlgeschlagen:',e); }
+    toast('Zeiterfassung genehmigt und in die Buchhaltungsversion eingereicht ✓','ok');
+  } else toast('Zeiterfassung genehmigt.','ok');
+  renderZeiterfassung(); window.renderOverview?.();
 }
 
 export function doReject(){
@@ -1321,6 +1328,7 @@ export function doResetToDraft(){
   setEntryField(window.viewEmpId,year,mon,'status','draft');
   setEntryField(window.viewEmpId,year,mon,'managerNote','');
   logEntryStatus(window.viewEmpId,year,mon,'draft','Admin: zurück auf Entwurf');
+  try{ unfileGfReport(window.viewEmpId,year,mon); }catch(e){}   // Entwurf gehört nicht in die Buchhaltungsversion
   toast('Zurück auf Entwurf gesetzt.');
   renderZeiterfassung();
 }

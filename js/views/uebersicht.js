@@ -216,7 +216,19 @@ export function renderOverview(){
     const rKey='team_'+team.replace(/\W/g,'_')+'_'+oy+'_'+String(om).padStart(2,'0');
     const sent=d.teamReports&&d.teamReports[rKey];
     const sentSet=new Set((sent&&sent.employeeIds)||[]);
+    // GF: genehmigte ZE landen automatisch in Berichten (Leitungen je eigener LEIT_-Bericht) –
+    // daher zählt jede Person, die in IRGENDEINEM Bericht des Monats steht, als eingereicht.
+    if(cu.role==='geschaeftsfuehrer') Object.values(d.teamReports||{}).forEach(r=>{
+      if(r&&r.year===oy&&r.month===om&&Array.isArray(r.employeeIds)) r.employeeIds.forEach(id=>sentSet.add(id));
+    });
     const notYetSent=approvedUsers.filter(u=>!sentSet.has(u.id)).length; // genehmigt, aber noch nicht gesendet
+    const anySent=users.some(u=>sentSet.has(u.id));
+    if(cu.role==='geschaeftsfuehrer' && approvedUsers.length && notYetSent===0){
+      return `<div class="team-send-bar">
+        <span style="color:var(--ok);font-weight:600;font-size:13px">✓ ${approved}/${total} genehmigt · automatisch in die Buchhaltungsversion eingereicht</span>
+        ${sent?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:''}
+      </div>`;
+    }
     const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
     const approvedIds=JSON.stringify(approvedUsers.map(u=>u.id));
     // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
@@ -234,8 +246,8 @@ export function renderOverview(){
     // Status-Text + Button-Beschriftung je nach Vollständigkeit / Nachreichung.
     const statusText=allApproved
       ? `✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt`
-      : `${monthLabel}: <strong>${approved}/${total}</strong> genehmigt${notYetSent>0&&sent?` · ${notYetSent} noch nicht gesendet`:''} – Rest später nachreichbar`;
-    const btnLabel=notYetSent>0&&sent
+      : `${monthLabel}: <strong>${approved}/${total}</strong> genehmigt${notYetSent>0&&anySent?` · ${notYetSent} noch nicht gesendet`:''} – Rest später nachreichbar`;
+    const btnLabel=notYetSent>0&&anySent
       ? `📨 ${notYetSent} nachreichen`
       : (allApproved?`📨 Alle ${total} ${verb}`:`📨 ${approved} von ${total} ${verb}`);
     return `<div class="team-send-bar">
