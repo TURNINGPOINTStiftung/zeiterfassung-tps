@@ -1,7 +1,7 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, mutate } from '../data.js';
 import { esc, toast } from '../utils.js';
-import { isManagerRole, canSeeEmployee, getLeitungTeams } from '../roles.js';
+import { isManagerRole, canSeeEmployee, getLeitungTeams, getTeamForDate, monthStartDate } from '../roles.js';
 import { _openPerEmpPrint } from '../print.js';
 
 // Benachrichtigt alle GF-Nutzer mit hinterlegter E-Mail über einen neuen Bericht.
@@ -29,6 +29,70 @@ export async function notifyGF(params){
       }, {publicKey: EMAILJS_PUBLIC_KEY});
     }catch(e){ console.warn('GF-Benachrichtigung fehlgeschlagen:',e); }
   }
+}
+
+// Bereichs-Label einer Leitung, z.B. „Leitung Marketing & Öffentlichkeitsarbeit".
+function _leitungLabel(u){
+  const lt=getLeitungTeams(u);
+  const t=lt.length?lt:(u&&u.team?[u.team]:[]);
+  return 'Leitung'+(t.length?' '+t.join(', '):'');
+}
+
+// Report-Schlüssel, unter dem eine vom GF genehmigte ZE in der Buchhaltungsversion landet:
+// Leitung → eigener LEIT_-Bericht (eine Karte pro Leitung), sonst der Team-Bericht des Monats.
+function _gfReportTarget(u,y,m){
+  if(u.role==='leitung') return {key:'LEIT_'+u.id+'_'+y+'_'+String(m).padStart(2,'0'), teamName:_leitungLabel(u)};
+  const team=getTeamForDate(u,monthStartDate(y,m))||u.team||'(kein Team)';
+  return {key:'team_'+team.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0'), teamName:team};
+}
+
+// Vom GF genehmigte (gegengezeichnete) ZE direkt als eingereichten Bericht in die
+// Buchhaltungsversion legen – der Zwischenschritt „Bericht einreichen" entfällt.
+// Idempotent: erneutes Ablegen ergänzt/aktualisiert nur, dupliziert nichts.
+export function fileGfApproval(uid,y,m){
+  const cu=window.cu; const d=getData();
+  const u=(d.users||[]).find(x=>x.id===uid);
+  if(!u||!cu) return;
+  const tg=_gfReportTarget(u,y,m);
+  const now=new Date().toISOString();
+  mutate(function(dd){
+    if(!dd.teamReports) dd.teamReports={};
+    // Person aus anderen Berichten desselben Monats lösen (z.B. alter Teamname / „Leitungsteam").
+    Object.keys(dd.teamReports).forEach(function(k){
+      const r=dd.teamReports[k];
+      if(k===tg.key||!r||r.year!==y||r.month!==m||!Array.isArray(r.employeeIds)||!r.employeeIds.includes(uid)) return;
+      r.employeeIds=r.employeeIds.filter(function(id){ return id!==uid; });
+      if(!r.employeeIds.length) delete dd.teamReports[k];
+    });
+    const r=dd.teamReports[tg.key];
+    if(r){
+      if(!Array.isArray(r.employeeIds)) r.employeeIds=[];
+      if(!r.employeeIds.includes(uid)) r.employeeIds.push(uid);
+      r.teamName=tg.teamName;
+      if(u.role==='leitung'){ r.countersignedAt=now; r.countersignedBy=cu.id; r.countersignedByName=cu.name; }
+      else { r.submittedAt=now; r.seenAt=null; }
+    } else {
+      dd.teamReports[tg.key]={
+        id:tg.key, teamName:tg.teamName, managedTeams:[tg.teamName],
+        leitungId:u.role==='leitung'?u.id:cu.id, leitungName:u.role==='leitung'?u.name:cu.name,
+        year:y, month:m, submittedAt:now, seenAt:null, employeeIds:[uid],
+        ...(u.role==='leitung'?{countersignedAt:now,countersignedBy:cu.id,countersignedByName:cu.name}:{})
+      };
+    }
+  });
+}
+
+// Gegenstück: Person wieder aus den Berichten des Monats nehmen (z.B. Admin setzt auf Entwurf).
+export function unfileGfReport(uid,y,m){
+  mutate(function(dd){
+    if(!dd.teamReports) return;
+    Object.keys(dd.teamReports).forEach(function(k){
+      const r=dd.teamReports[k];
+      if(!r||r.year!==y||r.month!==m||!Array.isArray(r.employeeIds)||!r.employeeIds.includes(uid)) return;
+      r.employeeIds=r.employeeIds.filter(function(id){ return id!==uid; });
+      if(!r.employeeIds.length) delete dd.teamReports[k];
+    });
+  });
 }
 
 // Aktuell in der GF-Berichte-Ansicht gezeigter Monat (year*100+month). null = neuester mit Berichten.
@@ -117,12 +181,14 @@ export function renderGFBerichte(){
   html+='<div>';
   list.forEach(function(r){
     let team=r.teamName||(r.managedTeams&&r.managedTeams[0])||'–';
+    const _emps=(r.employeeIds||[]).map(function(id){ return (d.users||[]).find(function(u){ return u.id===id; }); }).filter(Boolean);
     // Leitungs-Karten nach Fachbereich benennen (Moritz→Akademie, Rebecca→Vereinsentwicklung,
-    // Isabel→Marketing/ÖA), sonst heißen alle drei nur „Leitung". Reine Anzeige: der Bereich
-    // kommt aus dem Team-Feld der berichteten Person – keine Änderung an den Berichtsdaten.
-    if(team==='Leitung' && Array.isArray(r.employeeIds) && r.employeeIds.length){
-      const _p=(d.users||[]).find(function(u){ return u.id===r.employeeIds[0]; });
-      if(_p && _p.team) team='Leitung '+_p.team;
+    // Isabel→Marketing & ÖA) – immer aus den AKTUELLEN Teams der Leitung, damit auch alte
+    // Berichte („Leitung", „Leitungsteam", veraltete Teamnamen) richtig zugeordnet werden.
+    // Reine Anzeige – keine Änderung an den Berichtsdaten.
+    if(/^LEIT_/.test(r.id||'') || /^Leitung/.test(team)){
+      const _ls=_emps.filter(function(u){ return u.role==='leitung'; });
+      if(_ls.length) team=_ls.map(_leitungLabel).join(' · ');
     }
     const dt=new Date(r.submittedAt);
     const dtStr=dt.toLocaleDateString('de-DE')+' '+dt.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
@@ -132,6 +198,8 @@ export function renderGFBerichte(){
       +'<div class="gf-report-title">🏢 '+esc(team)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
       +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
       +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
+        +(_emps.length?': '+_emps.map(function(u){ return esc(u.name); }).join(', '):'')
+        +(r.countersignedAt?' &middot; <span style="color:var(--ok)">✍ Gegengezeichnet '+new Date(r.countersignedAt).toLocaleDateString('de-DE')+'</span>':'')
         +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
       +'</div>'
       +'</div>'
@@ -226,6 +294,15 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
     ? `${_n} ${_ze} für ${MONTHS[m-1]} ${y} (Team: ${teamName}) als Bericht einreichen (Buchhaltungsversion)?\nFehlende können später nachgereicht werden.`
     : `${_n} ${_ze} für ${MONTHS[m-1]} ${y} (Team: ${teamName}) an die Geschäftsführung senden?\nFehlende können später nachgereicht werden.`;
   if(!confirm(confirmMsg)) return;
+  // GF: gleiche Ablage wie beim automatischen Einreichen nach dem Genehmigen
+  // (Leitungen je eigene Karte, sonst Team-Bericht) – kein Sammelbericht „Leitungsteam".
+  if(isGfSelf){
+    emps.forEach(function(u){ fileGfApproval(u.id,y,m); });
+    toast('Bericht „'+teamName+'" für '+MONTHS[m-1]+' '+y+' eingereicht ✓','ok');
+    window.renderOverview?.();
+    _openPerEmpPrint(emps,y,m);
+    return;
+  }
   const rKey='team_'+teamName.replace(/\W/g,'_')+'_'+y+'_'+String(m).padStart(2,'0');
   const report={
     id:rKey, leitungId:cu.id, leitungName:cu.name,
