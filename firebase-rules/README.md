@@ -66,3 +66,15 @@ Live nur in der Konsole unter Storage → Rules; `STORAGE.rules` ist die Referen
 2. **App (`js/backup.js`):** erstes Gerät des Tages lädt den Server-Stand (ZE + CRM) nach
    `backups/daily/<YYYY-MM-DD>_<uid>.json`. Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft
    (ArbZG ≥ 2 Jahre). Einsehen/Laden: Verwaltung → Daten & Backup → „☁ Automatische App-Backups".
+
+## Stand 2026-09-29: CANDIDATE-v2.json ist LIVE
+Veröffentlicht am 2026-09-29 (vorher live: CANDIDATE.json = Rückfall-Stand). Neu gegenüber v1:
+- `entries/$k`: Besitzer (uidUser-ID + `_YYYY_MM`) nur solange Status ≠ approved; Status nur
+  draft/submitted. Leitung/GF/Admin (`managers`) und Admin immer.
+- `stamps/$uid` nur Besitzer/Admin; `vacRequests/$id` Besitzer (userId) oder managers/Admin;
+  `teamReports`/`yearReports` nur managers/Admin; `_fixes` nur noch `lastAppBackup` (Datum).
+- Neue Allowlist `managers` (Leitung/GF/Admin), gepflegt von admin-setup.js wie admins/gfAdmins.
+Getestet: 33 Fälle im Projekt zeiterfassung-test (Bereich `ruletest`, danach zurückgebaut) +
+Abgleich gegen den Live-Export (alle 19 Nutzer gemappt, 602/611 Einträge eindeutig zuordenbar –
+Rest = alte `jörg_…`-Kopien) + 6 Kontrollfälle im Playground gegen die Live-Daten.
+Rückfall: Inhalt von CANDIDATE.json in der Konsole veröffentlichen.

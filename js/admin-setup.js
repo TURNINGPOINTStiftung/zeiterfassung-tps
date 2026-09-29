@@ -80,10 +80,14 @@ export async function runSecuritySetup(opts){
     loginDir[dk]={ id, name:u.name||id };   // ASCII-Schlüssel + echte id im Wert (Umlaut-sicher)
     if(existingDir[dk]){ skipped++; log(`${id}: bereits eingerichtet (übersprungen)`); continue; }
     const em=_accountEmail(id);
+    // Neues Konto bekommt direkt das vergebene Startpasswort (opts.initialPw[id]) – NICHT das
+    // Stabil-Passwort, das aus öffentlich sichtbarem Code berechenbar ist. Bestehende Konten
+    // (email-already-in-use) werden weiter über das Stabil-Passwort gefunden.
+    const initPw=opts.initialPw&&opts.initialPw[id];
     const pw=_stableAuthPw(id);
     let uid=null;
     try{
-      const c=await sec.auth().createUserWithEmailAndPassword(em, pw);
+      const c=await sec.auth().createUserWithEmailAndPassword(em, initPw||pw);
       uid=c.user.uid; created++;
     }catch(e){
       if(e && e.code==='auth/email-already-in-use'){
@@ -154,6 +158,42 @@ export async function reprovisionUser(id){
     await db.ref('zeiterfassung/managers').update({ [uid]: _isManagerUser(u)?true:null });
   }
   return { id, uid, email:em, note };
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  Konten-Prüfung: Stabil-Passwort noch aktiv?
+//  Das Stabil-Passwort (tpsfb$<id>$<SALT>) ist aus dem öffentlichen App-Code berechenbar.
+//  Ein Konto, das sich damit noch anmelden lässt (Person hat sich seit dem Cutover nicht
+//  angemeldet bzw. neu angelegt vor v357), ist für jeden mit Kenntnis der Login-ID offen.
+//  checkStableAccounts: probiert je Nutzer EINEN Login mit dem Stabil-Passwort (sekundäre
+//  App-Instanz – die Admin-Sitzung bleibt unberührt) → 'offen' | 'sicher'.
+//  secureStableAccount: setzt das Firebase-Passwort eines offenen Kontos auf newPw.
+// ══════════════════════════════════════════════════════════════════
+export async function checkStableAccounts(opts){
+  opts=opts||{}; const onProgress=opts.onProgress||(()=>{});
+  if(!window.cu||window.cu.role!=='admin') throw new Error('Nur der Administrator-Account.');
+  const users=(getData().users||[]).filter(u=>u&&u.id);
+  const sec=_secApp(); const out=[];
+  for(let i=0;i<users.length;i++){
+    const u=users[i]; onProgress(i+1,users.length,u.name||u.id);
+    let status='sicher', code='';
+    try{ await sec.auth().signInWithEmailAndPassword(_accountEmail(u.id), _stableAuthPw(u.id)); status='offen'; }
+    catch(e){ code=(e&&e.code)||''; if(code==='auth/too-many-requests') status='unbekannt'; }
+    try{ await sec.auth().signOut(); }catch(_){}
+    out.push({id:u.id, name:u.name||u.id, status, code});
+    await new Promise(r=>setTimeout(r,350));   // sanft, um keine Anmelde-Drosselung auszulösen
+  }
+  return out;
+}
+export async function secureStableAccount(id, newPw){
+  if(!window.cu||window.cu.role!=='admin') throw new Error('Nur der Administrator-Account.');
+  if(!newPw||String(newPw).length<8) throw new Error('Startpasswort zu kurz.');
+  const sec=_secApp();
+  try{
+    const c=await sec.auth().signInWithEmailAndPassword(_accountEmail(id), _stableAuthPw(id));
+    await c.user.updatePassword(newPw);
+  } finally { try{ await sec.auth().signOut(); }catch(_){} }
+  return true;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -304,3 +344,4 @@ try{ window.runSecuritySetup = runSecuritySetup; }catch(_){}
 try{ window.migrateUserId = migrateUserId; }catch(_){}
 try{ window.reprovisionUser = reprovisionUser; }catch(_){}
 try{ window.refreshPermissionAllowlists = refreshPermissionAllowlists; }catch(_){}
+try{ window.checkStableAccounts = checkStableAccounts; window.secureStableAccount = secureStableAccount; }catch(_){}

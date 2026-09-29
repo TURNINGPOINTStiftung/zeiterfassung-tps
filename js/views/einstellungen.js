@@ -394,6 +394,47 @@ export async function resetUserPassword(id){
     <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
 }
 
+// ── Konten prüfen (nur Administrator) ─────────────────────────────────────────────────
+// Findet Login-Konten, die noch mit dem (aus öffentlichem Code berechenbaren) Stabil-Passwort
+// erreichbar sind, und sichert sie auf Wunsch mit einem neuen Startpasswort ab.
+export async function showAccountCheck(){
+  const cu=window.cu;
+  if(!cu||cu.role!=='admin'){ toast('Nur der Administrator-Account kann Konten prüfen.','err'); return; }
+  if(!window.checkStableAccounts){ toast('Funktion nicht verfügbar.','err'); return; }
+  openModal(`<h3>🔐 Konten prüfen</h3><p id="acc-prog" style="font-size:13px;color:var(--muted)">Prüfe Konten …</p>`);
+  let res;
+  try{ res=await window.checkStableAccounts({onProgress:(i,n,name)=>{ const p=document.getElementById('acc-prog'); if(p) p.textContent=`Prüfe ${i}/${n}: ${name} …`; }}); }
+  catch(e){ openModal(`<h3>🔐 Konten prüfen</h3><p style="color:var(--danger)">${esc((e&&e.message)||String(e))}</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">OK</button></div>`); return; }
+  window._accCheck=res;
+  _renderAccountCheck();
+}
+function _renderAccountCheck(){
+  const res=window._accCheck||[];
+  const open=res.filter(r=>r.status==='offen'), unk=res.filter(r=>r.status==='unbekannt');
+  const rows=open.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span><b>${esc(r.name)}</b> <span style="font-size:11px;color:var(--muted)">(${esc(r.id)})</span></span>
+      <button class="btn btn-ok btn-sm" onclick="secureAccountUi('${esc(r.id)}')">🔐 Absichern</button></div>`).join('');
+  openModal(`<h3>🔐 Konten prüfen</h3>
+    <p style="font-size:13px;margin:0 0 10px">${res.length} Konten geprüft · <b style="color:${open.length?'var(--danger)':'var(--ok)'}">${open.length} offen</b> · ${res.length-open.length-unk.length} sicher${unk.length?` · ${unk.length} nicht prüfbar (später erneut)`:''}</p>
+    ${open.length?`<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Diese Konten lassen sich noch mit dem berechenbaren Stabil-Passwort öffnen. „Absichern" setzt ein neues Startpasswort – bitte persönlich weitergeben; die Person meldet sich damit an und ändert es im Profil.</p><div style="max-height:45vh;overflow-y:auto">${rows}</div>`:'<p style="color:var(--ok);font-weight:600">✓ Alle Konten sind abgesichert.</p>'}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>`);
+}
+export async function secureAccountUi(id){
+  const u=getUser(id); if(!u) return;
+  if(!confirm(`Konto von ${u.name||id} absichern?\n\nEs wird ein neues Startpasswort gesetzt. Das bisherige Passwort der Person gilt dann nicht mehr.`)) return;
+  let temp, hash;
+  try{ temp=_genTempPw(); hash=await makePwRecord(temp); await window.secureStableAccount(id,temp); }
+  catch(e){ toast('Absichern fehlgeschlagen: '+((e&&(e.code||e.message))||e),'err'); return; }
+  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; }); }
+  catch(e){ toast('Firebase-Konto gesichert, aber App-Passwort nicht gespeichert: '+((e&&e.message)||e),'err'); }
+  (window._accCheck||[]).forEach(r=>{ if(r.id===id) r.status='sicher'; });
+  openModal(`<h3>🔐 Abgesichert – neues Startpasswort</h3>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich weitergeben – Anmeldung mit Name + diesem Passwort, danach im Profil ändern.</p>
+    <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="window._renderAccountCheckUi()">‹ Zurück zur Liste</button><button class="btn btn-primary" onclick="closeModal()">Fertig</button></div>`);
+}
+try{ window._renderAccountCheckUi=_renderAccountCheck; }catch(_){}
+
 // Kaputtes/gelöschtes Firebase-Login-Konto neu aufsetzen (Sonderfall, z. B. beschädigte
 // Umlaut-ID): legt das Konto neu an (Stabil-PW) + Verzeichnis + Allowlist und setzt gleich
 // ein Einmal-Passwort. Voraussetzung: das alte Konto ist in der Firebase-Konsole gelöscht.
@@ -841,7 +882,7 @@ export async function saveNewUser(){
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
   // Technisches Konto anlegen + im Login-Verzeichnis/Allowlist freischalten
   // (runSecuritySetup ist idempotent: legt nur den neuen Nutzer an, Rest bleibt).
-  try{ await window.runSecuritySetup?.({log:()=>{}}); }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); }
+  try{ await window.runSecuritySetup?.({log:()=>{}, initialPw:{[u.id]:_plainPw}}); }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); }
   // Berechtigungs-Allowlisten (admins/gfAdmins) an die Rolle des neuen Nutzers angleichen.
   // Best effort: no-op/Fehler solange uidUser noch nicht geseedet ist (vor dem Regel-Cutover).
   try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (neuer Nutzer):', e&&e.message); }
