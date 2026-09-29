@@ -7,7 +7,7 @@ URL: `https://europe-west1-zeiterfassung-tps.cloudfunctions.net/tpsPw` (in `js/c
 ```
 gcloud config set project zeiterfassung-tps
 mkdir -p ~/tpspw && cd ~/tpspw      # index.js + package.json hierher kopieren
-gcloud functions deploy tpsPw --gen2 --runtime=nodejs20 --region=europe-west1 \
+gcloud functions deploy tpsPw --gen2 --runtime=nodejs22 --region=europe-west1 \
   --source=. --entry-point=tpsPw --trigger-http --allow-unauthenticated \
   --memory=256MiB --max-instances=3
 ```
