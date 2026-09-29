@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════
-//  Automatisches App-Backup → Firebase Storage (backups/daily/<YYYY-MM-DD>.json)
+//  Automatisches App-Backup → Firebase Storage (backups/daily/<YYYY-MM-DD>_<uid>.json)
 //  Ergänzt die täglichen Firebase-Datenbank-Backups (Konsole, 30 Tage) um eine
 //  langfristige Kopie: täglich 90 Tage, der 1. jedes Monats dauerhaft (ArbZG ≥ 2 Jahre).
 //
@@ -42,7 +42,7 @@ export async function runAutoBackup(){
         // Merker NUR nach erfolgreichem Upload setzen. Wird verweigert (Datei existiert schon, weil
         // ein anderes Gerät gleichzeitig schneller war – oder Regeln noch nicht aktiv), bleibt der
         // Merker unberührt; das erfolgreiche Gerät setzt ihn.
-        await firebase.storage().ref('backups/daily/'+today+'.json').put(body, {contentType:'application/json'});
+        await firebase.storage().ref('backups/daily/'+today+'_'+firebase.auth().currentUser.uid+'.json').put(body, {contentType:'application/json'});
         await mark.set(today);
         console.info('[Backup] Tages-Backup '+today+' gespeichert.');
       }
@@ -59,7 +59,7 @@ async function _pruneOld(){
   const cut = new Date(); cut.setDate(cut.getDate()-KEEP_DAILY_DAYS);
   const cutStr = localISODate(cut);
   for(const item of res.items){
-    const m = item.name.match(/^(\d{4}-\d{2}-(\d{2}))\.json$/);
+    const m = item.name.match(/^(\d{4}-\d{2}-(\d{2}))_[^.]+\.json$/);   // <Datum>_<uid>.json
     if(!m || m[2]==='01' || m[1] >= cutStr) continue;
     try{ await item.delete(); }catch(e){ console.warn('[Backup] Löschen fehlgeschlagen:', item.name); }
   }
@@ -85,7 +85,7 @@ export async function showAppBackups(){
   try{ names=await listAppBackups(); }
   catch(e){ openModal('<h3>☁ Automatische App-Backups</h3><p style="color:var(--danger)">Konnte nicht geladen werden ('+esc((e&&(e.code||e.message))||'')+').</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
   const rows=names.length
-    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.replace('.json',''))+(/-01\.json$/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup(\''+esc(n)+'\')">⬇ Laden</button></div>').join('')
+    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.slice(0,10))+(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup(\''+esc(n)+'\')">⬇ Laden</button></div>').join('')
     : '<p style="color:var(--muted)">Noch keine App-Backups vorhanden.</p>';
   openModal('<h3 style="margin-bottom:6px">☁ Automatische App-Backups</h3>'
     +'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Täglich automatisch (Server-Stand). Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft. Einspielen über „Backup einspielen (JSON)".</p>'

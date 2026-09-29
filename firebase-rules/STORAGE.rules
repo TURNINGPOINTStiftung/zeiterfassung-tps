@@ -6,35 +6,40 @@ rules_version = '2';
 // Storage-Regeln können die Realtime Database (allowed/admins) NICHT abfragen. Das Admin-Recht
 // hängt daher am technischen Anmeldekonto des Administrators: admin@tps.intern
 // (Schema <id>@tps.intern, siehe js/firebase.js).
+//
+// ACHTUNG: In Authentication ist „Enable create (sign-up)" an (die App legt Konten neuer
+// Mitarbeiter clientseitig an). „Angemeldet" heißt daher NICHT „freigeschaltet" – deshalb:
+//  • nur Konten nach App-Schema (@tps.intern),
+//  • Backup-Dateien tragen die UID des Hochladenden im Namen → ein fremdes Konto kann das
+//    echte Tages-Backup weder blockieren noch vortäuschen,
+//  • CRM-Anhänge nur per Einzelabruf (get), kein Auflisten.
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function signedIn() { return request.auth != null; }
-    function isAdmin()  { return signedIn() && request.auth.token.email == 'admin@tps.intern'; }
+    function appUser() { return request.auth != null
+                           && request.auth.token.email is string
+                           && request.auth.token.email.matches('^[a-z0-9._-]+@tps[.]intern$'); }
+    function isAdmin() { return request.auth != null && request.auth.token.email == 'admin@tps.intern'; }
 
-    // ── Automatische App-Backups (js/backup.js) ─────────────────────────────
-    // Jedes angemeldete Gerät darf das Tages-Backup ANLEGEN (nur neu, nie überschreiben –
-    // ein bestehendes Backup kann also nicht manipuliert werden). Lesen, Auflisten und
-    // Löschen (Aufbewahrung) nur der Administrator-Account.
-    match /backups/{file=**} {
-      allow create: if signedIn()
+    // ── Automatische App-Backups (js/backup.js): backups/daily/<YYYY-MM-DD>_<uid>.json ──
+    match /backups/daily/{name} {
+      allow create: if appUser()
+                    && name.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_' + request.auth.uid + '[.]json$')
                     && request.resource.size < 25 * 1024 * 1024
                     && request.resource.contentType == 'application/json';
-      allow read, delete: if isAdmin();
-      allow update: if false;
+      allow read, delete: if isAdmin();   // read = get + list
+      allow update: if false;             // Backups sind unveränderlich
+    }
+    match /backups/{rest=**} {
+      allow read: if isAdmin();           // Auflisten von backups/ für die Verwaltung
     }
 
     // ── CRM-Dateianhänge (js/crm/crm.js: crm-anlagen/<nodeId>/<zeit>_<name>) ──
     match /crm-anlagen/{nid}/{file} {
-      allow read:   if signedIn();
-      allow create: if signedIn() && request.resource.size < 15 * 1024 * 1024;
-      allow delete: if signedIn();
+      allow get:    if appUser();
+      allow create: if appUser() && request.resource.size < 15 * 1024 * 1024;
+      allow delete: if appUser();
       allow update: if false;
-    }
-
-    // Alles andere: gesperrt.
-    match /{other=**} {
-      allow read, write: if false;
     }
   }
 }

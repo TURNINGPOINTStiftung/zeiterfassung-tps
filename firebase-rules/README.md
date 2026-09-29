@@ -53,14 +53,16 @@ Normale Nutzer werden über Kind-`.write`-Regeln nur für ihre Knoten freigescha
 ## Storage-Regeln (STORAGE.rules)
 Firebase Storage (Bucket `zeiterfassung-tps.firebasestorage.app`, angelegt 2026-09-29, Blaze).
 Live nur in der Konsole unter Storage → Rules; `STORAGE.rules` ist die Referenz.
-- `backups/**`: automatische App-Backups (`js/backup.js`). Jedes angemeldete Gerät darf das
-  Tages-Backup NEU anlegen (nie überschreiben); Lesen/Löschen nur `admin@tps.intern`.
-- `crm-anlagen/<nodeId>/<datei>`: CRM-Dateianhänge, angemeldete Nutzer, max. 15 MB.
+- `backups/daily/<datum>_<uid>.json`: automatische App-Backups (`js/backup.js`). Jedes App-Konto darf das
+  Tages-Backup unter SEINER uid NEU anlegen (nie überschreiben); Lesen/Löschen nur `admin@tps.intern`.
+  Grund für die uid im Namen: Auth-Sign-up ist offen (App legt Konten clientseitig an) → ein fremdes
+  Konto darf das echte Backup nicht blockieren/vortäuschen können.
+- `crm-anlagen/<nodeId>/<datei>`: CRM-Dateianhänge, nur @tps.intern-Konten, nur Einzelabruf, max. 15 MB.
 - alles andere gesperrt.
 
 ## Backups (Stand 2026-09-29)
 1. **Firebase (Konsole → Realtime Database → Backups):** täglich automatisch, Daten + Regeln,
    gzip, 30 Tage Aufbewahrung, Bucket `zeiterfassung-tps-default-rtdb-backups`.
 2. **App (`js/backup.js`):** erstes Gerät des Tages lädt den Server-Stand (ZE + CRM) nach
-   `backups/daily/<YYYY-MM-DD>.json`. Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft
+   `backups/daily/<YYYY-MM-DD>_<uid>.json`. Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft
    (ArbZG ≥ 2 Jahre). Einsehen/Laden: Verwaltung → Daten & Backup → „☁ Automatische App-Backups".
