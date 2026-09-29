@@ -1,5 +1,5 @@
 import { MONTHS } from './config.js';
-import { getUser } from './data.js';
+import { getUser, getData } from './data.js';
 import { isManagerRole, hasPermission, roleLabel } from './roles.js';
 import { dailyMinutes, clampToEmployment } from './calc.js';
 
@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v357':'';
+  if(_hv) _hv.textContent=_showVer?'v358':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -134,6 +134,8 @@ export function initApp(){
   const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
+  // Administrator: auf offene „Passwort vergessen"-Anfragen hinweisen (Verwaltung → Mitarbeiter).
+  if(isAdmin){ try{ const _n=Object.keys(getData().pwResetRequests||{}).length; if(_n) setTimeout(()=>window.toast?.('🔑 '+_n+' offene Passwort-Anfrage'+(_n===1?'':'n')+' – siehe Verwaltung → Mitarbeiter.',''),1500); }catch(e){} }
   // Automatisches Tages-Backup (erstes Gerät des Tages; best effort, verzögert, stört den Start nicht).
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }

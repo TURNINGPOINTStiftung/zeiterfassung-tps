@@ -4,7 +4,7 @@ import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY, DATA_EPOCH } from './config
 import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
-         showForgotPassword, sendPasswordReset,
+         showForgotPassword, sendPasswordReset, requestPwReset,
          checkPasswordResetToken, saveResetPassword,
          filterLoginUsers, hideLoginDropdown, selectLoginUser,
          loginKeyNav } from './auth.js';
@@ -45,7 +45,7 @@ import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, s
          addCategory, removeCat, addTeamCat, removeTeamCat, moveTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleWerkstudentFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
-         saveNewUser, saveEditUser, resetUserPassword, reprovisionUserFull, fixApproverToLeitung, archivedUsersHtml, restoreArchivedUser, ufAutoAdjust, showAccountCheck, secureAccountUi } from './views/einstellungen.js';
+         saveNewUser, saveEditUser, resetUserPassword, reprovisionUserFull, fixApproverToLeitung, archivedUsersHtml, restoreArchivedUser, ufAutoAdjust, showAccountCheck, secureAccountUi, pwRequestsHtml, dismissPwRequest } from './views/einstellungen.js';
 
 // ── Utility / print modules ────────────────────────────────────────
 import { printFull, printBuchhaltung, printTeamBuchhaltung,
@@ -86,6 +86,7 @@ window.doEmergencyReset      = doEmergencyReset;
 window.resetPasswordsOnly    = resetPasswordsOnly;
 window.showForgotPassword      = showForgotPassword;
 window.sendPasswordReset       = sendPasswordReset;
+window.requestPwReset          = requestPwReset;
 window.checkPasswordResetToken = checkPasswordResetToken;
 window.saveResetPassword       = saveResetPassword;
 window.filterLoginUsers        = filterLoginUsers;
@@ -254,6 +255,8 @@ window.restoreArchivedUser   = restoreArchivedUser;
 window.ufAutoAdjust          = ufAutoAdjust;
 window.showAccountCheck      = showAccountCheck;
 window.secureAccountUi       = secureAccountUi;
+window.pwRequestsHtml        = pwRequestsHtml;
+window.dismissPwRequest      = dismissPwRequest;
 window.runCarryoverCleanup   = runCarryoverCleanup;
 window.fixManualCarryovers   = fixManualCarryovers;
 

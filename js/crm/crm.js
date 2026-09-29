@@ -4294,7 +4294,7 @@ function paintVerwUsers(){
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
       <tbody>${rows||'<tr><td colspan="5" class="small" style="color:var(--muted)">Keine Nutzer.</td></tr>'}</tbody>
     </table></div>
-  </div>`+(function(){ try{ return window.archivedUsersHtml?window.archivedUsersHtml():''; }catch(e){ return ''; } })();
+  </div>`+(function(){ try{ return (window.pwRequestsHtml?window.pwRequestsHtml():'')+(window.archivedUsersHtml?window.archivedUsersHtml():''); }catch(e){ return ''; } })();
 }
 function crmVerwSetLevel(uid, level){
   const a=getAccess(uid)||{};

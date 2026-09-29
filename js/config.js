@@ -17,6 +17,8 @@ export const EMAILJS_TEMPLATE_ID = 'template_8z8vi0g';          // Passwort-Rese
 export const EMAILJS_REMINDER_TEMPLATE_ID = 'template_seoonqa'; // Erinnerung Zeiterfassung
 export const EMAILJS_GF_REPORT_TEMPLATE_ID = 'template_gfreport'; // GF-Benachrichtigung bei neuem Bericht
 export const APP_URL = 'https://turningpointstiftung.github.io/zeiterfassung-tps/';
+// Cloud Function für „Passwort vergessen" (Anfrage) und Admin-Passwort-Reset (functions/index.js)
+export const PW_FUNCTION_URL = 'https://europe-west1-zeiterfassung-tps.cloudfunctions.net/tpsPw';
 
 // ── Standard-Berechtigungen (werden in den Einstellungen überschrieben) ──
 // Schlüssel → Array von Rollen die diese Berechtigung haben

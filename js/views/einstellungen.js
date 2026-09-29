@@ -1,4 +1,4 @@
-import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.js';
+import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate } from '../utils.js';
@@ -377,21 +377,56 @@ function _genTempPw(){
   let s=''; for(let i=0;i<10;i++){ s+=c[(a[i]||(i*7+3))%c.length]; }
   return s;
 }
+// Firebase-Konto-Passwort einer anderen Person setzen – nur über die Cloud Function tpsPw
+// (Admin SDK). Prüft serverseitig, dass der Aufrufer der Administrator-Account ist.
+async function _adminSetFirebasePw(id,newPw){
+  const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
+  const tok=await me.getIdToken();
+  const r=await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({action:'set',id,newPw})});
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':('Server: '+(j.error||r.status)));
+}
+
 export async function resetUserPassword(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   const u=getUser(id); if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
-  if(!confirm('Einmal-Passwort für '+(u.name||id)+' erzeugen?\n\nDas bisherige Passwort wird ungültig. '+(u.name||'Die Person')+' meldet sich mit dem neuen Passwort an und ändert es danach im Profil.')) return;
+  if(!confirm('Neues Startpasswort für '+(u.name||id)+' erzeugen?\n\nDas bisherige Passwort wird ungültig. '+(u.name||'Die Person')+' meldet sich mit dem neuen Passwort an und ändert es danach im Profil.')) return;
   let temp, hash;
   try{ temp=_genTempPw(); hash=await makePwRecord(temp); }
   catch(e){ toast('Fehler beim Erzeugen: '+((e&&e.message)||e),'err'); return; }
-  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; }); }
-  catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||e),'err'); return; }
-  openModal(`<h3>🔑 Einmal-Passwort</h3>
-    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich weitergeben – Anmeldung mit <b>Name + diesem Passwort</b>, danach im Profil ändern.</p>
+  // Zuerst das Firebase-Konto (sonst griffe nur der App-Hash und die Anmeldung scheiterte).
+  toast('Setze Passwort …','');
+  try{ await _adminSetFirebasePw(id,temp); }
+  catch(e){ openModal(`<h3>Passwort konnte nicht gesetzt werden</h3><p style="font-size:13px;color:var(--danger)">${esc((e&&e.message)||String(e))}</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">OK</button></div>`); return; }
+  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; if(d.pwResetRequests&&d.pwResetRequests[id]) delete d.pwResetRequests[id]; }); }
+  catch(e){ toast('Firebase-Passwort gesetzt, App-Passwort aber nicht gespeichert: '+((e&&e.message)||e),'err'); return; }
+  try{ window._refreshVerwUsers&&window._refreshVerwUsers(); }catch(_){}
+  openModal(`<h3>🔑 Neues Startpasswort</h3>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich oder telefonisch weitergeben – Anmeldung mit <b>Name + diesem Passwort</b>, danach im Profil ändern.</p>
     <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
-    <p style="font-size:12px;color:var(--muted);margin:12px 0 0">Klappt die Anmeldung damit nicht, ist das Konto bereits auf ein eigenes Firebase-Passwort „migriert" – dann ist ein Reset am Firebase-Konto nötig (Sonderfall, wie bei Jörg).</p>
     <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+}
+
+// Offene „Passwort vergessen"-Anfragen (vom Login-Bildschirm) – für die Verwaltung, nur Admin.
+export function pwRequestsHtml(){
+  const cu=window.cu; if(!_canVerwaltung(cu)) return '';
+  const req=getData().pwResetRequests||{};
+  const list=Object.entries(req).filter(([id,r])=>r&&getUser(id)).sort((a,b)=>(b[1].at||0)-(a[1].at||0));
+  if(!list.length) return '';
+  return `<div class="crm-sec" style="border:2px solid var(--warn)"><h4><span class="ttl">🔑 Passwort-Anfragen (${list.length})</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Diese Personen haben „Passwort vergessen" gewählt. „Neues Startpasswort" setzt das Passwort und zeigt es dir zur Weitergabe an.</div>
+    <table class="vw-table"><tbody>${list.map(([id,r])=>`<tr>
+      <td><span class="vw-name">${esc(getUser(id).name||id)}</span></td>
+      <td class="small" style="color:var(--muted)">${r.at?new Date(r.at).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):''}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn-sm-crm primary" onclick="resetUserPassword('${esc(id)}')">🔑 Neues Startpasswort</button>
+        <button class="btn-sm-crm" onclick="dismissPwRequest('${esc(id)}')">Verwerfen</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+export function dismissPwRequest(id){
+  if(!_canVerwaltung(window.cu)) return;
+  mutate(d=>{ if(d.pwResetRequests&&d.pwResetRequests[id]) delete d.pwResetRequests[id]; });
+  try{ window._refreshVerwUsers&&window._refreshVerwUsers(); }catch(_){}
 }
 
 // ── Konten prüfen (nur Administrator) ─────────────────────────────────────────────────

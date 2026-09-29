@@ -1,5 +1,5 @@
 import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
-         EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL } from './config.js';
+         EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL, PW_FUNCTION_URL } from './config.js';
 import { getData, getUser, mutate, setUserFields, setDataCache } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 import { getLoginDirUsers, authenticate } from './firebase.js';
@@ -249,7 +249,45 @@ function _genResetToken(){
   return Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// „Passwort vergessen" (Stufe 1): Anfrage an den Administrator über die Cloud Function tpsPw.
+// Der Administrator vergibt dann in der Verwaltung ein neues Startpasswort (setzt App-Hash UND
+// Firebase-Konto-Passwort). Keine E-Mail nötig, kein Passwort über ungeprüfte Wege.
 export function showForgotPassword(){
+  const pre=(document.getElementById('login-user-input')?.value||'').trim();
+  openModal(`<h3>🔑 Passwort vergessen?</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Gib deinen Namen ein. Der Administrator bekommt eine Anfrage und gibt dir ein neues Startpasswort – persönlich oder telefonisch.</p>
+    <div class="form-group">
+      <label for="reset-name">Dein Name</label>
+      <input type="text" id="reset-name" value="${esc(pre)}" list="reset-name-list" autocomplete="off" placeholder="Vorname Nachname"
+             onkeydown="if(event.key==='Enter') requestPwReset()">
+      <datalist id="reset-name-list">${(_loginUsers||[]).map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist>
+    </div>
+    <div id="reset-msg" style="margin-top:8px"></div>
+    <div class="modal-btns" id="reset-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="requestPwReset()">Anfrage senden</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('reset-name')?.focus(),100);
+}
+
+export async function requestPwReset(){
+  const name=(document.getElementById('reset-name')?.value||'').trim();
+  const msgEl=document.getElementById('reset-msg'), btnsEl=document.getElementById('reset-btns');
+  if(!name){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Bitte deinen Namen eingeben.</div>'; return; }
+  const u=(_loginUsers||[]).find(x=>String(x.name).toLowerCase()===name.toLowerCase());
+  btnsEl.innerHTML='<div style="font-size:13px;color:var(--muted)">⏳ Wird gesendet…</div>';
+  try{
+    // Unbekannte Namen werden gar nicht erst gesendet – die Antwort ist trotzdem dieselbe.
+    if(u){ await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'request',id:u.id})}); }
+    btnsEl.innerHTML='<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">✅ Anfrage gesendet. Der Administrator meldet sich mit einem neuen Startpasswort bei dir.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
+  }catch(e){
+    btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">Anfrage konnte nicht gesendet werden (keine Verbindung?). Bitte wende dich direkt an den Administrator.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
+  }
+}
+
+// Alter E-Mail-Link-Ablauf (EmailJS, Freikontingent aufgebraucht, setzte nur den App-Hash und
+// nicht das Firebase-Passwort – funktionierte daher nicht). Bleibt nur als Rückfall erhalten.
+export function showForgotPasswordLegacy(){
   if(!_emailjsReady()){
     // Fallback: show admin contact if EmailJS not configured
     let users=[];
@@ -334,6 +372,12 @@ export async function checkPasswordResetToken(){
   const token=params.get('pw_reset');
   if(!token) return;
   window.history.replaceState({},'',window.location.pathname);
+  // Alte Reset-Links (E-Mail-Ablauf) funktionieren nicht mehr – auf die neue Anfrage verweisen.
+  openModal(`<h3>Link nicht mehr gültig</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Passwörter werden jetzt über den Administrator zurückgesetzt.</p>
+    <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal();showForgotPassword()">Neues Passwort anfragen</button></div>`);
+  return;
+  // eslint-disable-next-line no-unreachable
   try{
     const snap=await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).once('value');
     const data=snap.val();
