@@ -421,9 +421,16 @@
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('service-worker.js').then(function(reg){
-      try{ reg.update(); }catch(e){} // beim Laden einmal auf neue Version pruefen
-      // Stündlich auf allen Geräten nach einer neuen Version fragen (offene Tabs/PWA laufen sonst tagelang alt).
-      setInterval(function(){ try{ reg.update(); }catch(e){} }, 60*60*1000);
+      var lastCheck=0;
+      function check(){ lastCheck=Date.now(); try{ reg.update(); }catch(e){} }
+      check(); // beim Laden einmal auf neue Version pruefen
+      // Alle 15 Min. auf allen Geräten nach einer neuen Version fragen (offene Tabs/PWA laufen sonst tagelang alt).
+      setInterval(check, 15*60*1000);
+      // Zusätzlich beim Zurückkehren in die App/den Tab (auf dem Handy laufen Timer im
+      // Hintergrund nicht zuverlässig) – höchstens einmal pro Minute.
+      function onReturn(){ if(!document.hidden && Date.now()-lastCheck>60*1000) check(); }
+      document.addEventListener('visibilitychange',onReturn);
+      window.addEventListener('focus',onReturn);
     }).catch(function(){});
   });
   // Neuladen NUR, wenn eine neue Version da ist UND es niemanden stört (kein Aufblitzen mitten
