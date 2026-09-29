@@ -49,3 +49,18 @@ Normale Nutzer werden über Kind-`.write`-Regeln nur für ihre Knoten freigescha
 - Admin → `cats` / `users` / `loginDir`: ERLAUBT.
 - GF → `vertretungen`: ERLAUBT; Nicht-GF/Nicht-Admin: VERWEIGERT.
 - Lesen (allowlistet) ganzes `zeiterfassung`: ERLAUBT; `loginDir` ohne Auth: ERLAUBT.
+
+## Storage-Regeln (STORAGE.rules)
+Firebase Storage (Bucket `zeiterfassung-tps.firebasestorage.app`, angelegt 2026-09-29, Blaze).
+Live nur in der Konsole unter Storage → Rules; `STORAGE.rules` ist die Referenz.
+- `backups/**`: automatische App-Backups (`js/backup.js`). Jedes angemeldete Gerät darf das
+  Tages-Backup NEU anlegen (nie überschreiben); Lesen/Löschen nur `admin@tps.intern`.
+- `crm-anlagen/<nodeId>/<datei>`: CRM-Dateianhänge, angemeldete Nutzer, max. 15 MB.
+- alles andere gesperrt.
+
+## Backups (Stand 2026-09-29)
+1. **Firebase (Konsole → Realtime Database → Backups):** täglich automatisch, Daten + Regeln,
+   gzip, 30 Tage Aufbewahrung, Bucket `zeiterfassung-tps-default-rtdb-backups`.
+2. **App (`js/backup.js`):** erstes Gerät des Tages lädt den Server-Stand (ZE + CRM) nach
+   `backups/daily/<YYYY-MM-DD>.json`. Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft
+   (ArbZG ≥ 2 Jahre). Einsehen/Laden: Verwaltung → Daten & Backup → „☁ Automatische App-Backups".

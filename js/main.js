@@ -71,6 +71,7 @@ import './crm/kalender.js';
 
 // ── Sicherheits-Setup (Cutover-Provisionierung: loginDir + allowed) ──
 import './admin-setup.js';
+import './backup.js';   // Automatisches Tages-Backup nach Firebase Storage (registriert window.runAutoBackup)
 
 // ══════════════════════════════════════════════════════════════════
 // Expose everything to window (for inline onclick handlers in HTML)

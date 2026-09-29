@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Firebase Storage – TPS Zeiterfassung
+// Live NUR in der Firebase-Konsole (Storage → Rules); diese Datei ist die versionierte Referenz.
+//
+// Storage-Regeln können die Realtime Database (allowed/admins) NICHT abfragen. Das Admin-Recht
+// hängt daher am technischen Anmeldekonto des Administrators: admin@tps.intern
+// (Schema <id>@tps.intern, siehe js/firebase.js).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin()  { return signedIn() && request.auth.token.email == 'admin@tps.intern'; }
+
+    // ── Automatische App-Backups (js/backup.js) ─────────────────────────────
+    // Jedes angemeldete Gerät darf das Tages-Backup ANLEGEN (nur neu, nie überschreiben –
+    // ein bestehendes Backup kann also nicht manipuliert werden). Lesen, Auflisten und
+    // Löschen (Aufbewahrung) nur der Administrator-Account.
+    match /backups/{file=**} {
+      allow create: if signedIn()
+                    && request.resource.size < 25 * 1024 * 1024
+                    && request.resource.contentType == 'application/json';
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // ── CRM-Dateianhänge (js/crm/crm.js: crm-anlagen/<nodeId>/<zeit>_<name>) ──
+    match /crm-anlagen/{nid}/{file} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.resource.size < 15 * 1024 * 1024;
+      allow delete: if signedIn();
+      allow update: if false;
+    }
+
+    // Alles andere: gesperrt.
+    match /{other=**} {
+      allow read, write: if false;
+    }
+  }
+}

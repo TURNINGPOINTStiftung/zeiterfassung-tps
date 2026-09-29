@@ -10,7 +10,7 @@
 window.firebase = { initializeApp(){}, database(){ return { ref(){ return { once(){return Promise.resolve({val:()=>null})}, on(){}, child(){return this}, set(){return Promise.resolve()} }; } }; }, auth(){ return { signInAnonymously(){return Promise.resolve()} }; } };
 const mods = [
   'config','utils','data','roles','calc','cats','auth','firebase','app','zoom','print','import-data','data-mgmt','profile','admin-setup',
-  'views/zeiterfassung','views/uebersicht','views/abwesenheiten','views/stempeln','views/gfberichte','views/einstellungen'
+  'backup','views/zeiterfassung','views/uebersicht','views/abwesenheiten','views/stempeln','views/gfberichte','views/einstellungen'
 ];
 (async () => {
   const errs = [];
