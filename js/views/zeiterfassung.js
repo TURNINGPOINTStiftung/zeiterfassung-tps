@@ -381,15 +381,7 @@ function renderActionBar(uid,user,entry,isLeiter){
     const rst=document.getElementById('carryover-reset');
     if(rst) rst.style.display=(isManual&&!_locked)?'inline-flex':'none';
   }
-  let extraBtns='';
-  if(cu.role==='admin'&&cu.id!==uid){
-    const un=user.name.toLowerCase();
-    const hasHist=typeof window.HIST_IMPORT!=='undefined'&&window.HIST_IMPORT.some(rec=>{
-      const rn=rec.n.toLowerCase();
-      return rn===un||rn.split(' ').every(p=>un.includes(p))||un.split(' ').every(p=>rn.includes(p));
-    });
-    if(hasHist) extraBtns=`<button class="btn btn-outline btn-sm" onclick="importHistForUser('${uid}')" style="font-size:12px">📋 Hist. Daten laden (Jan–Apr 2026)</button>`;
-  }
+  const extraBtns='';   // (historischer Import Jan–Apr 2026 abgeschlossen und entfernt)
   if(isLeiter&&cu.role!=='admin'&&cu.id!==uid){ btns.innerHTML=extraBtns; return; }
   if(cu.id===uid||cu.role==='admin'){
     // Leitung reicht den EIGENEN Monat ein → privat vom GF, aber Einreichen möglich

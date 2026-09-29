@@ -51,7 +51,6 @@ import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, s
 import { printFull, printBuchhaltung, printTeamBuchhaltung,
          _openPerEmpPrint, _teamReportStyle, renderBuchhaltungHTML } from './print.js';
 
-import { importHistorical, importHistForUser } from './import-data.js';
 import { hasPermission } from './roles.js';
 import './messe.js';   // Messemodus (registriert window.messeStart etc.)
 import { exportData, exportAllData, exportCrmOnly, importData, resetData,
@@ -239,8 +238,6 @@ window._teamReportStyle      = _teamReportStyle;
 window.renderBuchhaltungHTML = renderBuchhaltungHTML;
 
 // Import / data management
-window.importHistorical      = importHistorical;
-window.importHistForUser     = importHistForUser;
 window.hasPermission         = hasPermission;
 window.submitBtn             = submitBtn;
 window.exportData            = exportData;
