@@ -524,13 +524,83 @@ function _localPersist(d){
   noteGoodData(d);
 }
 function _cloudUpdate(upd){
-  // Cloud-Schutz wie in saveRaw: unbestätigt/offline → nur lokal, Rest per Listener/Reconnect.
+  // Cloud-Schutz wie in saveRaw: unbestätigt → nur lokal (Stand könnte aus Defaults stammen).
   if(window._cloudUnverified && !window._allowDataShrink) return Promise.resolve();
-  if(window._offlineMode){ window._pendingSync=true; return Promise.resolve(); }
-  const ref=window._fbRef; if(!ref) return Promise.resolve();
   try{ upd=JSON.parse(JSON.stringify(upd)); }catch(e){}   // undefined entfernen (Firebase wirft sonst)
-  let p; try{ p=ref.update(upd); }catch(e){ window._pendingSync=true; return Promise.resolve(); }
-  return (p||Promise.resolve()).catch(e=>{ console.warn('Firebase scoped-sync error:',e); window._pendingSync=true; });
+  // Offline → gezielte Pfade in die (reload-feste) Warteschlange statt „alles später neu schreiben".
+  if(window._offlineMode){ _queuePending(upd); return Promise.resolve(); }
+  const ref=window._fbRef; if(!ref) return Promise.resolve();
+  let p; try{ p=ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
+  return (p||Promise.resolve()).catch(e=>{
+    console.warn('Firebase scoped-sync error:',e);
+    // Regel-Ablehnung wird durch Wiederholen nicht besser → nicht einreihen, aber sichtbar melden.
+    if(e && /permission/i.test(String(e.code||e.message))){ try{ window.toast?.('⛔ Änderung vom Server abgelehnt (keine Berechtigung).','err'); }catch(_){} return; }
+    _queuePending(upd);
+  });
+}
+
+// ── Warteschlange nicht übertragener Änderungen (Offline / Netzfehler) ──────────────────
+// Liegt im localStorage → übersteht Neuladen/App-Neustart. Enthält NUR die gezielten Pfade der
+// tatsächlich geänderten Felder (kein Voll-Bestand) → beim Nachholen kann nichts Fremdes
+// überschrieben werden, und es passt zu Server-Regeln, die nur eigene Einträge erlauben.
+const _PENDING_KEY='tp_zt_pending';
+function _readPending(){ try{ return JSON.parse(localStorage.getItem(_PENDING_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function _writePending(q){ try{ if(Object.keys(q).length) localStorage.setItem(_PENDING_KEY, JSON.stringify(q)); else localStorage.removeItem(_PENDING_KEY); }catch(e){} _pendingBadge(q); }
+// Firebase update() verbietet Vorfahr- UND Nachfahr-Pfad im selben Aufruf → beim Einreihen auflösen:
+// neuer Pfad ersetzt seine Nachfahren; liegt er unter einem vorhandenen Pfad, wird der Wert dort
+// hineingeschrieben.
+function _queuePending(upd){
+  const q=_readPending();
+  for(const [path,val] of Object.entries(upd||{})){
+    const anc=Object.keys(q).find(k=>path.startsWith(k+'/'));
+    if(anc){
+      let base=q[anc]; if(base===null||typeof base!=='object') base={};
+      let o=base; const parts=path.slice(anc.length+1).split('/');
+      for(let i=0;i<parts.length-1;i++){ if(o[parts[i]]===null||typeof o[parts[i]]!=='object') o[parts[i]]={}; o=o[parts[i]]; }
+      o[parts[parts.length-1]]=val; q[anc]=base;
+      continue;
+    }
+    Object.keys(q).forEach(k=>{ if(k.startsWith(path+'/')) delete q[k]; });
+    q[path]=val;
+  }
+  _writePending(q);
+}
+export function pendingCount(){ return Object.keys(_readPending()).length; }
+let _flushing=false;
+export function flushPendingWrites(){
+  const q=_readPending(); const n=Object.keys(q).length;
+  _pendingBadge(q);
+  if(!n||_flushing||window._offlineMode||window._cloudUnverified) return Promise.resolve();
+  const ref=window._fbRef; if(!ref) return Promise.resolve();
+  _flushing=true;
+  let p; try{ p=ref.update(q); }catch(e){ _flushing=false; return Promise.resolve(); }
+  return p.then(()=>{
+    // Nur die übertragenen Pfade entfernen (währenddessen neu Eingereihtes bleibt erhalten).
+    const cur=_readPending(); Object.keys(q).forEach(k=>{ if(_eqJSON(cur[k],q[k])) delete cur[k]; }); _writePending(cur);
+    try{ window.toast?.('📶 '+n+' Offline-Änderung'+(n===1?'':'en')+' synchronisiert ✓','ok'); }catch(_){}
+  }).catch(e=>{
+    console.warn('Nachholen fehlgeschlagen:',e);
+    if(e && /permission/i.test(String(e.code||e.message))){
+      // Vom Server abgelehnt → nicht endlos wiederholen; zur Diagnose aufheben.
+      try{ localStorage.setItem(_PENDING_KEY+'_rejected', JSON.stringify(q)); }catch(_){}
+      _writePending({});
+      try{ window.toast?.('⛔ '+n+' Offline-Änderung(en) vom Server abgelehnt (keine Berechtigung).','err'); }catch(_){}
+    }
+  }).finally(()=>{ _flushing=false; });
+}
+// Dauerhafte Anzeige, solange Änderungen noch nicht auf dem Server sind.
+function _pendingBadge(q){
+  try{
+    const n=Object.keys(q||_readPending()).length;
+    let b=document.getElementById('sync-badge');
+    if(!n){ if(b) b.remove(); return; }
+    if(!b){ b=document.createElement('div'); b.id='sync-badge';
+      b.style.cssText='position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:300;background:#fff3cd;color:#856404;border:1.5px solid #e0a800;border-radius:18px;padding:6px 12px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer';
+      b.title='Diese Änderungen sind nur auf diesem Gerät gespeichert und werden übertragen, sobald wieder eine Verbindung besteht. Klicken = jetzt versuchen.';
+      b.onclick=()=>flushPendingWrites();
+      document.body.appendChild(b); }
+    b.textContent='⏳ '+n+' Änderung'+(n===1?'':'en')+' nicht synchronisiert';
+  }catch(e){}
 }
 // Pfade eines KOMPLETTEN Entry (nur nötig, wenn der Entry neu ist – analog fbWriteMerge, aber nur DIESER Entry).
 function _entryPaths(k, entry){

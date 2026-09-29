@@ -1,5 +1,5 @@
 import { STORAGE_KEY, _STAMP_KEY, _PW_SALT } from './config.js';
-import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge, mergeIncoming } from './data.js';
+import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge, mergeIncoming, flushPendingWrites, isAdminAccount } from './data.js';
 import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
@@ -210,7 +210,7 @@ export async function loadFullData(){
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
     if(!hadAbsV3&&migrated._fixes&&migrated._fixes.absSpecV3) needsSave=true;
     if(!hadVANoPause&&migrated._fixes&&migrated._fixes.veranstaltungNoPauseV1) needsSave=true;
-    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode) await fbWriteMerge(migrated).catch(()=>{}); }
+    if(needsSave){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));}catch(e){} if(!window._offlineMode&&isAdminAccount()) await fbWriteMerge(migrated).catch(()=>{}); }   // Voll-Write nur Administrator (sonst würden fremde Einträge mitgeschrieben)
   } else if(!window._offlineMode){
     // Kein brauchbarer Datenstand geladen. WICHTIG: Der Client schreibt Default-User NIEMALS
     // automatisch in die Cloud. Ein leerer/fehlgeschlagener Read (auch fbData==null) darf echte
@@ -237,6 +237,8 @@ function _applyFirebaseSnap(val){
   if(!val||!getData()) return;
   // Echter Cloud-Stand ist da → „unbestätigt"-Sperre aufheben (Writes dürfen wieder in die Cloud).
   if(Array.isArray(val.users)&&val.users.length>0) window._cloudUnverified=false;
+  // Cloud bestätigt → evtl. noch offene (offline eingereihte) Änderungen gezielt nachholen.
+  try{ flushPendingWrites(); }catch(e){}
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
@@ -249,7 +251,7 @@ function _applyFirebaseSnap(val){
   // Migration-Flags nach Firebase schreiben damit sie nicht wiederholt laufen
   if((!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1)||
      (!hadB2Mig&&migrated._fixes&&migrated._fixes.b2PauseMigrationV1)){
-    fbWriteMerge(migrated).catch(()=>{});
+    if(isAdminAccount()) fbWriteMerge(migrated).catch(()=>{});   // nur Administrator: Voll-Write
   }
   if(window.cu&&!(migrated.stamps&&migrated.stamps[window.cu.id])){
     try{ localStorage.removeItem(_STAMP_KEY); }catch(e){}
@@ -293,8 +295,12 @@ export function initFirebaseEvents(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
-    if(window._pendingSync&&getData()&&!window._cloudUnverified){
-      fbWriteMerge(getData()).then(()=>{ window._pendingSync=false; window.toast?.('📶 Offline-Änderungen synchronisiert ✓','ok'); }).catch(()=>{});
+    // Gezielt nur die offline eingereihten Pfade nachholen (kein Voll-Bestand mehr).
+    flushPendingWrites();
+    // Voll-Schreibvorgang (Fallback aus saveRaw) nur noch als Administrator-Account –
+    // er würde sonst fremde Einträge mitschreiben.
+    if(window._pendingSync&&getData()&&!window._cloudUnverified&&isAdminAccount()){
+      fbWriteMerge(getData()).then(()=>{ window._pendingSync=false; }).catch(()=>{});
     }
   });
   window.addEventListener('offline',()=>{
