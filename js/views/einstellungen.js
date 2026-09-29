@@ -7,7 +7,9 @@ import { getTeams, getCatsForTeam } from '../cats.js';
 import { vacDailyMin } from '../calc.js';
 
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
-const _canVerwaltung = cu => !!(cu && (cu.role==='admin' || hasPermission('zugriff_verwaltung', cu)));
+// Schreibende Verwaltungs-Aktionen (Nutzer, Passwörter, Konten, Datenkorrekturen) nur noch
+// über den Account „Administrator" – delegierter Verwaltungs-Zugriff darf ansehen, nicht ändern.
+const _canVerwaltung = cu => !!(cu && cu.role==='admin');
 
 // Pfade für persönliche „Modul-Zugriff"-Ausnahmen (spiegelt die Zugriffs-Matrix im CRM).
 // u.perms['path_<key>']=true|false übersteuert die Rollen-Matrix für DIESE Person; fehlt = Standard.
@@ -421,7 +423,7 @@ export function showEditDpw(id){
   const cu=window.cu;
   const u=getUser(id);
   if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
-  if(cu.role!=='admin'&&!(cu.role==='leitung'&&canSeeEmployee(cu,u))){ toast('Kein Zugriff.','err'); return; }
+  if(cu.role!=='admin'){ toast('Nur der Administrator-Account darf Nutzerdaten ändern.','err'); return; }
   openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${u.wh||0}&thinsp;h/Woche</p>
     <div class="form-group">
@@ -435,6 +437,7 @@ export function showEditDpw(id){
 }
 
 export function saveEditDpw(id){
+  if(!_canVerwaltung(window.cu)){ toast('Nur der Administrator-Account darf Nutzerdaten ändern.','err'); return; }
   const val=parseInt(document.getElementById('edit-dpw-val').value)||5;
   if(val<1||val>7){ toast('Bitte einen Wert zwischen 1 und 7 eingeben.','err'); return; }
   mutate(d=>{ const u=d.users.find(x=>x.id===id); if(u) u.dpw=val; });
@@ -785,6 +788,7 @@ function collectUserForm(){
 }
 
 export async function saveNewUser(){
+  if(!_canVerwaltung(window.cu)){ toast('Nur der Administrator-Account darf Mitarbeiter anlegen.','err'); return; }
   const u=collectUserForm();
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
@@ -808,6 +812,7 @@ export async function saveNewUser(){
 
 export async function saveEditUser(id){
   const cu=window.cu;
+  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
   const u=collectUserForm(); u.id=id;
   if(id==='admin') u.role='admin';
   if(u.pw){ u.pw=await makePwRecord(u.pw); }

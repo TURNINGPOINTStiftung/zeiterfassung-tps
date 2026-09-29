@@ -151,7 +151,7 @@ export function renderOverview(){
     const curEntry=d.entries[entryKey(u.id,oy,om)]||{};
     const curIST=monthIST(curEntry,u);
     const curCarry=getEffectiveCarryH(u.id,u,oy,om);
-    const canEditDpw=cu.role==='admin'||(cu.role==='leitung'&&canSeeEmployee(cu,u));
+    const canEditDpw=cu.role==='admin';   // Nutzerdaten ändert nur noch der Administrator-Account
     const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw('${u.id}')">✏ ${u.dpw||5} Tage/Wo</button>`:'';
     const curStatus=curEntry.status||'draft';
     const isClickable=curStatus==='submitted'||curStatus==='approved'||curStatus==='rejected'||cu.role==='admin';

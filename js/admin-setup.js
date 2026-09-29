@@ -32,12 +32,12 @@ function _secApp(){
 
 // ── Rollen-Klassifikation für die Allowlist-Knoten (spiegelt die Server-Regeln) ────
 // admins   = darf ALLE Config-Knoten schreiben (users/Rollen/Teams/loginDir/allowed/…)
-//            → role 'admin' ODER Berechtigung 'zugriff_verwaltung'.
+//            → NUR noch der Account „Administrator" (role 'admin'). Delegierter
+//              Verwaltungs-Zugriff (zugriff_verwaltung) zählt bewusst NICHT mehr – Schutz
+//              gegen Überspielen der Nutzerliste von fremden Geräten (Mojibake-Vorfall).
 // gfAdmins = darf zusätzlich Vertretungen schreiben → GF (Admins zählen mit).
 function _isAdminUser(u){
-  if(!u) return false;
-  if(u.role==='admin') return true;
-  try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', u)); }catch(_){ return false; }
+  return !!(u && u.role==='admin');
 }
 function _isGfUser(u){
   if(!u) return false;

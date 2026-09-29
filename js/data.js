@@ -39,10 +39,15 @@ export function _usersPoisoned(users){
 //                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
 const _CONFIG_NODES     = new Set(['users','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
 const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','uidUser']);
-function _isAdminLike(){
+// Config-Knoten (Nutzer, Teams, Kategorien, Rollen, Rechte) darf NUR noch der Account
+// „Administrator" schreiben – nicht mehr Personen mit delegiertem Verwaltungs-Zugriff.
+// Schützt vor dem Überspielen der Nutzerliste durch ein Gerät mit veraltetem/verstümmeltem
+// Cache (Umlaut-/Mojibake-Vorfall). Ausnahme: Vertretungen darf zusätzlich der GF pflegen.
+export function isAdminAccount(cu){ cu=cu||window.cu; return !!(cu && cu.role==='admin'); }
+function _mayWriteConfig(k){
   const cu=window.cu; if(!cu) return false;
   if(cu.role==='admin') return true;
-  try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(_){ return false; }
+  return k==='vertretungen' && cu.role==='geschaeftsfuehrer';
 }
 
 export function freshData(){
@@ -310,14 +315,13 @@ export function fbWriteMerge(d){
   // ganze Speichern mit „Speichern fehlgeschlagen" scheitern. JSON-Roundtrip entfernt undefined
   // zuverlässig (undefined-Objektschlüssel fallen weg). Firebase kann undefined ohnehin nicht speichern.
   try{ d = JSON.parse(JSON.stringify(d)); }catch(e){}
-  const adminLike=_isAdminLike();
   const upd={};
   for(const k of Object.keys(d)){
     // Sicherheits-/Identitäts-Knoten nie aus dem Blob schreiben (nur das Setup pflegt sie).
     if(_NEVER_BLOB_NODES.has(k)) continue;
-    // Config-Knoten nur als Admin/Verwaltung – sonst würde die atomare update()-Operation an
-    // der Server-Regel scheitern und ALLE (auch die erlaubten) Pfade mitreißen.
-    if(_CONFIG_NODES.has(k) && !adminLike) continue;
+    // Config-Knoten nur als Administrator-Account – sonst würde die atomare update()-Operation
+    // an der Server-Regel scheitern und ALLE (auch die erlaubten) Pfade mitreißen.
+    if(_CONFIG_NODES.has(k) && !_mayWriteConfig(k)) continue;
     if(k==='entries'){
       const es=d.entries||{};
       for(const ek of Object.keys(es)){
@@ -401,7 +405,7 @@ export function saveRaw(d){
 //  • pro Feld gilt „neuere Zeitmarke gewinnt" (siehe mergeIncoming beim Lesen).
 // Baut ein Firebase-update aus den Unterschieden. Tage feld-genau, entries/stamps/vac/
 // teamReports/yearReports pro Kind, alles Übrige (users[], teams, cats …) als ganzer Schlüssel.
-function _diffToUpdate(before, after){
+function _diffToUpdate(before, after, blocked){
   const upd={}; const B=before||{}, A=after||{};
   const _childDiff=(name)=>{ const bo=B[name]||{}, ao=A[name]||{};
     for(const ck of new Set([...Object.keys(bo),...Object.keys(ao)])){
@@ -433,6 +437,11 @@ function _diffToUpdate(before, after){
       }
     } else if(key==='stamps'||key==='vacRequests'||key==='teamReports'||key==='yearReports'){
       _childDiff(key);
+    } else if(_NEVER_BLOB_NODES.has(key)){
+      // Sicherheits-Knoten nie über mutate (nur admin-setup.js schreibt sie gezielt).
+    } else if(_CONFIG_NODES.has(key) && !_mayWriteConfig(key)){
+      // Nur der Administrator-Account darf Config-Knoten ändern → nicht schreiben, melden.
+      if(blocked && !_eqJSON(B[key],A[key])) blocked.push(key);
     } else if(key==='users' && _usersPoisoned(A.users)){
       // Schutz: verstümmelten users-Array NICHT schreiben (Server-Stand bleibt intakt).
       console.warn('[Schutz] users-Diff nicht geschrieben (Mojibake erkannt).');
@@ -455,8 +464,16 @@ export function mutate(fn){
       return Promise.reject(new Error('data-shrink-guard'));
     }
   }
+  const blocked=[];
+  const upd = before ? _diffToUpdate(before, d, blocked) : null;
+  if(blocked.length){
+    // Verweigerte Config-Änderung auch lokal zurücknehmen, damit die Anzeige nicht
+    // einen Stand zeigt, der nie gespeichert wurde.
+    blocked.forEach(k=>{ if(before[k]===undefined) delete d[k]; else d[k]=before[k]; });
+    console.warn('[Schutz] Nur Administrator-Account darf schreiben:', blocked.join(', '));
+    try{ window.toast?.('⛔ Nicht gespeichert – Nutzer, Teams, Kategorien und Rollen kann nur der Administrator-Account ändern.','err'); }catch(_){}
+  }
   _localPersist(d);
-  const upd = before ? _diffToUpdate(before, d) : null;
   if(upd===null) return saveRaw(d);              // Fallback (Clone fehlgeschlagen): wie bisher
   if(!Object.keys(upd).length) return Promise.resolve();
   return _cloudUpdate(upd);
