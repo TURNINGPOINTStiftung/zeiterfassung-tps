@@ -44,6 +44,11 @@ function _isGfUser(u){
   if(u.role==='geschaeftsfuehrer') return true;
   return _isAdminUser(u);
 }
+// managers = darf FREMDE Zeiteinträge/Abwesenheiten/Berichte schreiben (genehmigen, Abwesenheiten
+// eintragen, Teamberichte) → Leitung, GF, Admin. Vertretungen sind faktisch immer Leitung/GF.
+function _isManagerUser(u){
+  return !!(u && (u.role==='leitung' || u.role==='geschaeftsfuehrer' || u.role==='admin'));
+}
 
 export async function runSecuritySetup(opts){
   opts=opts||{};
@@ -64,6 +69,7 @@ export async function runSecuritySetup(opts){
   const uidUser={};   // Auth-UID → App-Nutzer-ID (für Eigentümer-/Rollen-Auflösung in den Regeln)
   const admins={};    // Auth-UID → true, falls Admin/Verwaltung
   const gfAdmins={};  // Auth-UID → true, falls GF (oder Admin)
+  const managers={};  // Auth-UID → true, falls Leitung/GF/Admin (fremde Einträge schreiben)
   let created=0, existing=0, skipped=0, failed=0;
   const problems=[];
 
@@ -89,6 +95,7 @@ export async function runSecuritySetup(opts){
       allowed[uid]=true;
       uidUser[uid]=id;
       if(_isAdminUser(u)) admins[uid]=true;
+      if(_isManagerUser(u)) managers[uid]=true;
       if(_isGfUser(u))    gfAdmins[uid]=true;
     }
     log(`${id}: ${uid?('uid '+uid.slice(0,6)+'…'):'FEHLER'}`);
@@ -98,7 +105,7 @@ export async function runSecuritySetup(opts){
   // Selbstschutz: der/die ausführende Admin bleibt in jedem Fall Admin – sonst könnte ein
   // Setup-Lauf, der die eigene UID (z. B. weil „bereits eingerichtet" übersprungen) nicht
   // erfasst, den Admin nach dem Regel-Cutover vom Config-Schreiben aussperren.
-  try{ const me=firebase.auth().currentUser; if(me && _isAdminUser(window.cu)){ admins[me.uid]=true; uidUser[me.uid]=window.cu.id; if(_isGfUser(window.cu)) gfAdmins[me.uid]=true; } }catch(_){}
+  try{ const me=firebase.auth().currentUser; if(me && _isAdminUser(window.cu)){ admins[me.uid]=true; managers[me.uid]=true; uidUser[me.uid]=window.cu.id; if(_isGfUser(window.cu)) gfAdmins[me.uid]=true; } }catch(_){}
 
   // Mit der Admin-Sitzung schreiben (Regeln verlangen allowlisteten Nutzer).
   // update() = additiv: bereits vorhandene Einträge anderer Nutzer bleiben erhalten.
@@ -107,6 +114,7 @@ export async function runSecuritySetup(opts){
   await db.ref('zeiterfassung/uidUser').update(uidUser);
   await db.ref('zeiterfassung/admins').update(admins);
   await db.ref('zeiterfassung/gfAdmins').update(gfAdmins);
+  await db.ref('zeiterfassung/managers').update(managers);
 
   const summary={ users:users.length, created, existing, skipped, failed, allowlistedNew:Object.keys(allowed).length, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, uidMapped:Object.keys(uidUser).length, problems };
   log('Fertig: '+JSON.stringify(summary));
@@ -143,6 +151,7 @@ export async function reprovisionUser(id){
     // admins/gfAdmins passend zur Rolle setzen (null = entfernen, falls herabgestuft).
     await db.ref('zeiterfassung/admins').update({ [uid]: _isAdminUser(u)?true:null });
     await db.ref('zeiterfassung/gfAdmins').update({ [uid]: _isGfUser(u)?true:null });
+    await db.ref('zeiterfassung/managers').update({ [uid]: _isManagerUser(u)?true:null });
   }
   return { id, uid, email:em, note };
 }
@@ -165,20 +174,22 @@ export async function refreshPermissionAllowlists(opts){
   const uidMap=(await db.ref('zeiterfassung/uidUser').once('value')).val()||{};
   if(!uidMap||!Object.keys(uidMap).length) throw new Error('uidUser ist leer – bitte zuerst das Sicherheits-Setup / Cutover-Seeding ausführen.');
   const byId={}; (data.users||[]).forEach(u=>{ if(u&&u.id) byId[u.id]=u; });
-  const admins={}, gfAdmins={};
+  const admins={}, gfAdmins={}, managers={};
   let mapped=0, orphan=0;
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id];
     if(!u){ orphan++; continue; }
     if(_isAdminUser(u)) admins[uid]=true;
+    if(_isManagerUser(u)) managers[uid]=true;
     if(_isGfUser(u))    gfAdmins[uid]=true;
     mapped++;
   }
   // Selbstschutz: ausführende:r Admin bleibt Admin.
-  try{ const me=firebase.auth().currentUser; if(me && _isAdminUser(window.cu)){ admins[me.uid]=true; if(_isGfUser(window.cu)) gfAdmins[me.uid]=true; } }catch(_){}
+  try{ const me=firebase.auth().currentUser; if(me && _isAdminUser(window.cu)){ admins[me.uid]=true; managers[me.uid]=true; if(_isGfUser(window.cu)) gfAdmins[me.uid]=true; } }catch(_){}
   await db.ref('zeiterfassung/admins').set(admins);
   await db.ref('zeiterfassung/gfAdmins').set(gfAdmins);
-  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length };
+  await db.ref('zeiterfassung/managers').set(managers);
+  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length };
   log('Fertig: '+JSON.stringify(summary));
   return summary;
 }

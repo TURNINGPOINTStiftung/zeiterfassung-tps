@@ -75,7 +75,8 @@ export function renderZeiterfassung(){
   document.getElementById('info-city').textContent=user.city||'–';
   document.getElementById('info-type').textContent=isFree?'Freiberuflich':'Festangestellt';
   document.getElementById('info-wh').textContent=isFree?'flexibel':`${user.wh} h`;
-  document.getElementById('info-al').textContent=isFree?'–':`${user.al} Tage`;
+  { const _av=annualVacDays(user,window.year); // anteilig bei Eintritt/Austritt bzw. Anspruchswechsel im Jahr
+    document.getElementById('info-al').textContent=isFree?'–':(_av!==Number(user.al||0)?`${_av} Tage (${window.year}, anteilig)`:`${user.al} Tage`); }
   document.getElementById('info-apd').textContent=isFree?'–':hFmt(dailyMinutes(user));
   document.getElementById('info-al-wrap').style.display=isFree?'none':'';
   document.getElementById('info-apd-wrap').style.display=isFree?'none':'';

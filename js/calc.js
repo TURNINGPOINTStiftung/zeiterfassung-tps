@@ -82,15 +82,47 @@ export function effUserAt(user,y,m){
   return clone;
 }
 
-// Jahres-Urlaubsanspruch (Tage) – bei unterjährigem Wechsel des Anspruchs (al) ANTEILIG
-// über die Monate gerechnet: Summe(effUserAt(m).al / 12). Ohne paramHistory = aktueller al
-// (unverändertes Verhalten). Beispiel Claudia: Jan–Jun al=6 (→3) + Jul–Dez al=12 (→6) = 9.
+// ── Beschäftigungszeitraum (Eintritt / Austritt) ─────────────────────────────────
+// user.entryDate / user.exitDate = 'YYYY-MM-DD' (optional). Liefert die Tage (1..dim) des
+// Monats, an denen die Person beschäftigt ist, oder null, wenn gar nicht.
+export function employedRange(user,y,m){
+  const dim=daysInMonth(y,m);
+  const first=dateStr(y,m,1), last=dateStr(y,m,dim);
+  const ent=user&&user.entryDate||'', ex=user&&user.exitDate||'';
+  if(ent && ent>last) return null;
+  if(ex && ex<first) return null;
+  const from=(ent && ent>first)?Number(ent.slice(8,10)):1;
+  const to=(ex && ex<last)?Number(ex.slice(8,10)):dim;
+  return from<=to?{from,to,dim,full:from===1&&to===dim}:null;
+}
+function _countWorkdays(user,y,m,from,to){
+  const holFree=user.holidaysLikeSunday!==false; // Standard: Feiertage = kein SOLL
+  const hols=getHolidays(y,user.bundesland||'');
+  let n=0;
+  for(let d=from;d<=to;d++){
+    const ds=dateStr(y,m,d);
+    const dw=new Date(y,m-1,d).getDay();
+    if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) n++;
+  }
+  return n;
+}
+
+// Jahres-Urlaubsanspruch (Tage) – ANTEILIG über die Monate: Summe(effUserAt(m).al / 12).
+//  • unterjähriger Wechsel des Anspruchs (paramHistory): jeder Monat mit dem damals gültigen al.
+//    Beispiel Claudia: Jan–Jun al=6 (→3) + Jul–Dez al=12 (→6) = 9.
+//  • Eintritt/Austritt im Jahr: nur VOLLE Beschäftigungsmonate zählen (§ 5 BUrlG, 1/12 je vollem
+//    Monat). Eintritt 01.10. → Okt–Dez = 3/12 des Jahresurlaubs.
+// Ohne Historie und ohne Eintritt/Austritt = aktueller al (unverändertes Verhalten).
 export function annualVacDays(user,y){
   if(!user) return 0;
   const hist=Array.isArray(user.paramHistory)?user.paramHistory:null;
-  if(!hist||!hist.length||!y) return Number(user.al||0);
+  const hasEmp=!!(user.entryDate||user.exitDate);
+  if((!hist||!hist.length)&&!hasEmp || !y) return Number(user.al||0);
   let total=0;
-  for(let m=1;m<=12;m++){ total += Number(effUserAt(user,y,m).al||0)/12; }
+  for(let m=1;m<=12;m++){
+    if(hasEmp){ const r=employedRange(user,y,m); if(!r||!r.full) continue; }
+    total += Number(effUserAt(user,y,m).al||0)/12;
+  }
   return Math.round(total*2)/2; // auf halbe Tage runden
 }
 
@@ -101,33 +133,23 @@ export function monthSOLL(user,y,m){
   // Vollzeit ODER per Schalter "arbeitstaggenau": echte Arbeitstage × Tagessoll.
   // Sonst (Teilzeit-Standard): pauschal 4 × Wochenarbeitszeit.
   const workdayBased=isVollzeit(user)||!!user.sollWorkdays;
-  if(!workdayBased||!y||!m) return wh*4*60;
-  const dailyMin=dailyMinutes(user);
-  const dim=daysInMonth(y,m);
-  const holFree=user.holidaysLikeSunday!==false; // Standard: Feiertage = kein SOLL
-  const hols=getHolidays(y,user.bundesland||'');
-  let workdays=0;
-  for(let d=1;d<=dim;d++){
-    const ds=dateStr(y,m,d);
-    const dw=new Date(y,m-1,d).getDay();
-    if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) workdays++;
+  if(!y||!m) return wh*4*60;
+  // Eintritt/Austritt: vor Eintritt bzw. nach Austritt kein Soll, im Wechselmonat anteilig.
+  const r=employedRange(user,y,m);
+  if(!r) return 0;
+  if(!workdayBased){
+    if(r.full) return wh*4*60;
+    const wdAll=_countWorkdays(user,y,m,1,r.dim), wdEmp=_countWorkdays(user,y,m,r.from,r.to);
+    return wdAll>0?Math.round(wh*4*60*wdEmp/wdAll):0;
   }
-  return workdays*dailyMin;
+  return _countWorkdays(user,y,m,r.from,r.to)*dailyMinutes(user);
 }
 
 export function monthSOLLdays(user,y,m){
   user=effUserAt(user,y,m);
   if((!isVollzeit(user)&&!user.sollWorkdays)||!y||!m) return 0;
-  const dim=daysInMonth(y,m);
-  const holFree=user.holidaysLikeSunday!==false;
-  const hols=getHolidays(y,user.bundesland||'');
-  let workdays=0;
-  for(let d=1;d<=dim;d++){
-    const ds=dateStr(y,m,d);
-    const dw=new Date(y,m-1,d).getDay();
-    if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) workdays++;
-  }
-  return workdays;
+  const r=employedRange(user,y,m);
+  return r?_countWorkdays(user,y,m,r.from,r.to):0;
 }
 
 // Wie monthSOLL, aber im LAUFENDEN Monat nur bis EINSCHLIESSLICH heute. Damit ziehen
@@ -141,15 +163,16 @@ export function monthSOLLToDate(user,y,m){
   const now=new Date(); const cy=now.getFullYear(), cm=now.getMonth()+1, cd=now.getDate();
   if(y<cy||(y===cy&&m<cm)) return monthSOLL(user,y,m); // Vergangenheit → volles Soll
   if(y>cy||(y===cy&&m>cm)) return 0;                   // Zukunft → noch kein Soll fällig
-  const dim=daysInMonth(y,m); const upto=Math.min(cd,dim);
-  const holFree=user.holidaysLikeSunday!==false;
-  const hols=getHolidays(y,user.bundesland||'');
-  const countWd=(from,to)=>{ let n=0; for(let d=from;d<=to;d++){ const ds=dateStr(y,m,d); const dw=new Date(y,m-1,d).getDay(); if(dw!==0&&dw!==6&&(!holFree||!hols.has(ds))) n++; } return n; };
+  const r=employedRange(user,y,m); if(!r) return 0;   // vor Eintritt / nach Austritt
+  const upto=Math.min(cd,r.to);
+  if(upto<r.from) return 0;
+  const countWd=(from,to)=>_countWorkdays(user,y,m,from,to);
   if(isVollzeit(user)||user.sollWorkdays){
-    return countWd(1,upto)*dailyMinutes(user); // arbeitstaggenau bis heute
+    return countWd(r.from,upto)*dailyMinutes(user); // arbeitstaggenau bis heute
   }
-  // Teilzeit-Pauschal (4×Wochenarbeitszeit): anteilig nach vergangenen Wochentagen.
-  const wdF=countWd(1,dim); const wdT=countWd(1,upto);
+  // Teilzeit-Pauschal (4×Wochenarbeitszeit): anteilig nach vergangenen Wochentagen
+  // (monthSOLL ist bei Ein-/Austritt schon auf den Beschäftigungszeitraum gekürzt).
+  const wdF=countWd(r.from,r.to); const wdT=countWd(r.from,upto);
   return wdF>0?Math.round(monthSOLL(user,y,m)*wdT/wdF):0;
 }
 

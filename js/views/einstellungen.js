@@ -4,7 +4,7 @@ import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLab
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate } from '../utils.js';
 import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
-import { vacDailyMin } from '../calc.js';
+import { vacDailyMin, annualVacDays } from '../calc.js';
 
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
 // Schreibende Verwaltungs-Aktionen (Nutzer, Passwörter, Konten, Datenkorrekturen) nur noch
@@ -355,7 +355,7 @@ export function showAddUser(){
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveNewUser())">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
-  try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
+  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
 }
 
 export function showEditUser(id){
@@ -363,7 +363,7 @@ export function showEditUser(id){
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword('${id}')">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull('${id}')" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
-  try{ toggleFreelancerFields(); toggleWerkstudentFields(); }catch(e){}
+  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
 }
 
 // Admin: Einmal-Passwort für einen Mitarbeiter erzeugen (setzt den Datensatz-Hash `u.pw`).
@@ -527,6 +527,11 @@ function userForm(u={}){
     </div>
     <div id="uf-employed-fields"${(u.crmOnly||!u.id)?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
+      <div class="uf-grid2">
+        <div class="form-group"><label>Eintritt <span style="font-size:11px;color:var(--muted)">(erster Arbeitstag)</span></label><input id="uf-entry" type="date" value="${esc(u.entryDate||'')}" oninput="ufAutoAdjust()"></div>
+        <div class="form-group"><label>Austritt <span style="font-size:11px;color:var(--muted)">(letzter Arbeitstag, optional)</span></label><input id="uf-exit" type="date" value="${esc(u.exitDate||'')}" oninput="ufAutoAdjust()"></div>
+      </div>
+      <div id="uf-vac-info" style="font-size:12px;color:var(--primary);background:#eef3fb;border-radius:6px;padding:6px 10px;margin:-4px 0 10px;display:none"></div>
       <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
         <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
         <input type="date" id="uf-param-change-date" value="${localISODate().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
@@ -534,13 +539,13 @@ function userForm(u={}){
         ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:11px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}"></div>
-        <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}"></div>
+        <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}" data-orig="${u.wh||20}" oninput="ufAutoAdjust('wh')"></div>
+        <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}" data-orig="${u.dpw||5}" oninput="ufAutoAdjust('dpw')"></div>
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Jahresurlaub (Tage)</label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${u.al||24}"></div>
+        <div class="form-group"><label>Jahresurlaub (Tage) <span style="font-size:11px;color:var(--muted)">(voller Jahreswert)</span></label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${u.al||24}" data-orig="${u.al||24}" oninput="this.dataset.touched='1';ufAutoAdjust()"></div>
         <div class="form-group"><label>Stunden / Urlaubstag <span style="font-size:11px;color:var(--muted)">(Teilzeit i.d.R. 8)</span></label>
-          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}">
+          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}" data-orig="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}" oninput="this.dataset.touched='1'">
         </div>
       </div>
       <div class="form-group">
@@ -681,6 +686,37 @@ export function _resolveUfRole(){
   return document.getElementById('uf-role')?.value||'mitarbeiter';
 }
 
+// Automatik im Mitarbeiter-Formular:
+//  • Arbeitstage/Woche geändert → Jahresurlaub (Tage) proportional mitziehen (5→3 Tage: 30→18),
+//    solange das Urlaubsfeld nicht von Hand geändert wurde.
+//  • Stunden oder Tage geändert → „Stunden/Urlaubstag" mitziehen, WENN er bisher genau dem
+//    Tagessoll (Std/Tage) entsprach (bei Teilzeit mit festen 8 h bleibt er unverändert).
+//  • Anzeige des anteiligen Urlaubsanspruchs bei Eintritt/Austritt im Jahr.
+export function ufAutoAdjust(src){
+  const $=id=>document.getElementById(id);
+  const wh=$('uf-wh'), dpw=$('uf-dpw'), al=$('uf-al'), vh=$('uf-vhpd'); if(!wh||!dpw||!al) return;
+  const whO=parseFloat(wh.dataset.orig)||0, dpwO=parseFloat(dpw.dataset.orig)||5, alO=parseFloat(al.dataset.orig)||0;
+  const whN=parseFloat(wh.value)||0, dpwN=parseFloat(dpw.value)||0;
+  const notes=[];
+  if(src==='dpw' && al.dataset.touched!=='1' && dpwN>0 && dpwO>0){
+    const nv=Math.round(alO*dpwN/dpwO*2)/2;
+    al.value=nv;
+    if(dpwN!==dpwO) notes.push(`Jahresurlaub automatisch angepasst: ${alO} → ${nv} Tage (${dpwO} → ${dpwN} Arbeitstage/Woche). Bei Bedarf überschreiben.`);
+  }
+  if((src==='wh'||src==='dpw') && vh && vh.dataset.touched!=='1' && dpwO>0 && dpwN>0){
+    const vhO=parseFloat(vh.dataset.orig)||0;
+    if(Math.abs(vhO-Math.round(whO/dpwO*10)/10)<0.05){ vh.value=Math.round(whN/dpwN*10)/10; }
+  }
+  const ent=$('uf-entry')?.value||'', ex=$('uf-exit')?.value||'';
+  if(ent||ex){
+    const y=Number((ent||ex).slice(0,4)); const tmp={al:parseFloat(al.value)||0, entryDate:ent, exitDate:ex};
+    const ys=[...new Set([ent&&Number(ent.slice(0,4)), ex&&Number(ex.slice(0,4))].filter(Boolean))];
+    ys.forEach(yy=>{ const v=annualVacDays(tmp,yy); if(v!==tmp.al) notes.push(`Urlaubsanspruch ${yy}: <b>${v} von ${tmp.al} Tagen</b> (anteilig, 1/12 je vollem Beschäftigungsmonat).`); });
+    if(!ys.length) void y;
+  }
+  const info=$('uf-vac-info'); if(info){ info.innerHTML=notes.join('<br>'); info.style.display=notes.length?'':'none'; }
+}
+
 export function toggleFreelancerFields(){
   const fields=document.getElementById('uf-employed-fields');
   if(!fields) return;
@@ -777,6 +813,8 @@ function collectUserForm(){
     wh,
     dpw,
     al:isFree?0:parseFloat(document.getElementById('uf-al').value)||24,
+    entryDate:document.getElementById('uf-entry')?.value||'',   // Eintritt (leer = unbekannt/seit jeher)
+    exitDate:document.getElementById('uf-exit')?.value||'',     // Austritt (leer = unbefristet)
     vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(vacDailyMin({wh,dpw,role})/60*10)/10),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     allowHalfVac:!!(document.getElementById('uf-allowhalf')?.checked),
