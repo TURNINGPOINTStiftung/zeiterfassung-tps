@@ -1,5 +1,5 @@
 import { getData, mutate } from '../data.js';
-import { esc, toast } from '../utils.js';
+import { esc, toast, localISODate } from '../utils.js';
 
 // Vertretungsregelung (eigener Reiter, nur GF/Admin): Fällt eine Team-Leitung aus, bestimmt die
 // Geschäftsführung/Admin hier befristet eine Vertretung – auch sich selbst. Die Vertretung sieht/
@@ -9,7 +9,7 @@ import { esc, toast } from '../utils.js';
 function _vtActive(v){
   if(!v||v.ended) return false;
   const c=s=>{ s=String(s||'').trim(); const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0'):s; };
-  const today=c(new Date().toISOString().slice(0,10));
+  const today=c(localISODate());
   return c(v.von)<=today && (!v.bis || today<=c(v.bis));
 }
 function _vtDate(s){ if(!s) return ''; try{ return new Date(s).toLocaleDateString('de-DE'); }catch(e){ return String(s); } }
@@ -53,7 +53,7 @@ export function renderVertretungen(){
 
   const teamOpts=teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const depOpts=deputies.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}${u.role==='geschaeftsfuehrer'?' (GF)':(u.role==='admin'?' (Admin)':'')}</option>`).join('');
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISODate();
 
   content.innerHTML=`
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px;max-width:760px">Fällt eine Team-Leitung aus, kann sie hier zeitweise vertreten werden – auch durch die Geschäftsführung selbst. Die Vertretung sieht, prüft und leitet die Zeiten des Teams in der Mitarbeiterübersicht weiter, bis der Zeitraum endet oder du sie beendest. Die eigentliche Leitung behält ihr Team dabei.</div>
@@ -76,7 +76,7 @@ export function addVertretung(){
   if(bis&&von&&bis<von){ toast('Das Bis-Datum liegt vor dem Ab-Datum.','err'); return; }
   const d=getData(); const dep=(d.users||[]).find(u=>u.id===deputyId); const cu=window.cu;
   mutate(dd=>{ if(!Array.isArray(dd.vertretungen)) dd.vertretungen=[];
-    dd.vertretungen.push({ id:'vt_'+Date.now()+'_'+Math.floor(Math.random()*1e6), team, deputyId, deputyName:(dep&&dep.name)||'', von:von||new Date().toISOString().slice(0,10), bis:bis||'', ended:false, byId:cu&&cu.id, byName:cu&&cu.name, ts:Date.now() }); });
+    dd.vertretungen.push({ id:'vt_'+Date.now()+'_'+Math.floor(Math.random()*1e6), team, deputyId, deputyName:(dep&&dep.name)||'', von:von||localISODate(), bis:bis||'', ended:false, byId:cu&&cu.id, byName:cu&&cu.name, ts:Date.now() }); });
   toast('Vertretung angelegt ✓','ok'); renderVertretungen();
 }
 export function endVertretung(id){

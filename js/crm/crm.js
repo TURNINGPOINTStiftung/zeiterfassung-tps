@@ -4283,7 +4283,7 @@ function paintVerwUsers(){
       <td>${lvl==='none'?'<span class="small" style="color:var(--muted)">–</span>':`<span class="vw-team">${esc(accTxt)}</span>`}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
-        <button class="crm-x" title="Löschen" onclick="deleteUser('${u.id}')">✕</button>
+        <button class="crm-x" title="Archivieren (Zeitdaten bleiben erhalten)" onclick="deleteUser('${u.id}')">✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -4294,7 +4294,7 @@ function paintVerwUsers(){
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
       <tbody>${rows||'<tr><td colspan="5" class="small" style="color:var(--muted)">Keine Nutzer.</td></tr>'}</tbody>
     </table></div>
-  </div>`;
+  </div>`+(function(){ try{ return window.archivedUsersHtml?window.archivedUsersHtml():''; }catch(e){ return ''; } })();
 }
 function crmVerwSetLevel(uid, level){
   const a=getAccess(uid)||{};

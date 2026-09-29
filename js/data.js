@@ -37,7 +37,7 @@ export function _usersPoisoned(users){
 //                      (nur gezielt über das Sicherheits-Setup, admin-setup.js). Schützt
 //                      loginDir/allowed vor versehentlichem Clobber aus einem Cache und
 //                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
-const _CONFIG_NODES     = new Set(['users','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
+const _CONFIG_NODES     = new Set(['users','archivedUsers','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
 const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','uidUser']);
 // Config-Knoten (Nutzer, Teams, Kategorien, Rollen, Rechte) darf NUR noch der Account
 // „Administrator" schreiben – nicht mehr Personen mit delegiertem Verwaltungs-Zugriff.

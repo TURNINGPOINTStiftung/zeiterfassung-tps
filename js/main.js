@@ -45,7 +45,7 @@ import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, s
          addCategory, removeCat, addTeamCat, removeTeamCat, moveTeamCat,
          showAddUser, showEditUser, showEditDpw, saveEditDpw,
          _resolveUfRole, toggleFreelancerFields, toggleWerkstudentFields, toggleGFTimesheet, toggleLeitungReport, deleteUser,
-         saveNewUser, saveEditUser, resetUserPassword, reprovisionUserFull, fixApproverToLeitung } from './views/einstellungen.js';
+         saveNewUser, saveEditUser, resetUserPassword, reprovisionUserFull, fixApproverToLeitung, archivedUsersHtml, restoreArchivedUser } from './views/einstellungen.js';
 
 // ── Utility / print modules ────────────────────────────────────────
 import { printFull, printBuchhaltung, printTeamBuchhaltung,
@@ -248,6 +248,8 @@ window.importData            = importData;
 window.resetData             = resetData;
 window.showCarryoverCleanup  = showCarryoverCleanup;
 window.fixApproverToLeitung  = fixApproverToLeitung;
+window.archivedUsersHtml     = archivedUsersHtml;
+window.restoreArchivedUser   = restoreArchivedUser;
 window.runCarryoverCleanup   = runCarryoverCleanup;
 window.fixManualCarryovers   = fixManualCarryovers;
 

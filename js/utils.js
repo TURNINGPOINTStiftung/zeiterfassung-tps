@@ -38,6 +38,9 @@ export function isoWeek(date){
 }
 export function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
 export function dateStr(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+// Kalenderdatum „YYYY-MM-DD" in LOKALER Zeit. NICHT toISOString().slice(0,10) verwenden –
+// das liefert das UTC-Datum: zwischen 0 und 2 Uhr nachts (MESZ) wäre das der VORTAG.
+export function localISODate(dt){ const x=dt?new Date(dt):new Date(); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
 export function isWeekend(y,m,d){ const wd=new Date(y,m-1,d).getDay(); return wd===0||wd===6; }
 export function dayName(y,m,d){ return DAYS[new Date(y,m-1,d).getDay()]; }
 export function isToday(y,m,d){ const t=new Date(); return t.getFullYear()===y&&t.getMonth()+1===m&&t.getDate()===d; }

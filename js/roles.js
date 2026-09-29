@@ -1,5 +1,6 @@
 import { getData, getCustomRoles } from './data.js';
 import { DEFAULT_PERMISSIONS } from './config.js';
+import { localISODate } from './utils.js';
 
 // Liefert das korrekte Team eines Users für ein bestimmtes Datum.
 // Berücksichtigt die Team-Geschichte (teamHistory).
@@ -67,7 +68,7 @@ export function isAdminUser(u){ return u&&(u.role==='admin'||(u.role==='leitung'
 // wird. Datenquelle: d.vertretungen[]={id,team,deputyId,von,bis,ended,…}.
 export function activeVertretungTeams(u){
   if(!u) return [];
-  const today=_cmpDate(new Date().toISOString().slice(0,10));
+  const today=_cmpDate(localISODate());
   return (getData().vertretungen||[]).filter(v=>
       v && v.deputyId===u.id && !v.ended
       && _cmpDate(v.von)<=today && (!v.bis || today<=_cmpDate(v.bis))

@@ -1,6 +1,6 @@
 import { _STAMP_KEY } from '../config.js';
 import { getData, getDataCache, getEntry, entryKey, mutate } from '../data.js';
-import { esc, toast, openModal, closeModal, diffMin, addMin } from '../utils.js';
+import { esc, toast, openModal, closeModal, diffMin, addMin, localISODate } from '../utils.js';
 import { getCatsForTeam } from '../cats.js';
 
 export function getStamp(){
@@ -28,7 +28,7 @@ export function startZeitstempelAt(von){
   const cu=window.cu;
   if(!cu||cu.role==='admin') return;
   if(getStamp()) return; // läuft bereits
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISODate();
   const[h,m]=von.split(':').map(Number);
   const startTime=new Date(today+'T00:00:00');
   startTime.setHours(h,m,0,0);
@@ -217,7 +217,7 @@ export async function startZeitstempel(){
   if(!cu||cu.role==='admin') return;
   const now=new Date();
   const von=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  const startDate=now.toISOString().slice(0,10);
+  const startDate=localISODate(now);
   const [sy,sm]=startDate.split('-').map(Number);
   const k=entryKey(cu.id,sy,sm);
   if(!window._offlineMode&&getDataCache()){

@@ -1,7 +1,7 @@
 import { STORAGE_KEY } from './config.js';
 import { getData, getUser, mutate, saveRaw } from './data.js';
 import { computeAutoCarry } from './calc.js';
-import { openModal, closeModal, toast, diffMin, addMin } from './utils.js';
+import { openModal, closeModal, toast, diffMin, addMin, localISODate } from './utils.js';
 
 // Große/zerstörerische Datenoperationen (Gesamt-Export, Import/Überschreiben, Reset)
 // sind ausschließlich dem Admin vorbehalten. Normale Nutzung (eigene Zeiten) bleibt offen.
@@ -37,7 +37,7 @@ function _dlJson(obj, prefix){
   const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`${prefix}_${new Date().toISOString().slice(0,10)}.json`;
+  a.download=`${prefix}_${localISODate()}.json`;
   a.click();
 }
 // Nur Zeiterfassung

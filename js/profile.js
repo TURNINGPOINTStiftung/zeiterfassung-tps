@@ -1,6 +1,6 @@
 import { getUser, getData, setUserFields } from './data.js';
 import { verifyPw, makePwRecord } from './auth.js';
-import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods } from './utils.js';
+import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate } from './utils.js';
 
 // Ist der/die aktuelle Nutzer:in als „Werkstudent" benannt?
 function _cuIsWerkstudent(cu){
@@ -20,7 +20,7 @@ export function openProfileModal(){
   // Werkstudent: eigene Vorlesungszeiten UND Brückentage pflegen – bis zu einem Jahr im Voraus.
   // (Zusätzlich zentral in der Verwaltung pflegbar; beide schreiben dieselben Felder.)
   const _maxD=new Date(); _maxD.setFullYear(_maxD.getFullYear()+1);
-  const maxDate=_maxD.toISOString().slice(0,10);
+  const maxDate=localISODate(_maxD);
   let wstSection='';
   if(_cuIsWerkstudent(cu)){
     wstSection=`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">

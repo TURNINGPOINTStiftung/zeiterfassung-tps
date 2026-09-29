@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
-import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast } from '../utils.js';
+import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate } from '../utils.js';
 import { vacDailyMin } from '../calc.js';
 
 export function countWorkDays(start,end,user){
@@ -17,7 +17,7 @@ export function countWorkDays(start,end,user){
   while(cur<=endD){
     const wd=cur.getDay();
     if(wd!==0&&wd!==6){
-      const ds=cur.toISOString().slice(0,10);
+      const ds=localISODate(cur);
       if(!holFree||!holCache[cur.getFullYear()]?.has(ds)) count++;
     }
     cur.setDate(cur.getDate()+1);
@@ -47,7 +47,7 @@ export function countVacationDays(start,end,user){
     if(wd!==0&&wd!==6){
       const y=cur.getFullYear();
       if(holFree&&!holCache[y]) holCache[y]=getHolidays(y,bl);
-      const ds=cur.toISOString().slice(0,10);
+      const ds=localISODate(cur);
       if(!holFree||!holCache[y].has(ds)){
         const wk=_iso(cur);
         perWeek[wk]=(perWeek[wk]||0)+1;
@@ -61,7 +61,7 @@ export function countVacationDays(start,end,user){
 
 export function showVacRequestForm(editId){
   const cu=window.cu;
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISODate();
   const isMgr=cu.role==='leitung'||cu.role==='admin'||cu.role==='geschaeftsfuehrer';
   const d=getData();
   const editing=editId?d.vacRequests?.[editId]:null;
@@ -465,7 +465,7 @@ export function changeAbNav(delta){
   if(sub==='week'){
     const ms=new Date((window.abCalWeekStart||_thisMonday())+'T12:00:00');
     ms.setDate(ms.getDate()+delta*7);
-    window.abCalWeekStart=ms.toISOString().slice(0,10);
+    window.abCalWeekStart=localISODate(ms);
   } else if(sub==='year'){
     window.abCalYear=(window.abCalYear||new Date().getFullYear())+delta;
   } else {
@@ -481,7 +481,7 @@ export function changeAbMonth(delta){ changeAbNav(delta); }
 function _thisMonday(){
   const d=new Date(); const wd=d.getDay();
   d.setDate(d.getDate()-(wd===0?6:wd-1));
-  return d.toISOString().slice(0,10);
+  return localISODate(d);
 }
 
 export function renderAbCalendar(){
@@ -630,7 +630,7 @@ export function renderAbwesenheiten(){
     </div>`;
   };
   const today=new Date(); today.setHours(0,0,0,0);
-  const todayStr=today.toISOString().slice(0,10);
+  const todayStr=localISODate(today);
   const upcoming=reqs.filter(r=>{
     if(r.status!=='approved') return false;
     if(r.endDate<todayStr) return false;
@@ -765,8 +765,8 @@ export function renderAbCalendarWeek(){
   const{dayMap,personList,colorFor}=_buildDayMap(reqs,cu);
   const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
   const fmtShort=ds=>{ const[,m2,d2]=ds.split('-'); return `${d2}.${m2}.`; };
-  const mondayStr=monday.toISOString().slice(0,10);
-  const sundayStr=sunday.toISOString().slice(0,10);
+  const mondayStr=localISODate(monday);
+  const sundayStr=localISODate(sunday);
   const GER=['Mo','Di','Mi','Do','Fr','Sa','So'];
   // Update title
   const t=document.getElementById('ab-cal-title');
@@ -775,7 +775,7 @@ export function renderAbCalendarWeek(){
   html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
   for(let i=0;i<7;i++){
     const day=new Date(monday); day.setDate(day.getDate()+i);
-    const ds=day.toISOString().slice(0,10);
+    const ds=localISODate(day);
     const dw=day.getDay(); // 0=Sun
     const isWE=dw===0||dw===6;
     const hols=getHolidays(day.getFullYear(),cu.bundesland||'');

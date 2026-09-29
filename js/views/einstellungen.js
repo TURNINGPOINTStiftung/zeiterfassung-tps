@@ -1,7 +1,7 @@
 import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
-import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods } from '../utils.js';
+import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate } from '../utils.js';
 import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
 import { vacDailyMin } from '../calc.js';
@@ -487,7 +487,7 @@ function userForm(u={}){
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:12px;color:var(--muted)">Eintrag hinzufügen:</span>
-          <input type="date" id="uf-team-change-date" value="${new Date().toISOString().slice(0,10)}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+          <input type="date" id="uf-team-change-date" value="${localISODate()}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
           <button class="btn btn-ok btn-sm" onclick="addTeamHistEntry('${u.id}')">+ Eintrag</button>
         </div>
       </div>`;
@@ -529,7 +529,7 @@ function userForm(u={}){
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
       <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
         <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
-        <input type="date" id="uf-param-change-date" value="${new Date().toISOString().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+        <input type="date" id="uf-param-change-date" value="${localISODate().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Greift nur, wenn du unten einen Wert änderst. Vergangene Monate rechnen dann weiter mit den bisherigen Werten (SOLL & Überträge bleiben korrekt).</div>
         ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:11px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
       </div>
@@ -822,7 +822,7 @@ export async function saveEditUser(id){
   const newTeam=u.teams[0]||u.team||'';
   const oldTeam=existing?.teams?.[0]||existing?.team||'';
   if(newTeam&&newTeam!==oldTeam){
-    const changeDate=document.getElementById('uf-team-change-date')?.value||new Date().toISOString().slice(0,10);
+    const changeDate=document.getElementById('uf-team-change-date')?.value||localISODate();
     const existHist=Array.isArray(existing?.teamHistory)?existing.teamHistory:[];
     u.teamHistory=[...existHist.filter(h=>h.fromDate!==changeDate),{team:newTeam,fromDate:changeDate}]
       .sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
@@ -837,7 +837,7 @@ export async function saveEditUser(id){
   const _pnorm=(k,v)=>k==='holidaysLikeSunday'?(v!==false?'1':'0'):(k==='sollWorkdays'?(v?'1':'0'):String(v??''));
   const _pchg=existing&&_pk.some(k=>_pnorm(k,existing[k])!==_pnorm(k,u[k]));
   if(existing&&_pchg){
-    const cd=document.getElementById('uf-param-change-date')?.value||(new Date().toISOString().slice(0,8)+'01');
+    const cd=document.getElementById('uf-param-change-date')?.value||(localISODate().slice(0,8)+'01');
     let ph=Array.isArray(existing.paramHistory)?existing.paramHistory.slice():[];
     if(!ph.length){ const base={fromDate:'2000-01-01'}; _pk.forEach(k=>base[k]=existing[k]); ph.push(base); } // Alt-Werte gelten "seit jeher"
     const rec={fromDate:cd}; _pk.forEach(k=>rec[k]=u[k]);
@@ -869,7 +869,7 @@ export async function saveEditUser(id){
 // ── Team-History Admin-Funktionen ─────────────────────────────────
 export function addTeamHistEntry(uid){
   const dateEl=document.getElementById('uf-team-change-date');
-  const date=dateEl?.value||new Date().toISOString().slice(0,10);
+  const date=dateEl?.value||localISODate();
   mutate(d=>{
     const u=d.users.find(x=>x.id===uid); if(!u) return;
     if(!Array.isArray(u.teamHistory)) u.teamHistory=[];
@@ -935,15 +935,51 @@ export function deleteUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
-  if(!confirm('Mitarbeiter und alle Zeitdaten wirklich löschen?')) return;
+  const _u=getUser(id); if(!_u) return;
+  // ARCHIVIEREN statt löschen: Zeitaufzeichnungen müssen (ArbZG) mind. 2 Jahre erhalten
+  // bleiben. Der Nutzer verschwindet aus allen Listen und kann sich nicht mehr anmelden, seine
+  // Zeitdaten bleiben unverändert. Wiederherstellbar über „Archivierte Mitarbeiter".
+  if(!confirm(`${_u.name} archivieren?\n\nDer Mitarbeiter verschwindet aus allen Listen und kann sich nicht mehr anmelden. Alle Zeitdaten bleiben erhalten; unter „Archivierte Mitarbeiter" wiederherstellbar.`)) return;
   mutate(d=>{
-    d.users=d.users.filter(u=>u.id!==id);
-    Object.keys(d.entries).forEach(k=>{ if(k.startsWith(id+'_')) delete d.entries[k]; });
+    const u=d.users.find(x=>x.id===id); if(!u) return;
+    if(!Array.isArray(d.archivedUsers)) d.archivedUsers=[];
+    d.archivedUsers=d.archivedUsers.filter(x=>x&&x.id!==id);
+    d.archivedUsers.push({...u, archivedAt:new Date().toISOString(), archivedBy:cu.id});
+    d.users=d.users.filter(x=>x.id!==id);
   });
-  renderSettings(); toast('Mitarbeiter gelöscht.','err');
+  renderSettings(); toast(_u.name+' archiviert – Zeitdaten bleiben erhalten.','ok');
   if(window.viewEmpId===id){
     const rem=getData().users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
     window.viewEmpId=rem.length?rem[0].id:null;
     window.rebuildEmpSelect?.(); window.renderZeiterfassung?.();
   }
+}
+
+// Liste der archivierten Mitarbeiter (für die Verwaltung) – nur für den Administrator-Account.
+export function archivedUsersHtml(){
+  const cu=window.cu; if(!_canVerwaltung(cu)) return '';
+  const arch=(getData().archivedUsers||[]).filter(Boolean)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
+  if(!arch.length) return '';
+  return `<div class="crm-sec"><h4><span class="ttl">🗄 Archivierte Mitarbeiter</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Ausgeschiedene Mitarbeiter. Ihre Zeitdaten bleiben erhalten (Aufbewahrungspflicht mind. 2 Jahre) und sind nach dem Wiederherstellen wieder sichtbar.</div>
+    <table class="vw-table"><tbody>${arch.map(u=>`<tr>
+      <td><span class="vw-name">${esc(u.name)}</span></td>
+      <td class="small" style="color:var(--muted)">archiviert ${u.archivedAt?new Date(u.archivedAt).toLocaleDateString('de-DE'):''}</td>
+      <td style="text-align:right"><button class="btn-sm-crm" onclick="restoreArchivedUser('${esc(u.id)}')">↩ Wiederherstellen</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+export function restoreArchivedUser(id){
+  const cu=window.cu;
+  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter wiederherstellen.','err'); return; }
+  const a=(getData().archivedUsers||[]).find(x=>x&&x.id===id); if(!a) return;
+  if(getUser(id)){ toast('Login-ID „'+id+'" ist inzwischen wieder vergeben.','err'); return; }
+  if(!confirm(a.name+' wiederherstellen?')) return;
+  mutate(d=>{
+    const u={...a}; delete u.archivedAt; delete u.archivedBy;
+    d.users.push(u);
+    d.archivedUsers=(d.archivedUsers||[]).filter(x=>x&&x.id!==id);
+  });
+  renderSettings(); toast(a.name+' wiederhergestellt ✓','ok');
 }

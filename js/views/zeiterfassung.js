@@ -4,7 +4,7 @@ import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission,
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays } from '../calc.js';
-import { fmtTs } from '../utils.js';
+import { fmtTs, localISODate } from '../utils.js';
 import { fileGfApproval, unfileGfReport } from './gfberichte.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
@@ -563,7 +563,7 @@ export function rebuildNightShifts(uid){
         const endsMidnight=(day.b2von&&_mid(day.b2bis))||(!day.b2von&&_mid(day.b1bis));
         if(!endsMidnight||!day.b1von) return;
         const nd=new Date(ds+'T12:00:00'); nd.setDate(nd.getDate()+1);
-        const nds=nd.toISOString().slice(0,10);
+        const nds=localISODate(nd);
         const nday=byDate[nds];
         if(!nday||_ABS.has(nday.b1zuord)) return;
         if(nday.b1von!=='00:00'||!nday.b1bis) return;
@@ -602,7 +602,7 @@ export function rebuildNightShifts(uid){
         const pause=gross>=585?45:gross>=390?30:0;
         if(pause<=0) return;
         const nd=new Date(ds+'T12:00:00'); nd.setDate(nd.getDate()+1);
-        const nds=nd.toISOString().slice(0,10);
+        const nds=localISODate(nd);
         const nentry=d.entries[_mk(+nds.slice(0,4),+nds.slice(5,7))];
         if(nentry&&(nentry.status==='submitted'||nentry.status==='approved')) return;
         const ex=byDate[nds];
@@ -640,7 +640,7 @@ export function rebuildAutoAbsences(uid,reviewerId){
     Object.values(d.vacRequests).forEach(r=>{
       if(r&&r.userId===uid&&r.status==='approved'&&r.reviewNote!==AUTO){
         let c=new Date(r.startDate+'T12:00:00'); const e=new Date(r.endDate+'T12:00:00');
-        while(c<=e){ realCovered.add(c.toISOString().slice(0,10)); c.setDate(c.getDate()+1); }
+        while(c<=e){ realCovered.add(localISODate(c)); c.setDate(c.getDate()+1); }
       }
     });
     // 3. alle Absence-Tage des Users aus der Zeiterfassung sammeln
@@ -846,7 +846,7 @@ export function td_b1bis_change(ds,val){
 
   // Wenn Endzeit heute manuell eingetragen → laufenden Stempel mit DIESER Zeit stoppen
   if(uid===window.cu?.id){
-    const today=new Date().toISOString().slice(0,10);
+    const today=localISODate();
     if(ds===today){
       const stamp=window.getStamp?.();
       if(stamp&&stamp.uid===uid&&stamp.startDate===today){
@@ -954,7 +954,7 @@ export function td_tchange(ds,field,val){
   // laufende Stempel mitgezogen werden – sonst überschreibt er beim Ausstempeln die Korrektur.
   // (Früher nur b1von → eine Nachmittags-Korrektur an b2von kam nicht am Stempel an.)
   if((field==='b1von'||field==='b2von')&&uid===window.cu?.id){
-    const today=new Date().toISOString().slice(0,10);
+    const today=localISODate();
     if(ds===today){
       const normV=_normTime(val);
       const stamp=window.getStamp?.();
