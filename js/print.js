@@ -2,7 +2,7 @@ import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate } from './roles.js';
 import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
-import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed, effUserAt, annualVacDays } from './calc.js';
+import { monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed, effUserAt, annualVacDays, employedRange } from './calc.js';
 
 export function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
 
@@ -26,7 +26,7 @@ export function printBuchhaltung(){
 export function printTeamBuchhaltung(){
   const cu=window.cu;
   const d=getData();
-  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u,monthStartDate(window.year,window.mon))).filter(u=>!!employedRange(u,window.year,window.mon));   // Team + Beschäftigung im gewählten Monat
   if(!emps.length){ toast('Keine Mitarbeiter im Team vorhanden.','err'); return; }
   _openPerEmpPrint(emps,window.year,window.mon);
 }

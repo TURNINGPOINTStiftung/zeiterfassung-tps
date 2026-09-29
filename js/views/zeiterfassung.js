@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } f
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays } from '../calc.js';
+import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
 import { fmtTs, localISODate } from '../utils.js';
 import { fileGfApproval, unfileGfReport } from './gfberichte.js';
 
@@ -38,6 +38,9 @@ export function renderZeiterfassung(){
   }
   if(!user){ document.getElementById('zt-body').innerHTML='<tr><td colspan="18" style="padding:20px;text-align:center;color:var(--muted)">Kein Mitarbeiter ausgewählt.</td></tr>'; return; }
 
+  // Vor dem Eintritt / nach dem Austritt gibt es keine Zeiterfassung → auf den ersten bzw.
+  // letzten Beschäftigungsmonat springen (statt leere, nicht existente Monate zu zeigen).
+  { const _c=clampToEmployment(user,window.year,window.mon); if(_c.clamped){ window.year=_c.y; window.mon=_c.m; } }
   const year=window.year, mon=window.mon, cu=window.cu;
   const entry=getEntry(uid,year,mon);
   const isLeiter=isManagerRole(cu);

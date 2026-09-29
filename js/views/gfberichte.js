@@ -2,6 +2,7 @@ import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPL
 import { getData, mutate } from '../data.js';
 import { esc, toast } from '../utils.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, getTeamForDate, monthStartDate } from '../roles.js';
+import { employedRange } from '../calc.js';
 import { _openPerEmpPrint } from '../print.js';
 
 // Benachrichtigt alle GF-Nutzer mit hinterlegter E-Mail über einen neuen Bericht.
@@ -260,7 +261,7 @@ export function markYearReportSeen(key){
 export function sendTeamReport(){
   const cu=window.cu;
   const d=getData();
-  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
+  const emps=d.users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u,monthStartDate(window.year,window.mon))).filter(u=>!!employedRange(u,window.year,window.mon));   // Team + Beschäftigung im gewählten Monat
   if(!emps.length){ toast('Keine Mitarbeiter im Team vorhanden.','err'); return; }
   const key=cu.id+'_'+window.year+'_'+String(window.mon).padStart(2,'0');
   const report={

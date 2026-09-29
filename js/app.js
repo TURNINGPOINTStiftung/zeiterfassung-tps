@@ -1,7 +1,7 @@
 import { MONTHS } from './config.js';
 import { getUser } from './data.js';
 import { isManagerRole, hasPermission, roleLabel } from './roles.js';
-import { dailyMinutes } from './calc.js';
+import { dailyMinutes, clampToEmployment } from './calc.js';
 
 // Hat der Nutzer überhaupt IRGENDEINEN Bereich frei? (Modul-Zugriff, Übersicht/GF-Berichte,
 // Voll-Verwaltung). FAIL-OPEN: lässt sich der Zugriff nicht bestimmen (CRM-Modul noch nicht
@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v355':'';
+  if(_hv) _hv.textContent=_showVer?'v356':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -202,7 +202,16 @@ export function switchView(v){
 }
 
 export function changeMonth(delta){
-  window.mon+=delta;
-  if(window.mon<1){window.mon=12;window.year--;} if(window.mon>12){window.mon=1;window.year++;}
+  let y=window.year, m=window.mon+delta;
+  if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  // Nicht über Eintritt/Austritt hinaus blättern – davor/danach gibt es keine Zeiterfassung.
+  const u=getUser(window.viewEmpId||window.cu?.id);
+  const c=u?clampToEmployment(u,y,m):{clamped:null};
+  if(c.clamped){
+    const d=c.clamped==='entry'?u.entryDate:u.exitDate;
+    window.toast?.((c.clamped==='entry'?'Eintritt am ':'Austritt am ')+d.split('-').reverse().join('.')+(c.clamped==='entry'?' – davor':' – danach')+' gibt es keine Zeiterfassung.','');
+    return;
+  }
+  window.year=y; window.mon=m;
   window.renderZeiterfassung?.();
 }

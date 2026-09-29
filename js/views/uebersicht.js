@@ -2,7 +2,7 @@ import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLA
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
-import { monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord, effUserAt, annualVacDays } from '../calc.js';
+import { monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord, effUserAt, annualVacDays, employedRange } from '../calc.js';
 import { getCatsForTeam, currentCatsForUser } from '../cats.js';
 import { notifyGF } from './gfberichte.js';
 
@@ -128,6 +128,9 @@ export function renderOverview(){
   // CRM-only, die Geschäftsführung (GF-Konzept) sowie explizit ZE-lose Nutzer
   // (noTimesheet). Galt bisher nicht im Admin-Zweig, der alle Nicht-Admins zeigte.
   employees=employees.filter(u=>!u.crmOnly&&u.role!=='geschaeftsfuehrer'&&!u.noTimesheet);
+  // Eintritt/Austritt: nur Monate zeigen, in denen die Person beschäftigt ist (Eintrittsmonat bis
+  // einschließlich Austrittsmonat). Vergangene Monate bleiben so vollständig sichtbar.
+  employees=employees.filter(u=>!!employedRange(u,oy,om));
 
   // Team für den gewählten Monat ermitteln (History-aware)
   const mDate=monthStartDate(oy,om);
@@ -140,6 +143,7 @@ export function renderOverview(){
 
   const renderCard=(u)=>{
     const pills=MONTHS.map((mn,i)=>{
+      if(!employedRange(u,oy,i+1)) return `<span class="m-pill" style="opacity:.25" title="${mn}: nicht beschäftigt">${mn.slice(0,3)}</span>`;
       const e=d.entries[entryKey(u.id,oy,i+1)];
       const st=e?e.status:'draft';
       return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
@@ -732,6 +736,8 @@ export function sendTimesheetReminders(){
     const withMail=[], noMail=[];
     d.users.forEach(u=>{
       if(!_isReminderTarget(u)) return;
+      if(!employedRange(u,y,m)) return;                                   // vor Eintritt / nach Austritt
+      if(cu.role!=='admin'&&!canSeeEmployee(cu,u,monthStartDate(y,m))) return; // Team im damaligen Monat
       const st=(d.entries[entryKey(u.id,y,m)]||{}).status||'draft';
       if(st==='submitted'||st==='approved') return;
       if(u.email) withMail.push(u);

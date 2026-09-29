@@ -95,6 +95,15 @@ export function employedRange(user,y,m){
   const to=(ex && ex<last)?Number(ex.slice(8,10)):dim;
   return from<=to?{from,to,dim,full:from===1&&to===dim}:null;
 }
+// Monat (y,m) in den Beschäftigungszeitraum ziehen: vor dem Eintritt → Eintrittsmonat,
+// nach dem Austritt → Austrittsmonat. Ohne Eintritt/Austritt unverändert.
+export function clampToEmployment(user,y,m){
+  const key=y*100+m;
+  const ent=user&&user.entryDate, ex=user&&user.exitDate;
+  if(ent){ const k=Number(ent.slice(0,4))*100+Number(ent.slice(5,7)); if(key<k) return {y:Math.floor(k/100),m:k%100,clamped:'entry'}; }
+  if(ex){ const k=Number(ex.slice(0,4))*100+Number(ex.slice(5,7)); if(key>k) return {y:Math.floor(k/100),m:k%100,clamped:'exit'}; }
+  return {y,m,clamped:null};
+}
 function _countWorkdays(user,y,m,from,to){
   const holFree=user.holidaysLikeSunday!==false; // Standard: Feiertage = kein SOLL
   const hols=getHolidays(y,user.bundesland||'');

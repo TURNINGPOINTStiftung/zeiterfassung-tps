@@ -68,7 +68,7 @@ export function showVacRequestForm(editId){
   window._vrEditId=editing?editId:null;
   window._vrEditDayTimes=editing?.dayTimes?{...editing.dayTimes}:{};
   const teamEmps=isMgr
-    ? d.users.filter(u=>u.id!==cu.id&&canSeeEmployee(cu,u))
+    ? d.users.filter(u=>u.id!==cu.id&&canSeeEmployee(cu,u)&&!(u.exitDate&&u.exitDate<localISODate())) // Ausgetretene nicht mehr anbieten
     : [];
   const empSelector=isMgr&&teamEmps.length
     ? `<div class="form-group"><label>Für wen?</label>
