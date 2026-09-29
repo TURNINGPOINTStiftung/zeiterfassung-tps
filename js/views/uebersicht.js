@@ -243,6 +243,16 @@ export function renderOverview(){
         <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed">📨 ${cu.role==='geschaeftsfuehrer'?'Bericht einreichen':'An GF weiterleiten'}</button>
       </div>`;
     }
+    // Alle genehmigten sind bereits gesendet → Button ausgegraut (kein versehentliches
+    // Doppelt-Senden). Kommt später eine weitere genehmigte ZE dazu (notYetSent>0),
+    // wird er unten automatisch wieder als „nachreichen" aktiv.
+    if(notYetSent===0 && anySent){
+      return `<div class="team-send-bar">
+        <span style="color:${allApproved?'var(--ok)':'var(--warn)'};font-weight:600;font-size:13px">${monthLabel}: <strong>${approved}/${total}</strong> genehmigt${allApproved?'':' – Rest später nachreichbar'}</span>
+        ${sentInfo}
+        <button class="btn btn-outline btn-sm" disabled style="opacity:.4;cursor:not-allowed" title="Alle genehmigten Zeiterfassungen sind bereits gesendet">✓ Bereits ${cu.role==='geschaeftsfuehrer'?'eingereicht':'an GF gesendet'}</button>
+      </div>`;
+    }
     // Status-Text + Button-Beschriftung je nach Vollständigkeit / Nachreichung.
     const statusText=allApproved
       ? `✓ Alle ${total} Zeiterfassungen für ${monthLabel} genehmigt`
