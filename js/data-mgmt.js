@@ -7,6 +7,20 @@ import { openModal, closeModal, toast, diffMin, addMin, localISODate } from './u
 // sind ausschließlich dem Admin vorbehalten. Normale Nutzung (eigene Zeiten) bleibt offen.
 // NUR der Account „Administrator" – delegierter Verwaltungs-Zugriff reicht dafür nicht.
 const _isAdmin = () => { const cu=window.cu; return !!(cu && cu.role==='admin'); };
+// EXPORT (nur Lesen) zusätzlich für „System-Verwaltung" (Recht zugriff_verwaltung, vom Admin vergeben).
+// Import/Überschreiben/Reset bleiben ausschließlich beim Administrator.
+const _mayExport = () => { const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true;
+  try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } };
+// Für Nicht-Admins: Passwort-Hashes und Reset-Daten NICHT in die Datei (Export ist dann eine
+// Lese-Kopie, kein vollständiger Wiederherstellungsstand).
+function _exportZe(){
+  const d=JSON.parse(JSON.stringify(getData()||{}));
+  if(_isAdmin()) return d;
+  ['users','archivedUsers'].forEach(k=>{ if(Array.isArray(d[k])) d[k].forEach(u=>{ if(u) delete u.pw; }); });
+  ['pwResetTokens','pwResetRequests','loginDir','uidUser','allowed','admins','gfAdmins','managers','grants'].forEach(k=>{ delete d[k]; });
+  d._redacted='ohne Passwort-Hashes (Export durch System-Verwaltung)';
+  return d;
+}
 
 // Manuelle Überträge, die vom automatischen (minutengenauen) Wert abweichen, auf
 // Automatik zurücksetzen. Behebt z.B. alte, versehentlich auf ganze Stunden
@@ -42,20 +56,20 @@ function _dlJson(obj, prefix){
 }
 // Nur Zeiterfassung
 export function exportData(){
-  if(!_isAdmin()){ toast('Nur der Administrator darf die Gesamtdaten exportieren.','err'); return; }
-  _dlJson(getData(), 'Zeiterfassung-Backup');
+  if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf die Gesamtdaten exportieren.','err'); return; }
+  _dlJson(_exportZe(), 'Zeiterfassung-Backup');
   toast('Zeiterfassungs-Backup erstellt ✓','ok');
 }
 // Alles: Zeiterfassung + CRM in EINER Datei (echtes Komplett-Backup)
 export function exportAllData(){
-  if(!_isAdmin()){ toast('Nur der Administrator darf exportieren.','err'); return; }
+  if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
   let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
-  _dlJson({ _type:'tps-vollbackup', exportedAt:new Date().toISOString(), zeiterfassung:getData(), crm:crm }, 'TPS-Vollbackup');
+  _dlJson({ _type:'tps-vollbackup', exportedAt:new Date().toISOString(), zeiterfassung:_exportZe(), crm:crm }, 'TPS-Vollbackup');
   toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM) ✓':'Nur Zeiterfassung gesichert – CRM war nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
 }
 // Nur CRM
 export function exportCrmOnly(){
-  if(!_isAdmin()){ toast('Nur der Administrator darf exportieren.','err'); return; }
+  if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
   let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
   if(!crm){ toast('CRM-Daten nicht verfügbar – bitte das CRM einmal öffnen und erneut versuchen.','err'); return; }
   _dlJson({ _type:'tps-crm-backup', exportedAt:new Date().toISOString(), crm:crm }, 'CRM-Backup');

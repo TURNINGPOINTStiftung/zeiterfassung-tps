@@ -106,7 +106,7 @@ Rückfall: CANDIDATE-v3.json. Neu gegenüber v3 („Rechte vergibt nur der Admin
 Getestet: 30 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut).
 Reihenfolge: App ≥ v366 zuerst (läuft auch mit v3), Admin einmal anmelden (schreibt grants), DANN v4.
 
-## CANDIDATE-v5.json – bereit (noch NICHT live)
+## Stand 2026-10-01: CANDIDATE-v5.json ist LIVE (App v374, tpsPw Revision 00003)
 Rückfall: CANDIDATE-v4.json. Neu gegenüber v4: Recht „System-Verwaltung" (`grants/zugriff_verwaltung`)
 darf bei ANDEREN, bestehenden Nicht-Admin-Nutzern die Stammdaten-Felder schreiben
 (`users/$i/<feld>`: email, city, bundesland, team, teams, teamHistory, customRole(s), wh, dpw, al,
@@ -117,4 +117,3 @@ läuft über die Cloud Function tpsPw (offboard archive:true / reboard restore:t
 Zusätzlich: Recht „Abwesenheiten genehmigen" (grants/genehmigung_abwesenheit) darf wie managers fremde
 entries/$k und ze_audit schreiben (Urlaubs-/Gutschrift-Sync beim Freigeben); Status-Freigabe bleibt managers.
 Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut) + Abwesenheits-Fälle.
-Reihenfolge: tpsPw deployen → v5 veröffentlichen → App v367.
