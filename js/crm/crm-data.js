@@ -442,13 +442,15 @@ export function saveAccess(uid, obj){
 export function getAccess(uid){ const d=getCrm(); return (d.access && d.access[uid]) || null; }
 
 // ── Zugriffs-Matrix (welche Rolle sieht welches Modul) ─────────────
-// Liegt seit v365 in einem EIGENEN Knoten crm/pathAccess (nur Admin darf schreiben), nicht mehr in
+// Liegt seit v365 in einem EIGENEN Knoten crm/pathAccess (nur Admin darf schreiben), nicht in
 // crm/config (das dürfen CRM-Verwalter ändern). Marker _v:1 = migriert; bis dahin gilt der alte
 // Stand aus config.pathAccess.
 export function getPathAccess(){
   const d=getCrm();
-  if(d.pathAccess && d.pathAccess._v){ const o=Object.assign({}, d.pathAccess); delete o._v; return o; }
-  return (d.config && d.config.pathAccess && typeof d.config.pathAccess==='object') ? d.config.pathAccess : {};
+  // Kein Rückgriff mehr auf config.pathAccess (war in der Produktion leer; CRM-Verwalter dürfen config
+  // schreiben → ein Rückgriff wäre eine Hintertür).
+  if(d.pathAccess && typeof d.pathAccess==='object'){ const o=Object.assign({}, d.pathAccess); delete o._v; return o; }
+  return {};
 }
 export function isPathAccessMigrated(){ const d=getCrm(); return !!(d.pathAccess && d.pathAccess._v); }
 export function savePathAccess(pa){

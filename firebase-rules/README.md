@@ -104,5 +104,4 @@ Rückfall: CANDIDATE-v3.json. Neu gegenüber v3 („Rechte vergibt nur der Admin
 - `crm_history/$id`: nur anhängbar, `byId` = eigene App-ID, `ts` nicht in der Zukunft; löschen nur
   Einträge älter als 7 Tage (automatisches Aufräumen) oder Admin.
 Getestet: 30 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut).
-Reihenfolge: App ≥ v365 zuerst (läuft auch mit v3), Admin einmal anmelden (schreibt grants +
-migriert pathAccess), DANN v4 veröffentlichen.
+Reihenfolge: App ≥ v366 zuerst (läuft auch mit v3), Admin einmal anmelden (schreibt grants), DANN v4.
