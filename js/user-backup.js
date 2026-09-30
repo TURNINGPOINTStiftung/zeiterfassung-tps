@@ -213,6 +213,110 @@ export function ubConfirmRestore(){
   try{ window.renderZeiterfassung && window.renderZeiterfassung(); window.renderOverview && window.renderOverview(); }catch(e){}
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  Phase 2 – Automatischer Cloud-Schnappschuss (Firebase Storage) am 10.
+//  • Opt-in per Häkchen im Profil (localStorage, pro Gerät).
+//  • Läuft beim ersten App-Start am/nach dem 10., 1× pro Monat (Merker localStorage).
+//  • Ziel: backups/user/<authUid>/<YYYY-MM>_ze.json  (+ _reports.json für GF).
+//  • Quelle wie beim manuellen Backup: Server + lokal zusammengeführt.
+//  • Best effort: schlägt still fehl, solange die Storage-Regel noch nicht veröffentlicht ist.
+//  • Wiederherstellen aus der Cloud: eigene Schnappschuss-Liste → auswählen → gleicher Restore.
+// ══════════════════════════════════════════════════════════════════
+const _AB_ON_KEY = 'tp_zt_autobackup';        // '1' = aktiviert (pro Gerät)
+const _AB_LAST_KEY = 'tp_zt_autobackup_last';  // 'YYYY-MM' = letzter erledigter Monat
+
+export function autoBackupOn(){ try{ return localStorage.getItem(_AB_ON_KEY) === '1'; }catch(e){ return false; } }
+export function toggleAutoBackup(cb){
+  try{ localStorage.setItem(_AB_ON_KEY, cb && cb.checked ? '1' : '0'); }catch(e){}
+  toast(cb && cb.checked ? 'Automatische Monats-Sicherung aktiviert (dieses Gerät) ✓' : 'Automatische Monats-Sicherung deaktiviert.', 'ok');
+  if(cb && cb.checked) setTimeout(() => { try{ runAutoUserBackup(); }catch(e){} }, 500);   // gleich einmal versuchen
+}
+
+function _storageReady(){
+  try{ return !!(window.firebase && firebase.storage && firebase.auth && firebase.auth().currentUser
+    && window.cu && !window._offlineMode && !window._cloudUnverified); }catch(e){ return false; }
+}
+function _putStorage(path, obj){
+  const body = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+  return firebase.storage().ref(path).put(body, { contentType: 'application/json' });
+}
+
+// Wird 20 s nach Login über backup.js/runAutoBackup ausgelöst.
+export async function runAutoUserBackup(){
+  try{
+    const cu = window.cu; if(!cu || !autoBackupOn()) return;
+    if(!_zeActive(cu) && !_isGF(cu)) return;
+    const now = new Date();
+    if(now.getDate() < 10) return;                        // erst ab dem 10.
+    const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    try{ if(localStorage.getItem(_AB_LAST_KEY) === ym) return; }catch(e){}   // diesen Monat schon erledigt
+    if(!_storageReady()) return;
+    const uid = firebase.auth().currentUser.uid;
+    const { data: allEntries } = await _backupEntries();
+    if(_zeActive(cu)){
+      const keys = _ownKeys(allEntries, cu.id); const entries = {}; keys.forEach(k => entries[k] = allEntries[k]);
+      await _putStorage('backups/user/'+uid+'/'+ym+'_ze.json',
+        { _type:BK_TYPE, version:1, exportedAt:new Date().toISOString(), source:'auto', userId:cu.id, userName:cu.name, monthCount:keys.length, entries });
+    }
+    if(_isGF(cu)){
+      const entries = {}; let n = 0;
+      Object.keys(allEntries).forEach(k => { const e = allEntries[k]; if(e && (e.status==='submitted'||e.status==='approved')){ entries[k]=e; n++; } });
+      await _putStorage('backups/user/'+uid+'/'+ym+'_reports.json',
+        { _type:'tps-ze-reports-backup', version:1, exportedAt:new Date().toISOString(), source:'auto', byUser:cu.id, reportCount:n, entries });
+    }
+    try{ localStorage.setItem(_AB_LAST_KEY, ym); }catch(e){}
+    console.info('[UserBackup] Monats-Schnappschuss ' + ym + ' in der Cloud gespeichert.');
+  }catch(e){
+    console.warn('[UserBackup] Auto-Cloud-Backup fehlgeschlagen (Storage-Regel schon veröffentlicht?):', e && (e.code||e.message));
+  }
+}
+
+// Eigene Cloud-Schnappschüsse auflisten + wiederherstellen.
+export async function showCloudSnapshots(){
+  const cu = window.cu; if(!cu){ toast('Nicht angemeldet.','err'); return; }
+  if(!_storageReady()){ toast('Cloud gerade nicht erreichbar – bitte online und angemeldet erneut versuchen.','err'); return; }
+  openModal('<h3 style="margin-bottom:10px">☁ Cloud-Schnappschüsse</h3><p style="color:var(--muted)">Lädt …</p>');
+  let items = [];
+  try{
+    const uid = firebase.auth().currentUser.uid;
+    const res = await firebase.storage().ref('backups/user/'+uid).listAll();
+    items = res.items.map(i => i.name).sort().reverse();
+  }catch(e){
+    openModal('<h3 style="margin-bottom:10px">☁ Cloud-Schnappschüsse</h3><p style="color:var(--danger)">Konnte nicht geladen werden ('+esc((e&&(e.code||e.message))||'')+'). Ist die Storage-Regel veröffentlicht?</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
+    return;
+  }
+  const zeItems = items.filter(n => /_ze\.json$/.test(n));
+  const repItems = items.filter(n => /_reports\.json$/.test(n));
+  const _row = (n, isReport) => { const ym = n.slice(0,7);
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'
+      + '<span>'+esc(ym)+(isReport?' <span class="chip" style="font-size:10px">Berichte</span>':'')+'</span>'
+      + (isReport ? '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud(\''+esc(n)+'\')">⬇ Laden</button>'
+                  : '<button class="btn btn-outline btn-sm" onclick="ubRestoreCloud(\''+esc(n)+'\')">↩ Wiederherstellen</button>')
+      + '</div>'; };
+  const body = (zeItems.length || repItems.length)
+    ? (zeItems.length ? '<div style="font-size:12px;font-weight:700;color:var(--primary);margin:4px 0">Meine Zeiterfassung</div>'+zeItems.map(n=>_row(n,false)).join('') : '')
+      + (repItems.length ? '<div style="font-size:12px;font-weight:700;color:var(--primary);margin:10px 0 4px">Eingereichte Berichte</div>'+repItems.map(n=>_row(n,true)).join('') : '')
+    : '<p style="color:var(--muted)">Noch keine Cloud-Schnappschüsse vorhanden. Sie entstehen automatisch am 10. (wenn aktiviert).</p>';
+  openModal('<h3 style="margin-bottom:6px">☁ Cloud-Schnappschüsse</h3>'
+    + '<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Automatische Monats-Sicherungen. Wiederherstellen spielt nur deine eigenen, nicht genehmigten Monate ein (mit Vorschau).</p>'
+    + '<div style="max-height:50vh;overflow-y:auto">'+body+'</div>'
+    + '<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
+}
+async function _fetchCloud(name){
+  const uid = firebase.auth().currentUser.uid;
+  const url = await firebase.storage().ref('backups/user/'+uid+'/'+name).getDownloadURL();
+  const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+export async function ubRestoreCloud(name){
+  try{ const blob = await _fetchCloud(name); _previewRestore(blob, null); }   // nutzt den gleichen Vorschau-/Restore-Fluss
+  catch(e){ toast('Schnappschuss konnte nicht geladen werden.','err'); }
+}
+export async function ubDownloadCloud(name){
+  try{ const blob = await _fetchCloud(name); _dl(blob, name.replace(/\.json$/,'') + '.json'); toast('Schnappschuss heruntergeladen ✓','ok'); }
+  catch(e){ toast('Schnappschuss konnte nicht geladen werden.','err'); }
+}
+
 // ── UI-Abschnitt für den Profil-Dialog ─────────────────────────────────
 // Wird nur angezeigt, wenn die Zeiterfassung für die Person aktiv ist.
 export function ownBackupSectionHtml(cu){
@@ -236,6 +340,18 @@ export function ownBackupSectionHtml(cu){
       + '<button type="button" class="btn btn-outline" onclick="exportSubmittedReports()">⬇ Eingereichte Berichte herunterladen</button>'
       + '</div>';
   }
+  // Cloud-Schnappschüsse + automatische Monats-Sicherung (für ZE-Nutzer und GF).
+  if(_zeActive(cu) || _isGF(cu)){
+    html += '<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">'
+      + '<div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">☁ Cloud-Sicherung</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Automatische Sicherung in der Cloud, einmal im Monat ab dem 10. Wiederherstellen jederzeit aus der Liste.</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+      + '<button type="button" class="btn btn-outline" onclick="showCloudSnapshots()">☁ Cloud-Schnappschüsse …</button>'
+      + '</div>'
+      + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+      + '<input type="checkbox" onchange="toggleAutoBackup(this)"' + (autoBackupOn() ? ' checked' : '') + '>'
+      + 'Automatische Monats-Sicherung am 10. aktivieren <span style="color:var(--muted);font-size:11px">(dieses Gerät)</span></label>';
+  }
   return html;
 }
 
@@ -245,4 +361,10 @@ try{
   window.importOwnZEFile = importOwnZEFile;
   window.ubConfirmRestore = ubConfirmRestore;
   window.ownBackupSectionHtml = ownBackupSectionHtml;
+  window.runAutoUserBackup = runAutoUserBackup;
+  window.toggleAutoBackup = toggleAutoBackup;
+  window.autoBackupOn = autoBackupOn;
+  window.showCloudSnapshots = showCloudSnapshots;
+  window.ubRestoreCloud = ubRestoreCloud;
+  window.ubDownloadCloud = ubDownloadCloud;
 }catch(_){}

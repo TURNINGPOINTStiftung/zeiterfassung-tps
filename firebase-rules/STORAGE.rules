@@ -30,6 +30,19 @@ service firebase.storage {
       allow read, delete: if isAdmin();   // read = get + list
       allow update: if false;             // Backups sind unveränderlich
     }
+    // ── Persönliche Monats-Schnappschüsse (js/user-backup.js, Phase 2) ──
+    //    backups/user/<uid>/<YYYY-MM>_ze.json  bzw. _reports.json
+    //    Jede Person darf NUR ihren EIGENEN Ordner schreiben/lesen/aufräumen (uid == eigene Auth-UID);
+    //    der Admin darf alles lesen (siehe backups/{rest=**}).
+    match /backups/user/{uid}/{name} {
+      allow create, update:
+        if appUser() && uid == request.auth.uid
+        && name.matches('^[0-9]{4}-[0-9]{2}_(ze|reports)[.]json$')
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType == 'application/json';
+      allow read, delete: if isAdmin() || (appUser() && uid == request.auth.uid);   // read = get + list des eigenen Ordners
+    }
+
     match /backups/{rest=**} {
       allow read: if isAdmin();           // Auflisten von backups/ für die Verwaltung
     }

@@ -12,6 +12,7 @@
 //  Alles best effort: Fehler landen nur in der Konsole und stören die App nie.
 // ══════════════════════════════════════════════════════════════════
 import { localISODate, openModal, esc, toast } from './utils.js';
+import { runAutoUserBackup } from './user-backup.js';   // persönlicher Monats-Schnappschuss (Phase 2)
 
 const KEEP_DAILY_DAYS = 90;
 let _running = false;
@@ -22,6 +23,8 @@ function _ready(){
 }
 
 export async function runAutoBackup(){
+  // Persönlichen Monats-Schnappschuss (Phase 2) unabhängig mit anstoßen – hat eigene Guards.
+  try{ runAutoUserBackup(); }catch(_){}
   if(_running || !_ready()) return;
   _running = true;
   try{
