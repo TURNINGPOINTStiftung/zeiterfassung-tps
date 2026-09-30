@@ -91,7 +91,7 @@ Getestet: 15 Fälle im Projekt zeiterfassung-test (ruletest/ruletest_audit, dana
 Wichtig: Regeln VOR einer App-Version veröffentlichen, die ze_audit schreibt (sonst wird das
 atomare update inkl. der eigentlichen Änderung abgelehnt).
 
-## Stand 2026-09-30: CANDIDATE-v4.json – bereit (noch NICHT live)
+## Stand 2026-09-30: CANDIDATE-v4.json ist LIVE (veröffentlicht 2026-09-30, App v366)
 Rückfall: CANDIDATE-v3.json. Neu gegenüber v3 („Rechte vergibt nur der Admin – vergebene Rechte wirken"):
 - Neue Freigabelisten `zeiterfassung/grants/<recht>/<authUid>` (nur Admin schreibt, abgeleitet von
   refreshPermissionAllowlists in admin-setup.js; läuft beim Admin-Start und nach Rechte-Änderungen).
