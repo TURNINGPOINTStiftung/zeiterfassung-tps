@@ -71,12 +71,26 @@ export async function saveProfile(){
   let newPwHash=null;
   if(pwCur||pwNew||pwConfirm){
     if(!pwCur){ toast('Bitte aktuelles Passwort eingeben.','err'); return; }
-    const user=getUser(cu.id);
-    const match=(await verifyPw(pwCur,user.pw)).ok;
-    if(!match){ toast('Aktuelles Passwort falsch.','err'); return; }
     if(!pwNew){ toast('Bitte neues Passwort eingeben.','err'); return; }
     if(pwNew!==pwConfirm){ toast('Neue Passwörter stimmen nicht überein.','err'); return; }
     if(pwNew.length<8){ toast('Neues Passwort zu kurz (min. 8 Zeichen).','err'); return; }
+    // Maßgeblich für die Anmeldung ist das Passwort des Firebase-Kontos (js/firebase.js
+    // authenticate). Deshalb: aktuelles Passwort DORT prüfen (Re-Auth) und das neue ZUERST dort
+    // setzen – erst danach den App-Hash. Früher wurde nur der Hash geändert: das alte Passwort
+    // blieb gültig, das neue funktionierte nicht. (Re-Auth statt Hash-Vergleich, damit auch
+    // Personen mit bereits auseinandergelaufenem Hash ihr Passwort wieder korrekt setzen können.)
+    const fu=(window.firebase&&firebase.auth&&firebase.auth().currentUser)||null;
+    if(!fu||!fu.email){ toast('Keine gültige Anmeldung – bitte ab- und wieder anmelden.','err'); return; }
+    try{
+      const cred=firebase.auth.EmailAuthProvider.credential(fu.email, pwCur);
+      await fu.reauthenticateWithCredential(cred);
+    }catch(e){
+      const c=(e&&e.code)||'';
+      toast(/wrong-password|invalid-credential|invalid-login/.test(c)?'Aktuelles Passwort falsch.':('Prüfung fehlgeschlagen: '+(c||e&&e.message||'')),'err');
+      return;
+    }
+    try{ await fu.updatePassword(pwNew); }
+    catch(e){ toast('Neues Passwort konnte nicht gesetzt werden: '+((e&&(e.code||e.message))||''),'err'); return; }
     newPwHash=await makePwRecord(pwNew);
   }
   // Werkstudent: Vorlesungszeiten + Brückentage einsammeln (aktive Slots + im Verlauf mitgeführte),
@@ -88,7 +102,7 @@ export async function saveProfile(){
   }
   // Nur die eigenen Selbstbedienungs-Felder gezielt schreiben (users/<idx>/<feld>) – passt zur
   // Owner-Regel und rührt den restlichen users-Array (role/teams/… = Admin-only) nicht an.
-  const patch={ email, city, bundesland };
+  const patch={ email, city, bundesland:bl };   // (vorher `bundesland` = undefinierte Variable → Speichern brach immer ab)
   if(newPwHash) patch.pw=newPwHash;
   if(lecturePeriods) patch.lecturePeriods=lecturePeriods;
   if(lectureFreeDays) patch.lectureFreeDays=lectureFreeDays;
