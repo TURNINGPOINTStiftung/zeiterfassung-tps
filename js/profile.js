@@ -1,6 +1,7 @@
 import { getUser, getData, setUserFields } from './data.js';
 import { verifyPw, makePwRecord } from './auth.js';
 import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate } from './utils.js';
+import { ownBackupSectionHtml } from './user-backup.js';
 
 // Ist der/die aktuelle Nutzer:in als „Werkstudent" benannt?
 function _cuIsWerkstudent(cu){
@@ -50,6 +51,7 @@ export function openProfileModal(){
       <input type="password" id="prof-pw-new" placeholder="Neues Passwort" autocomplete="new-password"></div>
     <div class="form-group"><label>Neues Passwort bestätigen</label>
       <input type="password" id="prof-pw-confirm" placeholder="Bestätigung" autocomplete="new-password"></div>
+    ${ownBackupSectionHtml(cu)}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🔄 App aktualisieren</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Holt die neueste Version (Cache leeren & neu laden) – z. B. nach einem Update.</div>
