@@ -256,6 +256,8 @@ export function savePermission(permKey,role,checked){
     if(!checked&&idx>=0) cur.splice(idx,1);
     d.rolePermissions[permKey]=cur;
   });
+  // Freigabelisten (zeiterfassung/grants) nachziehen, damit das Recht auch serverseitig wirkt.
+  try{ window.refreshPermissionAllowlists?.({log:()=>{}})?.catch(e=>console.warn('Perms-Refresh (Matrix):', e&&e.message)); }catch(e){}
   // App-Navigation sofort aktualisieren
   window.initApp?.();
 }
@@ -673,8 +675,10 @@ function userForm(u={}){
         ? vereine.map(v=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" class="uf-crmv" value="${esc(v.id)}"${accIds.includes(v.id)?' checked':''}> ${esc(v.name)}</label>`).join('')
         : '<span style="font-size:12px;color:var(--muted)">Keine Vereine im CRM angelegt.</span>';
       const TRI=[['kein','Kein'],['nutzen','Nutzen'],['verwaltend','Verwaltend']];
-      const seg=(key,cur)=>`<div class="uf-seg">${TRI.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod(${jsq(key)})" style="display:none">${o[1]}</label>`).join('')}</div>`;
-      const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${key!=='crm'?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).</div>`:''}</div></div>`;
+      // KI, Messe, Auswertung haben nichts zu verwalten → nur Kein/Nutzen (Verteiler folgt später).
+      const NOADM=new Set(['ki','messe','auswertung']);
+      const seg=(key,cur)=>{ const opts=NOADM.has(key)?TRI.slice(0,2):TRI; if(NOADM.has(key)&&cur==='verwaltend') cur='nutzen'; return `<div class="uf-seg">${opts.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod(${jsq(key)})" style="display:none">${o[1]}</label>`).join('')}</div>` };
+      const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${(key!=='crm'&&!NOADM.has(key))?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${key==='kalender'?'🛠️ Darf Termine und Veranstaltungen anlegen und bearbeiten.':'🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).'}</div>`:''}</div></div>`;
       const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
       const crmBody=`<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">Umfang</label>
           <select id="uf-crmlevel" onchange="ufSetMod('crm')">${LV.map(([L,t])=>`<option value="${L}"${acc.crmLevel===L?' selected':''}>${t}</option>`).join('')}</select></div>
@@ -736,7 +740,7 @@ function userForm(u={}){
         ${modBlock('ki','🧠','KI')}
         ${modBlock('messe','🎪','Messemodus')}
         ${modBlock('auswertung','📊','Auswertung')}
-        ${modBlock('kalender','📅','Kalender')}
+        ${modBlock('kalender','📅','Kalender','<div style="font-size:12px;color:var(--muted)">Darf den Kalender ansehen.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;

@@ -12,12 +12,14 @@
 //   • alles in try/catch – ein CRM-Fehler kann die ZE nicht erschlagen
 // ══════════════════════════════════════════════════════════════════
 
+import { toast } from '../utils.js';
+
 const CRM_LS_KEY = 'tps_crm_v1';
 // Eingebaute Standard-Bäume (Erst-Befüllung). Weitere Bäume kann der Admin
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -28,6 +30,50 @@ let _onChange= null;   // Re-Render-Hook (von der UI gesetzt)
 const HISTORY_MS = 7*24*60*60*1000;  // Aufbewahrung: 7 Tage
 
 export function setCrmRenderHook(fn){ _onChange = fn; }
+
+// ── Schreib-Warteschlange (nur NOCH NICHT übertragene eigene Änderungen) ──
+// Früher lud jedes Gerät beim Start ALLE lokal vorhandenen Datensätze hoch, die in der Cloud
+// fehlten → ein Gerät mit altem Stand hat woanders gelöschte Einträge wiederbelebt. Jetzt merkt
+// sich jedes Gerät nur die Pfade, deren Schreibvorgang noch nicht bestätigt ist, und spielt beim
+// Start genau diese nach. Verweigert die Datenbank (fehlendes Recht), wird der Pfad verworfen.
+const CRM_PENDING_KEY = 'tps_crm_pending_v1';
+function _pendLoad(){ try{ const p=JSON.parse(localStorage.getItem(CRM_PENDING_KEY)||'{}'); return (p&&typeof p==='object')?p:{}; }catch(e){ return {}; } }
+function _pendSave(p){ try{ localStorage.setItem(CRM_PENDING_KEY, JSON.stringify(p)); }catch(e){} }
+function _isDenied(e){ const s=String((e&&(e.code||''))+' '+(e&&e.message||'')); return /permission/i.test(s); }
+let _deniedToastTs = 0;
+function _denied(path){
+  console.warn('CRM: Schreiben verweigert (fehlendes Recht):', path);
+  const now=Date.now(); if(now-_deniedToastTs<4000) return; _deniedToastTs=now;
+  try{ toast('Keine Berechtigung – Änderung wurde nicht gespeichert.','err'); }catch(e){}
+}
+function _write(coll, id, val){
+  const path = id==null ? coll : coll+'/'+id;
+  const tok  = Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  const p=_pendLoad(); p[path]={ op: val===null?'del':'set', t: tok }; _pendSave(p);
+  if(!_ref) return Promise.resolve();
+  const clear=()=>{ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } };
+  let pr;
+  try{ const r=_ref.child(path); pr = val===null ? r.remove() : r.set(val); }catch(e){ return Promise.resolve(); }
+  return pr.then(clear).catch(e=>{
+    if(_isDenied(e)){ clear(); _denied(path); }
+    console.warn('CRM Firebase-Fehler ('+path+'):', e && e.message);
+  });
+}
+// Beim Start: nur die eigenen, noch offenen Schreibvorgänge nachholen.
+function _replayPending(local){
+  const p=_pendLoad();
+  Object.keys(p).forEach(path=>{
+    const it=p[path]||{}; const parts=path.split('/');
+    let val=null;
+    if(it.op==='set'){
+      val = parts.length>1 ? (local[parts[0]]&&local[parts[0]][parts[1]]) : local[parts[0]];
+      if(val==null){ delete p[path]; return; }   // lokal nicht mehr vorhanden → nichts nachzuholen
+    }
+    delete p[path]; _pendSave(p);
+    _write(parts[0], parts.length>1?parts[1]:null, val);
+  });
+  _pendSave(p);
+}
 
 // ── Änderungs-Verlauf (Backup) ─────────────────────────────────────
 // Jede inhaltliche Änderung (Anlegen/Ändern/Löschen) wird mit Person +
@@ -84,7 +130,7 @@ export function restoreHistory(entry){
 }
 
 function freshCrm(){
-  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null };
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null, pathAccess:null };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }
@@ -129,34 +175,23 @@ export function ensureCrmReady(){
         // normalen CRM-Sync nicht aufbläht. Wird nur bei Bedarf (Admin) gelesen.
         try{ _histRef = firebase.database().ref('crm_history'); pruneHistory(HISTORY_MS); }catch(e){ _histRef=null; }
         const snap = await _ref.once('value');
-        // ── Merge lokal ⇄ Cloud (Auto-Upload) ────────────────────────
-        // Firebase ist Quelle der Wahrheit; ABER lokal vorhandene Datensätze,
-        // die in der Cloud fehlen ODER lokal neuer sind (updatedAt), werden
-        // hochgeladen. So gehen offline/regel-blockiert angelegte Einträge
-        // nicht verloren und erscheinen nach Regel-Fix auch auf Mobil.
+        // ── Cloud ist Quelle der Wahrheit ──────────────────────────────
+        // Nur die EIGENEN, noch nicht bestätigten Änderungen dieses Geräts (Warteschlange)
+        // werden über den Cloud-Stand gelegt und nachgeholt – nichts sonst. So kann ein Gerät
+        // mit altem Cache keine woanders gelöschten Datensätze mehr wiederbeleben.
         const fb    = _normalize(snap.val() || {});
         const local = _cache || freshCrm();
-        // Datensatz-Sammlungen (alle objekt-wertigen Knoten außer 'config')
-        const COLLS = Object.keys(local).filter(k=> k!=='config' && local[k] && typeof local[k]==='object');
-        COLLS.forEach(coll=>{
-          const lobj = local[coll] || {};
-          if(!fb[coll]) fb[coll] = {};
-          Object.keys(lobj).forEach(id=>{
-            const lrec = lobj[id]; if(!lrec || typeof lrec!=='object') return;
-            const frec = fb[coll][id];
-            if(!frec || (lrec.updatedAt||0) > (frec.updatedAt||0)){
-              fb[coll][id] = lrec;
-              try{ if(_ref) _ref.child(coll).child(id).set(lrec).catch(()=>{}); }catch(e){}
-            }
-          });
+        const pend  = _pendLoad();
+        Object.keys(pend).forEach(path=>{
+          const it=pend[path]||{}; const parts=path.split('/'); const c=parts[0], id=parts[1];
+          if(id==null){ if(it.op==='set' && local[c]!=null) fb[c]=local[c]; return; }
+          if(!fb[c] || typeof fb[c]!=='object') fb[c]={};
+          if(it.op==='del') delete fb[c][id];
+          else if(local[c] && local[c][id]) fb[c][id]=local[c][id];
         });
-        // Konfiguration: lokal neuere Version hochladen (sonst gewinnt die Cloud)
-        if(local.config && (!fb.config || (local.config.updatedAt||0) > (fb.config.updatedAt||0))){
-          fb.config = local.config;
-          try{ if(_ref) _ref.child('config').set(local.config).catch(()=>{}); }catch(e){}
-        }
         _cache = fb;
         _persistLocal();
+        _replayPending(local);
         // Realtime: nur den CRM-Teilbaum beobachten
         _ref.on('value', s => {
           try{
@@ -191,7 +226,7 @@ export function saveEntity(tree, entity){
   _persistLocal();
   _logHistory(tree, entity.id, 'save', entity, (entity.stamm&&entity.stamm.name)||entity.name||'');
   try{
-    if(_ref) return _ref.child(tree).child(entity.id).set(entity).catch(e=>{
+    return _write(tree, entity.id, entity).catch(e=>{
       console.warn('CRM saveEntity Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveEntity:', e && e.message); }
@@ -206,7 +241,7 @@ export function deleteEntity(tree, id){
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child(tree).child(id).remove().catch(e=>{
+    return _write(tree, id, null).catch(e=>{
       console.warn('CRM deleteEntity Firebase-Fehler:', e && e.message);
     });
   }catch(e){ console.warn('CRM deleteEntity:', e && e.message); }
@@ -239,7 +274,7 @@ export function saveVorlage(v){
   _persistLocal();
   _logHistory('vorlagen', v.id, 'save', v, v.name||'');
   try{
-    if(_ref) return _ref.child('vorlagen').child(v.id).set(v).catch(e=>{
+    return _write('vorlagen', v.id, v).catch(e=>{
       console.warn('CRM saveVorlage Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveVorlage:', e && e.message); }
@@ -253,7 +288,7 @@ export function deleteVorlage(id){
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('vorlagen').child(id).remove().catch(e=>{
+    return _write('vorlagen', id, null).catch(e=>{
       console.warn('CRM deleteVorlage Firebase-Fehler:', e && e.message);
     });
   }catch(e){ console.warn('CRM deleteVorlage:', e && e.message); }
@@ -283,7 +318,7 @@ export function saveTeamProjekt(p){
   _persistLocal();
   _logHistory('teamprojekte', p.id, 'save', p, p.name||'');
   try{
-    if(_ref) return _ref.child('teamprojekte').child(p.id).set(p).catch(e=>{
+    return _write('teamprojekte', p.id, p).catch(e=>{
       console.warn('CRM saveTeamProjekt Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveTeamProjekt:', e && e.message); }
@@ -297,7 +332,7 @@ export function deleteTeamProjekt(id){
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('teamprojekte').child(id).remove().catch(e=>{
+    return _write('teamprojekte', id, null).catch(e=>{
       console.warn('CRM deleteTeamProjekt Firebase-Fehler:', e && e.message);
     });
   }catch(e){ console.warn('CRM deleteTeamProjekt:', e && e.message); }
@@ -326,7 +361,7 @@ export function saveVerteiler(v){
   _persistLocal();
   _logHistory('verteiler', v.id, 'save', v, v.name||'');
   try{
-    if(_ref) return _ref.child('verteiler').child(v.id).set(v).catch(e=>{
+    return _write('verteiler', v.id, v).catch(e=>{
       console.warn('CRM saveVerteiler Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveVerteiler:', e && e.message); }
@@ -340,7 +375,7 @@ export function deleteVerteiler(id){
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('verteiler').child(id).remove().catch(e=>{
+    return _write('verteiler', id, null).catch(e=>{
       console.warn('CRM deleteVerteiler Firebase-Fehler:', e && e.message);
     });
   }catch(e){ console.warn('CRM deleteVerteiler:', e && e.message); }
@@ -367,7 +402,7 @@ export function saveVeranstaltung(v){
   _persistLocal();
   _logHistory('veranstaltungen', v.id, 'save', v, v.titel||'');
   try{
-    if(_ref) return _ref.child('veranstaltungen').child(v.id).set(v).catch(e=>{
+    return _write('veranstaltungen', v.id, v).catch(e=>{
       console.warn('CRM saveVeranstaltung Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveVeranstaltung:', e && e.message); }
@@ -381,7 +416,7 @@ export function deleteVeranstaltung(id){
   _cache = d;
   _persistLocal();
   try{
-    if(_ref) return _ref.child('veranstaltungen').child(id).remove().catch(e=>{
+    return _write('veranstaltungen', id, null).catch(e=>{
       console.warn('CRM deleteVeranstaltung Firebase-Fehler:', e && e.message);
     });
   }catch(e){ console.warn('CRM deleteVeranstaltung:', e && e.message); }
@@ -402,15 +437,25 @@ export function saveAccess(uid, obj){
   const d=getCrm(); if(!d.access) d.access={};
   if(obj===null) delete d.access[uid]; else d.access[uid]=obj;
   _cache=d; _persistLocal();
-  try{
-    if(_ref){
-      const ref=_ref.child('access').child(uid);
-      return (obj===null?ref.remove():ref.set(obj)).catch(e=>console.warn('CRM saveAccess:', e && e.message));
-    }
-  }catch(e){ console.warn('CRM saveAccess:', e && e.message); }
-  return Promise.resolve();
+  return _write('access', uid, obj===null?null:obj);
 }
 export function getAccess(uid){ const d=getCrm(); return (d.access && d.access[uid]) || null; }
+
+// ── Zugriffs-Matrix (welche Rolle sieht welches Modul) ─────────────
+// Liegt seit v365 in einem EIGENEN Knoten crm/pathAccess (nur Admin darf schreiben), nicht mehr in
+// crm/config (das dürfen CRM-Verwalter ändern). Marker _v:1 = migriert; bis dahin gilt der alte
+// Stand aus config.pathAccess.
+export function getPathAccess(){
+  const d=getCrm();
+  if(d.pathAccess && d.pathAccess._v){ const o=Object.assign({}, d.pathAccess); delete o._v; return o; }
+  return (d.config && d.config.pathAccess && typeof d.config.pathAccess==='object') ? d.config.pathAccess : {};
+}
+export function isPathAccessMigrated(){ const d=getCrm(); return !!(d.pathAccess && d.pathAccess._v); }
+export function savePathAccess(pa){
+  const val=Object.assign({}, (pa&&typeof pa==='object')?pa:{}, { _v:1 });
+  const d=getCrm(); d.pathAccess=val; _cache=d; _persistLocal();
+  return _write('pathAccess', null, val);
+}
 
 // ── Vollbackup: gesamten CRM-Blob exportieren / wiederherstellen ───
 // exportCrmBlob liefert eine tiefe Kopie aller CRM-Daten (Bäume, config, access, vorlagen,
@@ -438,7 +483,7 @@ export function saveCrmConfig(cfg){
   _persistLocal();
   _logHistory('config', 'config', 'save', cfg, 'CRM-Konfiguration');
   try{
-    if(_ref) return _ref.child('config').set(cfg).catch(e=>{
+    return _write('config', null, cfg).catch(e=>{
       console.warn('CRM saveCrmConfig Firebase-Fehler (lokal gespeichert):', e && e.message);
     });
   }catch(e){ console.warn('CRM saveCrmConfig:', e && e.message); }

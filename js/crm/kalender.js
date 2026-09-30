@@ -8,7 +8,7 @@
 // ══════════════════════════════════════════════════════════════════
 import { getData } from '../data.js';
 import { listVeranstaltungen, getCrm } from './crm-data.js';
-const _RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows']);
+const _RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess']);
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
@@ -117,7 +117,7 @@ function kalGotoTermin(tree,eid){
 function _kalAccess(){
   let ma={}; try{ if(window.crmModuleAccess) ma=window.crmModuleAccess(window.cu)||{}; }catch(e){}
   const hasCrm=((ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'));
-  return { verwaltend: ma.crm==='verwaltend', hasCrm:!!hasCrm };
+  return { verwaltend: ma.kalender==='verwaltend', hasCrm:!!hasCrm };
 }
 // „+ Neu" im Kalender: EIN Fenster mit Umschalter Termin/Veranstaltung (Termin vorgewählt),
 // bleibt im Kalender. Beim Termin wird der CRM-Kontakt per Such-Dropdown gewählt.

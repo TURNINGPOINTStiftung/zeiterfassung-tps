@@ -38,7 +38,7 @@ export function _usersPoisoned(users){
 //                      loginDir/allowed vor versehentlichem Clobber aus einem Cache und
 //                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
 const _CONFIG_NODES     = new Set(['users','archivedUsers','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
-const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','uidUser']);
+const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','uidUser','grants']);
 // Config-Knoten (Nutzer, Teams, Kategorien, Rollen, Rechte) darf NUR noch der Account
 // „Administrator" schreiben – nicht mehr Personen mit delegiertem Verwaltungs-Zugriff.
 // Schützt vor dem Überspielen der Nutzerliste durch ein Gerät mit veraltetem/verstümmeltem

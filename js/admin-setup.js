@@ -10,6 +10,13 @@
 // ══════════════════════════════════════════════════════════════════
 import { _PW_SALT, STORAGE_KEY } from './config.js';
 import { getData, setDataCache } from './data.js';
+import { hasPermission } from './roles.js';
+
+// Rechte, die serverseitig über zeiterfassung/grants geprüft werden (siehe firebase-rules).
+const GRANT_KEYS=['genehmigung_abwesenheit','btn_teamberichte','btn_jahresbericht','tab_gfberichte',
+  'zugriff_verwaltung','zugriff_verwaltung_ze','zugriff_verwaltung_crm','verw_kanban','verw_kalender'];
+// Bereichs-Verwalter-Rechte: System-Verwaltung schließt sie ein (wie _canAdminFor im CRM).
+const AREA_ADMIN_KEYS=['zugriff_verwaltung_ze','zugriff_verwaltung_crm','verw_kanban','verw_kalender'];
 
 const _accountEmail = id => String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 const _stableAuthPw = id => 'tpsfb$'+String(id||'').toLowerCase()+'$'+_PW_SALT;
@@ -229,7 +236,20 @@ export async function refreshPermissionAllowlists(opts){
   await db.ref('zeiterfassung/admins').set(admins);
   await db.ref('zeiterfassung/gfAdmins').set(gfAdmins);
   await db.ref('zeiterfassung/managers').set(managers);
-  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length };
+  // Freigabelisten pro vergebenem Recht: zeiterfassung/grants/<recht>/<authUid> = true.
+  // Die Datenbank-Regeln prüfen dagegen → ein vergebenes Recht wirkt auch serverseitig.
+  // Schreiben darf nur das Administrator-Konto (Regel), also auch nur der Admin vergeben.
+  const grants={};
+  for(const [uid,id] of Object.entries(uidMap)){
+    const u=byId[id]; if(!u || _isAdminUser(u)) continue;
+    const sys=!!hasPermission('zugriff_verwaltung',u);
+    GRANT_KEYS.forEach(k=>{
+      const on = AREA_ADMIN_KEYS.includes(k) ? (sys || !!hasPermission(k,u)) : !!hasPermission(k,u);
+      if(on){ (grants[k]=grants[k]||{})[uid]=true; }
+    });
+  }
+  await db.ref('zeiterfassung/grants').set(grants);
+  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length, grants:Object.keys(grants).map(k=>k+':'+Object.keys(grants[k]).length).join(' ') };
   log('Fertig: '+JSON.stringify(summary));
   return summary;
 }

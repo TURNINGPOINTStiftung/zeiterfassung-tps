@@ -90,3 +90,19 @@ Rückfall: CANDIDATE-v2.json. Neu gegenüber v2:
 Getestet: 15 Fälle im Projekt zeiterfassung-test (ruletest/ruletest_audit, danach zurückgebaut).
 Wichtig: Regeln VOR einer App-Version veröffentlichen, die ze_audit schreibt (sonst wird das
 atomare update inkl. der eigentlichen Änderung abgelehnt).
+
+## Stand 2026-09-30: CANDIDATE-v4.json – bereit (noch NICHT live)
+Rückfall: CANDIDATE-v3.json. Neu gegenüber v3 („Rechte vergibt nur der Admin – vergebene Rechte wirken"):
+- Neue Freigabelisten `zeiterfassung/grants/<recht>/<authUid>` (nur Admin schreibt, abgeleitet von
+  refreshPermissionAllowlists in admin-setup.js; läuft beim Admin-Start und nach Rechte-Änderungen).
+- `vacRequests`: zusätzlich Recht `genehmigung_abwesenheit`; `teamReports`/`yearReports`: zusätzlich
+  `btn_teamberichte`, `btn_jahresbericht`, `tab_gfberichte`.
+- `crm`: Schreiben nur noch pro Sammlung (`$coll`); `crm/access` (CRM-Zugriffsstufen) und
+  `crm/pathAccess` (Zugriffs-Matrix, neu als eigener Knoten) nur Admin; `crm/config` Admin oder
+  Recht `zugriff_verwaltung_crm`; ganzes CRM ersetzen (Restore) nur Admin; `.validate` verhindert,
+  dass access/config/pathAccess über einen Schreibvorgang auf `crm` verschwinden.
+- `crm_history/$id`: nur anhängbar, `byId` = eigene App-ID, `ts` nicht in der Zukunft; löschen nur
+  Einträge älter als 7 Tage (automatisches Aufräumen) oder Admin.
+Getestet: 30 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut).
+Reihenfolge: App ≥ v365 zuerst (läuft auch mit v3), Admin einmal anmelden (schreibt grants +
+migriert pathAccess), DANN v4 veröffentlichen.

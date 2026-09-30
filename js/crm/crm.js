@@ -15,7 +15,8 @@ import {
   saveAccess, getAccess, exportCrmBlob, restoreCrmBlob, getCrmConfig, saveCrmConfig,
   saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
   saveVeranstaltung, deleteVeranstaltung, getVeranstaltung, listVeranstaltungen,
-  listHistory, restoreHistory
+  listHistory, restoreHistory,
+  getPathAccess, savePathAccess, isPathAccessMigrated
 } from './crm-data.js';
 import {
   getTrees, treeByKey, stammFields, memberFunctions,
@@ -348,7 +349,7 @@ function canUsePath(key, cu){
   if(cu.perms && Object.prototype.hasOwnProperty.call(cu.perms, 'path_'+key)) return !!cu.perms['path_'+key];
   // 2. Rollen-Matrix (Verwaltung → Zugriffe).
   try{
-    const c=getCrmConfig(); const row=c&&c.pathAccess&&c.pathAccess[key];
+    const pa=getPathAccess(); const row=pa&&pa[key];
     if(row && Object.prototype.hasOwnProperty.call(row, cu.role)) return !!row[cu.role];
   }catch(e){}
   // 3. Standard (= bisheriges Verhalten).
@@ -2358,7 +2359,7 @@ function crmImportContactsFile(inp){
 // Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
 function crmCanCreateItems(){ return { termin: (crmFull()||crmRestricted()), va: crmFull() }; }
 // Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
-const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows']);
+const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess']);
 function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
     Object.keys(d).forEach(tk=>{ if(_KAL_RESERVED.has(tk)) return; const ents=d[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; if(!e||typeof e!=='object') return; out.push({tree:tk, eid, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); });
@@ -4237,7 +4238,7 @@ function renderVerwaltung(){
 // ── Zugriffs-Matrix (Verwaltung → Zugriffe) ────────────────────────
 function paintVerwZugriff(){
   const host=document.getElementById('verw-zugriff'); if(!host) return;
-  const c=getCrmConfig(); const pa=(c&&c.pathAccess)||{};
+  const pa=getPathAccess()||{};
   const head=`<th style="text-align:left;padding:8px 10px">Pfad</th><th style="text-align:center;padding:8px 6px">Admin</th>`
     + _ROLE_COLS.map(r=>`<th style="text-align:center;padding:8px 6px;min-width:96px">${esc(r.label)}</th>`).join('');
   const rows=_PATH_DEFS.map(p=>{
@@ -4263,12 +4264,12 @@ function paintVerwZugriff(){
   </div>`;
 }
 function crmSetPathAccess(pathKey, role, value){
-  const work=_cfgWork();
-  if(!work.pathAccess||typeof work.pathAccess!=='object') work.pathAccess={};
-  if(!work.pathAccess[pathKey]||typeof work.pathAccess[pathKey]!=='object') work.pathAccess[pathKey]={};
-  if(value==='std'){ delete work.pathAccess[pathKey][role]; if(!Object.keys(work.pathAccess[pathKey]).length) delete work.pathAccess[pathKey]; }
-  else work.pathAccess[pathKey][role]=(value==='ja');
-  saveCrmConfig(work);
+  if(!(window.cu && window.cu.role==='admin')){ toast('Nur das Administrator-Konto darf Zugriffe vergeben.','err'); return; }
+  const pa=JSON.parse(JSON.stringify(getPathAccess()||{}));
+  if(!pa[pathKey]||typeof pa[pathKey]!=='object') pa[pathKey]={};
+  if(value==='std'){ delete pa[pathKey][role]; if(!Object.keys(pa[pathKey]).length) delete pa[pathKey]; }
+  else pa[pathKey][role]=(value==='ja');
+  savePathAccess(pa);
   toast('Zugriff gespeichert ✓','ok');
   try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){}   // Modulleiste sofort aktualisieren
 }
@@ -4477,7 +4478,7 @@ function crmHistRestore(key){
 // ══════════════════════════════════════════════════════════════════
 //  CRM-Konfiguration (admin): Bäume & Stammdaten-Felder editierbar
 // ══════════════════════════════════════════════════════════════════
-const CFG_RESERVED = ['vorlagen','teamprojekte','access','config'];
+const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess'];
 const _clone = o => JSON.parse(JSON.stringify(o));
 // Arbeitskopie der Config: aus crm/config oder (falls leer) aus den Defaults.
 function _cfgWork(){

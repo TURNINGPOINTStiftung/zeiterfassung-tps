@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v364':'';
+  if(_hv) _hv.textContent=_showVer?'v365':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -136,6 +136,10 @@ export function initApp(){
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
   // Administrator: auf offene „Passwort vergessen"-Anfragen hinweisen (Verwaltung → Mitarbeiter).
   if(isAdmin){ try{ const _n=Object.keys(getData().pwResetRequests||{}).length; if(_n) setTimeout(()=>window.toast?.('🔑 '+_n+' offene Passwort-Anfrage'+(_n===1?'':'n')+' – siehe Verwaltung → Mitarbeiter.',''),1500); }catch(e){} }
+  // Administrator: Freigabelisten (admins/managers/grants) einmal pro Sitzung neu ableiten, damit
+  // vergebene Rechte serverseitig immer dem aktuellen Stand entsprechen.
+  if(isAdmin && !window._permsRefreshed){ window._permsRefreshed=true;
+    setTimeout(()=>{ try{ window.refreshPermissionAllowlists?.({log:()=>{}})?.catch(e=>console.warn('Perms-Refresh (Start):', e&&e.message)); }catch(e){} }, 8000); }
   // Automatisches Tages-Backup (erstes Gerät des Tages; best effort, verzögert, stört den Start nicht).
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }
