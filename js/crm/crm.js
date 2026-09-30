@@ -29,6 +29,13 @@ import {
 const esc = s => String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+// Wert als JS-Argument in Inline-Handlern: onclick="fn(${jsq(x)})" – HTML-Maskierung allein reicht
+// dort nicht (der Browser dekodiert &#39; vor dem Ausführen wieder zu ').
+const jsq = s => esc(JSON.stringify(String(s==null?'':s)));
+// Farbwert für style="…": nur echte CSS-Farben zulassen (Hex, Name, rgb/hsl, var(--…)),
+// sonst Standardfarbe – Farben stammen aus der (von vielen beschreibbaren) CRM-Konfiguration.
+const cssColor = (v,def='#5b6b7d') => { const s=String(v==null?'':v).trim();
+  return /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|(rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)|var\(--[a-zA-Z0-9-]+\))$/.test(s)?s:def; };
 const nl2br = s => esc(s).replace(/\n/g,'<br>');
 // Telefonnummer → tel:-Link (mobil öffnet das Tastenfeld). Nur Ziffern und + behalten.
 const telHref  = t => 'tel:'+String(t==null?'':t).replace(/[^\d+]/g,'');
@@ -182,7 +189,7 @@ const CRM_STATUS=[
   { key:'sonstiges',     label:'Sonstiges',          color:'#6b7280' }
 ];
 function crmStatusDef(k){ return CRM_STATUS.find(s=>s.key===k)||null; }
-function crmStatusBadge(k){ const d=crmStatusDef(k); return d?`<span class="crm-statusbadge" style="background:${d.color}">${esc(d.label)}</span>`:''; }
+function crmStatusBadge(k){ const d=crmStatusDef(k); return d?`<span class="crm-statusbadge" style="background:${cssColor(d.color)}">${esc(d.label)}</span>`:''; }
 function crmStatusOpts(sel){ return ['<option value="">– kein Status –</option>'].concat(CRM_STATUS.map(s=>`<option value="${s.key}"${sel===s.key?' selected':''}>${esc(s.label)}</option>`)).join(''); }
 // Status kann MEHRERE Werte haben (Array). Alt-Daten (einzelner String) werden transparent
 // als [String] behandelt; leer → []. Badges = alle gesetzten Status nebeneinander.
@@ -207,7 +214,7 @@ function _catsOf(e, treeKey){
   const t=e.tree||treeKey; return t ? [t] : [];
 }
 function crmCatDef(k){ try{ return categoryByKey(k); }catch(e){ return null; } }
-function crmCatBadge(k){ const d=crmCatDef(k); const c=(d&&d.color)||'#5b6b7d'; return `<span class="crm-catbadge" style="background:${c}">${esc(d?d.label:k)}</span>`; }
+function crmCatBadge(k){ const d=crmCatDef(k); const c=(d&&d.color)||'#5b6b7d'; return `<span class="crm-catbadge" style="background:${cssColor(c)}">${esc(d?d.label:k)}</span>`; }
 function crmCatBadges(e, treeKey){ const a=_catsOf(e, treeKey); return a.length?a.map(crmCatBadge).join(' '):''; }
 // Vereinskürzel (falls als Stammfeld gepflegt) – für Anzeige „Name (KÜRZEL)". Sucht das
 // Stammfeld, dessen Label oder Key „kürzel/kuerzel" enthält, und liefert dessen Wert.
@@ -1045,7 +1052,7 @@ function _renderNotifPop(){
   const list=data.items||[];
   const rows = list.length ? list.slice(0,30).map(it=>{
     const t=_notifType(it.coll); const unread=it.ts>seen;
-    return `<div class="crm-notif-item${unread?' unread':''}" onclick="crmNotifGo('${esc(it.coll)}','${esc(it.recId)}')">
+    return `<div class="crm-notif-item${unread?' unread':''}" onclick="crmNotifGo(${jsq(it.coll)},${jsq(it.recId)})">
       <span class="crm-notif-ic">${t.icon}</span>
       <div class="crm-notif-tx"><div class="crm-notif-nm">${esc(it.name||'(ohne Name)')}</div>
       <div class="crm-notif-mt">${esc(it.desc||t.label)} · von ${esc(it.by)} · ${_agoStr(it.ts)}</div></div>
@@ -1093,7 +1100,7 @@ function barHtml(){
   if(lvl==='verein'){
     const tabs=[];
     accessVereine().forEach(vid=>{ const ve=getEntity('vereine',vid); if(!ve) return; const nm=(ve.stamm&&ve.stamm.name)||'Verein';
-      tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen('${vid}')">🏛️ ${esc(nm)}</button>`); });
+      tabs.push(`<button class="crm-tree-tab${(mode==='kontakte'&&window._crmSelId===vid)?' active':''}" onclick="crmRestrictedOpen(${jsq(vid)})">🏛️ ${esc(nm)}</button>`); });
     if(tabs.length) return `<div class="crm-bar"><div class="crm-trees">${tabs.join('')}</div><span style="margin-left:auto"></span></div>`;
   }
   return '';
@@ -1168,7 +1175,7 @@ function paintList(){
     if(cfgChips!=null){ meta=cfgChips; }
     else { const openTodos=entityOpenTaskCount(e); const kCount=(e.kontakte||[]).length;
       meta=`${crmStatusBadges(e)} ${crmCatBadges(e, tk)}<span class="crm-chip">👤 ${kCount} Kontakt${kCount===1?'':'e'}</span>${openTodos?`<span class="crm-chip warn">✓ ${openTodos} Aufgabe${openTodos===1?'':'n'}</span>`:''}`; }
-    return `<div class="crm-card" onclick="crmGoEntry('${tk}','${e.id}')">
+    return `<div class="crm-card" onclick="crmGoEntry(${jsq(tk)},${jsq(e.id)})">
       <h3>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, tk)}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
       <div class="meta">${meta}</div>
@@ -1202,8 +1209,8 @@ function _renderFilterPop(){
   const ctf=Array.isArray(window._crmCatFilter)?window._crmCatFilter:[];
   const stCount=k=>baseQ.filter(e=>_statusArr(e).includes(k)).length;
   const ctCount=k=>baseQ.filter(e=>_catsOf(e,e.tree||window._crmTree).includes(k)).length;
-  const stRows=CRM_STATUS.map(s=>{const on=stf.includes(s.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatusFilter('${s.key}')"><span class="crm-fpop-dot" style="background:${s.color}"></span><span class="crm-fpop-lbl">${esc(s.label)}</span><span class="crm-fpop-n">${stCount(s.key)}</span></label>`;}).join('');
-  const ctRows=getCategories().map(c=>{const on=ctf.includes(c.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCatFilter('${esc(c.key)}')"><span class="crm-fpop-dot" style="background:${c.color||'#5b6b7d'}"></span><span class="crm-fpop-lbl">${esc(c.label)}</span><span class="crm-fpop-n">${ctCount(c.key)}</span></label>`;}).join('')||'<div class="crm-fpop-empty">Noch keine Kategorien angelegt.</div>';
+  const stRows=CRM_STATUS.map(s=>{const on=stf.includes(s.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatusFilter(${jsq(s.key)})"><span class="crm-fpop-dot" style="background:${cssColor(s.color)}"></span><span class="crm-fpop-lbl">${esc(s.label)}</span><span class="crm-fpop-n">${stCount(s.key)}</span></label>`;}).join('');
+  const ctRows=getCategories().map(c=>{const on=ctf.includes(c.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCatFilter(${jsq(c.key)})"><span class="crm-fpop-dot" style="background:${cssColor(c.color)}"></span><span class="crm-fpop-lbl">${esc(c.label)}</span><span class="crm-fpop-n">${ctCount(c.key)}</span></label>`;}).join('')||'<div class="crm-fpop-empty">Noch keine Kategorien angelegt.</div>';
   let pop=document.getElementById('crm-filter-pop');
   if(!pop){ pop=document.createElement('div'); pop.id='crm-filter-pop'; pop.className='crm-filter-pop'; document.body.appendChild(pop);
     setTimeout(()=>document.addEventListener('click', _crmFilterOutside, true),0);
@@ -1370,13 +1377,13 @@ function taskNodeHtml(c, n, depth){
   const children=kids.map(ch=>taskNodeHtml(c,ch,depth+1)).join('');
   return `<div class="crm-tnode${depth===0?' top':''}${done?' done':''}">
     <div class="crm-task${blk?' blocked':''}">
-      <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmToggleDone('${n.id}')">
-      <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+      <input type="checkbox" class="crm-check" ${done?'checked':''} ${(blk&&!done)?'disabled':''} title="Erledigt" onchange="crmToggleDone(${jsq(n.id)})">
+      <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
       <div class="grow"><span class="tx">${esc(n.text)}</span>${meta?`<div class="crm-tmeta">${meta}</div>`:''}${n.note?`<div class="crm-tnote">${nl2br(n.note)}</div>`:''}${blk?`<div class="small crm-locked">🔒 wartet auf: ${esc(blk.join(', '))}</div>`:''}</div>
       ${prog}
-      <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmAddChild('${n.id}')">＋</button>
-      <button class="btn-sm-crm" title="Bearbeiten" onclick="crmOpenTask('${n.id}')">✎</button>
-      <button class="crm-x" title="Löschen" onclick="crmDeleteNode('${n.id}')">✕</button>
+      <button class="btn-sm-crm" title="Unterpunkt hinzufügen" onclick="crmAddChild(${jsq(n.id)})">＋</button>
+      <button class="btn-sm-crm" title="Bearbeiten" onclick="crmOpenTask(${jsq(n.id)})">✎</button>
+      <button class="crm-x" title="Löschen" onclick="crmDeleteNode(${jsq(n.id)})">✕</button>
     </div>
     ${kids.length?`<div class="crm-subs">${children}</div>`:''}
   </div>`;
@@ -1413,40 +1420,40 @@ function kbCardHtml(c, n){
   const visKids=(!vo&&_hideDone())?kids.filter(k=>k.status!=='erledigt'):kids;
   const checklist=visKids.map(k=>{
     if(vo) return `<div class="kb-check" onclick="event.stopPropagation()">
-      <span class="kb-check-tx" onclick="crmOpenTask('${k.id}')">${esc(k.text)}</span>
+      <span class="kb-check-tx" onclick="crmOpenTask(${jsq(k.id)})">${esc(k.text)}</span>
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.length}</span>`:''}
-      <button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode('${k.id}')">✕</button>
+      <button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode(${jsq(k.id)})">✕</button>
     </div>`;
     const kdone=k.status==='erledigt';
     return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
-      <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone('${k.id}')">
-      <span class="kb-check-tx" onclick="crmOpenTask('${k.id}')">${esc(k.text)}</span>
+      <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone(${jsq(k.id)})">
+      <span class="kb-check-tx" onclick="crmOpenTask(${jsq(k.id)})">${esc(k.text)}</span>
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
     </div>`;
   }).join('');
   const cdone=!vo&&n.status==='erledigt';
   const st=vo?null:taskStatusByKey(n.status);
-  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${n.id}" draggable="true" ondragstart="crmDragStart(event,'${n.id}')" ondragend="crmDragEnd(event)">
+  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${n.id}" draggable="true" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
     <div class="kb-card-top">
-      <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse('${n.id}')">${collapsed?'▸':'▾'}</button>
-      ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone('${n.id}')">`}
-      <span class="kb-card-title" onclick="crmOpenTask('${n.id}')">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
-      ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode('${n.id}')">✕</button>`:''}
+      <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(n.id)})">${collapsed?'▸':'▾'}</button>
+      ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
+      <span class="kb-card-title" onclick="crmOpenTask(${jsq(n.id)})">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
+      ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode(${jsq(n.id)})">✕</button>`:''}
     </div>
     <div class="kb-card-body">
       ${n.note?`<div class="kb-card-note">${linkify(n.note)}</div>`:''}
       ${(!vo&&(n.assigneeName||n.due||kids.length||(cdone&&n.doneAt)))?`<div class="kb-card-meta">
-         <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+         <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
          ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
          ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
          ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
          ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
        </div>`:''}
       ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-      <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step','${n.id}')">
+      <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step',${jsq(n.id)})">
       ${attachChips(n)}
       <div class="kb-cardbtns">
-        <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen('${n.id}')">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
+        <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen(${jsq(n.id)})">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
       </div>
     </div>
   </div>`;
@@ -1458,17 +1465,17 @@ function taskBoardHtml(c){
     const w=_kbWidth(top.id);
     const childs=_hideDone()?(top.children||[]).filter(card=>card.status!=='erledigt'):(top.children||[]);
     const cards=childs.map(card=>kbCardHtml(c,card)).join('');
-    return `<div class="kb-col${collapsed?' collapsed':''}"${w?` style="flex:0 0 ${w}px;width:${w}px"`:''} ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'${top.id}')">
+    return `<div class="kb-col${collapsed?' collapsed':''}"${w?` style="flex:0 0 ${w}px;width:${w}px"`:''} ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,${jsq(top.id)})">
       <div class="kb-col-head">
-        <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse('${top.id}')">${collapsed?'▸':'▾'}</button>
-        <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,'${top.id}')" title="Spalte verschieben">⠿</span>
-        <span class="kb-col-title" onclick="crmOpenTask('${top.id}')">${esc(top.text)}${collapsed?`<span class="kb-count">${childs.length}</span>`:''}</span>
-        <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode('${top.id}')">✕</button>
+        <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(top.id)})">${collapsed?'▸':'▾'}</button>
+        <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,${jsq(top.id)})" title="Spalte verschieben">⠿</span>
+        <span class="kb-col-title" onclick="crmOpenTask(${jsq(top.id)})">${esc(top.text)}${collapsed?`<span class="kb-count">${childs.length}</span>`:''}</span>
+        <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode(${jsq(top.id)})">✕</button>
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
-      <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card','${top.id}')">
-      <div class="kb-cards" ondragover="crmDragOver(event)" ondrop="crmDropInCards(event,'${top.id}')">${cards}</div>
-      <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,'${top.id}')"></div>
+      <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card',${jsq(top.id)})">
+      <div class="kb-cards" ondragover="crmDragOver(event)" ondrop="crmDropInCards(event,${jsq(top.id)})">${cards}</div>
+      <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,${jsq(top.id)})"></div>
     </div>`;
   }).join('');
   return `<div class="kb-board">${cols}
@@ -1555,12 +1562,12 @@ function paintDetail(){
 
   const fields = stammFields(window._crmTree)
     .filter(f=>f.key!=='name')
-    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):_fieldDisp(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField('${f.key}')" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
+    .map(f=>{ const v=s[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):_fieldDisp(v); const flabel=flbls[f.key]||f.label; const lbl=canCfg?`<label ondblclick="crmQuickRenameField(${jsq(f.key)})" title="Doppelklick: Bezeichnung ändern" style="cursor:pointer">${esc(flabel)}</label>`:`<label>${esc(flabel)}</label>`; return `<div class="crm-field">${lbl}<div class="v">${disp}</div></div>`; })
     .filter(Boolean).join('');
 
   // Kontakte als klickbare Karten (wie im Gartenverein-CRM) → Detail-Ansicht beim Klick.
   const kCards=(e.kontakte||[]).map(k=>`
-    <div class="crm-card crm-kontakt" onclick="crmMemberDetail('${k.id}')">
+    <div class="crm-card crm-kontakt" onclick="crmMemberDetail(${jsq(k.id)})">
       <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
       ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
       ${k.adresse?`<div class="sub" style="white-space:pre-line">📍 ${esc(k.adresse)}</div>`:''}
@@ -1577,13 +1584,13 @@ function paintDetail(){
     const dateStr = (end && end!==start) ? `${fmtDate(Date.parse(start))} – ${fmtDate(Date.parse(end))}`
                                          : (start?fmtDate(Date.parse(start)):'');
     const asg=(t.mitarbeiter&&t.mitarbeiter.length)?`<div class="small" style="color:var(--muted)">👥 ${esc(staffNames(t.mitarbeiter).join(', '))}</div>`:'';
-    return `<div class="crm-row" style="cursor:pointer" onclick="crmEditTermin('${t.id}')" title="Öffnen">
+    return `<div class="crm-row" style="cursor:pointer" onclick="crmEditTermin(${jsq(t.id)})" title="Öffnen">
       <div class="grow"><span class="name">${esc(t.titel)}</span>
         <div class="small">${[dateStr, t.ort].filter(Boolean).map(esc).join(' · ')}</div>
         ${t.note?`<div class="small">${linkify(t.note)}</div>`:''}
         ${asg}
       </div>
-      <button class="crm-x" title="Entfernen" onclick="event.stopPropagation();crmDeleteTermin('${t.id}')">✕</button>
+      <button class="crm-x" title="Entfernen" onclick="event.stopPropagation();crmDeleteTermin(${jsq(t.id)})">✕</button>
     </div>`;
   };
   const allTermine=(e.termine||[]).slice().sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
@@ -1595,7 +1602,7 @@ function paintDetail(){
 
   // Übergreifende Veranstaltungen, an denen dieser Eintrag beteiligt ist
   const vaList=veranstaltungenForEntity(window._crmTree, e.id);
-  const vaRow=v=>`<div class="crm-row" style="cursor:pointer" onclick="crmOpenVeranstaltung('${v.id}')">
+  const vaRow=v=>`<div class="crm-row" style="cursor:pointer" onclick="crmOpenVeranstaltung(${jsq(v.id)})">
       <div class="grow"><span class="name">${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</span>
         <div class="small">${vaDateLabel(v)||'—'}${(v.teilnehmer||[]).length>1?` · mit ${(v.teilnehmer||[]).length-1} weiteren`:''}</div></div>
       <span class="btn-sm-crm">öffnen ↗</span>
@@ -1635,7 +1642,7 @@ function paintDetail(){
   if(_entityHasStatsCat(e) || _statsForEntity(window._crmTree, e.id).length) tabs.push(['statistik','Statistik']);
   tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
-  const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab('${k}')">${esc(l)}</button>`).join('')}</div>`;
+  const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab(${jsq(k)})">${esc(l)}</button>`).join('')}</div>`;
   const canCreate=crmFull()||crmRestricted();
   // EIN Anlege-Knopf mit Auswahl (Aufgabe/Termin/Veranstaltung) – bündelt die Wege,
   // ohne Funktionen zu entfernen (Board + Inline-Anlegen bleiben voll erhalten).
@@ -1948,13 +1955,13 @@ function crmTagHide(){ const box=document.getElementById('crm-tag-suggest'); if(
 function _catPickerHtml(sel){
   sel=sel||[];
   return `<div class="crm-modal-field"><label>Kategorie(n) *</label>
-    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?col:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
+    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?cssColor(col):'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
 }
 // Status-Häkchen fürs Anlage-/Bearbeiten-Formular (Checkbox-IDs crm-st-<key>).
 function _statusPickerHtml(sel){
   sel=sel||[];
   return `<div class="crm-modal-field"><label>Status</label>
-    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{const on=sel.includes(s.key);return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?s.color:'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-st-${esc(s.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`;}).join('')}</div></div>`;
+    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{const on=sel.includes(s.key);return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?cssColor(s.color):'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-st-${esc(s.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`;}).join('')}</div></div>`;
 }
 function crmOpenNew(){
   crmOpenModalShell();
@@ -2056,10 +2063,10 @@ function kooperationenSecHtml(e){
   const row=(k,isEnded)=>{
     const icon=(getTrees().find(t=>t.key===k.partnerTree)||{}).icon||'';
     const acts = !canEdit ? '' : (isEnded
-      ? `<span class="crm-koop-act"><button class="btn-sm-crm" title="Wieder aktivieren" onclick="crmKoopReactivate('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">↩</button><button class="crm-x" title="Endgültig löschen" onclick="crmKoopDelete('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✕</button></span>`
-      : `<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">✎</button><button class="btn-sm-crm" title="Kooperation beenden (bleibt im Verlauf)" onclick="crmKoopEnd('${esc(k.ownerTree)}','${esc(k.ownerEid)}','${esc(k.koopId)}')">⏹</button></span>`);
+      ? `<span class="crm-koop-act"><button class="btn-sm-crm" title="Wieder aktivieren" onclick="crmKoopReactivate(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">↩</button><button class="crm-x" title="Endgültig löschen" onclick="crmKoopDelete(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">✕</button></span>`
+      : `<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">✎</button><button class="btn-sm-crm" title="Kooperation beenden (bleibt im Verlauf)" onclick="crmKoopEnd(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">⏹</button></span>`);
     return `<div class="crm-koop"${isEnded?' style="opacity:.6"':''}>
-      <span class="crm-koop-p" onclick="crmGoEntry('${esc(k.partnerTree)}','${esc(k.partnerEid)}')">${esc(icon)} ${esc(_entityName(k.partnerTree,k.partnerEid))} ↗</span>
+      <span class="crm-koop-p" onclick="crmGoEntry(${jsq(k.partnerTree)},${jsq(k.partnerEid)})">${esc(icon)} ${esc(_entityName(k.partnerTree,k.partnerEid))} ↗</span>
       ${k.art?`<span class="crm-koop-art">${esc(k.art)}</span>`:''}
       ${_koopDateChip(k)}
       ${acts}
@@ -2184,7 +2191,7 @@ function crmEditMember(mid){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Kontakt</h3>${memberFormHtml(k)}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveMember('${mid}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmSaveMember(${jsq(mid)})">Speichern</button></div>`);
 }
 function crmSaveMember(mid){
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
@@ -2238,9 +2245,9 @@ function crmMemberDetail(mid){
     ${det('Adresse', k.adresse?`<span style="white-space:pre-line">${esc(k.adresse)}</span>`:'')}
     ${det('Notiz', k.note?`<span style="white-space:pre-line">${linkify(k.note)}</span>`:'')}
     <div class="crm-modal-actions" style="margin-top:16px">
-      ${canEdit?`<button class="btn-sm-crm danger" style="margin-right:auto" onclick="crmDeleteMemberConfirm('${k.id}')">🗑 Löschen</button>`:''}
+      ${canEdit?`<button class="btn-sm-crm danger" style="margin-right:auto" onclick="crmDeleteMemberConfirm(${jsq(k.id)})">🗑 Löschen</button>`:''}
       <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
-      ${canEdit?`<button class="btn-sm-crm primary" onclick="crmEditMember('${k.id}')">✎ Bearbeiten</button>`:''}
+      ${canEdit?`<button class="btn-sm-crm primary" onclick="crmEditMember(${jsq(k.id)})">✎ Bearbeiten</button>`:''}
     </div>`);
 }
 
@@ -2363,16 +2370,16 @@ function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
 function _kpList(idp){ if(idp==='crm-va'){ if(!Array.isArray(window._vaTeiln)) window._vaTeiln=[]; return window._vaTeiln; } window._crmKp=window._crmKp||{}; if(!Array.isArray(window._crmKp[idp])) window._crmKp[idp]=[]; return window._crmKp[idp]; }
 function _kpSet(idp,arr){ arr=(arr||[]).map(o=>({tree:o.tree,eid:o.eid})); if(idp==='crm-va') window._vaTeiln=arr; else { window._crmKp=window._crmKp||{}; window._crmKp[idp]=arr; } }
 function _kpName(o){ try{ const e=getEntity(o.tree,o.eid); return (e&&e.stamm&&e.stamm.name)||o.eid; }catch(x){ return o.eid; } }
-function crmKpChips(idp,ro){ const l=_kpList(idp); if(!l.length) return '<span class="small" style="color:var(--muted)">Noch keine ausgewählt.</span>'; return l.map((o,i)=>`<span class="crm-chip">${esc(_kpName(o))}${ro?'':` <span onclick="crmKpRemove('${idp}',${i})" title="Entfernen" style="cursor:pointer;font-weight:800;margin-left:4px">✕</span>`}</span>`).join(''); }
+function crmKpChips(idp,ro){ const l=_kpList(idp); if(!l.length) return '<span class="small" style="color:var(--muted)">Noch keine ausgewählt.</span>'; return l.map((o,i)=>`<span class="crm-chip">${esc(_kpName(o))}${ro?'':` <span onclick="crmKpRemove(${jsq(idp)},${i})" title="Entfernen" style="cursor:pointer;font-weight:800;margin-left:4px">✕</span>`}</span>`).join(''); }
 function crmKpHtml(idp,label,hint,ro){ return `<div class="crm-modal-field" style="position:relative"><label>${label}${hint?` <span style="font-size:11px;color:var(--muted)">${hint}</span>`:''}</label>
    <div id="${idp}-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${crmKpChips(idp,ro)}</div>
-   ${ro?'':`<input id="${idp}-in" autocomplete="off" placeholder="Kontakt suchen … (mehrere möglich)" oninput="crmKpSearch('${idp}',this.value)" onfocus="crmKpSearch('${idp}',this.value)">
+   ${ro?'':`<input id="${idp}-in" autocomplete="off" placeholder="Kontakt suchen … (mehrere möglich)" oninput="crmKpSearch(${jsq(idp)},this.value)" onfocus="crmKpSearch(${jsq(idp)},this.value)">
    <div id="${idp}-dd" class="crm-ac-dd" style="display:none"></div>`}</div>`; }
 function crmKpSearch(idp,v){ const dd=document.getElementById(idp+'-dd'); if(!dd) return; const q=(v||'').trim().toLowerCase(); if(!q){ dd.style.display='none'; return; }
    const has=new Set(_kpList(idp).map(o=>o.tree+'::'+o.eid));
    const list=_kalContacts().filter(c=>c.name.toLowerCase().includes(q)&&!has.has(c.tree+'::'+c.eid)).slice(0,60);
    if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
-   dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd('${idp}',this.dataset.t,this.dataset.e)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
+   dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd(${jsq(idp)},this.dataset.t,this.dataset.e)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
    dd.style.display='block'; }
 function crmKpAdd(idp,tree,eid){ const l=_kpList(idp); if(!l.some(o=>o.tree===tree&&o.eid===eid)) l.push({tree,eid}); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); const i=document.getElementById(idp+'-in'); if(i) i.value=''; const dd=document.getElementById(idp+'-dd'); if(dd) dd.style.display='none'; }
 function crmKpRemove(idp,i){ const l=_kpList(idp); l.splice(i,1); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); }
@@ -2426,9 +2433,9 @@ function crmEditTermin(tid){
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
-   ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa('${tid}')" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
+   ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa(${jsq(tid)})" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
    ${(window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoTermin()">Zum Termin ↗</button>`:''}
-   ${canEdit?`<button class="btn-sm-crm primary" onclick="crmSaveTerminEdit('${tid}')">Speichern</button>`:''}</div>`);
+   ${canEdit?`<button class="btn-sm-crm primary" onclick="crmSaveTerminEdit(${jsq(tid)})">Speichern</button>`:''}</div>`);
 }
 function crmSaveTerminEdit(tid){
   const backToKal=(window._crmModalReturn==='kalender');
@@ -2487,7 +2494,7 @@ function kontaktnotizenSecHtml(e){
     const tag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Notiz – beim Partner bearbeiten">🤝 mit ${esc(n._ownerName||'')}</span>`
       : ((n.sharedWith&&n.sharedWith.length) ? ` <span class="crm-koop-art" title="Gemeinsam mit Kooperationspartner">🤝 gemeinsam</span>` : '');
     return `<div class="crm-kn-item">
-      <div class="crm-kn-meta">${_knMeta(n)}${tag}${(canEdit&&!shared)?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz('${n.id}')">✕</button>`:''}</div>
+      <div class="crm-kn-meta">${_knMeta(n)}${tag}${(canEdit&&!shared)?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz(${jsq(n.id)})">✕</button>`:''}</div>
       <div class="crm-kn-text">${linkify(n.text||'')}</div>
     </div>`; };
   const latest=notes[0], older=notes.slice(1);
@@ -2546,7 +2553,7 @@ function entityProjekteSectionHtml(e){
   const selPid=window._crmProjSel;
   const sel=e.projekte.find(p=>p.id===selPid)||null;
   const tab=(p)=>{ const open=flatNodes(p.todos).filter(t=>t.status!=='erledigt').length;
-    return `<button class="crm-projtab${p.id===selPid?' active':''}" onclick="crmSelProjekt('${p.id}')">${esc(p.name||'Projekt')}${(!p.closed&&open)?` <span class="cnt">${open}</span>`:''}</button>`; };
+    return `<button class="crm-projtab${p.id===selPid?' active':''}" onclick="crmSelProjekt(${jsq(p.id)})">${esc(p.name||'Projekt')}${(!p.closed&&open)?` <span class="cnt">${open}</span>`:''}</button>`; };
   const openTabs = openP.length ? `<div class="crm-projtabs">${openP.map(tab).join('')}</div>` : '';
   const board = sel ? entityProjBoardHtml(sel)
     : (openP.length ? '' : `<div class="small" style="color:var(--muted);margin-bottom:8px">Noch keine Aufgaben.${closedP.length?' (Unten gibt es abgeschlossene Projekte.)':''}</div>${(crmFull()||crmRestricted())?`<input class="kb-qadd" id="kb-qa-col" placeholder="Erste Spalte anlegen + Enter – z. B. „Vorbereitung"" onkeydown="crmQaKey(event,'col','')">`:''}`);
@@ -2566,10 +2573,10 @@ function entityProjBoardHtml(p){
   return `<div class="crm-projhead">
       ${closed?`<span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>`:''}
       <span class="hbtns" style="margin-left:auto">
-        ${crmFull()?`<button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt('${p.id}')">✎ Umbenennen</button>`:''}
+        ${crmFull()?`<button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt(${jsq(p.id)})">✎ Umbenennen</button>`:''}
         <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
         ${crmFull()?`<button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>`:''}
-        ${crmFull()?`<button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt('${p.id}')">✕</button>`:''}
+        ${crmFull()?`<button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt(${jsq(p.id)})">✕</button>`:''}
       </span>
     </div>
     ${closed?`<div class="small" style="color:var(--muted);margin:-2px 0 10px">🏁 Abgeschlossen am ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' von '+esc(p.closedByKuerzel):''}.</div>`:''}
@@ -2612,7 +2619,7 @@ function crmRenameProjekt(pid){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📌 Projektname</h3>
    <div class="crm-modal-field"><label>Name</label><input id="crm-pn" value="${esc(p.name||'')}"></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveProjektName('${pid}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmSaveProjektName(${jsq(pid)})">Speichern</button></div>`);
 }
 function crmSaveProjektName(pid){
   const v=val('crm-pn'); if(!v){ toast('Bitte einen Namen eingeben.','err'); return; }
@@ -2659,8 +2666,8 @@ function crmAttOpen(nid){
   const rows=a.length ? a.map(x=>`<div class="crm-att-row">
       <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
       ${x.size?`<span class="small" style="color:var(--muted)">${Math.round(x.size/1024)} KB</span>`:''}
-      <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmAttEdit('${nid}','${x.id}')">✎</button>
-      <button class="crm-x" title="Entfernen" onclick="crmAttDel('${nid}','${x.id}')">✕</button>
+      <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmAttEdit(${jsq(nid)},${jsq(x.id)})">✎</button>
+      <button class="crm-x" title="Entfernen" onclick="crmAttDel(${jsq(nid)},${jsq(x.id)})">✕</button>
     </div>`).join('') : `<div class="small" style="color:var(--muted);padding:4px 0">Noch keine Anlagen.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 12px">📎 Anlagen</h3>
    <div style="margin-bottom:6px;font-size:13px;color:var(--muted)">${esc(f.node.text||'')}</div>
@@ -2670,7 +2677,7 @@ function crmAttOpen(nid){
      <div style="display:flex;gap:8px;flex-wrap:wrap">
        <input id="crm-att-title" placeholder="Bezeichnung (optional)" style="flex:1;min-width:130px">
        <input id="crm-att-url" placeholder="Link einfügen (z. B. OneDrive-Freigabelink)" style="flex:2;min-width:200px">
-       <button class="btn-sm-crm primary" onclick="crmAttLink('${nid}')">＋ Anhängen</button>
+       <button class="btn-sm-crm primary" onclick="crmAttLink(${jsq(nid)})">＋ Anhängen</button>
      </div>
      <div class="small" style="color:var(--muted);margin-top:8px;line-height:1.5">📂 <b>Datei aus OneDrive / Teams anhängen:</b> Datei dort ablegen → <b>Teilen</b> → <b>Link kopieren</b> → oben einfügen. <a href="https://www.office.com/launch/onedrive" target="_blank" rel="noopener" style="color:var(--primary);font-weight:600">OneDrive öffnen ↗</a></div>
    </div>
@@ -2788,7 +2795,7 @@ function statsSecHtml(e){
       if(s.tnAktiv!=null&&s.tnAktiv!=='') legacy.push('aktiv im Training: '+Number(s.tnAktiv||0));
       const noteHtml=[ s.notiz?`<div class="crm-stat-note">${nl2br(esc(s.notiz))}</div>`:'', legacy.length?`<div class="small" style="color:var(--muted)">früher erfasst · ${esc(legacy.join(' · '))}</div>`:'' ].join('');
       return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
-        <td class="crm-stat-act">${(canEdit&&!shared)?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat('${s.id}')">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat('${s.id}')">✕</button>`:(shared?`<button class="btn-sm-crm" title="Beim Partner öffnen" onclick="crmGoEntry('${esc(s._ownerTree)}','${esc(s._ownerEid)}')">↗</button>`:'')}</td></tr>`;
+        <td class="crm-stat-act">${(canEdit&&!shared)?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat(${jsq(s.id)})">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat(${jsq(s.id)})">✕</button>`:(shared?`<button class="btn-sm-crm" title="Beim Partner öffnen" onclick="crmGoEntry(${jsq(s._ownerTree)},${jsq(s._ownerEid)})">↗</button>`:'')}</td></tr>`;
     }).join('');
     return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>${quoteBox}
       <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
@@ -2855,7 +2862,7 @@ const FOERDER_STATUS=[
 function foerderStatusLabel(s){ const f=FOERDER_STATUS.find(x=>x[0]===s); return f?f[1]:(s||'–'); }
 function foerderBadge(s){
   const col={beantragt:['#8a5a00','#fff7e6'],genehmigt:['#1a7f37','#e9f8ee'],abgelehnt:['#b3261e','#fdecea'],abgeschlossen:['#3a4a5c','#eef1f5']}[s]||['#555','#eee'];
-  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${col[0]};background:${col[1]}">${esc(foerderStatusLabel(s))}</span>`;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${cssColor(col[0],'#333')};background:${cssColor(col[1],'#eee')}">${esc(foerderStatusLabel(s))}</span>`;
 }
 function fmtEuro(n){ n=Number(n||0); return n.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 // Status-Verlauf einer Förderung als Tooltip (nur wenn es echte Wechsel gab).
@@ -2873,7 +2880,7 @@ function foerderungenSecHtml(e){
       <td style="text-align:right;white-space:nowrap">${fmtEuro(f.betrag)}</td>
       <td>${esc(f.was||'')}</td>
       <td>${foerderBadge(f.status)}${_foerderLogHtml(f)}</td>
-      <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung('${f.id}')">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung('${f.id}')">✕</button>`:''}</td>
+      <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung(${jsq(f.id)})">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung(${jsq(f.id)})">✕</button>`:''}</td>
     </tr>`).join('');
   const sum=pred=>list.filter(pred).reduce((s,f)=>s+Number(f.betrag||0),0);
   const bewilligt=sum(f=>f.status==='genehmigt'||f.status==='abgeschlossen');
@@ -3098,7 +3105,7 @@ function crmApplyVorlagePick(){
   crmOpenModalShell();
   const rows=vs.map(v=>`<div class="crm-row">
     <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${_vCount(v)} Hauptaufgaben</span></div>
-    <button class="btn-sm-crm primary" onclick="crmApplyVorlage('${v.id}')">Anwenden</button>
+    <button class="btn-sm-crm primary" onclick="crmApplyVorlage(${jsq(v.id)})">Anwenden</button>
   </div>`).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 Vorlage anwenden</h3>${rows}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
@@ -3237,7 +3244,7 @@ function teamCardHtml(tm, view){
   let meta;
   if(view){ const c=teamCounts(tm); meta=`<span class="crm-chip">${c.total} Veranstaltung${c.total===1?'':'en'}</span>${c.open?`<span class="crm-chip warn">${c.open} anstehend</span>`:''}`; }
   else { const c=teamProjektCounts(tm); meta=`<span class="crm-chip">${c.total} Projekt${c.total===1?'':'e'}</span>${c.open?`<span class="crm-chip warn">${c.open} offen</span>`:''}`; }
-  return `<div class="crm-card" onclick="crmOpenTeam('${encodeURIComponent(tm)}')">
+  return `<div class="crm-card" onclick="crmOpenTeam(${jsq(encodeURIComponent(tm))})">
     <h3>👥 ${esc(tm)}</h3>
     <div class="meta">${meta}</div>
   </div>`;
@@ -3278,21 +3285,21 @@ function paintTeamDetail(){
   }
   // Veranstaltungen des Teams
   const vs=teamVeranstaltungen(team);
-  const vaCard=v=>`<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
+  const vaCard=v=>`<div class="crm-card" onclick="crmOpenVeranstaltung(${jsq(v.id)})">
       <h3>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="sub">${vaDateLabel(v)||'—'}${v.online?' · Online':''}</div>
       <div class="meta">${(v.teilnehmer||[]).length?`<span class="crm-chip">👥 ${(v.teilnehmer||[]).length} beteiligt</span>`:`<span class="crm-chip">übergeordnet</span>`}</div>
     </div>`;
   const vaUpc=vs.filter(v=>!vaIsPast(v)&&!v.closed), vaPast=vs.filter(v=>vaIsPast(v)||v.closed);
   const vaSec=`<div class="crm-sec">
-    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam('${esc(team)}')">＋ Veranstaltung</button>`:''}</h4>
+    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</h4>
     ${vaUpc.length?`<div class="crm-list">${vaUpc.map(vaCard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen für dieses Team.</div>`}
     ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div class="crm-list" style="margin-top:8px">${vaPast.map(vaCard).join('')}</div></details>`:''}
   </div>`;
   // Eigenständige Team-Projekte (persönliche ausschließen)
   const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
   const projCardHtml=p=>{ const all=flatTasks(p); const openN=all.filter(t=>t.status!=='erledigt').length;
-    return `<div class="crm-card" onclick="crmOpenTeamProjekt('${p.id}')">
+    return `<div class="crm-card" onclick="crmOpenTeamProjekt(${jsq(p.id)})">
       <h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div>
     </div>`; };
@@ -3310,9 +3317,9 @@ function paintTeamDetail(){
       const who = t.assigneeName ? '👤 '+esc(t.assigneeName) : '<span style="color:var(--accent);font-weight:600">＋ noch frei</span>';
       const meta=[a.oicon+' '+esc(a.origin), who, t.due?('📅 '+esc(fmtDate(Date.parse(t.due)))):''].filter(Boolean).join(' · ');
       return `<div class="crm-task">
-        <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+        <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
         <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div></div>
-        <button class="btn-sm-crm" onclick="crmTeamTaskOpen('${a.kind}','${a.tree||''}','${a.id}','${t.id}')">Öffnen</button>
+        <button class="btn-sm-crm" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.id)},${jsq(t.id)})">Öffnen</button>
       </div>`;
     }).join('');
     return `<div class="crm-sec"><h4><span class="ttl">📋 Team-Aufgaben</span></h4>${rows||'<div class="small" style="color:var(--muted)">Keine offenen Team-Aufgaben.</div>'}</div>`;
@@ -3375,7 +3382,7 @@ function paintTeamProjektDetail(){
       <button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>
     </div>
     ${(p.createdAt||p.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${p.createdAt?`angelegt ${p.createdByKuerzel?'von '+esc(p.createdByKuerzel)+' ':''}am ${esc(fmtDate(p.createdAt))}`:''}${p.updatedByKuerzel?` · zuletzt von ${esc(p.updatedByKuerzel)}${p.updatedAt?' am '+esc(fmtDateTime(p.updatedAt)):''}`:''}</div>`:''}
-    ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity('${esc(p.linkTree)}','${esc(p.linkEid)}')">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
+    ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity(${jsq(p.linkTree)},${jsq(p.linkEid)})">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
     ${p.beschreibung?`<div class="crm-sec"><div class="v" style="white-space:pre-line">${nl2br(p.beschreibung)}</div></div>`:''}
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
@@ -3492,16 +3499,16 @@ function meineSectionsHtml(){
     const meta=[(a.kind==='veranstaltung'?'📅 ':'📂 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
     const idArg=''; const cArg=a.id;
     return `<div class="crm-task${done?' done':''}">
-      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle('${a.kind}','${idArg}','${cArg}','${t.id}')">
-      <span class="crm-tstatus" style="background:${st.color}">${esc(st.label)}</span>
+      <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle(${jsq(a.kind)},${jsq(idArg)},${jsq(cArg)},${jsq(t.id)})">
+      <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
       <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div>${t.note?`<div class="crm-tnote">${nl2br(t.note)}</div>`:''}</div>
-      <button class="btn-sm-crm" onclick="crmMeineOpen('${a.kind}','${idArg}','${cArg}','${t.id}')">Öffnen</button>
+      <button class="btn-sm-crm" onclick="crmMeineOpen(${jsq(a.kind)},${jsq(idArg)},${jsq(cArg)},${jsq(t.id)})">Öffnen</button>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
   const myProj=listTeamProjekte().filter(p=>p.owner===me);
   const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length; const ln=linkedEntityName(p);
-    return `<div class="crm-card" onclick="crmOpenMeinProjekt('${p.id}')"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}${ln?`<span class="crm-chip">🔗 ${esc(ln)}</span>`:''}</div></div>`; };
+    return `<div class="crm-card" onclick="crmOpenMeinProjekt(${jsq(p.id)})"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}${ln?`<span class="crm-chip">🔗 ${esc(ln)}</span>`:''}</div></div>`; };
   const openMine=myProj.filter(p=>!p.closed), closedMine=myProj.filter(p=>p.closed);
   return `<div class="crm-sec">
       <h4><span class="ttl">📌 Mir zugewiesen</span></h4>
@@ -3566,7 +3573,7 @@ function vaTeilnChip(t,i,removable){
 function veranstaltungenListHtml(){
   const all=listVeranstaltungen();
   const card=v=>{ const op=flatNodes(v.todos).filter(t=>t.status!=='erledigt').length;
-    return `<div class="crm-card" onclick="crmOpenVeranstaltung('${v.id}')">
+    return `<div class="crm-card" onclick="crmOpenVeranstaltung(${jsq(v.id)})">
       <h3>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="sub">${vaDateLabel(v)||'—'}${v.online?' · Online':(v.ortOderLink?' · '+esc(v.ortOderLink):'')}</div>
       <div class="meta">${(v.teilnehmer||[]).length?`<span class="crm-chip">👥 ${(v.teilnehmer||[]).length} beteiligt</span>`:`<span class="crm-chip">übergeordnet</span>`}${op?`<span class="crm-chip warn">${op} offen</span>`:''}</div>
@@ -3599,7 +3606,7 @@ function paintVeranstaltungDetail(){
   if(!v){ window._crmVaSel=null; paintVeranstaltungen(); return; }
   normTasks(v); recoverV187VaItems(v);
   window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
-  const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry('${esc(t.tree)}','${esc(t.eid)}')">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
+  const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry(${jsq(t.tree)},${jsq(t.eid)})">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
   const ortLine = v.online
     ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
     : (v.ortOderLink?('📍 '+esc(v.ortOderLink)):'');
@@ -3671,7 +3678,7 @@ function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=
 function staffPickerHtml(selIds, idp){
   const sel=new Set(selIds||[]);
   const rows=_assignableStaff().map(u=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;cursor:pointer;border:1px solid var(--border);border-radius:999px"><input type="checkbox" class="${idp}-ma" value="${esc(u.id)}"${sel.has(u.id)?' checked':''} style="width:auto"> ${esc(u.name)}</label>`).join('') || '<span class="small" style="color:var(--muted)">Keine Mitarbeiter vorhanden.</span>';
-  return `<div style="display:flex;gap:8px;margin-bottom:6px"><button type="button" class="btn-sm-crm" onclick="crmStaffAll('${idp}',true)">Alle</button><button type="button" class="btn-sm-crm" onclick="crmStaffAll('${idp}',false)">Keine</button></div><div style="max-height:150px;overflow:auto;display:flex;flex-wrap:wrap;gap:5px">${rows}</div>`;
+  return `<div style="display:flex;gap:8px;margin-bottom:6px"><button type="button" class="btn-sm-crm" onclick="crmStaffAll(${jsq(idp)},true)">Alle</button><button type="button" class="btn-sm-crm" onclick="crmStaffAll(${jsq(idp)},false)">Keine</button></div><div style="max-height:150px;overflow:auto;display:flex;flex-wrap:wrap;gap:5px">${rows}</div>`;
 }
 function readStaffPicker(idp){ return Array.from(document.querySelectorAll('.'+idp+'-ma:checked')).map(x=>x.value); }
 function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(cb=>{ cb.checked=!!on; }); }
@@ -3888,9 +3895,9 @@ function paintVerteiler(){
       <div class="meta"><span class="crm-chip">${n} Adresse${n===1?'':'n'}</span></div>
       <div class="vt-actions">
         ${(()=>{ const h=_mailtoHref(v.emails,'bcc'); return h?`<a class="btn-sm-crm primary" style="text-decoration:none" href="${esc(h)}">✉️ Mail (BCC)</a>`:`<button class="btn-sm-crm" disabled title="Keine Adressen">✉️ Mail (BCC)</button>`; })()}
-        <button class="btn-sm-crm" onclick="crmCopyVerteiler('${v.id}')">⧉ Kopieren</button>
-        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler('${v.id}')">Bearbeiten</button>
-        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC('${v.id}')">✕</button>`:''}
+        <button class="btn-sm-crm" onclick="crmCopyVerteiler(${jsq(v.id)})">⧉ Kopieren</button>
+        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>
+        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
       </div>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Verteiler. Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</div>`;
@@ -3918,7 +3925,7 @@ function _verteilerModal(v){
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmSaveVerteiler('${esc(v.id||'')}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmSaveVerteiler(${jsq(v.id||'')})">Speichern</button></div>`);
 }
 function crmVerteilerAddUser(){
   const sel=document.getElementById('crm-vt-user'); const mail=sel?sel.value:''; if(sel) sel.value='';
@@ -3973,8 +3980,8 @@ function crmOpenVorlagen(){
   const vs=listVorlagen();
   const rows=vs.length ? vs.map(v=>`<div class="crm-row">
       <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${_vCount(v)} Hauptaufgaben</span></div>
-      <button class="btn-sm-crm" onclick="crmEditVorlage('${v.id}')">Bearbeiten</button>
-      <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage('${v.id}')">✕</button>
+      <button class="btn-sm-crm" onclick="crmEditVorlage(${jsq(v.id)})">Bearbeiten</button>
+      <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage(${jsq(v.id)})">✕</button>
     </div>`).join('') : `<div class="small" style="color:var(--muted)">Noch keine Vorlagen.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 Aufgaben-Vorlagen</h3>
    ${rows}
@@ -4007,7 +4014,7 @@ function paintVorlageEditor(id){
   ov.innerHTML=`
     <div class="vb-head">
       <button class="btn-sm-crm" onclick="crmCloseVorlageEditor()">← Vorlagen</button>
-      <input class="vb-title-in" value="${esc(v.name)}" onchange="crmVorlageRename('${id}',this.value)" title="Vorlagenname – hier direkt ändern">
+      <input class="vb-title-in" value="${esc(v.name)}" onchange="crmVorlageRename(${jsq(id)},this.value)" title="Vorlagenname – hier direkt ändern">
       <button class="btn-sm-crm primary" onclick="crmCloseVorlageEditor()">✓ Fertig</button>
       <div class="vb-hint">Bau die Vorlage wie ein Board: <b>Spalte</b> anlegen → <b>Aufgabe</b> (Enter) → <b>Unterpunkt</b> je Karte (Enter). Klick auf eine Aufgabe öffnet Notiz, Abhängigkeiten und Anlagen. Beim <b>Anwenden</b> werden alle Aufgaben in ein Projekt kopiert.</div>
     </div>
@@ -4237,7 +4244,7 @@ function paintVerwZugriff(){
     const cells=_ROLE_COLS.map(r=>{
       const row=pa[p.key]||{};
       const cur = Object.prototype.hasOwnProperty.call(row, r.key) ? (row[r.key]?'ja':'nein') : 'std';
-      return `<td style="text-align:center;padding:4px 6px"><select class="crm-sortsel" onchange="crmSetPathAccess('${p.key}','${r.key}',this.value)">`
+      return `<td style="text-align:center;padding:4px 6px"><select class="crm-sortsel" onchange="crmSetPathAccess(${jsq(p.key)},${jsq(r.key)},this.value)">`
         + `<option value="std"${cur==='std'?' selected':''}>Standard</option>`
         + `<option value="ja"${cur==='ja'?' selected':''}>Ja</option>`
         + `<option value="nein"${cur==='nein'?' selected':''}>Nein</option></select></td>`;
@@ -4282,8 +4289,8 @@ function paintVerwUsers(){
       <td>${teams.map(t=>`<span class="vw-team">${esc(t)}</span>`).join('')||'<span class="small" style="color:var(--muted)">–</span>'}</td>
       <td>${lvl==='none'?'<span class="small" style="color:var(--muted)">–</span>':`<span class="vw-team">${esc(accTxt)}</span>`}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn-sm-crm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
-        <button class="crm-x" title="Archivieren (Zeitdaten bleiben erhalten)" onclick="deleteUser('${u.id}')">✕</button>
+        <button class="btn-sm-crm" onclick="showEditUser(${jsq(u.id)})">Bearbeiten</button>
+        <button class="crm-x" title="Archivieren (Zeitdaten bleiben erhalten)" onclick="deleteUser(${jsq(u.id)})">✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -4426,7 +4433,7 @@ function histRowsHtml(rows){
       <td>${esc(h.byName||h.byKuerzel||'?')}</td>
       <td><span class="vw-team" style="${del?'background:#fde8e8;color:#9b2c2c':''}">${icon} ${del?'gelöscht':'geändert'}</span></td>
       <td><b>${esc(_histCollLabel(h.coll))}: ${esc(h.name||h.recId||'')}</b><div class="small" style="color:var(--muted)">${esc(desc)}</div></td>
-      <td style="text-align:right"><button class="btn-sm-crm${del?' primary':''}" onclick="crmHistRestore('${h._key}')">↩ Wiederherstellen</button></td>
+      <td style="text-align:right"><button class="btn-sm-crm${del?' primary':''}" onclick="crmHistRestore(${jsq(h._key)})">↩ Wiederherstellen</button></td>
     </tr>`);
   });
   if(!out.length) return `<div class="small" style="color:var(--muted)">Keine inhaltlichen Änderungen im gewählten Zeitraum (nur automatische Speicherungen).</div>`;
@@ -4511,20 +4518,20 @@ function paintVerwConfig(){
       <td style="font-size:18px">${esc(t.icon||'')}</td>
       <td><span class="vw-name">${esc(t.label)}</span><div class="small" style="color:var(--muted)">${esc(t.single||'')} · <code>${esc(t.key)}</code></div></td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgTreeMove('${t.key}',-1)">↑</button>
-        <button class="btn-sm-crm" ${i===work.trees.length-1?'disabled':''} onclick="crmCfgTreeMove('${t.key}',1)">↓</button>
-        <button class="btn-sm-crm" onclick="crmCfgTreeEdit('${t.key}')">✎</button>
-        <button class="crm-x" title="Entfernen" onclick="crmCfgTreeDel('${t.key}')">✕</button>
+        <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgTreeMove(${jsq(t.key)},-1)">↑</button>
+        <button class="btn-sm-crm" ${i===work.trees.length-1?'disabled':''} onclick="crmCfgTreeMove(${jsq(t.key)},1)">↓</button>
+        <button class="btn-sm-crm" onclick="crmCfgTreeEdit(${jsq(t.key)})">✎</button>
+        <button class="crm-x" title="Entfernen" onclick="crmCfgTreeDel(${jsq(t.key)})">✕</button>
       </td></tr>`).join('');
   // ── Kategorien ──
   const catRows=work.categories.map((c,i)=>`<tr>
       <td><span class="vw-name">${esc(c.label)}</span>${_catStats(c)?' <span title="Statistik/Weitermach-Quote aktiv">📊</span>':''}<div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
       <td>${c.color?`<span class="crm-catbadge" style="background:${esc(c.color)}">${esc(c.label)}</span>`:'<span class="small" style="color:var(--muted)">—</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgCatMove('${esc(c.key)}',-1)">↑</button>
-        <button class="btn-sm-crm" ${i===work.categories.length-1?'disabled':''} onclick="crmCfgCatMove('${esc(c.key)}',1)">↓</button>
-        <button class="btn-sm-crm" onclick="crmCfgCatEdit('${esc(c.key)}')">✎</button>
-        <button class="crm-x" title="Entfernen" onclick="crmCfgCatDel('${esc(c.key)}')">✕</button>
+        <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgCatMove(${jsq(c.key)},-1)">↑</button>
+        <button class="btn-sm-crm" ${i===work.categories.length-1?'disabled':''} onclick="crmCfgCatMove(${jsq(c.key)},1)">↓</button>
+        <button class="btn-sm-crm" onclick="crmCfgCatEdit(${jsq(c.key)})">✎</button>
+        <button class="crm-x" title="Entfernen" onclick="crmCfgCatDel(${jsq(c.key)})">✕</button>
       </td></tr>`).join('');
   // ── Felder ──
   const sel=window._cfgFieldTree||'__default';
@@ -4536,17 +4543,17 @@ function paintVerwConfig(){
   const fieldRows=fields.map((f,i)=>`<tr>
       <td><span class="vw-name">${esc(f.label)}</span>${f.required?' <span class="vw-team">Pflicht</span>':''}<div class="small" style="color:var(--muted)">${esc((FIELD_TYPES.find(x=>x.key===f.type)||{}).label||f.type||'text')} · <code>${esc(f.key)}</code>${f.hint?' · '+esc(f.hint):''}</div></td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn-sm-crm" ${i===0||usesDefault?'disabled':''} onclick="crmCfgFieldMove('${i}',-1)">↑</button>
-        <button class="btn-sm-crm" ${i===fields.length-1||usesDefault?'disabled':''} onclick="crmCfgFieldMove('${i}',1)">↓</button>
-        <button class="btn-sm-crm" ${usesDefault?'disabled':''} onclick="crmCfgFieldEdit('${f.key}')">✎</button>
-        <button class="crm-x" title="Entfernen" ${(usesDefault||f.key==='name')?'disabled':''} onclick="crmCfgFieldDel('${f.key}')">✕</button>
+        <button class="btn-sm-crm" ${i===0||usesDefault?'disabled':''} onclick="crmCfgFieldMove(${jsq(i)},-1)">↑</button>
+        <button class="btn-sm-crm" ${i===fields.length-1||usesDefault?'disabled':''} onclick="crmCfgFieldMove(${jsq(i)},1)">↓</button>
+        <button class="btn-sm-crm" ${usesDefault?'disabled':''} onclick="crmCfgFieldEdit(${jsq(f.key)})">✎</button>
+        <button class="crm-x" title="Entfernen" ${(usesDefault||f.key==='name')?'disabled':''} onclick="crmCfgFieldDel(${jsq(f.key)})">✕</button>
       </td></tr>`).join('');
   const funcs=(work.memberFunctions||[]).join('\n');
   // ── Kachel-Infos je Baum ──
   const cardSel=(window._cfgCardTree && work.trees.some(t=>t.key===window._cfgCardTree)) ? window._cfgCardTree : (work.trees[0]&&work.trees[0].key);
   const cardTreeOpts=work.trees.map(t=>`<option value="${esc(t.key)}"${cardSel===t.key?' selected':''}>${esc(t.label)}</option>`).join('');
   const curCard=(work.cardFields&&Array.isArray(work.cardFields[cardSel]))?work.cardFields[cardSel]:[];
-  const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle('${esc(cardSel)}','${esc(d.key)}',this.checked)"> ${esc(d.label)}</label>`).join('');
+  const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle(${jsq(cardSel)},${jsq(d.key)},this.checked)"> ${esc(d.label)}</label>`).join('');
 
   host.innerHTML = `
   <div class="crm-sec">
@@ -4559,9 +4566,9 @@ function paintVerwConfig(){
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <label class="small" style="color:var(--muted)">Für:</label>
       <select class="crm-tsel" onchange="crmCfgFieldTree(this.value)">${treeOpts}</select>
-      ${hasOverride?`<button class="btn-sm-crm" onclick="crmCfgFieldReset('${esc(sel)}')">↩ Auf Standard zurücksetzen</button>`:''}
+      ${hasOverride?`<button class="btn-sm-crm" onclick="crmCfgFieldReset(${jsq(sel)})">↩ Auf Standard zurücksetzen</button>`:''}
     </div>
-    ${usesDefault?`<div class="small" style="color:var(--muted);margin-bottom:8px">Dieser Baum nutzt aktuell die Standard-Felder. <button class="btn-sm-crm" onclick="crmCfgFieldOverride('${esc(sel)}')">Eigene Felder für diesen Baum anlegen</button></div>`:''}
+    ${usesDefault?`<div class="small" style="color:var(--muted);margin-bottom:8px">Dieser Baum nutzt aktuell die Standard-Felder. <button class="btn-sm-crm" onclick="crmCfgFieldOverride(${jsq(sel)})">Eigene Felder für diesen Baum anlegen</button></div>`:''}
     <div style="overflow-x:auto"><table class="vw-table"><tbody>${fieldRows}</tbody></table></div>
   </div>
   <div class="crm-sec">
@@ -4610,7 +4617,7 @@ function crmCfgTreeEdit(key){
    <div class="crm-modal-field"><label>Einzahl (für „Neuer …")</label><input id="cfg-tree-single" value="${esc(t.single||'')}" placeholder="z. B. Verein"></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmCfgTreeSave('${esc(key)}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmCfgTreeSave(${jsq(key)})">Speichern</button></div>`);
 }
 function crmCfgTreeSave(origKey){
   const label=val('cfg-tree-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
@@ -4654,7 +4661,7 @@ function crmCfgCatEdit(key){
    <div class="crm-modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cfg-cat-stats" ${_catStats(c)?'checked':''} style="width:auto;margin:0"> Statistik / Weitermach-Quote für diese Kategorie</label><div class="small" style="color:var(--muted)">z. B. Vereine oder Segelschulen – schaltet den Statistik-Reiter an Kontakten dieser Kategorie frei.</div></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmCfgCatSave('${esc(key)}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmCfgCatSave(${jsq(key)})">Speichern</button></div>`);
 }
 function crmCfgCatSave(origKey){
   const label=val('cfg-cat-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
@@ -4719,7 +4726,7 @@ function crmCfgFieldEdit(key){
    <div class="crm-modal-field"><label>Hinweis (optional)</label><input id="cfg-f-hint" value="${esc(f.hint||'')}" placeholder="kleiner Hilfetext"></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest.</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
-   <button class="btn-sm-crm primary" onclick="crmCfgFieldSave('${esc(key)}')">Speichern</button></div>`);
+   <button class="btn-sm-crm primary" onclick="crmCfgFieldSave(${jsq(key)})">Speichern</button></div>`);
 }
 function crmCfgFieldSave(origKey){
   const label=val('cfg-f-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }

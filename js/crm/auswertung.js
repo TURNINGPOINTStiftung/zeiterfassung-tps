@@ -6,7 +6,7 @@
 // window._fbRef an. Alles in try/catch, damit ein Fehler nichts anderes stört.
 import { ensureCrmReady, listEntities, listVeranstaltungen } from './crm-data.js';
 import { getTrees } from './crm-config.js';
-import { esc, toast } from '../utils.js';
+import { esc, toast, jsArg as jsq } from '../utils.js';
 
 const FSTATUS = [['beantragt','Beantragt'],['genehmigt','Genehmigt'],['abgelehnt','Abgelehnt'],['abgeschlossen','Abgeschlossen']];
 let _xlsxP=null;
@@ -180,7 +180,7 @@ function _filterBar(){
   const yearOpts=`<option value="">Alle Jahre</option>`+years.map(y=>`<option value="${y}"${String(_yearsFilter())===String(y)?' selected':''}>${y}</option>`).join('');
   // Einträge gruppiert nach Baum
   const byTree={}; all.forEach(x=>{ (byTree[x.treeLabel]=byTree[x.treeLabel]||[]).push(x); });
-  const entHtml=Object.keys(byTree).map(tl=>`<div class="grp">${esc(tl)}</div>`+byTree[tl].map(x=>`<label><input type="checkbox" ${isSel(x)?'checked':''} onchange="ausToggle('${esc(_key(x.tree,x.id))}')"> ${esc(x.name)}</label>`).join('')).join('');
+  const entHtml=Object.keys(byTree).map(tl=>`<div class="grp">${esc(tl)}</div>`+byTree[tl].map(x=>`<label><input type="checkbox" ${isSel(x)?'checked':''} onchange="ausToggle(${jsq(_key(x.tree,x.id))})"> ${esc(x.name)}</label>`).join('')).join('');
   return `<div class="aus-card"><h3>Auswahl</h3>
     <div class="aus-filter">
       <div style="min-width:170px">

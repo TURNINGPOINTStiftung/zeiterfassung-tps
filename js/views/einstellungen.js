@@ -1,7 +1,7 @@
 import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
-import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate } from '../utils.js';
+import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate, jsArg as jsq } from '../utils.js';
 import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
 import { vacDailyMin, annualVacDays } from '../calc.js';
@@ -48,19 +48,19 @@ export function renderSettings(){
     const zeAktiv=!u.noTimesheet;
     const reportAktiv=!u.noReport;
     const zeToggle=isGFUser
-      ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet('${u.id}')" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
+      ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet(${jsq(u.id)})" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
       :isLeitungUser
         ?`<span style="font-size:11px;color:var(--muted)" title="Leitungs-Zeiterfassung ist immer privat; eingereichte Monate gehen als Buchhaltungsversion an die GF">🔒 ZE privat · Buchhaltung an GF</span>`
         :'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${t}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
-        <div class="details">${u.city||'–'} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
+        <div class="details">${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${zeToggle}
-        <button class="btn btn-outline btn-sm" onclick="showEditUser('${u.id}')">Bearbeiten</button>
-        ${u.id!==cu.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">×</button>`:''}
+        <button class="btn btn-outline btn-sm" onclick="showEditUser(${jsq(u.id)})">Bearbeiten</button>
+        ${u.id!==cu.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser(${jsq(u.id)})">×</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -73,7 +73,7 @@ export function renderSettings(){
   const crs=getCustomRoles();
   const crEl=document.getElementById('custom-role-list');
   if(crEl) crEl.innerHTML=crs.length
-    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:10px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole('${esc(r.id)}')" title="Entfernen">×</button></span>`).join('')
+    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:10px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole(${jsq(r.id)})" title="Entfernen">×</button></span>`).join('')
     : '<span style="color:var(--muted);font-size:13px">Noch keine eigenen Rollen.</span>';
 
   {
@@ -215,7 +215,7 @@ function renderPermissionsMatrix(el){
     if(rk==='admin') return true;
     return Array.isArray(perms[pk])?perms[pk].includes(rk):DEFAULT_PERMISSIONS[pk]?.includes(rk)??false;
   };
-  const hdrs=PERM_ROLES.map(r=>`<th style="text-align:center;font-size:11px;padding:6px 8px;min-width:60px">${r.label}</th>`).join('');
+  const hdrs=PERM_ROLES.map(r=>`<th style="text-align:center;font-size:11px;padding:6px 8px;min-width:60px">${esc(r.label)}</th>`).join('');
   const rows=PERM_DEFS.map(p=>{
     const cells=PERM_ROLES.map(r=>{
       const checked=getVal(p.key,r.key);
@@ -226,7 +226,7 @@ function renderPermissionsMatrix(el){
       </td>`;
     }).join('');
     return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="font-size:12px;padding:7px 10px;color:var(--text)">${p.label}</td>
+      <td style="font-size:12px;padding:7px 10px;color:var(--text)">${esc(p.label)}</td>
       ${cells}
       <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">✓</span></td>
     </tr>`;
@@ -361,7 +361,7 @@ export function showAddUser(){
 export function showEditUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
-  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword('${id}')">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull('${id}')" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser('${id}'))">Speichern</button></div>`, true);
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
 }
@@ -421,8 +421,8 @@ export function pwRequestsHtml(){
     <table class="vw-table"><tbody>${list.map(([id,r])=>`<tr>
       <td><span class="vw-name">${esc(getUser(id).name||id)}</span></td>
       <td class="small" style="color:var(--muted)">${r.at?new Date(r.at).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):''}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="btn-sm-crm primary" onclick="resetUserPassword('${esc(id)}')">🔑 Neues Startpasswort</button>
-        <button class="btn-sm-crm" onclick="dismissPwRequest('${esc(id)}')">Verwerfen</button></td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn-sm-crm primary" onclick="resetUserPassword(${jsq(id)})">🔑 Neues Startpasswort</button>
+        <button class="btn-sm-crm" onclick="dismissPwRequest(${jsq(id)})">Verwerfen</button></td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 export function dismissPwRequest(id){
@@ -450,7 +450,7 @@ function _renderAccountCheck(){
   const open=res.filter(r=>r.status==='offen'), unk=res.filter(r=>r.status==='unbekannt');
   const rows=open.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
       <span><b>${esc(r.name)}</b> <span style="font-size:11px;color:var(--muted)">(${esc(r.id)})</span></span>
-      <button class="btn btn-ok btn-sm" onclick="secureAccountUi('${esc(r.id)}')">🔐 Absichern</button></div>`).join('');
+      <button class="btn btn-ok btn-sm" onclick="secureAccountUi(${jsq(r.id)})">🔐 Absichern</button></div>`).join('');
   openModal(`<h3>🔐 Konten prüfen</h3>
     <p style="font-size:13px;margin:0 0 10px">${res.length} Konten geprüft · <b style="color:${open.length?'var(--danger)':'var(--ok)'}">${open.length} offen</b> · ${res.length-open.length-unk.length} sicher${unk.length?` · ${unk.length} nicht prüfbar (später erneut)`:''}</p>
     ${open.length?`<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Diese Konten lassen sich noch mit dem berechenbaren Stabil-Passwort öffnen. „Absichern" setzt ein neues Startpasswort – bitte persönlich weitergeben; die Person meldet sich damit an und ändert es im Profil.</p><div style="max-height:45vh;overflow-y:auto">${rows}</div>`:'<p style="color:var(--ok);font-weight:600">✓ Alle Konten sind abgesichert.</p>'}
@@ -510,7 +510,7 @@ export function showEditDpw(id){
     </div>
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-      <button class="btn btn-ok" onclick="saveEditDpw('${id}')">Speichern</button>
+      <button class="btn btn-ok" onclick="saveEditDpw(${jsq(id)})">Speichern</button>
     </div>`);
 }
 
@@ -550,14 +550,14 @@ function userForm(u={}){
       const histRows=hist.map((h,i)=>`
         <div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
           <input type="date" value="${h.fromDate}" style="padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;width:130px"
-            onchange="updateTeamHistEntry('${u.id}',${i},this.value,'team')">
+            onchange="updateTeamHistEntry(${jsq(u.id)},${i},this.value,'team')">
           <select style="flex:1;padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px"
-            onchange="updateTeamHistEntry('${u.id}',${i},this.value,'date')">
+            onchange="updateTeamHistEntry(${jsq(u.id)},${i},this.value,'date')">
             <option value="">– kein Team –</option>
             ${getTeams().map(t=>`<option value="${esc(t)}"${h.team===t?' selected':''}>${esc(t)}</option>`).join('')}
           </select>
           <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:11px"
-            onclick="deleteTeamHistEntry('${u.id}',${i})">×</button>
+            onclick="deleteTeamHistEntry(${jsq(u.id)},${i})">×</button>
         </div>`).join('');
       return `<div class="form-group"><label>📅 Team-Verlauf <span style="font-size:11px;color:var(--muted)">(editierbar)</span></label>
         <div style="border:1.5px solid var(--border);border-radius:6px;padding:6px;margin-bottom:8px;max-height:160px;overflow-y:auto">
@@ -566,7 +566,7 @@ function userForm(u={}){
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:12px;color:var(--muted)">Eintrag hinzufügen:</span>
           <input type="date" id="uf-team-change-date" value="${localISODate()}" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-          <button class="btn btn-ok btn-sm" onclick="addTeamHistEntry('${u.id}')">+ Eintrag</button>
+          <button class="btn btn-ok btn-sm" onclick="addTeamHistEntry(${jsq(u.id)})">+ Eintrag</button>
         </div>
       </div>`;
     })():'';
@@ -673,7 +673,7 @@ function userForm(u={}){
         ? vereine.map(v=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" class="uf-crmv" value="${esc(v.id)}"${accIds.includes(v.id)?' checked':''}> ${esc(v.name)}</label>`).join('')
         : '<span style="font-size:12px;color:var(--muted)">Keine Vereine im CRM angelegt.</span>';
       const TRI=[['kein','Kein'],['nutzen','Nutzen'],['verwaltend','Verwaltend']];
-      const seg=(key,cur)=>`<div class="uf-seg">${TRI.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod('${key}')" style="display:none">${o[1]}</label>`).join('')}</div>`;
+      const seg=(key,cur)=>`<div class="uf-seg">${TRI.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod(${jsq(key)})" style="display:none">${o[1]}</label>`).join('')}</div>`;
       const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${key!=='crm'?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).</div>`:''}</div></div>`;
       const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
       const crmBody=`<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">Umfang</label>
@@ -1088,7 +1088,7 @@ export function archivedUsersHtml(){
     <table class="vw-table"><tbody>${arch.map(u=>`<tr>
       <td><span class="vw-name">${esc(u.name)}</span></td>
       <td class="small" style="color:var(--muted)">archiviert ${u.archivedAt?new Date(u.archivedAt).toLocaleDateString('de-DE'):''}${u.accessRevoked?' · 🔒 Zugang gesperrt':' · <span style="color:var(--danger);font-weight:600">⚠ Zugang noch aktiv</span>'}</td>
-      <td style="text-align:right;white-space:nowrap">${u.accessRevoked?'':`<button class="btn-sm-crm primary" onclick="revokeArchivedAccess('${esc(u.id)}')">🔒 Zugang sperren</button> `}<button class="btn-sm-crm" onclick="restoreArchivedUser('${esc(u.id)}')">↩ Wiederherstellen</button></td>
+      <td style="text-align:right;white-space:nowrap">${u.accessRevoked?'':`<button class="btn-sm-crm primary" onclick="revokeArchivedAccess(${jsq(u.id)})">🔒 Zugang sperren</button> `}<button class="btn-sm-crm" onclick="restoreArchivedUser(${jsq(u.id)})">↩ Wiederherstellen</button></td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 

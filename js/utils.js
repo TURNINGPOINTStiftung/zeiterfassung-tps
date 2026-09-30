@@ -76,7 +76,12 @@ export function getHolidays(y,bl){
 }
 
 // ── Formatting ───────────────────────────────────────────────────
-export function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+// HTML-Maskierung für Text UND Attributwerte (beide Anführungszeichen, spitze Klammern).
+export function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Wert als JavaScript-Argument in einem Inline-Handler: onclick="fn(${jsArg(x)})".
+// HTML-Maskierung allein reicht dort NICHT (der Browser dekodiert &#39; vor dem Ausführen
+// wieder zu '). Daher zuerst als JS-String-Literal kodieren, dann fürs Attribut maskieren.
+export function jsArg(v){ return esc(JSON.stringify(String(v==null?'':v))); }
 export function fmtTs(iso){
   if(!iso) return '';
   const d=new Date(iso);

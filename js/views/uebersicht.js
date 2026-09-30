@@ -169,8 +169,8 @@ export function renderOverview(){
           +(curOverflow>0?` · <span style="color:var(--warn);font-weight:700">→ ${hFmt(curOverflow)} Übertrag</span>`:'')
         :'flexibel (kein Limit)';
       return `<div class="emp-card${isClickable?'':' emp-card-locked'}" ${cardClick}>
-        <h3>${u.name} ${roleChip}</h3>
-        <div class="meta">${u.city||'–'} · ${freeMeta}</div>
+        <h3>${esc(u.name)} ${roleChip}</h3>
+        <div class="meta">${esc(u.city||'–')} · ${freeMeta}</div>
         ${pending>0?`<div class="meta" style="margin-top:4px"><span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span></div>`:''}
         ${notSubmitted}
         <div class="months">${pills}</div>
@@ -190,8 +190,8 @@ export function renderOverview(){
     const diffColor=curDiff>=0?'var(--ok)':'var(--danger)';
     const diffStr=sFmt(curDiff);
     return `<div class="emp-card${isClickable?'':' emp-card-locked'}" ${cardClick}>
-      <h3>${u.name} ${roleChip}</h3>
-      <div class="meta">${u.city||'–'} · ${eu.wh}h/Woche</div>
+      <h3>${esc(u.name)} ${roleChip}</h3>
+      <div class="meta">${esc(u.city||'–')} · ${eu.wh}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
         <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>

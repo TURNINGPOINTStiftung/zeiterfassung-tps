@@ -471,7 +471,7 @@ export function renderSignature(user,entry){
   const ortDat=entry.submittedAt?`${city}${city?', ':''}${fmtTs(entry.submittedAt).split(' ')[0]}`:`${city}${city?', ':''}${today}`;
   let empSig='';
   if(entry.status==='submitted'||entry.status==='approved'||entry.status==='rejected'){
-    empSig=`<div class="dig-sig">✍ Digital eingereicht<br>${user.name}<span class="ts">${fmtTs(entry.submittedAt)}</span></div>`;
+    empSig=`<div class="dig-sig">✍ Digital eingereicht<br>${esc(user.name)}<span class="ts">${fmtTs(entry.submittedAt)}</span></div>`;
   } else {
     empSig=`<span class="dig-sig"><span class="pending">Noch nicht eingereicht</span></span>`;
   }
@@ -484,7 +484,7 @@ export function renderSignature(user,entry){
     let rName=reviewer?reviewer.name:'';
     if(!rName){ const _rl=getResponsibleLeitung(user,monthStartDate(window.year,window.mon)); rName=_rl?_rl.name:'Leitung'; }
     const action=entry.status==='approved'?'✓ Genehmigt':'✗ Abgelehnt';
-    mgSig=`<div class="dig-sig">${action}<br>${rName}<span class="ts">${fmtTs(entry.reviewedAt)}</span>${entry.managerNote?`<span class="ts" style="color:var(--danger)">${entry.managerNote}</span>`:''}</div>`;
+    mgSig=`<div class="dig-sig">${action}<br>${esc(rName)}<span class="ts">${fmtTs(entry.reviewedAt)}</span>${entry.managerNote?`<span class="ts" style="color:var(--danger)">${esc(entry.managerNote)}</span>`:''}</div>`;
   } else {
     mgSig=`<span class="dig-sig"><span class="pending">Ausstehend</span></span>`;
   }
@@ -498,7 +498,7 @@ export function renderSignature(user,entry){
     ? (_reviewed ? `<div class="sig-block"><div class="lbl">Gegengezeichnet – Geschäftsführung</div><div class="sig-line">${mgSig}</div></div>` : '')
     : `<div class="sig-block"><div class="lbl">Geprüft – Unterschrift Leitung</div><div class="sig-line">${mgSig}</div></div>`;
   area.innerHTML=`
-    <div class="sig-block"><div class="lbl">Ort / Datum</div><div class="sig-line"><span style="font-size:12px;font-weight:600">${ortDat}</span></div></div>
+    <div class="sig-block"><div class="lbl">Ort / Datum</div><div class="sig-line"><span style="font-size:12px;font-weight:600">${esc(ortDat)}</span></div></div>
     <div class="sig-block"><div class="lbl">${_leit?'Unterschrift Leitung':'Unterschrift Mitarbeiter/in'}</div><div class="sig-line">${empSig}</div></div>
     ${_secondBlock}`;
 }

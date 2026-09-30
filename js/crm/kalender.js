@@ -11,6 +11,7 @@ import { listVeranstaltungen, getCrm } from './crm-data.js';
 const _RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows']);
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
 
 // ── Datum-Helfer (lokal, Mittag um TZ-Verschiebungen zu vermeiden) ──
 const _pad=n=>String(n).padStart(2,'0');
@@ -561,7 +562,7 @@ export function renderKalender(){
       <div class="kal-h">📅 Kalender</div>
       <p class="kal-sub">${personal?'Deine persönliche Ansicht: alle Veranstaltungen &amp; Termine (deine hervorgehoben) plus deine Abwesenheiten.':'Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.'}</p>
       <div class="kal-bar">
-        <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView('${t[0]}')">${t[1]}</button>`).join('')}</div>
+        <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
