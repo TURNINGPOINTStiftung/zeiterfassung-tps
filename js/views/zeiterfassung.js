@@ -1,11 +1,12 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
-import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast } from '../utils.js';
+import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
 import { fmtTs, localISODate } from '../utils.js';
 import { fileGfApproval, unfileGfReport } from './gfberichte.js';
+import { checkMonth, forgottenStampText, submitWarnings } from '../plausi.js';
 
 // Uhrzeit "HH:MM" → Minuten seit Mitternacht
 function _hhmmToMin(t){ const p=String(t||'').split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
@@ -41,6 +42,7 @@ export function renderZeiterfassung(){
   // Vor dem Eintritt / nach dem Austritt gibt es keine Zeiterfassung → auf den ersten bzw.
   // letzten Beschäftigungsmonat springen (statt leere, nicht existente Monate zu zeigen).
   { const _c=clampToEmployment(user,window.year,window.mon); if(_c.clamped){ window.year=_c.y; window.mon=_c.m; } }
+  try{ document.getElementById('zt-stamp-banner')?.remove(); }catch(_){}
   const year=window.year, mon=window.mon, cu=window.cu;
   const entry=getEntry(uid,year,mon);
   const isLeiter=isManagerRole(cu);
@@ -151,6 +153,9 @@ export function renderZeiterfassung(){
   }
   const overWeeks=new Set(Object.entries(weekMins).filter(([,v])=>v>_wsLimit).map(([k])=>Number(k)));
   const overWeeksYTD=Object.values(weekMinsYTD).filter(v=>v>_wsLimit).length;
+  // Plausibilitätshinweise je Tag (Überschneidung, Ruhezeit) – > 10 h zeigt die Zeile schon selbst.
+  const _plausi=checkMonth(uid,user,year,mon).byDay;
+  _renderStampBanner(uid);
 
   for(let d=1;d<=dim;d++){
     const ds=dateStr(year,mon,d);
@@ -180,8 +185,11 @@ export function renderZeiterfassung(){
     const over10h=!isAbsDay&&!isFree&&roundedDayMin>600;
     // Werkstudent: Woche über 20h → nur Mo–Fr-Tage im Semester rot markieren.
     const wsOver=isWerkstudent&&!we&&_inSemester(ds)&&overWeeks.has(kw);
+    const _pw=(_plausi[ds]||[]).filter(w=>w.kind!=='over10h');
+    const _pwHtml=_pw.map(w=>`<span class="zt-warn zt-warn-plausi" title="${esc(w.text)}">${w.kind==='overlap'?'Überschneidung':'Ruhezeit &lt; 11 h'}</span>`).join('');
 
     const tr=document.createElement('tr');
+    if(_pw.length){ tr.classList.add('plausi-warn'); tr.title=_pw.map(w=>w.text).join('\n'); }
     if(we) tr.classList.add('weekend');
     if(hol) tr.classList.add('holiday');
     if(tod) tr.classList.add('today-row');
@@ -209,7 +217,7 @@ export function renderZeiterfassung(){
       <td class="kt-col"><input id="kt_${ds}" aria-label="${dateFmt} Kleinteilig (Minuten)" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
-      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}</td>
+      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}${_pwHtml}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -226,6 +234,20 @@ export function renderZeiterfassung(){
   renderReviewPanel(uid,entry,isLeiter);
   renderEntryAudit(entry);
   renderSignature(user,entry);
+}
+
+// Hinweisbalken über der Tabelle, wenn ein Stempel vermutlich vergessen wurde
+// (seit einem früheren Tag oder > 12 h aktiv).
+function _renderStampBanner(uid){
+  const tbl=document.getElementById('zt'); if(!tbl) return;
+  const host=tbl.parentElement; if(!host) return;
+  let b=document.getElementById('zt-stamp-banner');
+  const txt=forgottenStampText(uid);
+  if(!txt){ if(b) b.remove(); return; }
+  if(!b){ b=document.createElement('div'); b.id='zt-stamp-banner'; b.className='no-print';
+    b.style.cssText='background:#fff3cd;border:1.5px solid #e0a800;color:#856404;border-radius:8px;padding:9px 12px;margin:0 0 10px;font-size:13px;font-weight:600';
+    host.insertBefore(b,tbl); }
+  b.textContent='⏰ '+txt+(window.cu&&window.cu.id===uid?' Bitte über „Ausstempeln" mit der richtigen Endzeit beenden.':'');
 }
 
 // Mobiler „→ Heute"-Sprung: zeigt einen schwebenden Knopf, sobald die heutige Zeile NICHT
@@ -1244,14 +1266,26 @@ export function syncVeranstaltungToTimesheets(uid,dayTimes,note){
   return {written,skipped};
 }
 
-export function doSubmit(){
+export function doSubmit(force){
   const year=window.year, mon=window.mon, cu=window.cu;
   const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
   const tuser=getUser(tuid);
   const leitungSelf=tuser&&tuser.role==='leitung'&&tuid===cu.id;
   const q=leitungSelf?'Monat einreichen und als Buchhaltungsversion an die Geschäftsführung senden? Danach gesperrt (bis Zurückziehen).'
                      :'Monat einreichen? Danach keine Änderungen bis zur Freigabe.';
-  if(!confirm(q)) return;
+  if(force!==true){
+    // Plausibilitätsprüfung: Auffälligkeiten vor dem Einreichen zeigen (nur Hinweis, kein Verbot).
+    const warns=submitWarnings(tuid,tuser,year,mon);
+    if(warns.length){
+      openModal(`<h3>⚠ Bitte vor dem Einreichen prüfen</h3>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 10px">In ${MONTHS[mon-1]} ${year} ${warns.length===1?'ist eine Auffälligkeit':'sind '+warns.length+' Auffälligkeiten'} aufgefallen:</p>
+        <ul style="font-size:13px;margin:0 0 12px;padding-left:18px;max-height:45vh;overflow-y:auto">${warns.map(w=>`<li style="margin:3px 0">${esc(w)}</li>`).join('')}</ul>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 4px">Wenn alles so stimmt (z. B. genehmigte Ausnahme), kannst du trotzdem einreichen.</p>
+        <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Zurück zur Korrektur</button><button class="btn btn-primary" onclick="closeModal();doSubmit(true)">Trotzdem einreichen</button></div>`);
+      return;
+    }
+    if(!confirm(q)) return;
+  }
   setEntryField(tuid,year,mon,'status','submitted');
   setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
   logEntryStatus(tuid,year,mon,'submitted');
