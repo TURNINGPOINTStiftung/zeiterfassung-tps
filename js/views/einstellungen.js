@@ -1,5 +1,5 @@
 import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL } from '../config.js';
-import { getData, getUser, mutate, getCustomRoles, _fk } from '../data.js';
+import { getData, getUser, mutate, getCustomRoles, _fk, STAMM_FIELDS } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate, jsArg as jsq } from '../utils.js';
 import { makePwRecord } from '../auth.js';
@@ -10,6 +10,10 @@ import { vacDailyMin, annualVacDays } from '../calc.js';
 // Schreibende Verwaltungs-Aktionen (Nutzer, Passwörter, Konten, Datenkorrekturen) nur noch
 // über den Account „Administrator" – delegierter Verwaltungs-Zugriff darf ansehen, nicht ändern.
 const _canVerwaltung = cu => !!(cu && cu.role==='admin');
+// „System-Verwaltung" (Recht zugriff_verwaltung, vom Admin vergeben): Stammdaten ANDERER pflegen,
+// Archivieren/Wiederherstellen. Rechte, Anlegen, Passwörter, Admin-Konten bleiben beim Admin.
+const _canStamm = cu => !!(cu && (cu.role==='admin' || hasPermission('zugriff_verwaltung', cu)));
+const _isDelegated = cu => !!(cu && cu.role!=='admin' && _canStamm(cu));
 
 // Pfade für persönliche „Modul-Zugriff"-Ausnahmen (spiegelt die Zugriffs-Matrix im CRM).
 // u.perms['path_<key>']=true|false übersteuert die Rollen-Matrix für DIESE Person; fehlt = Standard.
@@ -362,10 +366,26 @@ export function showAddUser(){
 
 export function showEditUser(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  if(!_canStamm(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  const _tu=getUser(id);
+  if(_isDelegated(cu) && (!_tu || _tu.role==='admin' || id==='admin')){ toast('Den Administrator-Account kann nur der Administrator bearbeiten.','err'); return; }
+  if(_isDelegated(cu) && id===cu.id){ toast('Eigene Stammdaten ändert der Administrator (eigene Adresse/Ort: über „Profil").','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
+  if(_isDelegated(cu)) _lockAdminOnlyFields();
+}
+// System-Verwaltung (delegiert): alles, was Identität/Rechte betrifft, nur anzeigen – nicht ändern.
+// Die Server-Regeln verweigern diese Felder ohnehin; so sieht man es schon im Formular.
+function _lockAdminOnlyFields(){
+  const box=document.getElementById('modal-body'); if(!box) return;
+  const sel='#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet';
+  box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
+  box.querySelectorAll('button').forEach(b=>{ const oc=b.getAttribute('onclick')||''; if(/resetUserPassword|reprovisionUserFull|secureAccountUi/.test(oc)) b.style.display='none'; });
+  const h=document.createElement('div');
+  h.style.cssText='margin:6px 0 10px;padding:8px 10px;border-radius:6px;background:rgba(59,130,246,.08);font-size:12px;color:var(--muted)';
+  h.textContent='🔑 System-Verwaltung: Stammdaten (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt, Ort …) änderbar. Name, Login, Passwort, Rolle und Zugriffe vergibt nur der Administrator.';
+  const h3=box.querySelector('h3'); if(h3) h3.after(h);
 }
 
 // Admin: Einmal-Passwort für einen Mitarbeiter erzeugen (setzt den Datensatz-Hash `u.pw`).
@@ -932,8 +952,12 @@ export async function saveNewUser(){
 
 export async function saveEditUser(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
+  if(!_canStamm(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
   const u=collectUserForm(); u.id=id;
+  const _deleg=_isDelegated(cu);
+  if(_deleg){ const ex0=getUser(id);
+    if(!ex0 || ex0.role==='admin' || id==='admin' || id===cu.id){ toast('Diesen Datensatz kann nur der Administrator ändern.','err'); return; }
+    u.role=ex0.role; u.name=ex0.name; u.pw=''; }
   if(id==='admin') u.role='admin';
   if(u.pw){ u.pw=await makePwRecord(u.pw); }
   else { const ex=getUser(id); if(ex) u.pw=ex.pw; }
@@ -968,6 +992,14 @@ export async function saveEditUser(id){
     u.paramHistory=existing.paramHistory;
   } else {
     delete u.paramHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
+  }
+  if(_deleg){
+    // Nur Stammdaten schreiben (feldgenau) – keine Rechte, kein CRM-Zugriff, kein Konto-Setup.
+    const patch={}; STAMM_FIELDS.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(u,k) && u[k]!==undefined) patch[k]=u[k]; });
+    try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],patch); }); }
+    catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt'),'err'); return; }
+    closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Stammdaten gespeichert. ✓','ok');
+    return;
   }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
   const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
@@ -1053,9 +1085,10 @@ export function toggleLeitungReport(uid){
 
 export async function deleteUser(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  if(!_canStamm(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
   const _u=getUser(id); if(!_u) return;
+  if(_isDelegated(cu) && (_u.role==='admin' || id===cu.id)){ toast('Diesen Account kann nur der Administrator archivieren.','err'); return; }
   // ARCHIVIEREN statt löschen: Zeitaufzeichnungen müssen (ArbZG) mind. 2 Jahre erhalten
   // bleiben. Der Nutzer verschwindet aus allen Listen, seine Zeitdaten bleiben unverändert.
   // Zusätzlich wird der ZUGANG serverseitig entzogen (Cloud Function tpsPw „offboard"):
@@ -1063,6 +1096,14 @@ export async function deleteUser(id){
   // Anmeldebildschirm entfernt. Wiederherstellbar über „Archivierte Mitarbeiter".
   if(!confirm(`${_u.name} archivieren?\n\nDer Zugang wird sofort gesperrt und die Person verschwindet aus allen Listen. Alle Zeitdaten bleiben erhalten; unter „Archivierte Mitarbeiter" wiederherstellbar.`)) return;
   let off=false, offErr='';
+  if(_isDelegated(cu)){
+    // System-Verwaltung: Sperren UND Archivieren erledigt der Server (die Nutzerliste selbst darf nur der Admin schreiben).
+    try{ await _adminFn({action:'offboard', id, archive:true}); }
+    catch(e){ toast('Archivieren fehlgeschlagen: '+((e&&e.message)||e),'err'); return; }
+    toast(_u.name+' archiviert und Zugang gesperrt – Zeitdaten bleiben erhalten.','ok');
+    setTimeout(()=>{ try{ renderSettings(); window.renderVerwaltung?.(); }catch(e){} }, 1500);
+    return;
+  }
   try{ await _adminFn({action:'offboard', id}); off=true; }catch(e){ offErr=(e&&e.message)||String(e); }
   await mutate(d=>{
     const u=d.users.find(x=>x.id===id); if(!u) return;
@@ -1083,7 +1124,7 @@ export async function deleteUser(id){
 
 // Liste der archivierten Mitarbeiter (für die Verwaltung) – nur für den Administrator-Account.
 export function archivedUsersHtml(){
-  const cu=window.cu; if(!_canVerwaltung(cu)) return '';
+  const cu=window.cu; if(!_canStamm(cu)) return '';
   const arch=(getData().archivedUsers||[]).filter(Boolean)
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
   if(!arch.length) return '';
@@ -1100,23 +1141,25 @@ export function archivedUsersHtml(){
 // archivierte Personen oder wenn das Sperren beim Archivieren fehlgeschlagen ist.
 export async function revokeArchivedAccess(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account.','err'); return; }
+  if(!_canStamm(cu)){ toast('Nur der Administrator-Account.','err'); return; }
   const a=(getData().archivedUsers||[]).find(x=>x&&x.id===id); if(!a) return;
   try{ await _adminFn({action:'offboard', id}); }
   catch(e){ toast('Sperren fehlgeschlagen: '+((e&&e.message)||e),'err'); return; }
+  if(_isDelegated(cu)){ toast('Zugang von '+a.name+' gesperrt ✓','ok'); return; }   // Server setzt accessRevoked selbst
   await mutate(d=>{ const x=(d.archivedUsers||[]).find(y=>y&&y.id===id); if(x) x.accessRevoked=true; });
   renderSettings(); toast('Zugang von '+a.name+' gesperrt ✓','ok');
 }
 
 export async function restoreArchivedUser(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter wiederherstellen.','err'); return; }
+  if(!_canStamm(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter wiederherstellen.','err'); return; }
   const a=(getData().archivedUsers||[]).find(x=>x&&x.id===id); if(!a) return;
   if(getUser(id)){ toast('Login-ID „'+id+'" ist inzwischen wieder vergeben.','err'); return; }
   if(!confirm(a.name+' wiederherstellen?\n\nDer Zugang wird wieder freigeschaltet; das bisherige Passwort gilt wieder.')) return;
   // Zuerst den Zugang serverseitig wieder aktivieren (Konto entsperren, Freischaltung, Anmeldebildschirm).
-  try{ await _adminFn({action:'reboard', id, name:a.name||id}); }
+  try{ await _adminFn({action:'reboard', id, name:a.name||id, restore:_isDelegated(cu)}); }
   catch(e){ toast('Zugang konnte nicht wieder aktiviert werden: '+((e&&e.message)||e)+' – Mitarbeiter bleibt archiviert.','err'); return; }
+  if(_isDelegated(cu)){ toast(a.name+' wiederhergestellt – Zugang wieder aktiv ✓','ok'); setTimeout(()=>{ try{ renderSettings(); window.renderVerwaltung?.(); }catch(e){} }, 1500); return; }
   await mutate(d=>{
     const u={...a}; delete u.archivedAt; delete u.archivedBy; delete u.accessRevoked;
     d.users.push(u);

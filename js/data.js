@@ -49,6 +49,16 @@ function _mayWriteConfig(k){
   if(cu.role==='admin') return true;
   return k==='vertretungen' && cu.role==='geschaeftsfuehrer';
 }
+// Stammdaten, die eine Person mit „System-Verwaltung" bei ANDEREN (Nicht-Admin-)Nutzern pflegen
+// darf. Muss mit firebase-rules (users/$i/<feld>) übereinstimmen. Nicht dabei: id, name, pw, role,
+// perms, crmOnly, gfCountersign, noReport, noTimesheet, kanbanTeams (= Rechte/Identität → Admin).
+export const STAMM_FIELDS = new Set(['email','city','bundesland','team','teams','teamHistory','customRole','customRoles',
+  'wh','dpw','al','entryDate','exitDate','vacHoursPerDay','holidaysLikeSunday','allowHalfVac','sollWorkdays','maxHours',
+  'lecturePeriods','lectureFreeDays','paramHistory']);
+function _isStammVerwalter(){
+  const cu=window.cu; if(!cu || cu.role==='admin') return false;
+  try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; }
+}
 
 export function freshData(){
   return {users:DEFAULT_USERS.map(u=>({...u})),entries:{},cats:[...DEFAULT_CATS],teams:[...DEFAULT_TEAMS],teamReports:{},vacRequests:{},teamCats:{},yearReports:{},_fixes:{}};
@@ -477,6 +487,26 @@ function _diffToUpdate(before, after, blocked){
       // Protokoll wird nur über _auditRec (einzelne neue Einträge) geschrieben, nie als Ganzes.
     } else if(_NEVER_BLOB_NODES.has(key)){
       // Sicherheits-Knoten nie über mutate (nur admin-setup.js schreibt sie gezielt).
+    } else if(key==='users' && _isStammVerwalter()){
+      // System-Verwaltung (delegiert, nicht Admin): NUR Stammdaten-Felder bestehender, fremder,
+      // nicht-Admin-Nutzer – feldgenau (users/<i>/<feld>), passend zu den Server-Regeln.
+      // Anlegen/Entfernen/Umsortieren, Rollen, Rechte, Passwörter bleiben dem Admin vorbehalten.
+      const bu=Array.isArray(B.users)?B.users:[], au=Array.isArray(A.users)?A.users:[];
+      const me=(window.cu&&window.cu.id)||'';
+      let bad=bu.length!==au.length || _usersPoisoned(au);
+      const part={};
+      if(!bad) for(let i=0;i<au.length;i++){
+        const b=bu[i]||{}, a=au[i]||{};
+        if(b.id!==a.id){ bad=true; break; }
+        for(const f of new Set([...Object.keys(b),...Object.keys(a)])){
+          if(_eqJSON(b[f],a[f])) continue;
+          if(!STAMM_FIELDS.has(f) || b.role==='admin' || b.id===me){ bad=true; break; }
+          part['users/'+i+'/'+f]=(a[f]===undefined?null:a[f]);
+        }
+        if(bad) break;
+      }
+      if(bad){ if(blocked) blocked.push('users'); }
+      else Object.assign(upd, part);
     } else if(_CONFIG_NODES.has(key) && !_mayWriteConfig(key)){
       // Nur der Administrator-Account darf Config-Knoten ändern → nicht schreiben, melden.
       if(blocked && !_eqJSON(B[key],A[key])) blocked.push(key);

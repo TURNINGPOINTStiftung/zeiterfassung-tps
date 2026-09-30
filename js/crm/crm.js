@@ -4180,8 +4180,25 @@ function verwShowTab(name){
 function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
   const full=_canVerw();
-  const mode = full ? 'full' : 'crm';
+  const isAdm=!!(window.cu && window.cu.role==='admin');
+  const mode = full ? (isAdm ? 'full' : 'staff') : 'crm';
   if(root.getAttribute('data-verw-mode')===mode && document.getElementById('verw-crmcfg')) return;  // schon passend gemountet
+  if(mode==='staff'){
+    // System-Verwaltung (delegiert): Mitarbeiter-Stammdaten + Archiv, CRM-Struktur. Keine
+    // Organisation (Rollen/Rechte), keine Daten-/Login-Werkzeuge – die bleiben beim Administrator.
+    root.setAttribute('data-verw-mode', mode);
+    root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
+     <div class="verw-tabs">
+       <button class="verw-tab active" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
+       <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
+     </div>
+     <div class="crm-body">
+       <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
+       <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
+     </div>`;
+    verwShowTab(_verwTab()==='crm'?'crm':'users');
+    return;
+  }
   root.setAttribute('data-verw-mode', mode);
   if(!full){
     // CRM-Verwalter (Teil-Recht zugriff_verwaltung_crm): NUR der CRM-Reiter. Keine sensiblen
@@ -4226,10 +4243,12 @@ function renderVerwaltung(){
         if(_canVerw()){
           // Sensible/übergreifende Bereiche nur für Voll-Admins.
           paintVerwUsers();
-          paintVerwImpExp();
-          paintVerwZugriff();
-          paintVerwHistory();
-          if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien (Organisation)
+          if(window.cu && window.cu.role==='admin'){
+            paintVerwImpExp();
+            paintVerwZugriff();
+            paintVerwHistory();
+            if(window.renderSettings) window.renderSettings();  // füllt Teams/Rollen/Kategorien (Organisation)
+          }
         }
       }catch(e){ console.error('Verwaltung:',e); }
     });
@@ -4296,7 +4315,7 @@ function paintVerwUsers(){
     </tr>`;
   }).join('');
   host.innerHTML = `<div class="crm-sec">
-    <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span><button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button></h4>
+    <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span>${(window.cu&&window.cu.role==='admin')?'<button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button>':''}</h4>
     <div class="small" style="color:var(--muted);margin-bottom:10px">Alles zu einer Person – Rolle, Teams, Arbeitszeit, Urlaub, Berechtigungen und <b>CRM-Zugriff</b> – wird über „Bearbeiten" gesetzt. Die Spalte „CRM-Zugriff" zeigt nur den aktuellen Stand.</div>
     <div style="overflow-x:auto"><table class="vw-table">
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
