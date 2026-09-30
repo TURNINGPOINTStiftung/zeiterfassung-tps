@@ -76,37 +76,73 @@ exports.tpsPw = async (req, res) => {
       return res.json({ ok: true });
     }
 
-    // Offboarding / Wiederherstellen eines Mitarbeiters (nur Administrator):
+    // Offboarding / Wiederherstellen eines Mitarbeiters:
+    //  Berechtigt: Administrator ODER Recht „System-Verwaltung" (zeiterfassung/grants/zugriff_verwaltung,
+    //  vom Admin vergeben). Nie für Admin-Konten, nie für das eigene Konto.
     //  offboard: Firebase-Konto sperren + Sitzungen widerrufen, aus allowed/uidUser/admins/
-    //            gfAdmins/managers und loginDir entfernen → sofort kein Zugriff mehr.
-    //  reboard:  Konto entsperren, allowed/uidUser/loginDir wieder setzen (Rollen-Allowlists
-    //            berechnet der Admin-Client danach per refreshPermissionAllowlists neu).
+    //            gfAdmins/managers/grants und loginDir entfernen → sofort kein Zugriff mehr.
+    //            archive:true → zusätzlich users → archivedUsers verschieben (für Nicht-Admins, die die
+    //            Nutzerliste selbst nicht schreiben dürfen). Ein vorhandener Archiv-Eintrag bekommt accessRevoked.
+    //  reboard:  Konto entsperren, allowed/uidUser/loginDir (+ managers/gfAdmins nach Rolle) setzen.
+    //            restore:true → archivedUsers → users zurückverschieben.
     if (action === 'offboard' || action === 'reboard') {
       const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
       if (!m) return res.status(401).json({ ok: false, error: 'auth' });
       const tok = await admin.auth().verifyIdToken(m[1]);
       const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
-      if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      const isStaff = !isAdmin
+        && (await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() === true
+        && (await db.ref('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid).once('value')).val() === true;
+      if (!isAdmin && !isStaff) return res.status(403).json({ ok: false, error: 'forbidden' });
       if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
+      const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
+      if (callerId === id) return res.status(400).json({ ok: false, error: 'self' });
+      const users = (await db.ref('zeiterfassung/users').once('value')).val() || [];
+      const arch  = (await db.ref('zeiterfassung/archivedUsers').once('value')).val() || [];
+      const uList = Array.isArray(users) ? users : Object.values(users);
+      const aList = Array.isArray(arch) ? arch : Object.values(arch);
+      const rec = uList.find(x => x && x.id === id) || aList.find(x => x && x.id === id) || null;
+      if (rec && rec.role === 'admin') return res.status(403).json({ ok: false, error: 'admin-target' });
       let u = null;
       try { u = await admin.auth().getUserByEmail(accountEmail(id)); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
       if (u && u.uid === tok.uid) return res.status(400).json({ ok: false, error: 'self' });
+      if (u && (await db.ref('zeiterfassung/admins/' + u.uid).once('value')).val() === true) return res.status(403).json({ ok: false, error: 'admin-target' });
       const upd = {};
       if (action === 'offboard') {
         if (u) {
           await admin.auth().updateUser(u.uid, { disabled: true });
           await admin.auth().revokeRefreshTokens(u.uid);
           for (const n of ['allowed', 'uidUser', 'admins', 'gfAdmins', 'managers']) upd['zeiterfassung/' + n + '/' + u.uid] = null;
+          const grants = (await db.ref('zeiterfassung/grants').once('value')).val() || {};
+          for (const g of Object.keys(grants)) if (grants[g] && grants[g][u.uid]) upd['zeiterfassung/grants/' + g + '/' + u.uid] = null;
         }
         upd['zeiterfassung/loginDir/' + dirKey(id)] = null;
         upd['zeiterfassung/pwResetRequests/' + id] = null;
+        const inUsers = uList.find(x => x && x.id === id);
+        if (body.archive === true && inUsers) {
+          const newArch = aList.filter(x => x && x.id !== id);
+          newArch.push(Object.assign({}, inUsers, { archivedAt: new Date().toISOString(), archivedBy: callerId, accessRevoked: true }));
+          upd['zeiterfassung/users'] = uList.filter(x => x && x.id !== id);
+          upd['zeiterfassung/archivedUsers'] = newArch;
+        } else if (aList.some(x => x && x.id === id)) {
+          upd['zeiterfassung/archivedUsers'] = aList.map(x => (x && x.id === id) ? Object.assign({}, x, { accessRevoked: true }) : x);
+        }
       } else {
         if (!u) return res.status(404).json({ ok: false, error: 'no-account' });
-        const name = String(body.name || id).slice(0, 80);
+        const name = String(body.name || (rec && rec.name) || id).slice(0, 80);
         await admin.auth().updateUser(u.uid, { disabled: false });
         upd['zeiterfassung/allowed/' + u.uid] = true;
         upd['zeiterfassung/uidUser/' + u.uid] = id;
         upd['zeiterfassung/loginDir/' + dirKey(id)] = { id, name };
+        const role = rec && rec.role;
+        if (role === 'leitung' || role === 'geschaeftsfuehrer') upd['zeiterfassung/managers/' + u.uid] = true;
+        if (role === 'geschaeftsfuehrer') upd['zeiterfassung/gfAdmins/' + u.uid] = true;
+        const inArch = aList.find(x => x && x.id === id);
+        if (body.restore === true && inArch && !uList.some(x => x && x.id === id)) {
+          const back = Object.assign({}, inArch); delete back.archivedAt; delete back.archivedBy; delete back.accessRevoked;
+          upd['zeiterfassung/users'] = uList.concat([back]);
+          upd['zeiterfassung/archivedUsers'] = aList.filter(x => x && x.id !== id);
+        }
       }
       await db.ref().update(upd);
       return res.json({ ok: true, account: !!u });

@@ -105,3 +105,14 @@ Rückfall: CANDIDATE-v3.json. Neu gegenüber v3 („Rechte vergibt nur der Admin
   Einträge älter als 7 Tage (automatisches Aufräumen) oder Admin.
 Getestet: 30 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut).
 Reihenfolge: App ≥ v366 zuerst (läuft auch mit v3), Admin einmal anmelden (schreibt grants), DANN v4.
+
+## CANDIDATE-v5.json – bereit (noch NICHT live)
+Rückfall: CANDIDATE-v4.json. Neu gegenüber v4: Recht „System-Verwaltung" (`grants/zugriff_verwaltung`)
+darf bei ANDEREN, bestehenden Nicht-Admin-Nutzern die Stammdaten-Felder schreiben
+(`users/$i/<feld>`: email, city, bundesland, team, teams, teamHistory, customRole(s), wh, dpw, al,
+entryDate, exitDate, vacHoursPerDay, holidaysLikeSunday, allowHalfVac, sollWorkdays, maxHours,
+lecturePeriods, lectureFreeDays, paramHistory). Nicht: id, name, pw, role, perms & Co., eigener Datensatz,
+Admin-Datensatz, neue Datensätze, ganze Nutzerliste. Archivieren/Wiederherstellen durch dieses Recht
+läuft über die Cloud Function tpsPw (offboard archive:true / reboard restore:true).
+Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut).
+Reihenfolge: tpsPw deployen → v5 veröffentlichen → App v367.
