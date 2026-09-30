@@ -379,13 +379,15 @@ function _genTempPw(){
 }
 // Firebase-Konto-Passwort einer anderen Person setzen – nur über die Cloud Function tpsPw
 // (Admin SDK). Prüft serverseitig, dass der Aufrufer der Administrator-Account ist.
-async function _adminSetFirebasePw(id,newPw){
+async function _adminFn(payload){
   const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
   const tok=await me.getIdToken();
-  const r=await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({action:'set',id,newPw})});
+  const r=await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(payload)});
   let j={}; try{ j=await r.json(); }catch(_){}
   if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':('Server: '+(j.error||r.status)));
+  return j;
 }
+async function _adminSetFirebasePw(id,newPw){ return _adminFn({action:'set',id,newPw}); }
 
 export async function resetUserPassword(id){
   const cu=window.cu;
@@ -1045,23 +1047,29 @@ export function toggleLeitungReport(uid){
     :'GF-Zugriff aktiviert ✓','ok');
 }
 
-export function deleteUser(id){
+export async function deleteUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   if(id==='admin'){ toast('Der Admin-Account kann nicht gelöscht werden.','err'); return; }
   const _u=getUser(id); if(!_u) return;
   // ARCHIVIEREN statt löschen: Zeitaufzeichnungen müssen (ArbZG) mind. 2 Jahre erhalten
-  // bleiben. Der Nutzer verschwindet aus allen Listen und kann sich nicht mehr anmelden, seine
-  // Zeitdaten bleiben unverändert. Wiederherstellbar über „Archivierte Mitarbeiter".
-  if(!confirm(`${_u.name} archivieren?\n\nDer Mitarbeiter verschwindet aus allen Listen und kann sich nicht mehr anmelden. Alle Zeitdaten bleiben erhalten; unter „Archivierte Mitarbeiter" wiederherstellbar.`)) return;
-  mutate(d=>{
+  // bleiben. Der Nutzer verschwindet aus allen Listen, seine Zeitdaten bleiben unverändert.
+  // Zusätzlich wird der ZUGANG serverseitig entzogen (Cloud Function tpsPw „offboard"):
+  // Firebase-Konto gesperrt, Sitzungen widerrufen, aus allen Freischaltungen und dem
+  // Anmeldebildschirm entfernt. Wiederherstellbar über „Archivierte Mitarbeiter".
+  if(!confirm(`${_u.name} archivieren?\n\nDer Zugang wird sofort gesperrt und die Person verschwindet aus allen Listen. Alle Zeitdaten bleiben erhalten; unter „Archivierte Mitarbeiter" wiederherstellbar.`)) return;
+  let off=false, offErr='';
+  try{ await _adminFn({action:'offboard', id}); off=true; }catch(e){ offErr=(e&&e.message)||String(e); }
+  await mutate(d=>{
     const u=d.users.find(x=>x.id===id); if(!u) return;
     if(!Array.isArray(d.archivedUsers)) d.archivedUsers=[];
     d.archivedUsers=d.archivedUsers.filter(x=>x&&x.id!==id);
-    d.archivedUsers.push({...u, archivedAt:new Date().toISOString(), archivedBy:cu.id});
+    d.archivedUsers.push({...u, archivedAt:new Date().toISOString(), archivedBy:cu.id, accessRevoked:off});
     d.users=d.users.filter(x=>x.id!==id);
   });
-  renderSettings(); toast(_u.name+' archiviert – Zeitdaten bleiben erhalten.','ok');
+  renderSettings();
+  if(off) toast(_u.name+' archiviert und Zugang gesperrt – Zeitdaten bleiben erhalten.','ok');
+  else toast(_u.name+' archiviert, aber der Zugang konnte NICHT gesperrt werden ('+offErr+'). Bitte unter „Archivierte Mitarbeiter" erneut sperren.','err');
   if(window.viewEmpId===id){
     const rem=getData().users.filter(u=>!isManagerRole(u)).filter(u=>canSeeEmployee(cu,u));
     window.viewEmpId=rem.length?rem[0].id:null;
@@ -1079,21 +1087,38 @@ export function archivedUsersHtml(){
     <div class="small" style="color:var(--muted);margin-bottom:10px">Ausgeschiedene Mitarbeiter. Ihre Zeitdaten bleiben erhalten (Aufbewahrungspflicht mind. 2 Jahre) und sind nach dem Wiederherstellen wieder sichtbar.</div>
     <table class="vw-table"><tbody>${arch.map(u=>`<tr>
       <td><span class="vw-name">${esc(u.name)}</span></td>
-      <td class="small" style="color:var(--muted)">archiviert ${u.archivedAt?new Date(u.archivedAt).toLocaleDateString('de-DE'):''}</td>
-      <td style="text-align:right"><button class="btn-sm-crm" onclick="restoreArchivedUser('${esc(u.id)}')">↩ Wiederherstellen</button></td>
+      <td class="small" style="color:var(--muted)">archiviert ${u.archivedAt?new Date(u.archivedAt).toLocaleDateString('de-DE'):''}${u.accessRevoked?' · 🔒 Zugang gesperrt':' · <span style="color:var(--danger);font-weight:600">⚠ Zugang noch aktiv</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">${u.accessRevoked?'':`<button class="btn-sm-crm primary" onclick="revokeArchivedAccess('${esc(u.id)}')">🔒 Zugang sperren</button> `}<button class="btn-sm-crm" onclick="restoreArchivedUser('${esc(u.id)}')">↩ Wiederherstellen</button></td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 
-export function restoreArchivedUser(id){
+// Zugang eines (schon) archivierten Mitarbeiters nachträglich sperren – z. B. für vor v363
+// archivierte Personen oder wenn das Sperren beim Archivieren fehlgeschlagen ist.
+export async function revokeArchivedAccess(id){
+  const cu=window.cu;
+  if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account.','err'); return; }
+  const a=(getData().archivedUsers||[]).find(x=>x&&x.id===id); if(!a) return;
+  try{ await _adminFn({action:'offboard', id}); }
+  catch(e){ toast('Sperren fehlgeschlagen: '+((e&&e.message)||e),'err'); return; }
+  await mutate(d=>{ const x=(d.archivedUsers||[]).find(y=>y&&y.id===id); if(x) x.accessRevoked=true; });
+  renderSettings(); toast('Zugang von '+a.name+' gesperrt ✓','ok');
+}
+
+export async function restoreArchivedUser(id){
   const cu=window.cu;
   if(!_canVerwaltung(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter wiederherstellen.','err'); return; }
   const a=(getData().archivedUsers||[]).find(x=>x&&x.id===id); if(!a) return;
   if(getUser(id)){ toast('Login-ID „'+id+'" ist inzwischen wieder vergeben.','err'); return; }
-  if(!confirm(a.name+' wiederherstellen?')) return;
-  mutate(d=>{
-    const u={...a}; delete u.archivedAt; delete u.archivedBy;
+  if(!confirm(a.name+' wiederherstellen?\n\nDer Zugang wird wieder freigeschaltet; das bisherige Passwort gilt wieder.')) return;
+  // Zuerst den Zugang serverseitig wieder aktivieren (Konto entsperren, Freischaltung, Anmeldebildschirm).
+  try{ await _adminFn({action:'reboard', id, name:a.name||id}); }
+  catch(e){ toast('Zugang konnte nicht wieder aktiviert werden: '+((e&&e.message)||e)+' – Mitarbeiter bleibt archiviert.','err'); return; }
+  await mutate(d=>{
+    const u={...a}; delete u.archivedAt; delete u.archivedBy; delete u.accessRevoked;
     d.users.push(u);
     d.archivedUsers=(d.archivedUsers||[]).filter(x=>x&&x.id!==id);
   });
-  renderSettings(); toast(a.name+' wiederhergestellt ✓','ok');
+  // Rollen-Freischaltungen (Leitung/GF/Admin) aus der Nutzerliste neu berechnen.
+  try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (Wiederherstellen):', e&&e.message); }
+  renderSettings(); toast(a.name+' wiederhergestellt – Zugang wieder aktiv ✓','ok');
 }

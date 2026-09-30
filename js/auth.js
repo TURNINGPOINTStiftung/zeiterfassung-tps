@@ -1,6 +1,6 @@
 import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
          EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL, PW_FUNCTION_URL } from './config.js';
-import { getData, getUser, mutate, setUserFields, setDataCache } from './data.js';
+import { getData, getUser, mutate, setUserFields, setDataCache, pendingCount, flushPendingWrites } from './data.js';
 import { esc, toast, openModal, closeModal } from './utils.js';
 import { getLoginDirUsers, authenticate } from './firebase.js';
 
@@ -227,16 +227,28 @@ export async function doLogin(){
   try{ window.updateAbBadge?.(); } catch(e){ console.error('updateAbBadge Fehler:',e); }
 }
 
-export function doLogout(){
+// Abmelden = Firebase-Sitzung WIRKLICH beenden und die lokal gespeicherten Daten vom Gerät
+// entfernen (kompletter Datenbestand inkl. Zeiten/AU aller Personen, CRM-Cache, Warteschlange).
+// Wichtig auf geteilten Geräten. Noch nicht übertragene Änderungen werden vorher nachgeholt;
+// klappt das nicht, wird nachgefragt statt still zu verwerfen. Geräte-Einstellungen (gemerkter
+// Name, Zoom, zuletzt geöffnetes Modul, KI-Adresse) bleiben erhalten.
+const _LOGOUT_CLEAR=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tps_crm_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session'];
+export async function doLogout(){
+  try{
+    if(pendingCount()>0){
+      await flushPendingWrites();
+      const n=pendingCount();
+      if(n>0 && !confirm(n+' Änderung'+(n===1?' wurde':'en wurden')+' noch nicht an den Server übertragen (keine Verbindung?).\n\nBeim Abmelden gehen sie verloren. Trotzdem abmelden?')) return;
+    }
+  }catch(e){}
   window.cu=null; window.viewEmpId=null;
-  try{ localStorage.removeItem('tp_zt_session'); }catch(e){}
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('login-pw').value='';
-  // Eingabefeld leeren, damit populateLoginDropdown ggf. gespeicherten Namen einträgt
-  const inp=document.getElementById('login-user-input');
-  if(inp) inp.value='';
-  populateLoginDropdown();
+  try{ await firebase.auth().signOut(); }catch(e){ console.warn('signOut:',e&&e.message); }
+  try{
+    _LOGOUT_CLEAR.forEach(k=>localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k=>k.startsWith('tp_zt_premigrate_')).forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+  // Sauberer Neustart: beendet Live-Verbindungen und leert den Speicher im Tab.
+  location.reload();
 }
 
 function _emailjsReady(){
