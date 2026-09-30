@@ -76,6 +76,42 @@ exports.tpsPw = async (req, res) => {
       return res.json({ ok: true });
     }
 
+    // Offboarding / Wiederherstellen eines Mitarbeiters (nur Administrator):
+    //  offboard: Firebase-Konto sperren + Sitzungen widerrufen, aus allowed/uidUser/admins/
+    //            gfAdmins/managers und loginDir entfernen → sofort kein Zugriff mehr.
+    //  reboard:  Konto entsperren, allowed/uidUser/loginDir wieder setzen (Rollen-Allowlists
+    //            berechnet der Admin-Client danach per refreshPermissionAllowlists neu).
+    if (action === 'offboard' || action === 'reboard') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
+      if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
+      let u = null;
+      try { u = await admin.auth().getUserByEmail(accountEmail(id)); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
+      if (u && u.uid === tok.uid) return res.status(400).json({ ok: false, error: 'self' });
+      const upd = {};
+      if (action === 'offboard') {
+        if (u) {
+          await admin.auth().updateUser(u.uid, { disabled: true });
+          await admin.auth().revokeRefreshTokens(u.uid);
+          for (const n of ['allowed', 'uidUser', 'admins', 'gfAdmins', 'managers']) upd['zeiterfassung/' + n + '/' + u.uid] = null;
+        }
+        upd['zeiterfassung/loginDir/' + dirKey(id)] = null;
+        upd['zeiterfassung/pwResetRequests/' + id] = null;
+      } else {
+        if (!u) return res.status(404).json({ ok: false, error: 'no-account' });
+        const name = String(body.name || id).slice(0, 80);
+        await admin.auth().updateUser(u.uid, { disabled: false });
+        upd['zeiterfassung/allowed/' + u.uid] = true;
+        upd['zeiterfassung/uidUser/' + u.uid] = id;
+        upd['zeiterfassung/loginDir/' + dirKey(id)] = { id, name };
+      }
+      await db.ref().update(upd);
+      return res.json({ ok: true, account: !!u });
+    }
+
     return res.status(400).json({ ok: false, error: 'action' });
   } catch (e) {
     const code = (e && e.code) || '';
