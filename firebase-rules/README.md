@@ -78,3 +78,15 @@ Getestet: 33 Fälle im Projekt zeiterfassung-test (Bereich `ruletest`, danach zu
 Abgleich gegen den Live-Export (alle 19 Nutzer gemappt, 602/611 Einträge eindeutig zuordenbar –
 Rest = alte `jörg_…`-Kopien) + 6 Kontrollfälle im Playground gegen die Live-Daten.
 Rückfall: Inhalt von CANDIDATE.json in der Konsole veröffentlichen.
+
+## Stand 2026-09-30: CANDIDATE-v3.json ist LIVE
+Rückfall: CANDIDATE-v2.json. Neu gegenüber v2:
+- `entries/$k/status`: nur gültige Übergänge – eingereicht nur aus Entwurf/abgelehnt, Entwurf aus
+  Entwurf/eingereicht/abgelehnt, genehmigt/abgelehnt NUR durch managers und NUR aus „eingereicht"
+  (verhindert Mischzustände bei gleichzeitigem Zurückziehen/Genehmigen). Admin: alles.
+- `ze_audit/<entryKey>/<id>` (eigener Wurzelknoten, nicht im Live-Sync): Änderungsprotokoll der
+  Tagesfelder, **nur anhängbar** (!data.exists()), Besitzer (nicht genehmigter Monat) oder
+  managers/Admin, `by` muss zur eigenen App-ID passen. Lesen: allowlistete Nutzer.
+Getestet: 15 Fälle im Projekt zeiterfassung-test (ruletest/ruletest_audit, danach zurückgebaut).
+Wichtig: Regeln VOR einer App-Version veröffentlichen, die ze_audit schreibt (sonst wird das
+atomare update inkl. der eigentlichen Änderung abgelehnt).

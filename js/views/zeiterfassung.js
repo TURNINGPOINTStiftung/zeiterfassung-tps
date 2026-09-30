@@ -1,5 +1,5 @@
 import { MONTHS } from '../config.js';
-import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey } from '../data.js';
+import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey, loadAudit } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
@@ -1102,10 +1102,18 @@ export function resetCarryover(){
 // Änderungen (entry.carryoverLog). Rein additiv – nur Anzeige/Protokoll.
 const _STATUS_LBL={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'};
 function _userName(id){ const u=id?getUser(id):null; return u?u.name:''; }
-function logEntryStatus(uid,year,mon,status,note){
+// Statuswechsel (einreichen/zurückziehen/genehmigen/ablehnen) in EINEM Schreibvorgang:
+// Status + Metafelder + Verlaufseintrag gehen als ein atomares update() an den Server.
+// Vorher waren es bis zu 5 Einzel-Writes – ein gleichzeitiges Zurückziehen/Genehmigen
+// konnte so Mischzustände erzeugen. Der Server erlaubt zudem nur gültige Übergänge
+// (z. B. genehmigen nur aus „eingereicht"), siehe firebase-rules.
+function _statusChange(uid,year,mon,fields,status,note){
   const cu=window.cu;
-  mutate(d=>{
-    const k=entryKey(uid,year,mon); const e=d.entries[k]; if(!e) return;
+  return mutate(d=>{
+    const k=entryKey(uid,year,mon);
+    if(!d.entries[k]) d.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    const e=d.entries[k];
+    Object.assign(e,fields);
     if(!Array.isArray(e.statusLog)) e.statusLog=[];
     e.statusLog.push({ts:new Date().toISOString(), status, by:cu?cu.id:'', byName:cu?cu.name:'', note:note||''});
   });
@@ -1117,6 +1125,24 @@ function renderEntryAudit(entry){
     cl.innerHTML=!log.length?'':`<details><summary style="cursor:pointer">📋 Übertrag-Änderungen (${log.length})</summary><div style="margin-top:3px">${
       log.slice().reverse().map(r=>`<div style="padding:1px 0">${sFmt((r.from||0)*60)} → ${r.reset?'auto':sFmt((r.to||0)*60)} · ${esc(r.byName||_userName(r.by)||'?')} <span style="opacity:.8">${fmtTs(r.ts)}</span></div>`).join('')
     }</div></details>`;
+  }
+  // Änderungsverlauf der Tage (ze_audit) – erst beim Aufklappen vom Server laden.
+  { const sl0=document.getElementById('entry-status-log');
+    if(sl0&&sl0.parentElement){
+      let da=document.getElementById('entry-day-audit');
+      if(!da){ da=document.createElement('div'); da.id='entry-day-audit'; da.className='no-print'; da.style.cssText='margin-top:6px';
+        sl0.parentElement.insertBefore(da, sl0.nextSibling); }
+      const uid=window.viewEmpId||window.cu?.id; const ek=entryKey(uid,window.year,window.mon);
+      da.innerHTML=`<details id="eda-det"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">🕘 Änderungsverlauf der Tage</summary><div id="eda-body" style="margin-top:4px;font-size:12px;color:var(--muted)">Lädt …</div></details>`;
+      const det=da.querySelector('#eda-det');
+      det.addEventListener('toggle',async()=>{
+        if(!det.open) return;
+        const body=da.querySelector('#eda-body'); const list=await loadAudit(ek);
+        const FL={b1von:'Beginn 1',b1bis:'Ende 1',b1zuord:'Zuordnung 1',b1bem:'Bemerkung 1',b2von:'Beginn 2',b2bis:'Ende 2',b2zuord:'Zuordnung 2',b2bem:'Bemerkung 2',ktmin:'Kleinteilig (Min.)'};
+        body.innerHTML=!list.length?'Keine Änderungen protokolliert (Protokoll seit v361).':
+          `<div style="max-height:260px;overflow-y:auto">${list.slice(0,300).map(r=>`<div style="padding:2px 0;border-bottom:1px dotted var(--border)"><b>${esc((r.ds||'').split('-').reverse().join('.'))}</b> · ${esc(FL[r.f]||r.f)}: <span style="text-decoration:line-through;opacity:.7">${esc(r.from||'–')}</span> → <b>${esc(r.to||'–')}</b> · ${esc(r.byName||_userName(r.by)||'?')} <span style="opacity:.8">${r.ts?new Date(r.ts).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):''}</span></div>`).join('')}</div>`;
+      });
+    }
   }
   const sl=document.getElementById('entry-status-log');
   if(sl){
@@ -1286,9 +1312,7 @@ export function doSubmit(force){
     }
     if(!confirm(q)) return;
   }
-  setEntryField(tuid,year,mon,'status','submitted');
-  setEntryField(tuid,year,mon,'submittedAt',new Date().toISOString());
-  logEntryStatus(tuid,year,mon,'submitted');
+  _statusChange(tuid,year,mon,{status:'submitted', submittedAt:new Date().toISOString()},'submitted');
   // Leitung: eingereichter Monat automatisch als Buchhaltungsversion in den GF-Berichten.
   // Gruppenname = „Leitung <Team>" (das Team, für das die Leitung verantwortlich ist).
   if(leitungSelf){
@@ -1308,8 +1332,7 @@ export function doSubmit(force){
 export function doRecall(){
   const year=window.year, mon=window.mon, cu=window.cu;
   const tuid=(cu.role==='admin'&&window.viewEmpId&&window.viewEmpId!==cu.id)?window.viewEmpId:cu.id;
-  setEntryField(tuid,year,mon,'status','draft');
-  logEntryStatus(tuid,year,mon,'draft','zurückgezogen');
+  _statusChange(tuid,year,mon,{status:'draft'},'draft','zurückgezogen');
   // War es ein Leitungs-Buchhaltungsbericht → beim GF wieder entfernen.
   const rKey='LEIT_'+tuid+'_'+year+'_'+String(mon).padStart(2,'0');
   mutate(d=>{ if(d.teamReports&&d.teamReports[rKey]) delete d.teamReports[rKey]; });
@@ -1322,11 +1345,7 @@ export function doApprove(){
   const uid=window.viewEmpId;
   const note=document.getElementById('review-note').value;
   if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können genehmigt werden.','err'); return; }
-  setEntryField(uid,year,mon,'status','approved');
-  setEntryField(uid,year,mon,'managerNote',note);
-  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
-  setEntryField(uid,year,mon,'reviewedBy',cu.id);
-  logEntryStatus(uid,year,mon,'approved',note);
+  _statusChange(uid,year,mon,{status:'approved', managerNote:note, reviewedAt:new Date().toISOString(), reviewedBy:cu.id},'approved',note);
   // Vom GF direkt geprüft + gegengezeichnet → sofort als eingereichter Bericht in die
   // Buchhaltungsversion (kein separates „Bericht einreichen" mehr nötig).
   if(cu.role==='geschaeftsfuehrer'){
@@ -1342,11 +1361,7 @@ export function doReject(){
   const note=document.getElementById('review-note').value;
   if(getEntry(uid,year,mon).status!=='submitted'){ toast('Nur eingereichte Zeiterfassungen können abgelehnt werden.','err'); return; }
   if(!note.trim()){ toast('Bitte einen Ablehnungsgrund eingeben.','err'); return; }
-  setEntryField(uid,year,mon,'status','rejected');
-  setEntryField(uid,year,mon,'managerNote',note);
-  setEntryField(uid,year,mon,'reviewedAt',new Date().toISOString());
-  setEntryField(uid,year,mon,'reviewedBy',cu.id);
-  logEntryStatus(uid,year,mon,'rejected',note);
+  _statusChange(uid,year,mon,{status:'rejected', managerNote:note, reviewedAt:new Date().toISOString(), reviewedBy:cu.id},'rejected',note);
   toast('Zeiterfassung abgelehnt.','err'); renderZeiterfassung(); window.renderOverview?.();
 }
 
@@ -1355,9 +1370,7 @@ export function doResetToDraft(){
   // Die Leitung genehmigt oder lehnt (mit Begründung) ab.
   if(!window.cu||window.cu.role!=='admin'){ toast('Nur der Admin kann zurück auf Entwurf setzen. Bitte ablehnen mit Begründung.'); return; }
   const year=window.year, mon=window.mon;
-  setEntryField(window.viewEmpId,year,mon,'status','draft');
-  setEntryField(window.viewEmpId,year,mon,'managerNote','');
-  logEntryStatus(window.viewEmpId,year,mon,'draft','Admin: zurück auf Entwurf');
+  _statusChange(window.viewEmpId,year,mon,{status:'draft', managerNote:''},'draft','Admin: zurück auf Entwurf');
   try{ unfileGfReport(window.viewEmpId,year,mon); }catch(e){}   // Entwurf gehört nicht in die Buchhaltungsversion
   toast('Zurück auf Entwurf gesetzt.');
   renderZeiterfassung();

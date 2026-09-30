@@ -405,6 +405,41 @@ export function saveRaw(d){
 //  • pro Feld gilt „neuere Zeitmarke gewinnt" (siehe mergeIncoming beim Lesen).
 // Baut ein Firebase-update aus den Unterschieden. Tage feld-genau, entries/stamps/vac/
 // teamReports/yearReports pro Kind, alles Übrige (users[], teams, cats …) als ganzer Schlüssel.
+// ── Änderungsprotokoll je Tag (append-only, serverseitig nur anhängbar) ─────────────
+// Jede Änderung an einem sichtbaren Tagesfeld wird als ze_audit/<entryKey>/<id> = {ts,by,byName,
+// ds,f,from,to} im SELBEN update() wie die Änderung geschrieben → keine Lücken, wenn etwas
+// abbricht. Interne Felder (_ts, _paused, stampSessions …) werden nicht protokolliert.
+// Eigener Wurzelknoten ze_audit (NICHT unter zeiterfassung), damit der Live-Sync das stetig
+// wachsende Protokoll nicht bei jedem Snapshot mitlädt – gelesen wird es nur bei Bedarf.
+// Im update-Objekt steht es als 'audit/…'; _toRoot() bildet es auf ze_audit/… ab.
+const _AUDIT_FIELDS=new Set(['b1von','b1bis','b1zuord','b1bem','b2von','b2bis','b2zuord','b2bem','ktmin']);
+let _auditSeq=0;
+const _auditLocal={};   // zuletzt geschriebene Einträge (sofortige Anzeige vor dem Server-Read)
+function _auditRec(upd, ek, ds, f, from, to){
+  if(!_AUDIT_FIELDS.has(f)) return;
+  const a=(from===undefined||from===null)?'':String(from), b=(to===undefined||to===null)?'':String(to);
+  if(a===b) return;
+  const cu=window.cu||{};
+  const id=Date.now().toString(36)+'_'+(++_auditSeq).toString(36)+Math.random().toString(36).slice(2,6);
+  const rec={ts:Date.now(), by:cu.id||'', byName:cu.name||'', ds, f, from:a.slice(0,200), to:b.slice(0,200)};
+  upd['audit/'+ek+'/'+id]=rec;
+  (_auditLocal[ek]=_auditLocal[ek]||{})[id]=rec;
+}
+// update-Objekt (relativ zu zeiterfassung/) → Wurzel-Pfade; enthält es Protokoll-Einträge,
+// wird über die Wurzel geschrieben (ein atomares update über beide Knoten).
+function _toRoot(upd){
+  if(!Object.keys(upd).some(k=>k.startsWith('audit/'))) return null;
+  const r={};
+  for(const [k,v] of Object.entries(upd)) r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v;
+  return r;
+}
+// Protokoll eines Monats (Server + noch nicht zurückgespiegelte lokale Einträge), neueste zuerst.
+export async function loadAudit(ek){
+  let srv={};
+  try{ const ref=window._fbRef; if(ref&&!window._offlineMode){ srv=(await ref.root.child('ze_audit/'+ek).once('value')).val()||{}; } }catch(e){ console.warn('Protokoll nicht ladbar:',e&&e.message); }
+  const all=Object.assign({}, _auditLocal[ek]||{}, srv);
+  return Object.values(all).filter(Boolean).sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
 function _diffToUpdate(before, after, blocked){
   const upd={}; const B=before||{}, A=after||{};
   const _childDiff=(name)=>{ const bo=B[name]||{}, ao=A[name]||{};
@@ -423,12 +458,13 @@ function _diffToUpdate(before, after, blocked){
         const bd=bo.days||{}, ad=ao.days||{};
         for(const ds of new Set([...Object.keys(bd),...Object.keys(ad)])){
           const bday=bd[ds], aday=ad[ds];
-          if(aday===undefined){ upd['entries/'+ek+'/days/'+ds]=null; continue; }
-          if(bday===undefined){ upd['entries/'+ek+'/days/'+ds]=aday; continue; }
+          if(aday===undefined){ upd['entries/'+ek+'/days/'+ds]=null; for(const f of Object.keys(bday||{})) _auditRec(upd,ek,ds,f,bday[f],''); continue; }
+          if(bday===undefined){ upd['entries/'+ek+'/days/'+ds]=aday; for(const f of Object.keys(aday||{})) _auditRec(upd,ek,ds,f,'',aday[f]); continue; }
           for(const f of new Set([...Object.keys(bday),...Object.keys(aday)])){ if(f==='_ts') continue;
             if(!_eqJSON(bday[f],aday[f])){
               const base='entries/'+ek+'/days/'+ds+'/'+f;
               upd[base]= (aday[f]===undefined? null : aday[f]);
+              _auditRec(upd,ek,ds,f,bday[f],aday[f]);
               const ts=_now(); if(!aday._ts) aday._ts={}; aday._ts[f]=ts;
               upd['entries/'+ek+'/days/'+ds+'/_ts/'+f]=ts;
             }
@@ -437,6 +473,8 @@ function _diffToUpdate(before, after, blocked){
       }
     } else if(key==='stamps'||key==='vacRequests'||key==='teamReports'||key==='yearReports'){
       _childDiff(key);
+    } else if(key==='audit'){
+      // Protokoll wird nur über _auditRec (einzelne neue Einträge) geschrieben, nie als Ganzes.
     } else if(_NEVER_BLOB_NODES.has(key)){
       // Sicherheits-Knoten nie über mutate (nur admin-setup.js schreibt sie gezielt).
     } else if(_CONFIG_NODES.has(key) && !_mayWriteConfig(key)){
@@ -530,7 +568,7 @@ function _cloudUpdate(upd){
   // Offline → gezielte Pfade in die (reload-feste) Warteschlange statt „alles später neu schreiben".
   if(window._offlineMode){ _queuePending(upd); return Promise.resolve(); }
   const ref=window._fbRef; if(!ref) return Promise.resolve();
-  let p; try{ p=ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
+  let p; try{ const r=_toRoot(upd); p=r?ref.root.update(r):ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
   return (p||Promise.resolve()).catch(e=>{
     console.warn('Firebase scoped-sync error:',e);
     // Regel-Ablehnung wird durch Wiederholen nicht besser → nicht einreihen, aber sichtbar melden.
@@ -573,7 +611,7 @@ export function flushPendingWrites(){
   if(!n||_flushing||window._offlineMode||window._cloudUnverified) return Promise.resolve();
   const ref=window._fbRef; if(!ref) return Promise.resolve();
   _flushing=true;
-  let p; try{ p=ref.update(q); }catch(e){ _flushing=false; return Promise.resolve(); }
+  let p; try{ const r=_toRoot(q); p=r?ref.root.update(r):ref.update(q); }catch(e){ _flushing=false; return Promise.resolve(); }
   return p.then(()=>{
     // Nur die übertragenen Pfade entfernen (währenddessen neu Eingereihtes bleibt erhalten).
     const cur=_readPending(); Object.keys(q).forEach(k=>{ if(_eqJSON(cur[k],q[k])) delete cur[k]; }); _writePending(cur);
@@ -618,9 +656,9 @@ export function setDay(uid,y,m,ds,field,val){
   if(!d.entries[k].days) d.entries[k].days={};
   if(!d.entries[k].days[ds]) d.entries[k].days[ds]={};
   const day=d.entries[k].days[ds];
+  const oldVal=day[field];
   day[field]=val;
   const ts=_now(); if(!day._ts) day._ts={}; day._ts[field]=ts;
-  _localPersist(d);
   const entry=d.entries[k];
   // Neuer Entry → einmal komplett; sonst FELD-genau: nur dieses Feld + seine Zeitmarke.
   // (Zwei Geräte, die am selben Tag verschiedene Spalten ändern, überleben so beide.)
@@ -628,6 +666,8 @@ export function setDay(uid,y,m,ds,field,val){
     ['entries/'+k+'/days/'+ds+'/'+field]: val,
     ['entries/'+k+'/days/'+ds+'/_ts/'+field]: ts
   };
+  _auditRec(upd,k,ds,field,oldVal,val);   // Protokoll im selben Schreibvorgang
+  _localPersist(d);
   return _cloudUpdate(upd);
 }
 export function setEntryField(uid,y,m,field,val){
