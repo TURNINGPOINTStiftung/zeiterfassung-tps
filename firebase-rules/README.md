@@ -114,5 +114,7 @@ entryDate, exitDate, vacHoursPerDay, holidaysLikeSunday, allowHalfVac, sollWorkd
 lecturePeriods, lectureFreeDays, paramHistory). Nicht: id, name, pw, role, perms & Co., eigener Datensatz,
 Admin-Datensatz, neue Datensätze, ganze Nutzerliste. Archivieren/Wiederherstellen durch dieses Recht
 läuft über die Cloud Function tpsPw (offboard archive:true / reboard restore:true).
-Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut).
+Zusätzlich: Recht „Abwesenheiten genehmigen" (grants/genehmigung_abwesenheit) darf wie managers fremde
+entries/$k und ze_audit schreiben (Urlaubs-/Gutschrift-Sync beim Freigeben); Status-Freigabe bleibt managers.
+Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut) + Abwesenheits-Fälle.
 Reihenfolge: tpsPw deployen → v5 veröffentlichen → App v367.
