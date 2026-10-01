@@ -3,7 +3,10 @@ import { getData, getEntry, entryKey } from './data.js';
 import { isFreelancer } from './roles.js';
 
 const _ABS_CATS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
-function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(dd.b1bem))); }
+// _absCredit = per Abwesenheits-Antrag gutgeschriebene Arbeitszeit (z.B. Bildungsurlaub über
+// „Sonstiges"): zählt wie eine Abwesenheit VOLL (keine Pflichtpause, KEINE 15-Min-Rundung) –
+// sonst würde die Person durch Pausenabzug/Rundung ins Minus rutschen.
+function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(dd.b1bem)||(dd._absCredit&&dd.b1zuord==='Sonstiges'))); }
 
 // Tatsächlich abzuziehende Auto-Pause (§ ArbZG):
 // bis = Abfahrtszeit (= Nettoarbeitsende + Pause). Die Pflichtpause richtet

@@ -1215,6 +1215,10 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
             const used=perWeek[wk]||0;
             if(used<dpw){
               Object.assign(dayObj,{b1von:'08:00',b1bis:addMin('08:00',dailyMin),b1zuord:type,b1bem:'',b2von:'',b2bis:'',b2zuord:'',b2bem:'',halfDay:false});
+              // „Sonstiges"-Gutschrift (Bildungsurlaub): als volle Arbeitszeit zählen – keine
+              // Pflichtpause, keine 15-Min-Rundung (sonst Minus). AU/Krank ist über die
+              // Zuordnung ohnehin schon Abwesenheit, braucht das Flag nicht.
+              if(type==='Sonstiges') dayObj._absCredit=true; else if(dayObj._absCredit) delete dayObj._absCredit;
               perWeek[wk]=used+1;
             } else {
               dayObj.b1bem=type;
