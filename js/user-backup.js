@@ -290,31 +290,29 @@ export async function showCloudSnapshots(){
   const _row = (n, isReport) => { const ym = n.slice(0,7);
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'
       + '<span>'+esc(ym)+(isReport?' <span class="chip" style="font-size:10px">Berichte</span>':'')+'</span>'
-      + (isReport ? '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud(\''+esc(n)+'\')">⬇ Laden</button>'
-                  : '<button class="btn btn-outline btn-sm" onclick="ubRestoreCloud(\''+esc(n)+'\')">↩ Wiederherstellen</button>')
+      + '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud(\''+esc(n)+'\')">⬇ Laden</button>'
       + '</div>'; };
   const body = (zeItems.length || repItems.length)
     ? (zeItems.length ? '<div style="font-size:12px;font-weight:700;color:var(--primary);margin:4px 0">Meine Zeiterfassung</div>'+zeItems.map(n=>_row(n,false)).join('') : '')
       + (repItems.length ? '<div style="font-size:12px;font-weight:700;color:var(--primary);margin:10px 0 4px">Eingereichte Berichte</div>'+repItems.map(n=>_row(n,true)).join('') : '')
     : '<p style="color:var(--muted)">Noch keine Cloud-Schnappschüsse vorhanden. Sie entstehen automatisch am 10. (wenn aktiviert).</p>';
   openModal('<h3 style="margin-bottom:6px">☁ Cloud-Schnappschüsse</h3>'
-    + '<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Automatische Monats-Sicherungen. Wiederherstellen spielt nur deine eigenen, nicht genehmigten Monate ein (mit Vorschau).</p>'
+    + '<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Automatische Monats-Sicherungen. Zum Wiederherstellen den Schnappschuss <b>herunterladen</b> und dann oben über <b>„⬆ Backup wiederherstellen"</b> einspielen (spielt nur deine eigenen, nicht genehmigten Monate ein, mit Vorschau).</p>'
     + '<div style="max-height:50vh;overflow-y:auto">'+body+'</div>'
     + '<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
 }
-async function _fetchCloud(name){
-  const uid = firebase.auth().currentUser.uid;
-  const url = await firebase.storage().ref('backups/user/'+uid+'/'+name).getDownloadURL();
-  const r = await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-  return await r.json();
-}
-export async function ubRestoreCloud(name){
-  try{ const blob = await _fetchCloud(name); _previewRestore(blob, null); }   // nutzt den gleichen Vorschau-/Restore-Fluss
-  catch(e){ toast('Schnappschuss konnte nicht geladen werden.','err'); }
-}
+// Download eines Cloud-Schnappschusses OHNE fetch → kein CORS-Problem: die Download-URL
+// direkt als Browser-Download aufrufen (wie js/backup.js). Wiederherstellen danach über
+// „⬆ Backup wiederherstellen" (importOwnZEFile) – spielt die heruntergeladene Datei ein.
 export async function ubDownloadCloud(name){
-  try{ const blob = await _fetchCloud(name); _dl(blob, name.replace(/\.json$/,'') + '.json'); toast('Schnappschuss heruntergeladen ✓','ok'); }
-  catch(e){ toast('Schnappschuss konnte nicht geladen werden.','err'); }
+  try{
+    if(!_storageReady()){ toast('Cloud gerade nicht erreichbar.','err'); return; }
+    const uid = firebase.auth().currentUser.uid;
+    const url = await firebase.storage().ref('backups/user/'+uid+'/'+name).getDownloadURL();
+    const a = document.createElement('a'); a.href = url; a.download = 'Cloud_'+name; a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast('Schnappschuss wird heruntergeladen – danach über „⬆ Backup wiederherstellen" einspielen.','ok');
+  }catch(e){ toast('Download fehlgeschlagen ('+((e&&(e.code||e.message))||'')+').','err'); }
 }
 
 // ── UI-Abschnitt für den Profil-Dialog ─────────────────────────────────
@@ -365,6 +363,5 @@ try{
   window.toggleAutoBackup = toggleAutoBackup;
   window.autoBackupOn = autoBackupOn;
   window.showCloudSnapshots = showCloudSnapshots;
-  window.ubRestoreCloud = ubRestoreCloud;
   window.ubDownloadCloud = ubDownloadCloud;
 }catch(_){}
