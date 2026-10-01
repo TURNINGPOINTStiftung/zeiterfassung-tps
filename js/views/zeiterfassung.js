@@ -1163,14 +1163,16 @@ function _isoWeekKey(d){
   return t.getUTCFullYear()+'-'+week;
 }
 
-export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null,hourDays=null){
+export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null,hourDays=null,creditWork=false){
   const isFree=isFreelancer(user);
   const holFree=user.holidaysLikeSunday!==false;
   const dpw=Math.max(1,Math.min(7,user.dpw||5));
   const isUrlaub=type==='Urlaub';
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
-  // Freiberufler (alles), Sonstiges, Arbeitszeitausgleich → nur Bemerkung.
-  const hoursType=!isFree&&(isUrlaub||type==='AU/Krank');
+  // „Sonstiges" NUR mit ausdrücklicher Gutschrift (creditWork, z.B. Bildungsurlaub) – dann wie
+  // AU/Krank: Tagesarbeitszeit (wh/dpw), gedeckelt auf dpw/Woche, Zuordnung „Sonstiges".
+  // Freiberufler (alles), Sonstiges ohne Gutschrift, Arbeitszeitausgleich → nur Bemerkung.
+  const hoursType=!isFree&&(isUrlaub||type==='AU/Krank'||(type==='Sonstiges'&&creditWork));
   // Urlaub: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin); expliziter
   // hoursPerDay-Wert vom Antrag hat Vorrang. AU/Krank: Tagessoll aus wh/dpw.
   const dailyMin=isUrlaub?(hoursPerDay?Math.round(hoursPerDay*60):vacDailyMin(user)):(dailyMinutes(user)||480);

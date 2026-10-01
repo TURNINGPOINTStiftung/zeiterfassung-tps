@@ -2,7 +2,7 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate } from '../utils.js';
-import { vacDailyMin } from '../calc.js';
+import { vacDailyMin, dailyMinutes } from '../calc.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
@@ -120,6 +120,13 @@ export function showVacRequestForm(editId){
         <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
       </label>
     </div>
+    <div id="vr-sonstiges-wrap" style="display:none;margin:-4px 0 10px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="vr-credit-work" ${editing?.creditWork?'checked':''} onchange="calcVrDays()" style="width:16px;height:16px">
+        <span>Arbeitszeit gutschreiben <span style="color:var(--muted);font-size:11px">(nach Wochenarbeitszeit – z.B. Bildungsurlaub)</span></span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Wird als Arbeitszeit eingetragen und <b>muss</b> von Leitung/GF freigegeben werden.</div>
+    </div>
     <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
         <span style="font-weight:600;color:var(--primary)">Urlaubstage:</span>
@@ -152,6 +159,9 @@ export function onVrTypeChange(){
   const hdWrap=document.getElementById('vr-halfday-wrap');
   if(hdWrap) hdWrap.style.display=t==='Urlaub'?'':'none';
   if(t!=='Urlaub'){ const cb=document.getElementById('vr-halfday'); if(cb) cb.checked=false; }
+  const soWrap=document.getElementById('vr-sonstiges-wrap');
+  if(soWrap) soWrap.style.display=t==='Sonstiges'?'':'none';
+  if(t!=='Sonstiges'){ const cw=document.getElementById('vr-credit-work'); if(cw) cw.checked=false; }
   const vaWrap=document.getElementById('vr-va-wrap');
   if(vaWrap) vaWrap.style.display=isVA?'block':'none';
   const info=document.getElementById('vr-days-info'); if(info) info.style.display=isVA?'none':'';
@@ -241,12 +251,24 @@ export function calcVrDays(){
     effective=halfDay&&singleDay?0.5:weekdays;
   }
   if(info){
-    let txt=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
-    if(type==='Urlaub'&&(weekdays-effective)>=1){
-      const rest=weekdays-effective;
-      txt+=` · übrige ${rest} Tag${rest!==1?'e':''} im Zeitraum nur als Vermerk „Urlaub" (ohne Stunden)`;
+    if(type==='Sonstiges'){
+      // „Sonstiges" ist kein Urlaub: standardmäßig nur Vermerk (Datum von/bis genügt → keine
+      // irreführende „X Urlaubstage à 8h"-Zeile). Mit Häkchen wird Arbeitszeit gutgeschrieben.
+      const credit=!!document.getElementById('vr-credit-work')?.checked;
+      if(credit){
+        const dH=Math.round(dailyMinutes(vrUser)/60*10)/10;
+        info.textContent=`→ ${weekdays} Tag${weekdays!==1?'e':''} à ${dH}h werden als Arbeitszeit gutgeschrieben · Freigabe durch Leitung/GF nötig`;
+      } else {
+        info.textContent='';
+      }
+    } else {
+      let txt=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
+      if(type==='Urlaub'&&(weekdays-effective)>=1){
+        const rest=weekdays-effective;
+        txt+=` · übrige ${rest} Tag${rest!==1?'e':''} im Zeitraum nur als Vermerk „Urlaub" (ohne Stunden)`;
+      }
+      info.textContent=txt;
     }
-    info.textContent=txt;
   }
   if(hint) hint.style.display=weekdays>5?'block':'none';
 }
@@ -317,6 +339,8 @@ export async function saveVacRequest(){
   const isSick=type==='AU/Krank';
   const isLeiter=cu.role==='leitung';
   const weekdays=countWorkDays(from,to,targetUser);
+  // „Sonstiges" mit Arbeitszeit-Gutschrift (z.B. Bildungsurlaub): optional, pro Gerät am Häkchen.
+  const creditWork=type==='Sonstiges'&&!!document.getElementById('vr-credit-work')?.checked;
   let wd;
   if(halfDay){ wd=0.5; }
   else if(type==='Urlaub'){
@@ -325,13 +349,17 @@ export async function saveVacRequest(){
   } else {
     wd=weekdays;
   }
-  // Stunden pro Urlaubstag zentral (Teilzeit=8h, Vollzeit/Leitung=Tagessoll).
-  const hoursPerDay=type==='Urlaub'?Math.round(vacDailyMin(targetUser)/60*10)/10:null;
+  // Stunden pro Tag: Urlaub=Urlaubswert (Teilzeit 8h/Vollzeit Tagessoll); Sonstiges mit
+  // Gutschrift=Tagesarbeitszeit (wh/dpw); sonst keine Stunden.
+  const hoursPerDay=type==='Urlaub'?Math.round(vacDailyMin(targetUser)/60*10)/10
+    :(creditWork?Math.round(dailyMinutes(targetUser)/60*10)/10:null);
   // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
   // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
   // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
   // GF genehmigt niemandem gegenüber → eigener Urlaub läuft immer automatisch durch.
-  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich'||targetUser.role==='geschaeftsfuehrer'||wd<5;
+  // AUSNAHME: „Sonstiges" mit Arbeitszeit-Gutschrift MUSS immer von Leitung/GF freigegeben
+  // werden (kein Auto-Durchlauf über die <5-Tage-Regel) – außer ein Manager trägt es selbst ein.
+  const autoApprove=isSick||forOther||isLeiter||targetUser.role==='freiberuflich'||targetUser.role==='geschaeftsfuehrer'||(wd<5&&!creditWork);
   const key=`${targetUser.id}_${from}_${to}`;
   const now=new Date().toISOString();
   if(old){
@@ -343,7 +371,7 @@ export async function saveVacRequest(){
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
-    hoursPerDay,
+    hoursPerDay, creditWork,
     status:autoApprove?'approved':'pending',
     submittedAt:old?old.submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,
@@ -351,7 +379,7 @@ export async function saveVacRequest(){
     reviewNote:autoApprove&&forOther?`Eingetragen durch ${cu.name}`:''
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
-  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay,wd);
+  if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay,wd,creditWork);
   closeModal(); renderAbwesenheiten();
   if(old){
     toast(autoApprove?'Abwesenheit aktualisiert. ✓':'Abwesenheit aktualisiert – wartet erneut auf Genehmigung der Leitung. ✓','ok');
@@ -382,7 +410,7 @@ export function approveVacRequest(id){
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
-  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay,r.workDays);
+  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay,r.workDays,r.creditWork);
   renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 
