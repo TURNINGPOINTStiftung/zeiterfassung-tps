@@ -1220,7 +1220,9 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
               dayObj.b1bem=type;
             }
           } else {
-            // Freiberufler / Sonstiges / Arbeitszeitausgleich → nur Bemerkung
+            // Freiberufler / Sonstiges OHNE Häkchen / Arbeitszeitausgleich → nur Bemerkung, KEINE Stunden.
+            // War der Tag vorher eine Gutschrift (Häkchen inzwischen entfernt) → deren Stunden entfernen.
+            if(dayObj._absCredit){ Object.assign(dayObj,{b1von:'',b1bis:'',b1zuord:''}); delete dayObj._absCredit; delete dayObj._pInit; delete dayObj._paused; delete dayObj._pausedF; }
             dayObj.b1bem=type;
           }
         }
@@ -1260,6 +1262,13 @@ export function clearAbsenceFromTimesheets(uid,user,type,from,to){
           const dd=d.entries?.[k]?.days?.[ds];
           if(dd){
             if(isAZA){ if(dd.b1bem==='Arbeitszeitausgleich') dd.b1bem=''; }
+            else if(type==='Sonstiges'){
+              // Nur was der Antrag selbst eingetragen hat: Gutschrift-Tage (Häkchen „Arbeitszeit
+              // gutschreiben") komplett, sonst nur die Bemerkung. Selbst erfasste Arbeit mit der
+              // Zuordnung „Sonstiges" bleibt unangetastet.
+              if(dd._absCredit){ Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''}); delete dd._absCredit; delete dd._pInit; delete dd._paused; delete dd._pausedF; }
+              else if(dd.b1bem==='Sonstiges') dd.b1bem='';
+            }
             else if(dd.b1zuord===zuord||dd.b1bem===type||dd.b1zuord===type){
               Object.assign(dd,{b1von:'',b1bis:'',b1zuord:'',b1bem:''});
             }
