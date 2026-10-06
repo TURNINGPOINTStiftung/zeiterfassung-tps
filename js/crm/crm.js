@@ -641,6 +641,8 @@ function injectStyles(){
   .vt-ok{color:#2e7d32;font-weight:700;flex-shrink:0}
   .vt-bad{color:#c0392b;font-size:11px;font-weight:600;flex-shrink:0;white-space:nowrap}
   .vt-fix{flex-shrink:0;border:1px solid #e0a800;background:#fff8e1;color:#7a5a00;border-radius:10px;font-size:11px;padding:1px 7px;cursor:pointer;white-space:nowrap}
+  .pv-edit{display:flex;flex-direction:column;gap:5px;padding:8px;background:var(--bg,#f6f8fa);border-bottom:1px solid var(--border)}
+  .pv-edit input,.pv-edit textarea{font-size:13px;padding:4px 6px}
   .vt-tools{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
   .crm-hist-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
   .crm-hist-sum::-webkit-details-marker{display:none}
@@ -2178,9 +2180,15 @@ function crmMfAddRow(kind){ const box=document.getElementById('crm-mf-'+kind+'s'
 function crmMfDelRow(btn){ const row=btn&&btn.closest('.crm-mf-row'); if(row) row.remove(); }
 function memberFormHtml(k){
   const opts=memberFunctions().map(f=>`<option ${k.funktion===f?'selected':''}>${esc(f)}</option>`).join('');
-  const lists=listVerteiler();
+  const all=listVerteiler();
+  const lists=all.filter(v=>v.typ!=='post'), postLists=all.filter(v=>v.typ==='post');
   const emails=kEmails(k), tels=kTels(k);
   const myMail=String(emails[0]||'').toLowerCase().trim();
+  const ce=curEntity();
+  const pBlock = postLists.length ? `<div class="crm-modal-field"><label>📮 Zu Adressverteiler hinzufügen</label>
+     <div class="vw-vpick">${postLists.map(v=>{ const inIt = k.id && ce && (v.adressen||[]).some(a=>a.src&&a.src.eid===ce.id&&a.src.kid===k.id);
+        return `<label><input type="checkbox" class="crm-mf-pv" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
+     <div class="small" style="color:var(--muted);margin-top:3px">Ohne eigene Adresse wird die Adresse des Eintrags verwendet.</div></div>` : '';
   const vBlock = lists.length ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
      <div class="vw-vpick">${lists.map(v=>{ const inIt = myMail && _normEmails(v.emails).some(e=>e.toLowerCase()===myMail);
         return `<label><input type="checkbox" class="crm-mf-vt" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
@@ -2196,7 +2204,7 @@ function memberFormHtml(k){
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
    <div class="crm-modal-field"><label>Adresse</label><textarea id="crm-mf-adresse" rows="2" placeholder="Straße, PLZ Ort">${esc(k.adresse||'')}</textarea></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>
-   ${vBlock}`;
+   ${vBlock}${pBlock}`;
 }
 function crmAddMember(){
   crmOpenModalShell();
@@ -2221,10 +2229,21 @@ function crmSaveMember(mid){
   const email=String(emails[0]||'').trim();
   const want=new Set(Array.from(document.querySelectorAll('.crm-mf-vt:checked')).map(x=>x.value));
   const allBoxes=Array.from(document.querySelectorAll('.crm-mf-vt')).map(x=>x.value);
+  const wantPv=new Set(Array.from(document.querySelectorAll('.crm-mf-pv:checked')).map(x=>x.value));
+  const allPv=Array.from(document.querySelectorAll('.crm-mf-pv')).map(x=>x.value);
   mutateEntity(e=>{
     if(!Array.isArray(e.kontakte)) e.kontakte=[];
     if(mid){ const k=e.kontakte.find(x=>x.id===mid); if(k){ Object.assign(k,rec); delete k.email; delete k.tel; } }
     else { rec.id=newId(); e.kontakte.push(rec); }
+  });
+  // Adressverteiler-Mitgliedschaft (verknüpft über Eintrag + Kontakt-ID)
+  const ce=curEntity(), kid=mid||rec.id;
+  if(ce && kid) allPv.forEach(vid=>{
+    const v=getVerteiler(vid); if(!v) return;
+    const ad=Array.isArray(v.adressen)?v.adressen:[];
+    const has=ad.some(a=>a.src&&a.src.eid===ce.id&&a.src.kid===kid);
+    if(wantPv.has(vid) && !has){ v.adressen=[...ad, _pvSnap({src:{tree:ce.tree||window._crmTree, eid:ce.id, kid}})]; saveVerteiler(v); }
+    else if(!wantPv.has(vid) && has){ v.adressen=ad.filter(a=>!(a.src&&a.src.eid===ce.id&&a.src.kid===kid)); saveVerteiler(v); }
   });
   // Verteiler-Mitgliedschaft setzen (nur mit E-Mail)
   let added=0;
@@ -3911,7 +3930,21 @@ function paintVerteiler(){
   const root=document.getElementById('crm-root'); if(!root) return;
   window._crmTaskCtx=null;
   const lists=listVerteiler();
-  const cards=lists.map(v=>{
+  const mailLists=lists.filter(v=>v.typ!=='post'), postLists=lists.filter(v=>v.typ==='post');
+  const postCards=postLists.map(v=>{
+    const n=(v.adressen||[]).length;
+    return `<div class="crm-card">
+      <h3>📮 ${esc(v.name||'(ohne Name)')}</h3>
+      <div class="meta"><span class="crm-chip">${n} Empfänger</span></div>
+      <div class="vt-actions">
+        <button class="btn-sm-crm primary" ${n?'':'disabled'} onclick="crmPvLabels(${jsq(v.id)})">🏷️ Etiketten</button>
+        <button class="btn-sm-crm" ${n?'':'disabled'} onclick="crmPvExcel(${jsq(v.id)})">📊 Excel</button>
+        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>
+        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
+      </div>
+    </div>`;
+  }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Adressverteiler. Lege einen an und übernimm Postadressen aus Kontakten und Vereinen.</div>`;
+  const cards=mailLists.map(v=>{
     const n=_normEmails(v.emails).length;
     return `<div class="crm-card">
       <h3>✉️ ${esc(v.name||'(ohne Name)')}</h3>
@@ -3930,10 +3963,16 @@ function paintVerteiler(){
       <div class="small" style="color:var(--muted);margin-bottom:10px">„Mail (BCC)" öffnet Outlook mit allen Adressen im <b>BCC</b>-Feld – die Empfänger sehen einander nicht.</div>
       <div class="crm-list">${cards}</div>
     </div>
+    <div class="crm-sec">
+      <h4><span class="ttl">📮 Adressverteiler (Post)</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewAdressverteiler()">＋ Adressverteiler</button>`:''}</h4>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">Für Briefe: „Etiketten" druckt auf A4-Klebeetiketten-Bögen, „Excel" liefert die Liste (z. B. für einen Word-Serienbrief).</div>
+      <div class="crm-list">${postCards}</div>
+    </div>
   </div>`;
 }
 function crmNewVerteiler(){ _verteilerModal({}); }
-function crmEditVerteiler(id){ const v=getVerteiler(id); if(v) _verteilerModal(v); }
+function crmNewAdressverteiler(){ _pvModal({typ:'post'}); }
+function crmEditVerteiler(id){ const v=getVerteiler(id); if(!v) return; if(v.typ==='post') _pvModal(v); else _verteilerModal(v); }
 function _verteilerModal(v){
   crmOpenModalShell();
   const vereinOpts=['<option value="">– Kontakte eines Eintrags übernehmen –</option>']
@@ -3954,7 +3993,7 @@ function _verteilerModal(v){
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
      <div id="crm-vt-list" class="vt-list"></div>
-     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren · Prüfung läuft automatisch</span>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
@@ -4078,21 +4117,6 @@ async function _vtCheckDomain(dom){
     return (a.Answer||[]).some(x=>x.type===1) ? 'ok' : 'bad';
   }catch(e){ return '?'; }
 }
-async function crmVerteilerCheck(){
-  const list=window._vtEmails||[]; if(!list.length){ toast('Keine Adressen zum Prüfen.','err'); return; }
-  _vtBtnBusy(true);
-  const doms=[...new Set(list.map(e=>e.split('@')[1].toLowerCase()))];
-  const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
-  doms.forEach((d,k)=>{ window._vtDom[d]=res[k]; });
-  _vtBtnBusy(false);
-  if(window._vtEditIdx===null) _vtPaintList();
-  const bad=list.filter(e=>{ const s=window._vtDom[e.split('@')[1].toLowerCase()]; return s==='nx'||s==='bad'; }).length;
-  const typo=list.filter(e=>_vtTypo(e.split('@')[1].toLowerCase())).length;
-  const unk=res.filter(s=>s==='?').length;
-  if(unk===doms.length) toast('Prüfung nicht möglich (keine Verbindung?)','err');
-  else if(!bad && !typo) toast('Alle Adressen sehen gut aus ✓','ok');
-  else toast(`${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain${typo?`, ${typo} möglicher Tippfehler`:''} – siehe Markierungen`,'err');
-}
 // Fügt Adressen zur Modal-Liste hinzu; gibt {added, dup} zurück. Duplikate (Groß/Klein egal) werden ignoriert.
 function _vtAdd(emails){
   const cur=window._vtEmails||[];
@@ -4145,6 +4169,245 @@ function crmSaveVerteiler(id){
 function crmDeleteVerteilerC(id){ const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
 function crmVerteilerMail(id){ const v=getVerteiler(id); if(v) _openBcc(v.emails); }
 function crmCopyVerteiler(id){ const v=getVerteiler(id); if(v) _copyEmails(v.emails); }
+
+// ══════════════════════════════════════════════════════════════════
+//  ADRESSVERTEILER (Post) – Etiketten-Druck + Excel
+//  verteiler/<id> = { typ:'post', name, adressen:[{ src:{tree,eid,kid}|null, name, org, adresse }] }
+//  Mit src verknüpfte Einträge holen Name/Adresse beim Anzeigen/Drucken LIVE aus dem
+//  Kontakt (name/org/adresse sind nur der Schnappschuss, falls die Quelle gelöscht wurde).
+//  Wird ein Eintrag von Hand bearbeitet, fällt die Verknüpfung weg.
+// ══════════════════════════════════════════════════════════════════
+function _pvResolve(a){
+  const s=a&&a.src;
+  if(s){
+    const e=getEntity(s.tree,s.eid);
+    if(e){
+      const st=e.stamm||{}, org=st.name||'';
+      if(s.kid){
+        const k=(e.kontakte||[]).find(x=>x.id===s.kid);
+        if(k){
+          const own=String(k.adresse||'').trim();
+          // Eigene Adresse = Privatanschrift → ohne Vereinszeile; sonst Vereinsadresse „Verein / Name"
+          return own ? {name:k.name||'', org:'', adresse:own, live:true}
+                     : {name:k.name||'', org, adresse:String(st.adresse||'').trim(), live:true, viaOrg:true};
+        }
+      } else return {name:'', org, adresse:String(st.adresse||'').trim(), live:true};
+    }
+  }
+  return {name:(a&&a.name)||'', org:(a&&a.org)||'', adresse:String((a&&a.adresse)||'').trim(), live:false};
+}
+// Adresstext → Zeilen („Str. 1, 24119 Kronshagen" oder mehrzeilig)
+function _pvAdrLines(t){
+  const s=String(t||'').trim(); if(!s) return [];
+  return (s.includes('\n')?s.split('\n'):s.split(',')).map(x=>x.trim()).filter(Boolean);
+}
+// Zeilen fürs Etikett: Organisation, Name, Adresse
+function _pvLabelLines(a){ const r=_pvResolve(a); return [r.org, r.name, ..._pvAdrLines(r.adresse)].filter(Boolean); }
+function _pvKey(a){ const r=_pvResolve(a); return [r.name,r.org,_pvAdrLines(r.adresse).join(',')].join('|').toLowerCase().replace(/\s+/g,' '); }
+// Aufteilen für Excel/Serienbrief: Straße, PLZ, Ort, Land
+function _pvSplit(adresse){
+  const lines=_pvAdrLines(adresse); let plz='', ort='', land=''; let i=lines.findIndex(l=>/^(?:D-?\s*)?\d{4,5}\s+\S/.test(l));
+  if(i>=0){ const m=lines[i].match(/^(?:D-?\s*)?(\d{4,5})\s+(.+)$/); plz=m[1]; ort=m[2]; land=lines.slice(i+1).join(', '); }
+  const strasse=(i>=0?lines.slice(0,i):lines).join(', ');
+  return {strasse, plz, ort, land};
+}
+function _pvSnap(a){ const r=_pvResolve(a); return { src:a.src||null, name:r.name, org:r.org, adresse:r.adresse }; }
+
+function _pvModal(v){
+  crmOpenModalShell();
+  window._pvList=(v.adressen||[]).map(a=>Object.assign({},a));
+  window._pvEditIdx=null;
+  // Auswahl: je Eintrag „alle Kontakte", die Eintragsadresse und jeden Kontakt einzeln
+  const groups=getTrees().map(tr=>listEntities(tr.key).map(e=>{
+    const nm=(e.stamm&&e.stamm.name)||'(ohne Name)'; const ks=(e.kontakte||[]);
+    const opts=[`<option value="all::${esc(tr.key)}::${esc(e.id)}">👥 Alle Kontakte (${ks.length})</option>`,
+      `<option value="org::${esc(tr.key)}::${esc(e.id)}">📍 ${esc(nm)} – Eintragsadresse${(e.stamm&&e.stamm.adresse)?'':' (keine hinterlegt)'}</option>`]
+      .concat(ks.map(k=>`<option value="k::${esc(tr.key)}::${esc(e.id)}::${esc(k.id)}">👤 ${esc(k.name||'(ohne Name)')}${k.funktion?` (${esc(k.funktion)})`:''}${k.adresse?'':' – Vereinsadresse'}</option>`));
+    return `<optgroup label="${esc((tr.icon||'')+' '+nm)}">${opts.join('')}</optgroup>`;
+  }).join('')).join('');
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📮 Adressverteiler</h3>
+   <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
+   <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
+   <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:11px;color:var(--muted)"></span></label>
+     <div id="crm-pv-list" class="vt-list"></div>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Eintrag anklicken = korrigieren · 🔗 = mit Kontakt verknüpft (bleibt aktuell)</span>
+     <button type="button" class="btn-sm-crm" onclick="crmPvAddManual()">＋ Adresse von Hand</button></div></div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmSavePv(${jsq(v.id||'')})">Speichern</button></div>`);
+  _pvPaint();
+}
+function _pvPaint(){
+  const box=document.getElementById('crm-pv-list'); if(!box) return;
+  const list=window._pvList||[];
+  box.innerHTML=list.map((a,i)=>{
+    if(window._pvEditIdx===i) return `<div class="pv-edit">
+      <input id="crm-pv-e-name" placeholder="Name" value="${esc(a.name||'')}">
+      <input id="crm-pv-e-org" placeholder="Organisation / Verein (optional)" value="${esc(a.org||'')}">
+      <textarea id="crm-pv-e-adr" rows="3" placeholder="Straße Nr.&#10;PLZ Ort">${esc(_pvAdrLines(a.adresse).join('\n'))}</textarea>
+      <div style="display:flex;gap:6px;justify-content:flex-end"><button type="button" class="btn-sm-crm" onclick="crmPvEditCancel()">Abbrechen</button>
+      <button type="button" class="btn-sm-crm primary" onclick="crmPvEditSave(${i})">Übernehmen</button></div></div>`;
+    const r=_pvResolve(a); const adr=_pvAdrLines(r.adresse);
+    const head=[r.org,r.name].filter(Boolean).map(esc).join(' · ')||'(ohne Name)';
+    return `<div class="vt-row${adr.length?'':' vt-row-bad'}"><div class="vt-main" onclick="crmPvEdit(${i})" style="cursor:text" title="Klicken zum Korrigieren">
+      <span class="vt-addr"><b>${head}</b>${r.live?' <span title="Mit Kontakt verknüpft – Änderungen am Kontakt werden automatisch übernommen">🔗</span>':''}</span>
+      <span class="vt-who">${adr.length?esc(adr.join(', ')):'<span class="vt-bad">⚠ keine Adresse hinterlegt</span>'}</span></div>
+      <button type="button" class="crm-x" title="Entfernen" onclick="crmPvRemove(${i})">✕</button></div>`;
+  }).join('');
+  const c=document.getElementById('crm-pv-count'); if(c) c.textContent=`(${list.length})`;
+  const f=document.getElementById('crm-pv-e-name'); if(f) f.focus();
+}
+// Fügt Einträge hinzu, Doppelte (gleiche Quelle oder gleicher Name+Adresse) werden übersprungen
+function _pvAdd(items){
+  const list=window._pvList||[];
+  const srcKey=a=>a.src?[a.src.tree,a.src.eid,a.src.kid||''].join('|'):null;
+  const seen=new Set(); list.forEach(a=>{ const s=srcKey(a); if(s) seen.add(s); seen.add(_pvKey(a)); });
+  let added=0, dup=0, noAdr=0;
+  items.forEach(a=>{
+    const s=srcKey(a), k=_pvKey(a);
+    if((s&&seen.has(s)) || seen.has(k)){ dup++; return; }
+    if(s) seen.add(s); seen.add(k); list.push(a); added++;
+    if(!_pvResolve(a).adresse) noAdr++;
+  });
+  window._pvList=list; _pvPaint();
+  return {added,dup,noAdr};
+}
+function crmPvAddPick(){
+  const sel=document.getElementById('crm-pv-pick'); const v0=sel?sel.value:''; if(sel) sel.value=''; if(!v0) return;
+  const [kind,tree,eid,kid]=v0.split('::');
+  const e=getEntity(tree,eid); if(!e) return;
+  let items=[];
+  if(kind==='all') items=(e.kontakte||[]).map(k=>({src:{tree,eid,kid:k.id}}));
+  else if(kind==='org') items=[{src:{tree,eid,kid:null}}];
+  else items=[{src:{tree,eid,kid}}];
+  if(!items.length){ toast('Dieser Eintrag hat keine Kontakte.','err'); return; }
+  const r=_pvAdd(items);
+  const parts=[]; if(r.added) parts.push(`${r.added} übernommen ✓`); if(r.dup) parts.push(`${r.dup} schon drin`); if(r.noAdr) parts.push(`${r.noAdr} ohne Adresse`);
+  toast(parts.join(' · ')||'Nichts übernommen', r.added&&!r.noAdr?'ok':'err');
+}
+function crmPvAddManual(){
+  if(window._pvEditIdx!=null){ toast('Bitte die offene Bearbeitung erst übernehmen oder abbrechen.','err'); return; }
+  window._pvEditOrig=null;
+  const list=window._pvList||[]; list.push({src:null,name:'',org:'',adresse:''});
+  window._pvList=list; window._pvEditIdx=list.length-1; _pvPaint();
+}
+function crmPvEdit(i){
+  const list=window._pvList||[]; const a=list[i]; if(!a) return;
+  if(window._pvEditIdx!=null){ toast('Bitte die offene Bearbeitung erst übernehmen oder abbrechen.','err'); return; }
+  // Bearbeiten löst die Verknüpfung (erst beim Übernehmen): aktuellen Stand als festen Text vorbelegen
+  window._pvEditOrig=a;
+  list[i]=Object.assign(_pvSnap(a),{src:null});
+  window._pvEditIdx=i; _pvPaint();
+}
+function crmPvEditCancel(){
+  const list=window._pvList||[]; const i=window._pvEditIdx; window._pvEditIdx=null;
+  if(window._pvEditOrig) list[i]=window._pvEditOrig;   // Original inkl. Verknüpfung zurück
+  else { const a=list[i]; if(a && !a.name && !a.org && !a.adresse) list.splice(i,1); }   // leer angelegt → wieder weg
+  window._pvEditOrig=null;
+  _pvPaint();
+}
+function crmPvEditSave(i){
+  const list=window._pvList||[];
+  const name=val('crm-pv-e-name'), org=val('crm-pv-e-org');
+  const adr=_pvAdrLines((document.getElementById('crm-pv-e-adr')||{}).value||'').join('\n');
+  if(!name && !org){ toast('Bitte Name oder Organisation eingeben.','err'); return; }
+  const neu={src:null,name,org,adresse:adr};
+  if(list.some((x,j)=>j!==i && _pvKey(x)===_pvKey(neu))){ toast('Diese Adresse ist schon im Verteiler – Doppelte entfernt','ok'); list.splice(i,1); }
+  else list[i]=neu;
+  window._pvEditIdx=null; window._pvEditOrig=null; _pvPaint();
+}
+function crmPvRemove(i){ const list=window._pvList||[]; if(i<0||i>=list.length) return; window._pvEditIdx=null; window._pvEditOrig=null; list.splice(i,1); _pvPaint(); }
+function crmSavePv(id){
+  const name=val('crm-pv-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  if(window._pvEditIdx!=null){ toast('Bitte die offene Bearbeitung erst übernehmen oder abbrechen.','err'); return; }
+  const ex=id?getVerteiler(id):null;
+  const adressen=(window._pvList||[]).map(_pvSnap).map(a=>({src:a.src?{tree:a.src.tree,eid:a.src.eid,kid:a.src.kid||null}:null,name:a.name||'',org:a.org||'',adresse:a.adresse||''}));
+  saveVerteiler({ id:id||newId(), typ:'post', name, adressen, emails:[],
+    createdAt:(ex&&ex.createdAt)||Date.now(), createdByKuerzel:(ex&&ex.createdByKuerzel)||curKuerzel(),
+    updatedByKuerzel:curKuerzel(), updatedByName:curName() });
+  crmCloseModal(); paintVerteiler(); toast('Adressverteiler gespeichert ✓','ok');
+}
+function _pvFileName(v,ext){ return `Adressverteiler-${String(v.name||'Liste').replace(/[\\/:*?"<>|]+/g,'_').slice(0,60)}.${ext}`; }
+
+// ── Excel (auch als Datenquelle für Word-Serienbrief) ─────────────
+async function crmPvExcel(id){
+  const v=getVerteiler(id); if(!v) return;
+  try{
+    const XLSX=await loadXLSX();
+    const header=['Organisation','Name','Straße','PLZ','Ort','Land','Adresse komplett'];
+    const rows=(v.adressen||[]).map(a=>{ const r=_pvResolve(a); const s=_pvSplit(r.adresse);
+      return [r.org,r.name,s.strasse,s.plz,s.ort,s.land,_pvAdrLines(r.adresse).join(', ')]; });
+    const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+    ws['!cols']=[{wch:28},{wch:24},{wch:30},{wch:7},{wch:20},{wch:12},{wch:45}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Adressen');
+    XLSX.writeFile(wb, _pvFileName(v,'xlsx'));
+    toast('Excel-Datei erstellt ✓','ok');
+  }catch(e){ toast('Excel-Export fehlgeschlagen: '+((e&&e.message)||e),'err'); }
+}
+
+// ── Etiketten (A4-Bögen) ──────────────────────────────────────────
+// Maße in mm: Etikett w×h, Spalten×Zeilen, Seitenrand oben/links, Abstand zwischen Etiketten gx/gy
+const _PV_FORMATS=[
+  {id:'3475', label:'Zweckform 3475 · 70 × 36 mm · 24 St.',   w:70,   h:36,   cols:3, rows:8, top:4.5,   left:0,    gx:0,    gy:0, fs:10},
+  {id:'3474', label:'Zweckform 3474 · 70 × 37 mm · 24 St.',   w:70,   h:37,   cols:3, rows:8, top:0.5,   left:0,    gx:0,    gy:0, fs:10},
+  {id:'3422', label:'Zweckform 3422 · 70 × 35 mm · 24 St.',   w:70,   h:35,   cols:3, rows:8, top:8.5,   left:0,    gx:0,    gy:0, fs:10},
+  {id:'L7160',label:'Avery L7160 · 63,5 × 38,1 mm · 21 St.',  w:63.5, h:38.1, cols:3, rows:7, top:15.15, left:7.21, gx:2.54, gy:0, fs:10},
+  {id:'L7163',label:'Avery L7163 · 99,1 × 38,1 mm · 14 St.',  w:99.1, h:38.1, cols:2, rows:7, top:15.15, left:4.63, gx:2.54, gy:0, fs:11},
+  {id:'3425', label:'Zweckform 3425 · 105 × 57 mm · 10 St.',  w:105,  h:57,   cols:2, rows:5, top:6,     left:0,    gx:0,    gy:0, fs:12},
+];
+function _pvPrefs(){ try{ return JSON.parse(localStorage.getItem('tps_pv_label')||'{}')||{}; }catch(e){ return {}; } }
+function crmPvLabels(id){
+  const v=getVerteiler(id); if(!v) return;
+  const p=_pvPrefs(); const fmt=p.fmt||'3475';
+  const n=(v.adressen||[]).filter(a=>_pvResolve(a).adresse).length, ohne=(v.adressen||[]).length-n;
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🏷️ Etiketten drucken – ${esc(v.name||'')}</h3>
+   <div class="crm-modal-field"><label>Etikettenbogen (A4)</label><select id="crm-pvl-fmt">${_PV_FORMATS.map(f=>`<option value="${f.id}"${f.id===fmt?' selected':''}>${esc(f.label)}</option>`).join('')}</select>
+     <div class="small" style="color:var(--muted);margin-top:3px">Die Nummer steht auf der Packung der Etiketten.</div></div>
+   <div class="crm-modal-field"><label>Beginnen bei Etikett Nr.</label><input id="crm-pvl-start" type="number" min="1" value="1" style="width:90px">
+     <div class="small" style="color:var(--muted);margin-top:3px">Für angebrochene Bögen: zählt zeilenweise von links oben.</div></div>
+   <div class="crm-modal-field"><label>Feinjustierung <span style="font-size:11px;color:var(--muted)">(nur falls der Druck verrutscht, in mm)</span></label>
+     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="small">→ rechts</span><input id="crm-pvl-dx" type="number" step="0.5" value="${Number(p.dx)||0}" style="width:70px">
+     <span class="small">↓ runter</span><input id="crm-pvl-dy" type="number" step="0.5" value="${Number(p.dy)||0}" style="width:70px"></div></div>
+   <div class="small" style="margin:6px 0 2px">${n} Etikett${n===1?'':'en'}${ohne?` · <span style="color:#c0392b">${ohne} Empfänger ohne Adresse werden übersprungen</span>`:''}</div>
+   <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+   <button class="btn-sm-crm primary" onclick="crmPvPrint(${jsq(v.id)})">🖨️ Druckansicht öffnen</button></div>`);
+}
+function crmPvPrint(id){
+  const v=getVerteiler(id); if(!v) return;
+  const f=_PV_FORMATS.find(x=>x.id===val('crm-pvl-fmt'))||_PV_FORMATS[0];
+  const per=f.cols*f.rows;
+  const start=Math.min(per,Math.max(1,parseInt(val('crm-pvl-start'),10)||1));
+  const dx=parseFloat(val('crm-pvl-dx'))||0, dy=parseFloat(val('crm-pvl-dy'))||0;
+  try{ localStorage.setItem('tps_pv_label',JSON.stringify({fmt:f.id,dx,dy})); }catch(e){}
+  const labels=(v.adressen||[]).filter(a=>_pvResolve(a).adresse).map(_pvLabelLines);
+  if(!labels.length){ toast('Keine Empfänger mit Adresse.','err'); return; }
+  const slots=[...Array(start-1).fill(null), ...labels];
+  const pages=[]; for(let i=0;i<slots.length;i+=per) pages.push(slots.slice(i,i+per));
+  const pageHtml=pages.map(pg=>`<div class="page">${pg.map((ls,i)=>{ if(!ls) return '';
+    const c=i%f.cols, r=Math.floor(i/f.cols);
+    const x=f.left+c*(f.w+f.gx)+dx, y=f.top+r*(f.h+f.gy)+dy;
+    return `<div class="lbl" style="left:${x}mm;top:${y}mm">${ls.map(l=>`<div>${esc(l)}</div>`).join('')}</div>`; }).join('')}</div>`).join('');
+  const win=window.open('','_blank'); if(!win){ toast('Popup blockiert – bitte Popups für diese Seite erlauben.','err'); return; }
+  win.document.write(`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>${esc(_pvFileName(v,'pdf').replace(/\.pdf$/,''))}</title><style>
+    @page{size:A4 portrait;margin:0}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;background:#888}
+    .page{position:relative;width:210mm;height:297mm;background:#fff;margin:10mm auto;overflow:hidden;page-break-after:always;break-after:page}
+    .page:last-child{page-break-after:auto;break-after:auto}
+    .lbl{position:absolute;width:${f.w}mm;height:${f.h}mm;padding:0 5mm;display:flex;flex-direction:column;justify-content:center;
+      font-size:${f.fs}pt;line-height:1.25;overflow:hidden;outline:1px dashed #ccc}
+    .lbl div{overflow-wrap:anywhere}
+    .bar{position:sticky;top:0;z-index:5;background:#1a3a5c;color:#fff;padding:10px 16px;font-size:13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .bar button{background:#fff;color:#1a3a5c;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer}
+    @media print{body{background:#fff}.bar{display:none}.page{margin:0}.lbl{outline:none}}
+  </style></head><body>
+  <div class="bar"><button onclick="window.print()">🖨️ Drucken</button>
+    <span>${esc(f.label)} · ${labels.length} Etikett${labels.length===1?'':'en'} · ${pages.length} ${pages.length===1?'Bogen':'Bögen'}</span>
+    <span style="opacity:.85">Im Druckdialog: <b>Skalierung 100 % / „Tatsächliche Größe"</b>, Ränder <b>„Keine"</b>. Tipp: erst einen Probedruck auf Normalpapier und gegen den Etikettenbogen ans Licht halten.</span></div>
+  ${pageHtml}</body></html>`);
+  win.document.close();
+  crmCloseModal();
+}
 // Schnellaktion am Eintrag: Mail an alle Kontakte (BCC)
 function crmMailKontakte(){
   const e=curEntity(); if(!e) return;
@@ -5345,7 +5608,9 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerCheck,crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerMail,
+  crmNewAdressverteiler, crmPvAddPick, crmPvAddManual, crmPvEdit, crmPvEditCancel, crmPvEditSave, crmPvRemove, crmSavePv,
+  crmPvExcel, crmPvLabels, crmPvPrint, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
