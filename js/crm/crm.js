@@ -624,6 +624,14 @@ function injectStyles(){
   .crm-projhist{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
   .crm-projhist>summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
   .vt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .vt-add{display:flex;gap:6px}
+  .vt-add input{flex:1;min-width:0}
+  .vt-list{display:flex;flex-direction:column;margin-top:6px;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:6px}
+  .vt-list:empty{display:none}
+  .vt-row{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;font-size:13px;border-bottom:1px solid var(--border)}
+  .vt-row:last-child{border-bottom:none}
+  .vt-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vt-row .crm-x{flex-shrink:0}
   .crm-hist-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
   .crm-hist-sum::-webkit-details-marker{display:none}
   .crm-hist-sum::before{content:'▸';color:var(--muted);font-size:13px;transition:transform .15s}
@@ -3920,22 +3928,52 @@ function _verteilerModal(v){
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const userOpts=['<option value="">– Person aus dem System hinzufügen –</option>']
     .concat(usersWithMail.map(u=>`<option value="${esc(u.email)}">${esc(u.name)} (${esc(u.email)})</option>`)).join('');
+  // Arbeitskopie der Adressen fürs Modal – doppelte (auch Groß/Klein) sind schon hier raus.
+  window._vtEmails=_normEmails(v.emails||[]);
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
-   <div class="crm-modal-field"><label>E-Mail-Adressen <span style="font-size:11px;color:var(--muted)">(eine pro Zeile)</span></label><textarea id="crm-vt-emails" rows="8" placeholder="name@example.de">${esc((v.emails||[]).join('\n'))}</textarea></div>
+   <div class="crm-modal-field"><label>E-Mail-Adressen <span id="crm-vt-count" style="font-size:11px;color:var(--muted)"></span></label>
+     <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
+     <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
+     <div id="crm-vt-list" class="vt-list"></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVerteiler(${jsq(v.id||'')})">Speichern</button></div>`);
+  _vtPaintList();
+}
+function _vtPaintList(){
+  const box=document.getElementById('crm-vt-list'); if(!box) return;
+  const list=window._vtEmails||[];
+  box.innerHTML=list.map((e,i)=>`<div class="vt-row"><span title="${esc(e)}">${esc(e)}</span><button type="button" class="crm-x" title="Adresse entfernen" onclick="crmVerteilerRemove(${i})">✕</button></div>`).join('');
+  const c=document.getElementById('crm-vt-count'); if(c) c.textContent=`(${list.length})`;
+}
+// Fügt Adressen zur Modal-Liste hinzu; gibt {added, dup} zurück. Duplikate (Groß/Klein egal) werden ignoriert.
+function _vtAdd(emails){
+  const cur=window._vtEmails||[];
+  const seen=new Set(cur.map(e=>e.toLowerCase()));
+  let added=0, dup=0;
+  _normEmails(emails).forEach(e=>{ const k=e.toLowerCase(); if(seen.has(k)) dup++; else { seen.add(k); cur.push(e); added++; } });
+  window._vtEmails=cur; _vtPaintList();
+  return {added, dup};
+}
+function crmVerteilerAddInput(){
+  const inp=document.getElementById('crm-vt-input'); const raw=inp?inp.value.trim():''; if(!raw) return;
+  if(!_normEmails([raw]).length){ toast('Keine gültige E-Mail-Adresse.','err'); return; }
+  const r=_vtAdd([raw]);
+  if(inp){ inp.value=''; inp.focus(); }
+  if(!r.added) toast('Adresse ist bereits im Verteiler','err');
+  else if(r.dup) toast(`${r.added} übernommen, ${r.dup} schon vorhanden`,'ok');
+}
+function crmVerteilerRemove(i){
+  const list=window._vtEmails||[]; if(i<0||i>=list.length) return;
+  list.splice(i,1); _vtPaintList();
 }
 function crmVerteilerAddUser(){
   const sel=document.getElementById('crm-vt-user'); const mail=sel?sel.value:''; if(sel) sel.value='';
   if(!mail) return;
-  const ta=document.getElementById('crm-vt-emails');
-  const before=_normEmails([ta?ta.value:'']).length;
-  const merged=_normEmails([(ta?ta.value:''), mail]);
-  if(ta) ta.value=merged.join('\n');
-  toast(merged.length>before?'Person übernommen ✓':'Adresse ist bereits in der Liste','ok');
+  const r=_vtAdd([mail]);
+  toast(r.added?'Person übernommen ✓':'Adresse ist bereits im Verteiler', r.added?'ok':'err');
 }
 function crmVerteilerAddVerein(){
   const sel=document.getElementById('crm-vt-pick'); const v0=sel?sel.value:''; if(!v0) return;
@@ -3945,17 +3983,14 @@ function crmVerteilerAddVerein(){
   if(!e) return;
   const emails=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean);
   const stammMail=(e.stamm&&e.stamm.email)||''; if(stammMail) emails.push(stammMail);
-  const ta=document.getElementById('crm-vt-emails');
-  const before=_normEmails([ta?ta.value:'']).length;
-  const merged=_normEmails([(ta?ta.value:''), ...emails]);
-  if(ta) ta.value=merged.join('\n');
-  const added=merged.length-before;
-  toast(added?`${added} neue Adresse(n) übernommen ✓`:'Keine neuen Adressen gefunden','ok');
+  const r=_vtAdd(emails);
+  toast(r.added?`${r.added} neue Adresse(n) übernommen ✓${r.dup?` · ${r.dup} schon vorhanden`:''}`:'Keine neuen Adressen gefunden','ok');
 }
 function crmSaveVerteiler(id){
   const name=val('crm-vt-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
-  const ta=document.getElementById('crm-vt-emails');
-  const emails=_normEmails([ta?ta.value:'']);
+  // Noch im Eingabefeld getippte Adresse nicht verlieren
+  const inp=document.getElementById('crm-vt-input'); if(inp&&inp.value.trim()) _vtAdd([inp.value]);
+  const emails=_normEmails(window._vtEmails||[]);
   const ex=id?getVerteiler(id):null;
   saveVerteiler({ id:id||newId(), name, emails,
     createdAt:(ex&&ex.createdAt)||Date.now(), createdByKuerzel:(ex&&ex.createdByKuerzel)||curKuerzel(),
@@ -5165,7 +5200,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,

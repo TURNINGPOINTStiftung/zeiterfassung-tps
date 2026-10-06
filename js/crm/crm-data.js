@@ -353,6 +353,11 @@ export function listTeamProjekte(team){
 // Liegen unter crm/verteiler/<id> = { id, name, emails:[], note?, … }.
 export function saveVerteiler(v){
   if(!v || !v.id) return Promise.resolve();
+  // Keine Adresse doppelt (Groß/Klein egal) – greift für JEDEN Speicherweg (Modal, Kontakt-Häkchen, Import).
+  if(Array.isArray(v.emails)){
+    const seen = new Set();
+    v.emails = v.emails.map(e=>String(e||'').trim()).filter(e=>{ const k=e.toLowerCase(); if(!e || seen.has(k)) return false; seen.add(k); return true; });
+  }
   v.updatedAt = Date.now();
   const d = getCrm();
   if(!d.verteiler) d.verteiler = {};
