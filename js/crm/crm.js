@@ -3944,14 +3944,15 @@ function _verteilerModal(v){
   window._vtEmails=_normEmails(v.emails||[]);
   window._vtEditIdx=null;
   if(!window._vtDom) window._vtDom={};   // Domain-Prüfergebnis: 'ok' | 'bad' | 'nx' | '?'
+  Object.keys(window._vtDom).forEach(d=>{ if(window._vtDom[d]==='?') delete window._vtDom[d]; });   // Fehlversuche beim Öffnen erneut probieren
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
    <div class="crm-modal-field"><label>E-Mail-Adressen <span id="crm-vt-count" style="font-size:11px;color:var(--muted)"></span></label>
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
      <div id="crm-vt-list" class="vt-list"></div>
-     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
-     <button type="button" class="btn-sm-crm" id="crm-vt-checkbtn" onclick="crmVerteilerCheck()">🔍 Adressen prüfen</button></div></div>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren · Prüfung läuft automatisch</span>
+     <button type="button" class="btn-sm-crm" id="crm-vt-checkbtn" onclick="crmVerteilerCheck()">🔄 Erneut prüfen</button></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -3975,6 +3976,30 @@ function _vtPaintList(){
   }).join('');
   const c=document.getElementById('crm-vt-count'); if(c) c.textContent=`(${list.length})`;
   const ed=document.getElementById('crm-vt-edit'); if(ed){ ed.focus(); ed.select(); }
+  _vtAutoCheck();
+}
+// Automatische Prüfung: nach jedem Neuzeichnen (Öffnen, Hinzufügen, Korrigieren) nur die Domains
+// abfragen, die noch kein Ergebnis haben. Meldung nur, wenn dabei ein Problem auftaucht.
+const _vtPending=new Set();
+async function _vtAutoCheck(){
+  const dom=window._vtDom||(window._vtDom={});
+  const doms=[...new Set((window._vtEmails||[]).map(e=>e.split('@')[1].toLowerCase()))]
+    .filter(d=>!(d in dom) && !_vtPending.has(d));
+  if(!doms.length) return;
+  doms.forEach(d=>_vtPending.add(d));
+  _vtBtnBusy(true);
+  const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
+  doms.forEach((d,k)=>{ dom[d]=res[k]; _vtPending.delete(d); });
+  if(!_vtPending.size) _vtBtnBusy(false);
+  if(!document.getElementById('crm-vt-list')) return;   // Modal inzwischen geschlossen
+  if(window._vtEditIdx===null) _vtPaintList();           // nicht mitten ins Tippen hinein neu zeichnen
+  const badDoms=new Set(doms.filter((d,k)=>res[k]==='nx'||res[k]==='bad'));
+  const bad=(window._vtEmails||[]).filter(e=>badDoms.has(e.split('@')[1].toLowerCase())).length;
+  if(bad) toast(`⚠ ${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain – rot markiert`,'err');
+}
+function _vtBtnBusy(on){
+  const btn=document.getElementById('crm-vt-checkbtn'); if(!btn) return;
+  btn.disabled=on; btn.textContent=on?'⏳ Prüfe…':'🔄 Erneut prüfen';
 }
 // Tippfehler bei gängigen Mail-Anbietern erkennen (gmial.com → gmail.com). null = nichts Auffälliges.
 const _VT_DOMAINS=['gmail.com','googlemail.com','gmx.de','gmx.net','gmx.at','web.de','t-online.de','outlook.com','outlook.de',
@@ -4032,12 +4057,12 @@ async function _vtCheckDomain(dom){
 }
 async function crmVerteilerCheck(){
   const list=window._vtEmails||[]; if(!list.length){ toast('Keine Adressen zum Prüfen.','err'); return; }
-  const btn=document.getElementById('crm-vt-checkbtn'); if(btn){ btn.disabled=true; btn.textContent='⏳ Prüfe…'; }
+  _vtBtnBusy(true);
   const doms=[...new Set(list.map(e=>e.split('@')[1].toLowerCase()))];
   const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
   doms.forEach((d,k)=>{ window._vtDom[d]=res[k]; });
-  if(btn){ btn.disabled=false; btn.textContent='🔍 Adressen prüfen'; }
-  _vtPaintList();
+  _vtBtnBusy(false);
+  if(window._vtEditIdx===null) _vtPaintList();
   const bad=list.filter(e=>{ const s=window._vtDom[e.split('@')[1].toLowerCase()]; return s==='nx'||s==='bad'; }).length;
   const typo=list.filter(e=>_vtTypo(e.split('@')[1].toLowerCase())).length;
   const unk=res.filter(s=>s==='?').length;
