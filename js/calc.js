@@ -238,6 +238,51 @@ export function totalVacUsed(uid,y){
   return used;
 }
 
+// ── Resturlaub Vorjahr (Hausregel TPS) ─────────────────────────────
+// Urlaub ist im selben Jahr zu nehmen; nicht genommene Tage dürfen noch im JANUAR des
+// Folgejahres genommen werden („Resturlaub Vorjahr") und verfallen danach.
+// Urlaub im Januar wird ZUERST vom Vorjahresrest abgezogen, erst danach vom neuen Anspruch.
+// Gilt ab dem Übertrag 2026 → 2027 (VAC_CARRY_FROM); frühere Jahre bleiben unverändert.
+export const VAC_CARRY_FROM=2027;
+function _hasYearData(uid,y){
+  for(let m=1;m<=12;m++){ const e=getEntry(uid,y,m); if(e&&e.days&&Object.keys(e.days).length) return true; }
+  return false;
+}
+// Übertrag ins Jahr y (Tage, ≥ 0). Ohne Erfassung im Vorjahr kein Übertrag (sonst wäre der
+// komplette Vorjahresanspruch „Rest").
+export function vacCarryIn(uid,user,y,_d){
+  _d=_d||0;
+  if(!user||!y||y<VAC_CARRY_FROM||_d>5) return 0;
+  const py=y-1;
+  if(!_hasYearData(uid,py)) return 0;
+  const pCarry=vacCarryIn(uid,user,py,_d+1);
+  const pCarryUsed=Math.min(pCarry, vacDays(getEntry(uid,py,1)));
+  const pUsedAnnual=totalVacUsed(uid,py)-pCarryUsed;
+  return Math.max(0, annualVacDays(user,py)-pUsedAnnual);
+}
+// Urlaubsstand eines Jahres bis einschließlich Monat upToM – eine Quelle für alle Anzeigen.
+//  annual   Jahresanspruch (anteilig)       carry      Resturlaub Vorjahr (nur im Januar nutzbar)
+//  usedUpTo gegen den Jahresanspruch bis upToM   left  Resturlaub aus dem Jahresanspruch
+//  carryLeft noch offener Vorjahresrest (nur Januar)   future  schon gebuchter späterer Urlaub
+//  unbooked  noch nicht beantragter Anspruch
+export function vacStatus(uid,user,y,upToM){
+  const annual=annualVacDays(user,y);
+  const carry=vacCarryIn(uid,user,y);
+  const jan=vacDays(getEntry(uid,y,1));
+  const carryUsed=Math.min(carry,jan);
+  const usedUpTo=vacUsedUpToMonth(uid,y,upToM)-carryUsed;
+  const usedYear=totalVacUsed(uid,y)-carryUsed;
+  return {
+    annual, carry, carryUsed,
+    carryLeft: upToM<=1 ? Math.max(0,carry-jan) : 0,
+    carryExpired: upToM>1 ? Math.max(0,carry-carryUsed) : 0,
+    usedUpTo, usedYear,
+    left: annual-usedUpTo,
+    future: Math.max(0,usedYear-usedUpTo),
+    unbooked: Math.max(0,annual-usedYear),
+  };
+}
+
 // Urlaub bis einschließlich Monat upToM (für monatsweisen Resturlaub).
 // Zukünftig genehmigter Urlaub zählt erst im jeweiligen Monat.
 export function vacUsedUpToMonth(uid,y,upToM){

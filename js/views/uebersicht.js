@@ -2,7 +2,7 @@ import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLA
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
 import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
-import { monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord, effUserAt, annualVacDays, employedRange } from '../calc.js';
+import { vacStatus, monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord, effUserAt, annualVacDays, employedRange } from '../calc.js';
 import { getCatsForTeam, currentCatsForUser } from '../cats.js';
 import { notifyGF } from './gfberichte.js';
 
@@ -178,11 +178,8 @@ export function renderOverview(){
       </div>`;
     }
     const eu=effUserAt(u,oy,om);   // für diesen Monat gültige Vertragswerte (Std/Urlaub/Rolle)
-    const vacUpTo=vacUsedUpToMonth(u.id,oy,om);   // bis einschl. angezeigtem Monat
-    const vacApproved=totalVacUsed(u.id,oy);       // ganzes Jahr (inkl. Zukunft)
-    const _annualVac=annualVacDays(u,oy);
-    const vacLeft=_annualVac-vacUpTo;
-    const vacFuture=Math.max(0,vacApproved-vacUpTo);
+    const _vs=vacStatus(u.id,u,oy,om);   // inkl. „Resturlaub Vorjahr" (nur Januar), siehe calc.js
+    const vacUpTo=_vs.usedUpTo, _annualVac=_vs.annual, vacLeft=_vs.left, vacFuture=_vs.future;
     // Offener laufender Monat: Soll bis heute; eingereicht/genehmigt (oder abgeschlossen): volles Soll.
     const _curSub=curStatus==='submitted'||curStatus==='approved';
     const curSOLL=_curSub?monthSOLL(u,oy,om):monthSOLLToDate(u,oy,om);
@@ -193,7 +190,7 @@ export function renderOverview(){
       <h3>${esc(u.name)} ${roleChip}</h3>
       <div class="meta">${esc(u.city||'–')} · ${eu.wh}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
-        <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''})</span></span>
+        <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, + ${_vs.carryLeft} T Vorjahr bis 31.01.`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>
       </div>
       ${pending>0?`<div class="meta" style="margin-top:4px"><span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span></div>`:''}
