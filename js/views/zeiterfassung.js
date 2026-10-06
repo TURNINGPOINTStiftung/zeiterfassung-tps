@@ -3,7 +3,7 @@ import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey, lo
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
 import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
-import { dailyMinutes, vacDailyMin, vacStatus, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
+import { dailyMinutes, vacDailyMin, vacStatus, isAbsDay as _isAbs, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
 import { fmtTs, localISODate } from '../utils.js';
 import { fileGfApproval, unfileGfReport } from './gfberichte.js';
 import { checkMonth, forgottenStampText, submitWarnings } from '../plausi.js';
@@ -122,7 +122,7 @@ export function renderZeiterfassung(){
   const _inSemester=ds=>_lectPeriods.some(p=>ds>=p.von&&ds<=p.bis) && !_freeDays.some(p=>ds>=p.von&&ds<=p.bis);
   // Abwesenheit (Urlaub / AU-Krank / Arbeitszeitausgleich) ist KEINE geleistete Arbeit →
   // zählt NICHT zur 20h-Grenze und nicht zum 26-Wochen-Zähler. (Veranstaltung = echte Arbeit → zählt.)
-  const _isWsAbsence=dd=>{ const z=dd.b1zuord||'', b=dd.b1bem||''; return z==='Urlaub'||z==='AU/Krank'||z==='Arbeitszeitausgleich'||b==='Urlaub'||b==='AU/Krank'||b==='Arbeitszeitausgleich'; };
+  const _isWsAbsence=dd=>_isAbs(dd);
   if(isWerkstudent){
     // a) Rot-Markierung im Semester: nur Mo–Fr, nur Arbeitszeit 8–20 Uhr (aktueller Monat)
     const _addWin=(kw,dd,dObj,ds)=>{
@@ -170,8 +170,7 @@ export function renderZeiterfassung(){
     const ktm=Number(dd.ktmin||0);
     const dayMinGross=b1min+b2min+ktm;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
-    const isAbsDay=dd.b1zuord==='Urlaub'||dd.b1zuord==='AU/Krank'||dd.b1zuord==='Arbeitszeitausgleich'
-      ||dd.b1bem==='Urlaub'||dd.b1bem==='AU/Krank'||dd.b1bem==='Arbeitszeitausgleich';
+    const isAbsDay=_isAbs(dd);   // inkl. „Sonstiges" mit Arbeitszeit-Gutschrift (Bildungsurlaub)
     // Pflicht-Pause minus bereits genommene Lücke (Freiberufler: keine Pause)
     const pauseMinAuto=(isAbsDay||isFree)?0:autoPauseMin(dd,user);
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
@@ -756,9 +755,7 @@ function _applyDayPause(uid,ds,editedField){
     day._paused=0; day._pausedF=''; day._pInit=true;
     // 2) Pause neu berechnen – keine bei Freiberufler / Veranstaltung / Abwesenheit
     const z=day.b1zuord||'', bem=day.b1bem||'';
-    if(isFreelancer(user)||z.startsWith('Veranstaltung')
-       ||z==='Urlaub'||z==='AU/Krank'||z==='Arbeitszeitausgleich'
-       ||bem==='Urlaub'||bem==='AU/Krank'||bem==='Arbeitszeitausgleich'){ day._netRaw=''; day._netRawF=''; return; }
+    if(isFreelancer(user)||z.startsWith('Veranstaltung')||_isAbs(day)){ day._netRaw=''; day._netRawF=''; return; }
     const lastF=hasB2?'b2bis':(day.b1von&&day.b1bis?'b1bis':'');
     if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00'){
       // Noch kein vollständiger Block (z.B. Endzeit getippt, Start fehlt noch) oder 24:00-Rand.
@@ -883,7 +880,7 @@ export function td_b1bis_change(ds,val){
   if(normVal){
     const von=day.b1von||'';
     const zuord=day.b1zuord||'';
-    const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
+    const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich'||_isAbs(day);
     if(von&&!isAbsence){
       const rawMin=diffMin(von,normVal);
       if(rawMin>0){ const r=Math.round(rawMin/15)*15; if(r!==rawMin&&r>0) roundedNet=addMin(von,r); }
@@ -1020,7 +1017,7 @@ export function td_tchange(ds,field,val){
   const entry=getEntry(uid,window.year,window.mon);
   const day=(entry.days||{})[ds]||{};
   const zuord=day[zuordF]||'';
-  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich';
+  const isAbsence=zuord==='Urlaub'||zuord==='AU/Krank'||zuord==='Arbeitszeitausgleich'||(zuordF==='b1zuord'&&_isAbs(day));
   if(!isAbsence){
     const von=field===vonF?normVal:(day[vonF]||'');
     const bis=field===bisF?normVal:(day[bisF]||'');

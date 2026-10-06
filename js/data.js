@@ -68,6 +68,21 @@ export function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
+  // „Sonstiges" mit Arbeitszeit-Gutschrift (_absCredit, z. B. Bildungsurlaub) zählt wie eine
+  // Abwesenheit: reine Arbeitszeit, KEINE Pflichtpause. Bis v377 hat die Live-Pausenlogik dort
+  // trotzdem 30/45 Min auf die Endzeit aufgeschlagen (08:00–15:48 → 16:18) – hier idempotent
+  // zurücknehmen (bei jedem Laden; danach ist _paused=0 und es passiert nichts mehr).
+  try{
+    Object.values(d.entries).forEach(entry=>{ if(!entry||!entry.days) return;
+      Object.values(entry.days).forEach(day=>{
+        if(!day||!day._absCredit||day.b1zuord!=='Sonstiges') return;
+        const p=Number(day._paused||0), f=day._pausedF||'';
+        if(p>0 && (f==='b1bis'||f==='b2bis') && day[f]) day[f]=addMin(day[f],-p);
+        if(p>0) day._paused=0;
+        if(day._netRaw||day._netRawF){ day._netRaw=''; day._netRawF=''; }
+      });
+    });
+  }catch(e){ console.warn('Gutschrift-Pausen-Korrektur (ignoriert):', e&&e.message); }
   if(!d.teamReports) d.teamReports={};
   if(!d.vacRequests) d.vacRequests={};
   if(!d.teamCats) d.teamCats={};
@@ -92,7 +107,7 @@ export function _migrate(d){
       Object.values(entry.days).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(day._pInit) return; // von der Live-Pausenlogik verwaltet → Pause ist bereits korrekt aufgeschlagen, NICHT erneut migrieren (sonst Doppel-Aufschlag beim Reload)
-        if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)) return;
+        if(_ABS.has(day.b1zuord)||_ABS.has(day.b1bem)||(day._absCredit&&day.b1zuord==='Sonstiges')) return;
         if(day.b2von) return; // Zwei-Block: Pause liegt im Gap
         if(day._pauseMigratedV2) return; // Bereits korrekt migriert
         // Falls V1 bereits addiert hatte → zuerst zurückrollen
@@ -128,7 +143,7 @@ export function _migrate(d){
         if(!day||day._b2PauseMig) return;
         if(day._pInit) return; // von der Live-Pausenlogik verwaltet → nicht erneut migrieren
         if(!day.b1von||!day.b1bis||!day.b2von||!day.b2bis) return; // nur echte Zwei-Block-Tage
-        if(_ABS2.has(day.b1zuord)||_ABS2.has(day.b1bem)) return;
+        if(_ABS2.has(day.b1zuord)||_ABS2.has(day.b1bem)||(day._absCredit&&day.b1zuord==='Sonstiges')) return;
         const grossNet=diffMin(day.b1von,day.b1bis)+diffMin(day.b2von,day.b2bis)+Number(day.ktmin||0);
         const required=grossNet>=540?45:grossNet>=360?30:0;
         let gap=0; const g=diffMin(day.b1bis,day.b2von); if(g>0) gap=g;
