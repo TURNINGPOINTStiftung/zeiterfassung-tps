@@ -1,4 +1,4 @@
-import { diffMin, daysInMonth, dateStr, getHolidays } from './utils.js';
+import { diffMin, daysInMonth, dateStr, getHolidays, dstDayAdj } from './utils.js';
 import { getData, getEntry, entryKey } from './data.js';
 import { isFreelancer } from './roles.js';
 
@@ -16,7 +16,7 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 //   Netto≥6h  ⇔ Brutto≥6h30 (390)  → 30 Min
 //   Netto≥9h  ⇔ Brutto≥9h45 (585)  → 45 Min
 // Davon wird eine bereits genommene Lücke zwischen Block 1 und 2 abgezogen.
-export function autoPauseMin(dd,user){
+export function autoPauseMin(dd,user,ds){
   if(!dd||_isAbsDay(dd)) return 0;
   if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
   if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
@@ -33,17 +33,18 @@ export function autoPauseMin(dd,user){
   // data.js/firebase.js. (Früher fälschlich 540/360 → 8h45-Tage wurden 15 Min zu niedrig
   // gezählt.) ktmin wird – wie beim Einbacken – mitgerechnet. Neue/bearbeitete Tage haben
   // _pInit und laufen oben über den exakt getrackten Wert (dort: Kleinteilig ohne Pause).
-  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0)+dstDayAdj(dd,ds);
   const required=gross>=585?45:gross>=390?30:0;
   const gap=(dd.b1bis&&dd.b2von)?diffMin(dd.b1bis,dd.b2von):0;
   return Math.max(0,required-gap);
 }
 
-export function dayMinutes(dd,user){
+// ds (optional, „YYYY-MM-DD"): Datum des Tages → Sommer-/Winterzeit-Korrektur (utils.dstDayAdj).
+export function dayMinutes(dd,user,ds){
   if(!dd) return 0;
-  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
+  const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0)+dstDayAdj(dd,ds);
   const isAbs=_isAbsDay(dd);
-  const net=isAbs?gross:Math.max(0,gross-autoPauseMin(dd,user));
+  const net=isAbs?gross:Math.max(0,gross-autoPauseMin(dd,user,ds));
   if(net<=0) return 0;
   // Identisch zur Zeiterfassungs-Ansicht: Arbeitstage auf 15-Min-Raster.
   // Kein 10h-Cap mehr – die echte Arbeitszeit zählt voll (Tage >10h werden in der
@@ -52,7 +53,7 @@ export function dayMinutes(dd,user){
 }
 export function monthIST(entry,user){
   if(!entry||!entry.days) return 0;
-  return Object.values(entry.days).reduce((s,dd)=>s+dayMinutes(dd,user),0);
+  return Object.entries(entry.days).reduce((s,[ds,dd])=>s+dayMinutes(dd,user,ds),0);
 }
 export function dailyMinutes(user){ return Math.round((user.wh||0)/((user.dpw||5))*60); }
 export function isVollzeit(user){ return !isFreelancer(user)&&(user.wh||0)>=39; }

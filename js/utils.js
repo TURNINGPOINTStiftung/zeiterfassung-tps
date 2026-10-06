@@ -41,6 +41,25 @@ export function dateStr(y,m,d){ return `${y}-${String(m).padStart(2,'0')}-${Stri
 // Kalenderdatum „YYYY-MM-DD" in LOKALER Zeit. NICHT toISOString().slice(0,10) verwenden –
 // das liefert das UTC-Datum: zwischen 0 und 2 Uhr nachts (MESZ) wäre das der VORTAG.
 export function localISODate(dt){ const x=dt?new Date(dt):new Date(); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; }
+// ── Sommer-/Winterzeit ───────────────────────────────────────────
+// Uhrzeiten sind reine Wanduhr-Zeiten („HH:MM"). In den Umstellungsnächten (EU-Regel: letzter
+// Sonntag im März 02:00→03:00, letzter Sonntag im Oktober 03:00→02:00) weicht die tatsächlich
+// gearbeitete Zeit daher um 1 h von der Differenz ab. Ein Block, der 02:00–03:00 VOLLSTÄNDIG
+// überspannt, bekommt im Oktober +60 Min (die Stunde gibt es doppelt), im März −60 Min (sie fällt
+// aus). Blöcke, die in der Umstellungsstunde beginnen/enden, sind mehrdeutig → keine Korrektur.
+function _lastSunday(y,m){ const d=new Date(y,m,0); d.setDate(d.getDate()-d.getDay()); return dateStr(y,m,d.getDate()); }
+export function dstShiftMin(ds,von,bis){
+  if(!ds||!von||!bis) return 0;
+  const y=+String(ds).slice(0,4); if(!y) return 0;
+  const a=tMin(von), b=tMin(bis);
+  if(!(b>a) || a>120 || b<180) return 0;
+  if(ds===_lastSunday(y,10)) return 60;
+  if(ds===_lastSunday(y,3)) return -60;
+  return 0;
+}
+// Korrektur für einen ganzen Tag (beide Zeitblöcke).
+export function dstDayAdj(dd,ds){ return dd ? dstShiftMin(ds,dd.b1von,dd.b1bis)+dstShiftMin(ds,dd.b2von,dd.b2bis) : 0; }
+
 export function isWeekend(y,m,d){ const wd=new Date(y,m-1,d).getDay(); return wd===0||wd===6; }
 export function dayName(y,m,d){ return DAYS[new Date(y,m-1,d).getDay()]; }
 export function isToday(y,m,d){ const t=new Date(); return t.getFullYear()===y&&t.getMonth()+1===m&&t.getDate()===d; }

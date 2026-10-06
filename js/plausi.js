@@ -10,7 +10,7 @@
 import { getData, entryKey } from './data.js';
 import { isFreelancer } from './roles.js';
 import { autoPauseMin } from './calc.js';
-import { diffMin, tMin, daysInMonth, dateStr, localISODate } from './utils.js';
+import { diffMin, tMin, daysInMonth, dateStr, localISODate, dstDayAdj } from './utils.js';
 
 const ABS = new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich','Veranstaltung AU']);
 const REST_MIN = 11*60;
@@ -53,8 +53,8 @@ export function checkMonth(uid, user, y, m){
     }
     if(free||_isAbs(dd)) continue;
     // 2) > 10 h Arbeitszeit (netto nach Pflichtpause, wie in der Tabelle)
-    const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0);
-    const net=Math.max(0,gross-autoPauseMin(dd,user));
+    const gross=diffMin(dd.b1von||'',dd.b1bis||'')+diffMin(dd.b2von||'',dd.b2bis||'')+Number(dd.ktmin||0)+dstDayAdj(dd,ds);
+    const net=Math.max(0,gross-autoPauseMin(dd,user,ds));
     if(Math.round(net/15)*15>600) add(ds,'over10h',`Mehr als 10 h Arbeitszeit (${_fmtH(net)})`);
     // 3) Ruhezeit zum Vortag
     if(!bl.length) continue;

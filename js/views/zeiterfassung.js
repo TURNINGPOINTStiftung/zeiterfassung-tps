@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey, loadAudit } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
-import { diffMin, addMin, tMin, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
+import { diffMin, addMin, tMin, dstDayAdj, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, vacStatus, isAbsDay as _isAbs, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
 import { fmtTs, localISODate } from '../utils.js';
@@ -168,11 +168,12 @@ export function renderZeiterfassung(){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const dayMinGross=b1min+b2min+ktm;
+    const dstAdj=dstDayAdj(dd,ds);   // Sommer-/Winterzeit-Nacht: ±1 h (utils.dstShiftMin)
+    const dayMinGross=b1min+b2min+ktm+dstAdj;
     const hasB2Work=!!(dd.b2von&&dd.b2bis);
     const isAbsDay=_isAbs(dd);   // inkl. „Sonstiges" mit Arbeitszeit-Gutschrift (Bildungsurlaub)
     // Pflicht-Pause minus bereits genommene Lücke (Freiberufler: keine Pause)
-    const pauseMinAuto=(isAbsDay||isFree)?0:autoPauseMin(dd,user);
+    const pauseMinAuto=(isAbsDay||isFree)?0:autoPauseMin(dd,user,ds);
     const dayMin=Math.max(0,dayMinGross-pauseMinAuto);
     monthPause+=pauseMinAuto;
     const roundedDayMin=dayMin>0?(isAbsDay?dayMin:Math.round(dayMin/15)*15):0;
@@ -216,7 +217,7 @@ export function renderZeiterfassung(){
       <td class="kt-col"><input id="kt_${ds}" aria-label="${dateFmt} Kleinteilig (Minuten)" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
-      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}${_pwHtml}</td>
+      <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${dstAdj?`<span class="zt-warn" style="color:var(--muted)" title="Zeitumstellung in dieser Nacht – automatisch berücksichtigt">${dstAdj>0?'+1 h':'−1 h'} Zeitumstellung</span>`:''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}${_pwHtml}</td>
     `;
     tbody.appendChild(tr);
   }

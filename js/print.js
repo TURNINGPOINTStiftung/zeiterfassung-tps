@@ -1,7 +1,7 @@
 import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate } from './roles.js';
-import { diffMin, addMin, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
+import { diffMin, addMin, dstDayAdj, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
 import { vacStatus, monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed, effUserAt, annualVacDays, employedRange } from './calc.js';
 
 export function pdfTitle(y,m,who){ return y+' '+MONTHS[m-1]+' - '+who+' Zeiterfassung'; }
@@ -167,11 +167,11 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     const b1min=diffMin(dd.b1von||'',dd.b1bis||'');
     const b2min=diffMin(dd.b2von||'',dd.b2bis||'');
     const ktm=Number(dd.ktmin||0);
-    const grossMin=b1min+b2min+ktm;
-    const pauseMin=autoPauseMin(dd,u);
+    const grossMin=b1min+b2min+ktm+dstDayAdj(dd,ds);   // inkl. Sommer-/Winterzeit-Korrektur
+    const pauseMin=autoPauseMin(dd,u,ds);
     // Netto über die ZENTRALE Funktion (inkl. 15-Min-Rundung wie Bildschirm/Übersicht) –
     // NICHT neu ausrechnen, sonst driftet die PDF-Summe bei krummen Minuten vom Bildschirm ab.
-    const dayMin=dayMinutes(dd,u);
+    const dayMin=dayMinutes(dd,u,ds);
     const b1bisDisp=dd.b1bis||'';
     monthTotal+=dayMin;
     const dateFmt=String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
