@@ -3951,8 +3951,8 @@ function _verteilerModal(v){
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
      <div id="crm-vt-list" class="vt-list"></div>
-     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren · Prüfung läuft automatisch</span>
-     <button type="button" class="btn-sm-crm" id="crm-vt-checkbtn" onclick="crmVerteilerCheck()">🔄 Erneut prüfen</button></div></div>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
+     <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -3998,8 +3998,7 @@ async function _vtAutoCheck(){
   if(bad) toast(`⚠ ${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain – rot markiert`,'err');
 }
 function _vtBtnBusy(on){
-  const btn=document.getElementById('crm-vt-checkbtn'); if(!btn) return;
-  btn.disabled=on; btn.textContent=on?'⏳ Prüfe…':'🔄 Erneut prüfen';
+  const el=document.getElementById('crm-vt-checkbtn'); if(el) el.textContent=on?'⏳ prüfe…':'';
 }
 // Tippfehler bei gängigen Mail-Anbietern erkennen (gmial.com → gmail.com). null = nichts Auffälliges.
 const _VT_DOMAINS=['gmail.com','googlemail.com','gmx.de','gmx.net','gmx.at','web.de','t-online.de','outlook.com','outlook.de',
@@ -4054,21 +4053,6 @@ async function _vtCheckDomain(dom){
     const a=await _vtDnsQ(dom,'A');   // ohne MX nimmt der Server unter der A-Adresse Mails an
     return (a.Answer||[]).some(x=>x.type===1) ? 'ok' : 'bad';
   }catch(e){ return '?'; }
-}
-async function crmVerteilerCheck(){
-  const list=window._vtEmails||[]; if(!list.length){ toast('Keine Adressen zum Prüfen.','err'); return; }
-  _vtBtnBusy(true);
-  const doms=[...new Set(list.map(e=>e.split('@')[1].toLowerCase()))];
-  const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
-  doms.forEach((d,k)=>{ window._vtDom[d]=res[k]; });
-  _vtBtnBusy(false);
-  if(window._vtEditIdx===null) _vtPaintList();
-  const bad=list.filter(e=>{ const s=window._vtDom[e.split('@')[1].toLowerCase()]; return s==='nx'||s==='bad'; }).length;
-  const typo=list.filter(e=>_vtTypo(e.split('@')[1].toLowerCase())).length;
-  const unk=res.filter(s=>s==='?').length;
-  if(unk===doms.length) toast('Prüfung nicht möglich (keine Verbindung?)','err');
-  else if(!bad && !typo) toast('Alle Adressen sehen gut aus ✓','ok');
-  else toast(`${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain${typo?`, ${typo} möglicher Tippfehler`:''} – siehe Markierungen`,'err');
 }
 // Fügt Adressen zur Modal-Liste hinzu; gibt {added, dup} zurück. Duplikate (Groß/Klein egal) werden ignoriert.
 function _vtAdd(emails){
@@ -5322,7 +5306,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerCheck,crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
