@@ -325,7 +325,7 @@ function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
       {lbl:'IST-Stunden',big:hFmt(istMin),sub:'tatsächlich geleistet'},
       {lbl:_open?'Über-/Unterstunden (Stand heute)':'Mehr / Minderstunden',big:sFmt(diff),sub:'Übertrag Vormonat: '+sFmt(carryH*60),cls:diff>=0?'pos':'neg'},
       {lbl:'Urlaub genutzt',big:vd+' T',sub:`diesen Monat`},
-      {lbl:'Resturlaub',big:vacLeft+' T',sub:(_vs.carryLeft>0?`+ ${_vs.carryLeft} T Vorjahr (verfällt 31.01.) · `:'')+(vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${_annualVac} offen`)},
+      {lbl:'Resturlaub',big:vacLeft+' T',sub:(_vs.carryLeft>0?`+ ${_vs.carryLeft} T Vorjahr · `:'')+(vacFuture>0?(vacUnbooked>0?`${vacFuture} geplant + ${vacUnbooked} offen`:`${vacFuture} geplant`):`${vacUnbooked} von ${_annualVac} offen`)},
       {lbl:'AU / Krank',big:sk+' T',sub:hFmt(sk*dailyMinutes(eu))+' h anteilig'},
     ];
   }
