@@ -630,8 +630,10 @@ function injectStyles(){
   .vt-list:empty{display:none}
   .vt-row{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;font-size:13px;border-bottom:1px solid var(--border)}
   .vt-row:last-child{border-bottom:none}
-  .vt-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vt-row .vt-addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .vt-row .crm-x{flex-shrink:0}
+  .vt-row .vt-main{flex:1;min-width:0;display:flex;flex-direction:column;text-align:left}
+  .vt-row .vt-who{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .vt-row .vt-addr{cursor:text}
   .vt-row .vt-addr:hover{text-decoration:underline dotted}
   .vt-row-bad{background:#fdecea}
@@ -3943,6 +3945,7 @@ function _verteilerModal(v){
   // Arbeitskopie der Adressen fürs Modal – doppelte (auch Groß/Klein) sind schon hier raus.
   window._vtEmails=_normEmails(v.emails||[]);
   window._vtEditIdx=null;
+  window._vtWho=_vtBuildWho();
   if(!window._vtDom) window._vtDom={};   // Domain-Prüfergebnis: 'ok' | 'bad' | 'nx' | '?'
   Object.keys(window._vtDom).forEach(d=>{ if(window._vtDom[d]==='?') delete window._vtDom[d]; });   // Fehlversuche beim Öffnen erneut probieren
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
@@ -3951,7 +3954,7 @@ function _verteilerModal(v){
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
      <div id="crm-vt-list" class="vt-list"></div>
-     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren · Prüfung läuft automatisch</span>
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
@@ -3972,7 +3975,9 @@ function _vtPaintList(){
       : st==='nx' ? `<span class="vt-bad" title="Domain „${esc(d)}“ existiert nicht">⚠ Domain gibt es nicht</span>`
       : st==='bad' ? `<span class="vt-bad" title="Domain „${esc(d)}“ hat keinen Mailserver">⚠ kein Mailserver</span>` : '';
     const fix = sug ? `<button type="button" class="vt-fix" title="Korrigieren auf @${esc(sug)}" onclick="crmVerteilerFix(${i},${jsq(sug)})">@${esc(sug)}?</button>` : '';
-    return `<div class="vt-row${(st==='nx'||st==='bad')?' vt-row-bad':''}"><span class="vt-addr" title="Klicken zum Korrigieren" onclick="crmVerteilerEdit(${i})">${esc(e)}</span>${fix}${badge}<button type="button" class="crm-x" title="Adresse entfernen" onclick="crmVerteilerRemove(${i})">✕</button></div>`;
+    const who=(window._vtWho&&window._vtWho.get(e.toLowerCase()))||[];
+    const whoHtml=who.length ? `<span class="vt-who" title="${esc(who.map(_vtWhoTxt).join('\n'))}">${_vtWhoHtml(who[0])}${who.length>1?` <b>+${who.length-1}</b>`:''}</span>` : '';
+    return `<div class="vt-row${(st==='nx'||st==='bad')?' vt-row-bad':''}"><div class="vt-main"><span class="vt-addr" title="Klicken zum Korrigieren" onclick="crmVerteilerEdit(${i})">${esc(e)}</span>${whoHtml}</div>${fix}${badge}<button type="button" class="crm-x" title="Adresse entfernen" onclick="crmVerteilerRemove(${i})">✕</button></div>`;
   }).join('');
   const c=document.getElementById('crm-vt-count'); if(c) c.textContent=`(${list.length})`;
   const ed=document.getElementById('crm-vt-edit'); if(ed){ ed.focus(); ed.select(); }
@@ -3999,6 +4004,25 @@ async function _vtAutoCheck(){
 }
 function _vtBtnBusy(on){
   const el=document.getElementById('crm-vt-checkbtn'); if(el) el.textContent=on?'⏳ prüfe…':'';
+}
+// Abgleich mit dem System: wem gehört eine Adresse? Map lower-mail → [{name, wo, kz}].
+// Quellen: Kontakte an Einträgen (Vereine …), Stamm-E-Mail eines Eintrags, Nutzer der Zeiterfassung.
+function _vtBuildWho(){
+  const m=new Map();
+  const add=(mail,info)=>{ _normEmails([mail]).forEach(x=>{ const k=x.toLowerCase(); if(!m.has(k)) m.set(k,[]); m.get(k).push(info); }); };
+  try{
+    getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{
+      const wo=(e.stamm&&e.stamm.name)||'(ohne Name)', kz=_kuerzelOf(e,tr.key);
+      (e.kontakte||[]).forEach(k=>kEmails(k).forEach(mail=>add(mail,{name:k.name||'', fn:k.funktion||'', wo, kz})));
+      if(e.stamm&&e.stamm.email) add(e.stamm.email,{name:'', fn:'', wo, kz});
+    }));
+  }catch(err){ console.warn('Verteiler-Abgleich (CRM):',err); }
+  try{ zeUsers().forEach(u=>{ if(u.id!=='admin' && u.email) add(u.email,{name:u.name||'', fn:'', wo:'Mitarbeiter/in', kz:''}); }); }catch(err){}
+  return m;
+}
+function _vtWhoTxt(w){ return [w.name, w.fn&&`(${w.fn})`, w.name?'·':'', w.wo+(w.kz?` (${w.kz})`:'')].filter(Boolean).join(' '); }
+function _vtWhoHtml(w){
+  return `${w.name?`<b>${esc(w.name)}</b>${w.fn?` <span>(${esc(w.fn)})</span>`:''} · `:''}${esc(w.wo)}${w.kz?` <span class="crm-kuerzel">(${esc(w.kz)})</span>`:''}`;
 }
 // Tippfehler bei gängigen Mail-Anbietern erkennen (gmial.com → gmail.com). null = nichts Auffälliges.
 const _VT_DOMAINS=['gmail.com','googlemail.com','gmx.de','gmx.net','gmx.at','web.de','t-online.de','outlook.com','outlook.de',
@@ -4053,6 +4077,21 @@ async function _vtCheckDomain(dom){
     const a=await _vtDnsQ(dom,'A');   // ohne MX nimmt der Server unter der A-Adresse Mails an
     return (a.Answer||[]).some(x=>x.type===1) ? 'ok' : 'bad';
   }catch(e){ return '?'; }
+}
+async function crmVerteilerCheck(){
+  const list=window._vtEmails||[]; if(!list.length){ toast('Keine Adressen zum Prüfen.','err'); return; }
+  _vtBtnBusy(true);
+  const doms=[...new Set(list.map(e=>e.split('@')[1].toLowerCase()))];
+  const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
+  doms.forEach((d,k)=>{ window._vtDom[d]=res[k]; });
+  _vtBtnBusy(false);
+  if(window._vtEditIdx===null) _vtPaintList();
+  const bad=list.filter(e=>{ const s=window._vtDom[e.split('@')[1].toLowerCase()]; return s==='nx'||s==='bad'; }).length;
+  const typo=list.filter(e=>_vtTypo(e.split('@')[1].toLowerCase())).length;
+  const unk=res.filter(s=>s==='?').length;
+  if(unk===doms.length) toast('Prüfung nicht möglich (keine Verbindung?)','err');
+  else if(!bad && !typo) toast('Alle Adressen sehen gut aus ✓','ok');
+  else toast(`${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain${typo?`, ${typo} möglicher Tippfehler`:''} – siehe Markierungen`,'err');
 }
 // Fügt Adressen zur Modal-Liste hinzu; gibt {added, dup} zurück. Duplikate (Groß/Klein egal) werden ignoriert.
 function _vtAdd(emails){
@@ -5306,7 +5345,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerCheck,crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
