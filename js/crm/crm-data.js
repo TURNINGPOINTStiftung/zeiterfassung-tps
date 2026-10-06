@@ -356,7 +356,7 @@ export function saveVerteiler(v){
   // Keine Adresse doppelt (Groß/Klein egal) – greift für JEDEN Speicherweg (Modal, Kontakt-Häkchen, Import).
   if(Array.isArray(v.emails)){
     const seen = new Set();
-    v.emails = v.emails.map(e=>String(e||'').trim()).filter(e=>{ const k=e.toLowerCase(); if(!e || seen.has(k)) return false; seen.add(k); return true; });
+    v.emails = v.emails.map(e=>String(e||'').trim().replace(/^mailto:/i,'').replace(/^[<>"'()\[\]]+|[<>"'()\[\].:]+$/g,'').trim()).filter(e=>{ const k=e.toLowerCase(); if(!e || seen.has(k)) return false; seen.add(k); return true; });
   }
   v.updatedAt = Date.now();
   const d = getCrm();

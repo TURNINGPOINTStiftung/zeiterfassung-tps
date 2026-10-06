@@ -632,6 +632,14 @@ function injectStyles(){
   .vt-row:last-child{border-bottom:none}
   .vt-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .vt-row .crm-x{flex-shrink:0}
+  .vt-row .vt-addr{cursor:text}
+  .vt-row .vt-addr:hover{text-decoration:underline dotted}
+  .vt-row-bad{background:#fdecea}
+  .vt-edit{flex:1;min-width:0;font-size:13px;padding:3px 6px}
+  .vt-ok{color:#2e7d32;font-weight:700;flex-shrink:0}
+  .vt-bad{color:#c0392b;font-size:11px;font-weight:600;flex-shrink:0;white-space:nowrap}
+  .vt-fix{flex-shrink:0;border:1px solid #e0a800;background:#fff8e1;color:#7a5a00;border-radius:10px;font-size:11px;padding:1px 7px;cursor:pointer;white-space:nowrap}
+  .vt-tools{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
   .crm-hist-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
   .crm-hist-sum::-webkit-details-marker{display:none}
   .crm-hist-sum::before{content:'▸';color:var(--muted);font-size:13px;transition:transform .15s}
@@ -3859,11 +3867,15 @@ function _normEmails(parts){
   const seen=new Set(); const out=[];
   (Array.isArray(parts)?parts:[parts]).forEach(s=>{
     String(s||'').split(/[,;\s]+/).forEach(tok=>{
-      const e=tok.trim();
+      // Outlook-Kopien („Max Muster <max@x.de>“) → Klammern/Anführungszeichen/mailto: weg
+      const e=_cleanEmailTok(tok);
       if(e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ const k=e.toLowerCase(); if(!seen.has(k)){ seen.add(k); out.push(e); } }
     });
   });
   return out;
+}
+function _cleanEmailTok(tok){
+  return String(tok||'').trim().replace(/^mailto:/i,'').replace(/^[<>"'()\[\]]+|[<>"'()\[\].:]+$/g,'').trim();
 }
 // Outlook/Standard-Mailprogramm öffnen – feld='bcc' (verdeckt) oder 'to' (sichtbar)
 function _mailtoHref(emails, feld){
@@ -3930,12 +3942,16 @@ function _verteilerModal(v){
     .concat(usersWithMail.map(u=>`<option value="${esc(u.email)}">${esc(u.name)} (${esc(u.email)})</option>`)).join('');
   // Arbeitskopie der Adressen fürs Modal – doppelte (auch Groß/Klein) sind schon hier raus.
   window._vtEmails=_normEmails(v.emails||[]);
+  window._vtEditIdx=null;
+  if(!window._vtDom) window._vtDom={};   // Domain-Prüfergebnis: 'ok' | 'bad' | 'nx' | '?'
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
    <div class="crm-modal-field"><label>E-Mail-Adressen <span id="crm-vt-count" style="font-size:11px;color:var(--muted)"></span></label>
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
-     <div id="crm-vt-list" class="vt-list"></div></div>
+     <div id="crm-vt-list" class="vt-list"></div>
+     <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
+     <button type="button" class="btn-sm-crm" id="crm-vt-checkbtn" onclick="crmVerteilerCheck()">🔍 Adressen prüfen</button></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -3944,9 +3960,90 @@ function _verteilerModal(v){
 }
 function _vtPaintList(){
   const box=document.getElementById('crm-vt-list'); if(!box) return;
-  const list=window._vtEmails||[];
-  box.innerHTML=list.map((e,i)=>`<div class="vt-row"><span title="${esc(e)}">${esc(e)}</span><button type="button" class="crm-x" title="Adresse entfernen" onclick="crmVerteilerRemove(${i})">✕</button></div>`).join('');
+  const list=window._vtEmails||[]; const dom=window._vtDom||{};
+  box.innerHTML=list.map((e,i)=>{
+    if(window._vtEditIdx===i) return `<div class="vt-row"><input id="crm-vt-edit" class="vt-edit" value="${esc(e)}"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerEditSave(${i});}else if(event.key==='Escape'){event.preventDefault();crmVerteilerEditCancel();}"
+      onblur="crmVerteilerEditSave(${i})"><button type="button" class="crm-x" title="Adresse entfernen" onmousedown="event.preventDefault()" onclick="crmVerteilerRemove(${i})">✕</button></div>`;
+    const d=e.split('@')[1].toLowerCase(), st=dom[d];
+    const sug=_vtTypo(d);
+    const badge = st==='ok' ? `<span class="vt-ok" title="Domain empfängt E-Mails">✓</span>`
+      : st==='nx' ? `<span class="vt-bad" title="Domain „${esc(d)}“ existiert nicht">⚠ Domain gibt es nicht</span>`
+      : st==='bad' ? `<span class="vt-bad" title="Domain „${esc(d)}“ hat keinen Mailserver">⚠ kein Mailserver</span>` : '';
+    const fix = sug ? `<button type="button" class="vt-fix" title="Korrigieren auf @${esc(sug)}" onclick="crmVerteilerFix(${i},${jsq(sug)})">@${esc(sug)}?</button>` : '';
+    return `<div class="vt-row${(st==='nx'||st==='bad')?' vt-row-bad':''}"><span class="vt-addr" title="Klicken zum Korrigieren" onclick="crmVerteilerEdit(${i})">${esc(e)}</span>${fix}${badge}<button type="button" class="crm-x" title="Adresse entfernen" onclick="crmVerteilerRemove(${i})">✕</button></div>`;
+  }).join('');
   const c=document.getElementById('crm-vt-count'); if(c) c.textContent=`(${list.length})`;
+  const ed=document.getElementById('crm-vt-edit'); if(ed){ ed.focus(); ed.select(); }
+}
+// Tippfehler bei gängigen Mail-Anbietern erkennen (gmial.com → gmail.com). null = nichts Auffälliges.
+const _VT_DOMAINS=['gmail.com','googlemail.com','gmx.de','gmx.net','gmx.at','web.de','t-online.de','outlook.com','outlook.de',
+  'hotmail.com','hotmail.de','live.de','live.com','yahoo.com','yahoo.de','icloud.com','me.com','freenet.de','arcor.de',
+  'posteo.de','mail.de','aol.com','aol.de','online.de','kabelmail.de','turningpoint-stiftung.com'];
+function _lev(a,b){
+  const m=a.length,n=b.length; let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i]; for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; }
+  return prev[n];
+}
+function _vtTypo(d){
+  if(!d || _VT_DOMAINS.includes(d)) return null;
+  let best=null, bd=3;
+  _VT_DOMAINS.forEach(k=>{ const x=_lev(d,k); if(x<bd){ bd=x; best=k; } });
+  return (best && bd<=(d.length>8?2:1)) ? best : null;
+}
+function crmVerteilerFix(i,dom){
+  const list=window._vtEmails||[]; const e=list[i]; if(!e) return;
+  const neu=e.split('@')[0]+'@'+dom;
+  if(list.some((x,j)=>j!==i && x.toLowerCase()===neu.toLowerCase())){ list.splice(i,1); toast('Korrigierte Adresse war schon drin – Doppelte entfernt','ok'); }
+  else list[i]=neu;
+  _vtPaintList();
+}
+function crmVerteilerEdit(i){ window._vtEditIdx=i; _vtPaintList(); }
+function crmVerteilerEditCancel(){ window._vtEditIdx=null; _vtPaintList(); }
+function crmVerteilerEditSave(i){
+  if(window._vtEditIdx!==i) return;   // schon gespeichert (Enter + anschließendes blur)
+  const inp=document.getElementById('crm-vt-edit'); const list=window._vtEmails||[];
+  const raw=inp?inp.value:'';
+  if(!raw.trim()){ window._vtEditIdx=null; list.splice(i,1); _vtPaintList(); return; }
+  const norm=_normEmails([raw]);
+  if(!norm.length){ toast('Keine gültige E-Mail-Adresse.','err'); if(inp) inp.focus(); return; }
+  const neu=norm[0];
+  window._vtEditIdx=null;
+  if(list.some((x,j)=>j!==i && x.toLowerCase()===neu.toLowerCase())){ list.splice(i,1); toast('Adresse ist bereits im Verteiler – Doppelte entfernt','ok'); }
+  else list[i]=neu;
+  _vtPaintList();
+}
+// Echtheits-Prüfung: fragt per DNS (Cloudflare, nur der Domain-Teil wird gesendet), ob die Domain
+// existiert und Mails annimmt (MX-Eintrag). Ob das Postfach selbst existiert, kann niemand
+// zuverlässig von außen prüfen – das zeigt erst eine Unzustellbar-Meldung.
+async function _vtDnsQ(dom,type){
+  const r=await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(dom)}&type=${type}`,{headers:{accept:'application/dns-json'}});
+  if(!r.ok) throw new Error('DNS '+r.status);
+  return r.json();
+}
+async function _vtCheckDomain(dom){
+  try{
+    const mx=await _vtDnsQ(dom,'MX');
+    if(mx.Status===3) return 'nx';
+    if((mx.Answer||[]).some(a=>a.type===15)) return 'ok';
+    const a=await _vtDnsQ(dom,'A');   // ohne MX nimmt der Server unter der A-Adresse Mails an
+    return (a.Answer||[]).some(x=>x.type===1) ? 'ok' : 'bad';
+  }catch(e){ return '?'; }
+}
+async function crmVerteilerCheck(){
+  const list=window._vtEmails||[]; if(!list.length){ toast('Keine Adressen zum Prüfen.','err'); return; }
+  const btn=document.getElementById('crm-vt-checkbtn'); if(btn){ btn.disabled=true; btn.textContent='⏳ Prüfe…'; }
+  const doms=[...new Set(list.map(e=>e.split('@')[1].toLowerCase()))];
+  const res=await Promise.all(doms.map(d=>_vtCheckDomain(d)));
+  doms.forEach((d,k)=>{ window._vtDom[d]=res[k]; });
+  if(btn){ btn.disabled=false; btn.textContent='🔍 Adressen prüfen'; }
+  _vtPaintList();
+  const bad=list.filter(e=>{ const s=window._vtDom[e.split('@')[1].toLowerCase()]; return s==='nx'||s==='bad'; }).length;
+  const typo=list.filter(e=>_vtTypo(e.split('@')[1].toLowerCase())).length;
+  const unk=res.filter(s=>s==='?').length;
+  if(unk===doms.length) toast('Prüfung nicht möglich (keine Verbindung?)','err');
+  else if(!bad && !typo) toast('Alle Adressen sehen gut aus ✓','ok');
+  else toast(`${bad} Adresse${bad===1?'':'n'} mit ungültiger Domain${typo?`, ${typo} möglicher Tippfehler`:''} – siehe Markierungen`,'err');
 }
 // Fügt Adressen zur Modal-Liste hinzu; gibt {added, dup} zurück. Duplikate (Groß/Klein egal) werden ignoriert.
 function _vtAdd(emails){
@@ -3967,7 +4064,7 @@ function crmVerteilerAddInput(){
 }
 function crmVerteilerRemove(i){
   const list=window._vtEmails||[]; if(i<0||i>=list.length) return;
-  list.splice(i,1); _vtPaintList();
+  window._vtEditIdx=null; list.splice(i,1); _vtPaintList();
 }
 function crmVerteilerAddUser(){
   const sel=document.getElementById('crm-vt-user'); const mail=sel?sel.value:''; if(sel) sel.value='';
@@ -5200,7 +5297,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
+  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerCheck,crmVerteilerMail, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
   crmOpenVeranstaltung, crmBackToVeranstaltungen, crmNewVeranstaltungForTeam,
   crmNewVeranstaltung, crmEditVeranstaltung, crmSaveVeranstaltung, crmDeleteVeranstaltungC,
