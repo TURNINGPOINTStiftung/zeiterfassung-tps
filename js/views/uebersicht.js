@@ -190,7 +190,7 @@ export function renderOverview(){
       <h3>${esc(u.name)} ${roleChip}</h3>
       <div class="meta">${esc(u.city||'–')} · ${eu.wh}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
-        <span>🏖 Resturlaub: <strong>${vacLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, + ${_vs.carryLeft} T Vorjahr`:''})</span></span>
+        <span>🏖 Resturlaub: <strong>${vacLeft+_vs.carryLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, davon ${_vs.carryLeft} T aus ${oy-1}`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>
       </div>
       ${pending>0?`<div class="meta" style="margin-top:4px"><span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span></div>`:''}
