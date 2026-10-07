@@ -259,6 +259,7 @@ function _applyFirebaseSnap(val){
   try{ window.updateZeitstempelBtn?.(); }catch(e){}
   try{ window._refreshStempelView?.(); }catch(e){}
   try{ window.updateAbBadge?.(); }catch(e){}
+  try{ window.renderZeNotices?.(); }catch(e){}   // Mitteilungen (z. B. GF-Rückgabe) live auffrischen
   try{
     const active=document.querySelector('.view.active');
     const vid=active?active.id:'';

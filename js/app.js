@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v386':'';
+  if(_hv) _hv.textContent=_showVer?'v387':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -134,6 +134,8 @@ export function initApp(){
   const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
+  // Mitteilungsleiste (z. B. „GF hat deine Zeiterfassung zurückgegeben") – in allen Modulen sichtbar
+  try{ window.renderZeNotices?.(); }catch(e){ console.error('Mitteilungen:',e); }
   // Administrator: auf offene „Passwort vergessen"-Anfragen hinweisen (Verwaltung → Mitarbeiter).
   if(isAdmin){ try{ const _n=Object.keys(getData().pwResetRequests||{}).length; if(_n) setTimeout(()=>window.toast?.('🔑 '+_n+' offene Passwort-Anfrage'+(_n===1?'':'n')+' – siehe Verwaltung → Mitarbeiter.',''),1500); }catch(e){} }
   // Administrator: Freigabelisten (admins/managers/grants) einmal pro Sitzung neu ableiten, damit

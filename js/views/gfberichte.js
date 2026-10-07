@@ -1,6 +1,6 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, APP_URL } from '../config.js';
-import { getData, mutate } from '../data.js';
-import { esc, toast } from '../utils.js';
+import { getData, mutate, entryKey } from '../data.js';
+import { esc, toast, openModal, closeModal } from '../utils.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, getTeamForDate, monthStartDate } from '../roles.js';
 import { employedRange } from '../calc.js';
 import { _openPerEmpPrint } from '../print.js';
@@ -174,6 +174,8 @@ export function renderGFBerichte(){
     return (a.leitungName||'').localeCompare(b.leitungName||'','de');
   });
   const newCount=list.filter(function(r){ return !r.seenAt; }).length;
+  const canReturn=!!(cu&&(cu.role==='geschaeftsfuehrer'||cu.role==='admin'));
+  _ensureNoticeCss();
   html+='<div class="gf-team-group">';
   html+='<div class="gf-team-header"><span class="gf-team-name">📅 '+MONTHS[curM-1]+' '+curY+'</span>'
     +(newCount?'<span class="gf-new-badge">'+newCount+' NEU</span>':'')
@@ -199,10 +201,14 @@ export function renderGFBerichte(){
       +'<div class="gf-report-title">🏢 '+esc(team)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
       +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName)+'</strong> &middot; '+dtStr+'</div>'
       +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
-        +(_emps.length?': '+_emps.map(function(u){ return esc(u.name); }).join(', '):'')
+        +(_emps.length?': '+_emps.map(function(u){
+            return canReturn
+              ? '<span class="gf-emp">'+esc(u.name)+'<button class="gf-ret-btn" title="Zeiterfassung von '+esc(u.name)+' zur Korrektur zurückgeben" onclick="gfReturnEmp(\''+esc(r.id)+'\',\''+esc(u.id)+'\')">↩</button></span>'
+              : esc(u.name); }).join(', '):'')
         +(r.countersignedAt?' &middot; <span style="color:var(--ok)">✍ Gegengezeichnet '+new Date(r.countersignedAt).toLocaleDateString('de-DE')+'</span>':'')
         +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
       +'</div>'
+      +_returnedHtml(r)
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
       +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
@@ -338,6 +344,144 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
   });
   window.renderOverview?.();
   _openPerEmpPrint(emps,y,m);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  EINZELNE ZE AUS EINEM BERICHT ZURÜCKGEBEN (GF → Mitarbeiter)
+//  Die GF gibt eine Person zur Korrektur zurück: Monat → „abgelehnt" mit Grund,
+//  Person raus aus dem Bericht. Die Info liegt AM MONATSEINTRAG (entries/<k>/gfReturn),
+//  weil normale Nutzer laut DB-Regeln nur unter entries/teamReports/… schreiben dürfen –
+//  ein eigener „notices"-Knoten würde für Nicht-Admins abgelehnt.
+//  gfReturn = { uid, y, m, reason, ts, byId, byName, ack:{<userId>:ts} }
+//  Die Mitteilungsleiste (renderZeNotices) zeigt sie dem Mitarbeiter und jeder Leitung,
+//  die ihn sieht (canSeeEmployee – inkl. Vertretung), bis „Gelesen" geklickt wird.
+// ══════════════════════════════════════════════════════════════════
+function _returnedHtml(r){
+  const list=(Array.isArray(r.returned)?r.returned:[]).filter(function(x){ return x&&!(r.employeeIds||[]).includes(x.uid); });
+  if(!list.length) return '';
+  return '<div class="gf-report-meta" style="color:var(--danger)">'+list.map(function(x){
+    return '↩ zurückgegeben: <strong>'+esc(x.name||x.uid)+'</strong>'+(x.reason?' („'+esc(x.reason)+'“)':'')+' · '+new Date(x.ts).toLocaleDateString('de-DE');
+  }).join('<br>')+'</div>';
+}
+
+export function gfReturnEmp(rid,uid){
+  const d=getData(); const r=d.teamReports&&d.teamReports[rid];
+  const u=(d.users||[]).find(function(x){ return x.id===uid; });
+  if(!r||!u){ toast('Bericht oder Mitarbeiter nicht gefunden.','err'); return; }
+  openModal('<h3>↩ Zeiterfassung zurückgeben</h3>'
+    +'<p style="font-size:13px;margin:0 0 10px"><strong>'+esc(u.name)+'</strong> · '+MONTHS[r.month-1]+' '+r.year+'</p>'
+    +'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Der Monat geht als <b>„abgelehnt"</b> zurück an '+esc(u.name)+' und wird aus diesem Bericht genommen. '
+    +esc(u.name)+' und die zuständige Leitung bekommen eine Mitteilung. Nach der Korrektur: erneut einreichen → Leitung genehmigt → nachreichen.</p>'
+    +'<label style="font-size:13px;font-weight:600">Was ist zu korrigieren? *</label>'
+    +'<textarea id="gf-ret-reason" rows="3" style="width:100%;margin-top:4px" placeholder="z. B. 14.03. fehlt die Pause, Urlaub am 21.03. nicht eingetragen"></textarea>'
+    +'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>'
+    +'<button class="btn btn-primary" onclick="gfReturnConfirm(\''+esc(rid)+'\',\''+esc(uid)+'\')">↩ Zurückgeben</button></div>');
+  setTimeout(function(){ const t=document.getElementById('gf-ret-reason'); if(t) t.focus(); },50);
+}
+
+export function gfReturnConfirm(rid,uid){
+  const cu=window.cu; const d=getData();
+  const r=d.teamReports&&d.teamReports[rid];
+  const u=(d.users||[]).find(function(x){ return x.id===uid; });
+  if(!r||!u||!cu) return;
+  const reason=((document.getElementById('gf-ret-reason')||{}).value||'').trim();
+  if(!reason){ toast('Bitte kurz angeben, was zu korrigieren ist.','err'); return; }
+  const y=r.year, m=r.month, now=new Date().toISOString();
+  mutate(function(dd){
+    const k=entryKey(uid,y,m);
+    if(!dd.entries) dd.entries={};
+    if(!dd.entries[k]) dd.entries[k]={status:'draft',carryover:0,managerNote:'',submittedAt:null,reviewedAt:null,reviewedBy:null,days:{}};
+    const e=dd.entries[k];
+    e.status='rejected'; e.managerNote='Von der Geschäftsführung zurückgegeben: '+reason;
+    e.reviewedAt=now; e.reviewedBy=cu.id;
+    e.gfReturn={uid:uid, y:y, m:m, reason:reason, ts:now, byId:cu.id, byName:cu.name, ack:{}};
+    if(!Array.isArray(e.statusLog)) e.statusLog=[];
+    e.statusLog.push({ts:now, status:'rejected', by:cu.id, byName:cu.name, note:'GF zurückgegeben: '+reason});
+    // Person aus dem Bericht nehmen + Rückgabe am Bericht vermerken (bis nachgereicht)
+    const rr=dd.teamReports&&dd.teamReports[rid];
+    if(rr){
+      rr.employeeIds=(rr.employeeIds||[]).filter(function(id){ return id!==uid; });
+      if(!Array.isArray(rr.returned)) rr.returned=[];
+      rr.returned=rr.returned.filter(function(x){ return x&&x.uid!==uid; });
+      rr.returned.push({uid:uid, name:u.name, reason:reason, ts:now, byName:cu.name});
+    }
+  });
+  closeModal();
+  toast('Zeiterfassung von '+u.name+' zurückgegeben – Mitarbeiter und Leitung werden benachrichtigt.','ok');
+  renderGFBerichte();
+  renderZeNotices();
+}
+
+// ── Mitteilungsleiste (oben, in allen Modulen) ─────────────────────
+function _myNotices(){
+  const cu=window.cu; if(!cu) return [];
+  const d=getData(); const out=[];
+  Object.keys(d.entries||{}).forEach(function(k){
+    const e=d.entries[k]; const g=e&&e.gfReturn;
+    if(!g||!g.uid||(g.ack&&g.ack[cu.id])||g.byId===cu.id) return;
+    if(g.uid===cu.id){
+      if(e.status!=='rejected') return;   // schon korrigiert + neu eingereicht → erledigt
+      out.push({k:k, g:g, self:true});
+      return;
+    }
+    if(cu.role==='admin'||!isManagerRole(cu)) return;
+    const emp=(d.users||[]).find(function(x){ return x.id===g.uid; });
+    if(emp && canSeeEmployee(cu,emp,monthStartDate(g.y,g.m))) out.push({k:k, g:g, self:false, empName:emp.name});
+  });
+  return out.sort(function(a,b){ return String(b.g.ts).localeCompare(String(a.g.ts)); });
+}
+
+let _noticeCss=false;
+function _ensureNoticeCss(){
+  if(!_noticeCss){ _noticeCss=true;
+    const st=document.createElement('style');
+    st.textContent='#ze-notice-bar{display:flex;flex-direction:column;gap:6px;padding:8px 12px;background:#fff4e5;border-bottom:2px solid #f0a020}'
+      +'.ze-notice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:#5a3a00}'
+      +'.ze-notice .tx{flex:1;min-width:220px}'
+      +'.ze-notice button{font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid #c98a10;background:#fff;color:#7a5200;font-weight:600}'
+      +'.ze-notice button.pri{background:#c98a10;color:#fff}'
+      +'.gf-emp{white-space:nowrap}'
+      +'.gf-ret-btn{margin-left:3px;border:1px solid var(--danger);background:#fff;color:var(--danger);border-radius:5px;font-size:11px;line-height:1;padding:1px 5px;cursor:pointer;vertical-align:middle}'
+      +'.gf-ret-btn:hover{background:var(--danger);color:#fff}';
+    document.head.appendChild(st);
+  }
+}
+export function renderZeNotices(){
+  _ensureNoticeCss();
+  let bar=document.getElementById('ze-notice-bar');
+  const list=_myNotices();
+  if(!list.length){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar=document.createElement('div'); bar.id='ze-notice-bar';
+    const mb=document.getElementById('module-bar');
+    if(mb&&mb.parentNode) mb.parentNode.insertBefore(bar, mb.nextSibling); else document.body.prepend(bar);
+  }
+  bar.innerHTML=list.map(function(n){
+    const g=n.g, mon=MONTHS[g.m-1]+' '+g.y;
+    const tx=n.self
+      ? '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat deine Zeiterfassung <b>'+mon+'</b> zur Korrektur zurückgegeben: „'+esc(g.reason)+'“ – bitte korrigieren und erneut einreichen.'
+      : '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat die Zeiterfassung von <b>'+esc(n.empName)+'</b> ('+mon+') zurückgegeben: „'+esc(g.reason)+'“ – nach der Korrektur bitte erneut genehmigen und nachreichen.';
+    return '<div class="ze-notice"><span class="tx">'+tx+'</span>'
+      +'<button class="pri" onclick="zeNoticeOpen(\''+esc(n.k)+'\')">Öffnen</button>'
+      +'<button onclick="zeNoticeAck(\''+esc(n.k)+'\')">✓ Gelesen</button></div>';
+  }).join('');
+}
+
+export function zeNoticeOpen(k){
+  const d=getData(); const e=d.entries&&d.entries[k]; const g=e&&e.gfReturn; if(!g) return;
+  try{ window.switchModule&&window.switchModule('zeiterfassung'); }catch(err){}
+  window.viewEmpId=g.uid; window.year=g.y; window.mon=g.m;
+  window.switchView&&window.switchView('zeiterfassung');
+}
+
+export function zeNoticeAck(k){
+  const cu=window.cu; if(!cu) return;
+  mutate(function(dd){
+    const e=dd.entries&&dd.entries[k]; if(!e||!e.gfReturn) return;
+    if(!e.gfReturn.ack) e.gfReturn.ack={};
+    e.gfReturn.ack[cu.id]=new Date().toISOString();
+  });
+  renderZeNotices();
 }
 
 // Einen an die GF gesendeten Teambericht (Buchhaltungsversion) wieder zurückziehen.
