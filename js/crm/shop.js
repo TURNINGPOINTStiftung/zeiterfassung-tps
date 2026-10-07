@@ -582,12 +582,13 @@ function _orderRecipient(o){
 }
 function _ordersHtml(mgr){
   const me=_me();
+  if(mgr) _backfillDirectOrders();   // frühere Direkt-Versendungen einmalig nachtragen
   let os=orders(); if(!mgr) os=os.filter(o=>o.byId===me.id);
   const act=o=>o.status==='offen'||o.status==='inarbeit';
   if(fOrd==='aktiv') os=os.filter(act); else if(fOrd==='fertig') os=os.filter(o=>!act(o));
   const seg=[['aktiv','Offen & in Arbeit'],['fertig','Abgeschlossen'],['alle','Alle']];
   const rows=os.map(o=>{
-    const st=STATUS[o.status]||STATUS.offen;
+    const st0=STATUS[o.status]||STATUS.offen; const st=(o.status==='ausgegeben'&&o.issueMode==='versand')?{l:'Verschickt',c:st0.c}:st0;
     const late=o.termin && act(o) && o.termin<_todayIso();
     const where=_orderWhere(o);
     const btns=[];
@@ -599,7 +600,7 @@ function _ordersHtml(mgr){
     }
     if(o.byId===me.id && o.status==='offen') btns.push(`<button class="shop-btn sm warn" onclick="shopOrderCancel(${jsq(o.id)})">Zurückziehen</button>`);
     return `<div class="shop-row"><div class="main">
-      <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span></div>
+      <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}</div>
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
@@ -830,10 +831,39 @@ function shopSendSave(itemId){
   if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
   saveShop('shopItems', it);
   const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
-  saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
-    type:'versand', qty:q, from, to:null, note:[how,anlass,note,(w.bRef?_crmAddress(w.bRef):(w.bId?userAddress(w.bId):'')).split('\n').join(', ')].filter(Boolean).join(' · '),
-    recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:null });
+  const adr=w.bRef?_crmAddress(w.bRef):(w.bId?userAddress(w.bId):'');
+  const log={ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
+    type:'versand', qty:q, from, to:null, note:[how,anlass,note,adr.split('\n').join(', ')].filter(Boolean).join(' · '),
+    recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:null };
+  // Direkter Versand erscheint auch in „Bestellungen" (gleich als ausgegeben) – eine Liste für „was ging an wen"
+  const o=_directOrder(log, it, how, anlass, note, adr);
+  log.orderId=o.id;
+  saveShop('shopOrders', o);
+  saveShop('shopLog', log);
+  if(TAB==='bestellungen') fOrd='alle';   // sonst wäre der (schon abgeschlossene) Eintrag in „Offen & in Arbeit" unsichtbar
   closeModal(); toast(`${q}× an ${w.bName} verschickt ✓`,'ok'); renderShop();
+}
+// Bestell-Eintrag für einen Versand ohne vorherige Bestellung (status 'ausgegeben', direkt:true)
+function _directOrder(log, it, how, anlass, note, adr){
+  const ref=log.recipientRef, uid=log.recipientId;
+  return { id:newId(), ts:log.ts, byId:log.byId, byName:log.byName, direkt:true,
+    itemId:it?it.id:(log.itemId||null), itemName:log.itemName||'', freitext:'', menge:log.qty, einheit:it?(it.einheit||'Stück'):'',
+    termin:'', anlass:anlass||'', note:[how,note].filter(Boolean).join(' · '),
+    ziel: ref?'crm':'other', zielRef:ref||null, zielUserId:uid||null, zielName:log.recipientName||'', ortId:null,
+    ortText:(ref?(ref.kid?'👤 ':'🏛️ '):(uid?'👤 ':'✏️ '))+(log.recipientName||''), adresse:adr||'',
+    status:'ausgegeben', issueMode:'versand', fromPlace:log.from||null, issuedQty:log.qty,
+    handledById:log.byId, handledByName:log.byName, handledTs:log.ts,
+    seenBy:{[log.byId||'x']:log.ts}, ackOrderer:true, leihe:false, rueckgabe:'' };
+}
+// Einmalig nachtragen: frühere Direkt-Versendungen (Log ohne orderId) als Bestell-Eintrag anlegen
+function _backfillDirectOrders(){
+  if(!canManage()) return;
+  listShop('shopLog').filter(l=>l.type==='versand' && !l.orderId).forEach(l=>{
+    const it=getShop('shopItems',l.itemId);
+    const o=_directOrder(l, it, '', '', l.note||'', '');
+    saveShop('shopOrders', o);
+    saveShop('shopLog', Object.assign({}, l, {orderId:o.id}));
+  });
 }
 function _recipLabel(l){ if(!l.recipientName) return ''; return bLabel({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
 function shopReturn(loanId){
