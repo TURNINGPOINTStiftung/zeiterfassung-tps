@@ -22,6 +22,14 @@ export function openProfileModal(){
   // (Zusätzlich zentral in der Verwaltung pflegbar; beide schreiben dieselben Felder.)
   const _maxD=new Date(); _maxD.setFullYear(_maxD.getFullYear()+1);
   const maxDate=localISODate(_maxD);
+  // Postadresse = CRM-Kontakt bei der eigenen Organisation (eine Quelle für Profil, CRM & Shop).
+  // Nur über window (shop.js) – fehlt das Modul (alter Cache), bleibt das Feld einfach weg.
+  let adrSection='';
+  try{
+    const ga=window.shopGetAddr ? window.shopGetAddr(cu.id) : null;
+    if(ga && ga.ok) adrSection=`<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(für Lieferungen aus dem Shop – wird beim CRM-Kontakt bei „${esc(ga.orgName)}" gespeichert)</span></label>
+      <textarea id="prof-adr" rows="2" placeholder="Straße Hausnr.&#10;PLZ Ort" data-orig="${esc(ga.adresse)}">${esc(ga.adresse)}</textarea></div>`;
+  }catch(e){}
   let wstSection='';
   if(_cuIsWerkstudent(cu)){
     wstSection=`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
@@ -41,6 +49,7 @@ export function openProfileModal(){
       <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
     <div class="form-group"><label>Bundesland</label>
       <select id="prof-bl">${blOpts}</select></div>
+    ${adrSection}
     ${wstSection}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px">🔒 Passwort ändern</div>
@@ -110,6 +119,11 @@ export async function saveProfile(){
   if(lectureFreeDays) patch.lectureFreeDays=lectureFreeDays;
   await setUserFields(cu.id, patch);
   window.cu=getUser(cu.id);
+  // Postadresse separat in den CRM-Kontakt (eigener Write, kann das Profil-Speichern nicht kippen)
+  try{
+    const ta=document.getElementById('prof-adr');
+    if(ta && window.shopSaveAddr && ta.value.trim()!==(ta.dataset.orig||'').trim()) await window.shopSaveAddr(cu.id, ta.value);
+  }catch(e){ console.warn('Postadresse speichern:', e&&e.message); }
   closeModal();
   toast('Profil gespeichert. ✓','ok');
 }

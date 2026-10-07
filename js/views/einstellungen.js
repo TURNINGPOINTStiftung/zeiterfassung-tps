@@ -626,6 +626,12 @@ function userForm(u={}){
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
       <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     </div>
+    ${(()=>{ // Postadresse = CRM-Kontakt bei der eigenen Organisation (eine Quelle für Profil, CRM & Shop)
+      try{ const ga=window.shopGetAddr ? window.shopGetAddr(u.id||'') : null;
+        if(!ga || !ga.ok) return '';
+        return `<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(CRM-Kontakt bei „${esc(ga.orgName)}" – für Shop-Lieferungen)</span></label>
+          <textarea id="uf-adr" rows="2" placeholder="Straße Hausnr.&#10;PLZ Ort" data-orig="${esc(ga.adresse)}">${esc(ga.adresse)}</textarea></div>`;
+      }catch(e){ return ''; } })()}
     <div id="uf-employed-fields"${(u.crmOnly||!u.id)?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
       <div class="uf-grid2">
@@ -929,6 +935,15 @@ function collectUserForm(){
   };
 }
 
+// Postadresse aus dem Mitarbeiter-Dialog in den CRM-Kontakt schreiben (nur bei Änderung, best effort –
+// ein Fehler hier darf das Speichern der Stammdaten nie verhindern)
+async function _ufSaveAdr(uid){
+  try{
+    const ta=document.getElementById('uf-adr');
+    if(ta && uid && window.shopSaveAddr && ta.value.trim()!==(ta.dataset.orig||'').trim()) await window.shopSaveAddr(uid, ta.value);
+  }catch(e){ console.warn('Postadresse (Verwaltung):', e&&e.message); }
+}
+
 export async function saveNewUser(){
   if(!_canVerwaltung(window.cu)){ toast('Nur der Administrator-Account darf Mitarbeiter anlegen.','err'); return; }
   const u=collectUserForm();
@@ -949,7 +964,7 @@ export async function saveNewUser(){
   // Berechtigungs-Allowlisten (admins/gfAdmins) an die Rolle des neuen Nutzers angleichen.
   // Best effort: no-op/Fehler solange uidUser noch nicht geseedet ist (vor dem Regel-Cutover).
   try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (neuer Nutzer):', e&&e.message); }
-  closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
+  await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 
 export async function saveEditUser(id){
@@ -1000,7 +1015,7 @@ export async function saveEditUser(id){
     const patch={}; STAMM_FIELDS.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(u,k) && u[k]!==undefined) patch[k]=u[k]; });
     try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],patch); }); }
     catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt'),'err'); return; }
-    closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Stammdaten gespeichert. ✓','ok');
+    await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Stammdaten gespeichert. ✓','ok');
     return;
   }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
@@ -1016,7 +1031,7 @@ export async function saveEditUser(id){
   // Nach einer möglichen Rollen-/Rechte-Änderung admins/gfAdmins autoritativ neu berechnen
   // (recomputet aus uidUser + aktuellen Rollen). Best effort: no-op vor dem Cutover-Seeding.
   try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (Edit):', e&&e.message); }
-  closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
+  await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter gespeichert. ✓','ok');
   if(cu.id===id){ window.cu=getUser(id); document.getElementById('hdr-name').textContent=window.cu.name; }
 }
 

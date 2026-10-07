@@ -103,6 +103,55 @@ function people(){
   try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&!u.archived)
     .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'})); }catch(e){ return []; }
 }
+// ── Mitarbeiter-Adressen = CRM-Kontakte der EIGENEN Organisation (z. B. „TURNING POINT Stiftung") ──
+// Eine einzige Quelle (User-Vorgabe „nicht doppelt und dreifach"): Profil, Verwaltung und Shop lesen/
+// schreiben die Adresse des CRM-Kontakts. Zuordnung Mitarbeiter ↔ Kontakt per E-Mail, sonst per Name.
+// Welche CRM-Organisation „die eigene" ist: crm/shopConfig/org = {tree,eid}; ohne Einstellung automatisch
+// der Eintrag mit „Turning Point" im Namen.
+function shopOrg(){
+  const c=getShop('shopConfig','org');
+  if(c&&c.tree&&c.eid&&CD.getEntity&&CD.getEntity(c.tree,c.eid)) return {tree:c.tree, eid:c.eid, auto:false};
+  const hit=_crmEntities().find(x=>/turning\s*-?\s*point/i.test(x.name));
+  return hit ? {tree:hit.tree, eid:hit.eid, auto:true} : null;
+}
+function _orgEntity(){ const o=shopOrg(); return o&&CD.getEntity ? CD.getEntity(o.tree,o.eid) : null; }
+const _lc=s=>String(s||'').trim().toLowerCase();
+function _kMails(k){ return (Array.isArray(k&&k.emails)?k.emails:(k&&k.email?[k.email]:[])).map(_lc).filter(Boolean); }
+// CRM-Kontakt eines Mitarbeiters in der eigenen Organisation (oder null)
+function staffContact(uid){
+  const e=_orgEntity(); if(!e) return null;
+  const u=people().find(x=>x.id===uid)||((window.cu&&window.cu.id===uid)?window.cu:null); if(!u) return null;
+  const ks=e.kontakte||[]; const mail=_lc(u.email);
+  return (mail && ks.find(k=>_kMails(k).includes(mail))) || ks.find(k=>_lc(k.name)===_lc(u.name)) || null;
+}
+function userAddress(uid){ const k=staffContact(uid); return String((k&&k.adresse)||'').trim(); }
+function personByName(n){ const s=_lc(n); return s ? people().find(u=>_lc(u.name)===s)||null : null; }
+function _peopleDatalist(id){ return `<datalist id="${id}">${people().map(u=>`<option value="${esc(u.name)}">`).join('')}</datalist>`; }
+// Für Profil/Verwaltung (ZE-Seite) – nur über window, damit die Zeiterfassung nie hart vom CRM abhängt.
+// → { adresse, orgName, ok } · ok=false: keine eigene Organisation im CRM gefunden
+function shopGetAddr(uid){
+  const e=_orgEntity(); if(!e) return { adresse:'', orgName:'', ok:false };
+  return { adresse:userAddress(uid), orgName:(e.stamm&&e.stamm.name)||'', ok:true };
+}
+// Adresse am CRM-Kontakt speichern; fehlt der Kontakt, wird er in der eigenen Organisation angelegt
+function shopSaveAddr(uid, adresse){
+  const o=shopOrg(); const e=_orgEntity(); if(!o||!e||!uid) return Promise.resolve(false);
+  const val=String(adresse||'').trim();
+  const u=people().find(x=>x.id===uid)||((window.cu&&window.cu.id===uid)?window.cu:null); if(!u) return Promise.resolve(false);
+  const ent=JSON.parse(JSON.stringify(e)); if(!Array.isArray(ent.kontakte)) ent.kontakte=[];
+  const mail=_lc(u.email);
+  let k=(mail && ent.kontakte.find(x=>_kMails(x).includes(mail))) || ent.kontakte.find(x=>_lc(x.name)===_lc(u.name));
+  if(k){ if(String(k.adresse||'').trim()===val) return Promise.resolve(true); k.adresse=val; }   // unverändert → kein Write
+  else { if(!val) return Promise.resolve(true);
+    ent.kontakte.push({ id:newId(), name:u.name||uid, funktion:'', emails:u.email?[u.email]:[], tels:[], adresse:val, note:'automatisch angelegt (Mitarbeiter-Adresse)' }); }
+  return Promise.resolve(CD.saveEntity ? CD.saveEntity(o.tree, ent) : null).then(()=>true);
+}
+// Verwalter: eigene Organisation im CRM festlegen
+function shopSetOrg(v){
+  if(!canManage()) return;
+  if(!v){ deleteShop('shopConfig','org'); toast('Automatische Erkennung aktiv.','ok'); renderShop(); return; }
+  const [tree,eid]=v.split('::'); saveShop('shopConfig',{id:'org',tree,eid}); toast('Eigene Organisation gespeichert ✓','ok'); renderShop();
+}
 function itemLabel(it){ return it ? (it.name+(it.variante?' · '+it.variante:'')) : ''; }
 function cats(){ const s=new Set(CATS_DEFAULT); items().forEach(i=>{ if(i.kategorie) s.add(i.kategorie); }); return [...s]; }
 const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
@@ -435,7 +484,8 @@ function shopOrderNew(itemId){
     <div class="shop-f2" id="so-crm-w" style="display:none"><div class="shop-f"><label>Welcher Verein / Partner? *</label><select id="so-crm" onchange="shopOrderCrmChg()">${vOpts}</select></div>
       <div class="shop-f" id="so-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="so-k" onchange="shopOrderZielChg(true)"></select></div></div>
     <div class="shop-f" id="so-place-w" style="display:none"><label>Welcher Ort? *</label><select id="so-place">${plOpts}</select></div>
-    <div class="shop-f" id="so-name-w" style="display:none"><label>Empfänger *</label><input id="so-name" placeholder="z. B. Schule XY, Max Muster"></div>
+    <div class="shop-f" id="so-name-w" style="display:none"><label>Empfänger * <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label>
+      <input id="so-name" list="so-people" autocomplete="off" placeholder="Name eingeben … z. B. Kollege, Schule XY" oninput="shopOrderNameChg()">${_peopleDatalist('so-people')}</div>
     <div class="shop-f" id="so-adr-w" style="display:none"><label>Lieferadresse <span id="so-adr-h" style="font-weight:400;color:var(--muted)"></span></label>
       <textarea id="so-adr" rows="3" placeholder="Straße Nr.&#10;PLZ Ort"></textarea></div>
     <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
@@ -456,14 +506,35 @@ function shopOrderZielChg(onlyAdr){
   const adr=document.getElementById('so-adr'), h=document.getElementById('so-adr-h'); if(!adr) return;
   let pre='', hint='';
   if(z==='home'){
+    const prof=userAddress(_me().id);
     const last=orders().find(o=>o.byId===_me().id && o.ziel==='home' && o.adresse);
-    pre=last?last.adresse:''; hint=last?'(von deiner letzten Bestellung)':'(wird für die nächste Bestellung gemerkt)';
+    if(prof){ pre=prof; hint='(aus deinem Profil)'; }
+    else if(last){ pre=last.adresse; hint='(von deiner letzten Bestellung – Tipp: im Profil hinterlegen)'; }
+    else hint='(Tipp: Adresse im Profil hinterlegen, dann ist sie immer vorausgefüllt)';
+  } else if(z==='other'){
+    if(!onlyAdr){ adr.value=''; adr.dataset.auto=''; }   // Adresse vom vorherigen Ziel nicht übernehmen
+    shopOrderNameChg(); return;
   } else if(z==='crm'){
     const v=_val('so-crm'); if(v){ const [t,e]=v.split('::'); const kid=_val('so-k')||null;
       const {k}=_crmContact({tree:t,eid:e,kid}); pre=_crmAddress({tree:t,eid:e,kid});
       hint=pre?((k&&k.adresse)?'(Adresse des Kontakts aus dem CRM)':'(Vereinsadresse aus dem CRM)'):'(im CRM ist keine Adresse hinterlegt)'; }
   }
   adr.value=pre; if(h) h.textContent=hint;
+}
+// „Andere Person": Mitarbeiter erkannt → Profiladresse eintragen (nur wenn das Feld leer ist
+// oder zuvor automatisch befüllt wurde – eigene Eingaben werden nie überschrieben)
+function shopOrderNameChg(){
+  const adr=document.getElementById('so-adr'), h=document.getElementById('so-adr-h'); if(!adr) return;
+  const p=personByName(_val('so-name'));
+  const auto=adr.dataset.auto==='1' || !adr.value.trim();
+  if(p){
+    const a=userAddress(p.id);
+    if(auto){ adr.value=a; adr.dataset.auto=a?'1':''; }
+    if(h) h.textContent=a?`(aus dem Profil von ${p.name})`:`(${p.name} hat keine Adresse im Profil hinterlegt)`;
+  } else {
+    if(adr.dataset.auto==='1'){ adr.value=''; adr.dataset.auto=''; }
+    if(h) h.textContent='';
+  }
 }
 function shopOrderCrmChg(){
   const v=_val('so-crm'); const w=document.getElementById('so-k-w'), s=document.getElementById('so-k');
@@ -484,7 +555,9 @@ function shopOrderSave(){
     const [t,e]=v.split('::'); const kid=_val('so-k')||null; zielRef=kid?{tree:t,eid:e,kid}:{tree:t,eid:e};
     zielName=bName({borrowerRef:zielRef}); ortText=(kid?'👤 ':'🏛️ ')+zielName; }
   else if(ziel==='place'){ ort=_val('so-place'); if(!ort){ toast('Bitte den Ort auswählen.','err'); return; } }
-  else { zielName=_val('so-name'); if(!zielName){ toast('Bitte den Empfänger angeben.','err'); return; } ortText='✏️ '+zielName; }
+  let zielUserId=null;
+  if(ziel==='other'){ zielName=_val('so-name'); if(!zielName){ toast('Bitte den Empfänger angeben.','err'); return; }
+    const p=personByName(zielName); if(p){ zielUserId=p.id; zielName=p.name; ortText='👤 '+zielName; } else ortText='✏️ '+zielName; }
   if((ziel==='home'||ziel==='other') && !adresse){ toast('Bitte die Lieferadresse angeben.','err'); return; }
   const leih=!!(it&&it.leihbar); const ret=leih?_val('so-ret'):'';
   if(leih && !ret){ toast('Bitte angeben, bis wann es zurückkommt.','err'); return; }
@@ -493,7 +566,7 @@ function shopOrderSave(){
   saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
     itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':free, menge:q, einheit:it?(it.einheit||'Stück'):'',
     termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
-    ziel, zielRef, zielName, adresse,
+    ziel, zielRef, zielName, zielUserId, adresse,
     leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
   closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
   TAB='bestellungen'; renderShop();
@@ -508,7 +581,7 @@ function _orderWhere(o){
 // Empfänger einer Bestellung (für Verschicken/Verleihen beim Ausgeben)
 function _orderRecipient(o){
   if(o.ziel==='crm'&&o.zielRef) return {bId:null, bRef:o.zielRef, bName:bName({borrowerRef:o.zielRef,borrowerName:o.zielName})};
-  if(o.ziel==='other') return {bId:null, bRef:null, bName:o.zielName||'?'};
+  if(o.ziel==='other') return o.zielUserId ? {bId:o.zielUserId, bRef:null, bName:o.zielName||'?'} : {bId:null, bRef:null, bName:o.zielName||'?'};
   return {bId:o.byId||null, bRef:null, bName:o.byName||'?'};   // home + alte Bestellungen → Besteller
 }
 function _ordersHtml(mgr){
@@ -661,7 +734,7 @@ function _whoPickerHtml(px){
         ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
         ${crmGroups}
         <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
-      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name</label><input id="${px}-other" placeholder="z. B. Max Muster, Schule XY"></div>
+      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label><input id="${px}-other" list="${px}-people" autocomplete="off" placeholder="z. B. Max Muster, Schule XY" oninput="shopWhoChg('${px}',true)">${_peopleDatalist(px+'-people')}</div>
       <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" onchange="shopWhoChg('${px}',true)"></select></div></div>
       <div class="shop-f" id="${px}-adr-w" style="display:none;font-size:12px;color:var(--muted);margin-top:-4px"></div>`;
 }
@@ -675,14 +748,19 @@ function shopWhoChg(px, onlyAdr){
     if(isC && g('-k')){ const [tree,eid]=who.slice(2).split('::'); g('-k').innerHTML=_contactOpts(tree,eid); }
   }
   const aw=g('-adr-w'); if(!aw) return;
-  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const adr=_crmAddress({tree,eid,kid:_val(px+'-k')||null});
-    aw.style.display=''; aw.innerHTML=adr?'📮 '+esc(adr).replace(/\n/g,', '):'📮 Im CRM ist keine Adresse hinterlegt.'; }
+  const showAdr=(adr,missing)=>{ aw.style.display=''; aw.innerHTML=adr?'📮 '+esc(adr).replace(/\n/g,', '):'📮 '+missing; };
+  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); showAdr(_crmAddress({tree,eid,kid:_val(px+'-k')||null}),'Im CRM ist keine Adresse hinterlegt.'); }
+  else if(who.startsWith('u:')){ showAdr(userAddress(who.slice(2)),'Keine Adresse im Profil hinterlegt.'); }
+  else if(who==='__other'){ const p=personByName(_val(px+'-other'));
+    if(p) showAdr(userAddress(p.id),'Keine Adresse im Profil hinterlegt.'); else aw.style.display='none'; }
   else aw.style.display='none';
 }
 // → {bId, bRef, bName} oder null (mit Hinweis)
 function _whoRead(px){
   const who=_val(px+'-who');
-  if(who==='__other'){ const n=_val(px+'-other'); if(!n){ toast('Bitte einen Namen eingeben.','err'); return null; } return {bId:null,bRef:null,bName:n}; }
+  if(who==='__other'){ const n=_val(px+'-other'); if(!n){ toast('Bitte einen Namen eingeben.','err'); return null; }
+    const p=personByName(n); if(p) return {bId:p.id,bRef:null,bName:p.name};   // getippter Mitarbeitername → als Mitarbeiter zuordnen
+    return {bId:null,bRef:null,bName:n}; }
   if(who.startsWith('u:')){ const id=who.slice(2); const u=people().find(x=>x.id===id); return {bId:id,bRef:null,bName:u?u.name:id}; }
   if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const kid=_val(px+'-k')||null;
     const ref=kid?{tree,eid,kid}:{tree,eid}; return {bId:null,bRef:ref,bName:bName({borrowerRef:ref})}; }
@@ -743,7 +821,7 @@ function shopSendSave(itemId){
   saveShop('shopItems', it);
   const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
   saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
-    type:'versand', qty:q, from, to:null, note:[how,anlass,note,(w.bRef?_crmAddress(w.bRef).split('\n').join(', '):'')].filter(Boolean).join(' · '),
+    type:'versand', qty:q, from, to:null, note:[how,anlass,note,(w.bRef?_crmAddress(w.bRef):(w.bId?userAddress(w.bId):'')).split('\n').join(', ')].filter(Boolean).join(' · '),
     recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:null });
   closeModal(); toast(`${q}× an ${w.bName} verschickt ✓`,'ok'); renderShop();
 }
@@ -829,7 +907,18 @@ function _orteHtml(){
   return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Wo liegen Sachen? Büro, Bus, Boote, Lager …</span><span class="shop-sp"></span>
     <button class="shop-btn pri" onclick="shopPlaceEdit('')">＋ Ort</button></div>
     <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>
-    ${bRows?`<h4 style="margin:18px 0 8px;color:var(--primary)">🔁 Unterwegs bei (ausgeliehen)</h4><div class="shop-list">${bRows}</div>`:''}`;
+    ${bRows?`<h4 style="margin:18px 0 8px;color:var(--primary)">🔁 Unterwegs bei (ausgeliehen)</h4><div class="shop-list">${bRows}</div>`:''}
+    ${_orgSettingHtml()}`;
+}
+function _orgSettingHtml(){
+  const o=shopOrg(); const e=_orgEntity(); const cur=o?o.tree+'::'+o.eid:'';
+  const opts=_crmEntities().sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}))
+    .map(x=>`<option value="${esc(x.tree)}::${esc(x.eid)}"${(o&&!o.auto&&cur===x.tree+'::'+x.eid)?' selected':''}>${esc(x.name)}</option>`).join('');
+  const n=e?(e.kontakte||[]).length:0;
+  return `<h4 style="margin:18px 0 8px;color:var(--primary)">🏢 Eigene Organisation im CRM</h4>
+    <div class="shop-row"><div class="main"><div class="m" style="font-size:13px;color:var(--text)">Die Adressen der Mitarbeiter kommen aus den <b>CRM-Kontakten</b> dieses Eintrags (Zuordnung per E-Mail oder Name) – im Profil gepflegt, nichts doppelt.
+      <br>Aktuell: <b>${e?esc((e.stamm&&e.stamm.name)||''):'– nicht gefunden –'}</b>${o&&o.auto?' (automatisch erkannt)':''}${e?` · ${n} Kontakt${n===1?'':'e'}`:''}</div></div>
+      <select onchange="shopSetOrg(this.value)" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;max-width:280px"><option value="">🔍 Automatisch („Turning Point")</option>${opts}</select></div>`;
 }
 // Alle, die gerade etwas ausgeliehen haben – gruppiert (Mitarbeiter, CRM-Einträge, freie Namen)
 function _borrowers(){
@@ -963,7 +1052,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
