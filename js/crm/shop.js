@@ -44,7 +44,7 @@ const STATUS={
   erledigt:  {l:'Erledigt',       c:'#16a34a'},
   abgelehnt: {l:'Abgelehnt',      c:'#c0392b'},
 };
-const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe' };
+const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt' };
 
 let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv';
 
@@ -118,7 +118,7 @@ function _styles(){
   if(_css) return; _css=true;
   const st=document.createElement('style');
   st.textContent=`
-  .shop-wrap{padding:16px 22px;max-width:1200px;width:100%;box-sizing:border-box}
+  .shop-wrap{padding:16px 22px;width:100%;box-sizing:border-box}
   .shop-h{font-size:20px;font-weight:700;color:var(--primary);margin:0 0 4px}
   .shop-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
@@ -252,7 +252,8 @@ function _itemsGrid(mgr){
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       <div class="shop-act">
         <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">${it.leihbar?'🔁 Ausleihen':'🛒 Bestellen'}</button>
-        ${mgr&&it.leihbar?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)},'')">🔁 Verleihen</button>`:''}
+        ${mgr?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – kommt zurück">🔁 Verleihen</button>
+        <button class="shop-btn sm" onclick="shopSend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – bleibt dort">📤 Verschicken</button>`:''}
         ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
         <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
@@ -566,24 +567,35 @@ function _createLoan(it, fromPlace, qty, borrowerId, borrowerName, due, anlass, 
   _log(it,'verleih',qty,fromPlace,null,'an '+(borrowerName||'?')+(due?' bis '+_fmtDate(due):' (Dauerleihe)')+(anlass?' · '+anlass:''),orderId);
   return l;
 }
+// Gemeinsame Empfänger-Auswahl (Verleihen + Verschicken): Mitarbeiter · CRM-Einträge je Bereich · freier Name
+function _whoPickerHtml(px){
+  const ppl=people();
+  const ents=_crmEntities(); const byTree={};
+  ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
+  const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
+    return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
+  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="document.getElementById('${px}-other-w').style.display=this.value==='__other'?'':'none'">
+        <option value="">– bitte wählen –</option>
+        ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
+        ${crmGroups}
+        <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
+      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name</label><input id="${px}-other" placeholder="z. B. Max Muster, Schule XY"></div></div>`;
+}
+// → {bId, bRef, bName} oder null (mit Hinweis)
+function _whoRead(px){
+  const who=_val(px+'-who');
+  if(who==='__other'){ const n=_val(px+'-other'); if(!n){ toast('Bitte einen Namen eingeben.','err'); return null; } return {bId:null,bRef:null,bName:n}; }
+  if(who.startsWith('u:')){ const id=who.slice(2); const u=people().find(x=>x.id===id); return {bId:id,bRef:null,bName:u?u.name:id}; }
+  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const x=_crmEntities().find(e=>e.tree===tree&&e.eid===eid); return {bId:null,bRef:{tree,eid},bName:x?x.name:'?'}; }
+  toast('Bitte auswählen, wer es bekommt.','err'); return null;
+}
 function shopLend(itemId){
   if(!canManage()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
-  const ppl=people();
-  // CRM-Einträge je Bereich gruppiert (Vereine, Sozialakteure …) – nach Name sortiert
-  const ents=_crmEntities(); const byTree={};
-  ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
-  const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
-    return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
-  openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar</p>
-    <div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="sl-who" onchange="document.getElementById('sl-other-w').style.display=this.value==='__other'?'':'none'">
-        <option value="">– bitte wählen –</option>
-        ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
-        ${crmGroups}
-        <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
-      <div class="shop-f" id="sl-other-w" style="display:none"><label>Name</label><input id="sl-other" placeholder="z. B. Max Muster, Schule XY"></div></div>
+  openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar · kommt zurück</p>
+    ${_whoPickerHtml('sl')}
     <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="sl-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
       <div class="shop-f"><label>Menge</label><input id="sl-qty" type="number" min="1" step="1" value="1"></div></div>
     <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis <span id="sl-due-req">*</span></label><input id="sl-due" type="date" min="${_todayIso()}">
@@ -595,11 +607,7 @@ function shopLend(itemId){
 }
 function shopLendSave(itemId){
   const it=getShop('shopItems',itemId); if(!it) return;
-  const who=_val('sl-who'); let bId=null, bRef=null, bName='';
-  if(who==='__other'){ bName=_val('sl-other'); if(!bName){ toast('Bitte einen Namen eingeben.','err'); return; } }
-  else if(who.startsWith('u:')){ const id=who.slice(2); const u=people().find(x=>x.id===id); bId=id; bName=u?u.name:id; }
-  else if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const x=_crmEntities().find(e=>e.tree===tree&&e.eid===eid); bRef={tree,eid}; bName=x?x.name:'?'; }
-  else { toast('Bitte auswählen, wer es bekommt.','err'); return; }
+  const w=_whoRead('sl'); if(!w) return; const {bId,bRef,bName}=w;
   const perm=!!(document.getElementById('sl-perm')||{}).checked;
   const from=_val('sl-from'), q=Math.round(_num(_val('sl-qty'))), due=perm?'':_val('sl-due');
   if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
@@ -609,6 +617,37 @@ function shopLendSave(itemId){
   _createLoan(it, from, q, bId, bName, due, _val('sl-anlass'), _val('sl-note'), null, false, bRef);
   closeModal(); toast(`${q}× verliehen an ${bName} ✓`,'ok'); renderShop();
 }
+// ── Verschicken / abgeben (Verbrauch MIT Empfänger: Flyer an Verein, Visitenkarten an Mitarbeiter …)
+function shopSend(itemId){
+  if(!canManage()) return;
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
+  if(!from.length){ toast('Kein Bestand zum Verschicken.','err'); return; }
+  openModal(`<h3>📤 Verschicken / abgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar · bleibt beim Empfänger (wird vom Bestand abgezogen)</p>
+    ${_whoPickerHtml('ss')}
+    <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="ss-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
+      <div class="shop-f"><label>Menge</label><input id="ss-qty" type="number" min="1" step="1" value="1"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Wie?</label><select id="ss-how"><option>Post / Versand</option><option>Persönlich übergeben</option><option>Abgeholt</option></select></div>
+      <div class="shop-f"><label>Wofür / Anlass</label><input id="ss-anlass" placeholder="z. B. Vereinsfest, Messe"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="ss-note" placeholder="z. B. Sendungsnummer"></div>
+    <p style="font-size:12px;color:var(--muted);margin:0">Soll es zurückkommen? Dann besser „🔁 Verleihen".</p>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopSendSave(${jsq(itemId)})">Verschicken</button></div>`);
+}
+function shopSendSave(itemId){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const w=_whoRead('ss'); if(!w) return;
+  const from=_val('ss-from'), q=Math.round(_num(_val('ss-qty')));
+  if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
+  saveShop('shopItems', it);
+  const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
+  saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
+    type:'versand', qty:q, from, to:null, note:[how,anlass,note].filter(Boolean).join(' · '),
+    recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:null });
+  closeModal(); toast(`${q}× an ${w.bName} verschickt ✓`,'ok'); renderShop();
+}
+function _recipLabel(l){ if(!l.recipientName) return ''; return (l.recipientRef?'🏛️ ':l.recipientId?'👤 ':'✏️ ')+bName({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
 function shopReturn(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
   const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
@@ -701,12 +740,18 @@ function _borrowers(){
 // Für die CRM-Detailseite eines Vereins/Eintrags: laufende Leihgaben (HTML, leer wenn keine)
 function shopLoansForEntity(tree, eid){
   try{
+    // NUR ANZEIGE (Vorgabe): Bestellen/Verleihen/Verschicken passiert ausschließlich im Shop.
     const ls=activeLoans().filter(l=>l.borrowerRef&&l.borrowerRef.tree===tree&&l.borrowerRef.eid===eid);
-    if(!ls.length) return '';
+    const sent=listShop('shopLog').filter(l=>l.type==='versand'&&l.recipientRef&&l.recipientRef.tree===tree&&l.recipientRef.eid===eid)
+      .sort((a,b)=>(b.ts||0)-(a.ts||0));
+    if(!ls.length && !sent.length) return '';
     const can=canUse();
-    return `<div class="crm-sec"><h4><span class="ttl">🔁 Leihgaben vom Shop</span>${can?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop öffnen</button></span>`:''}</h4>
-      ${ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
-        <div class="small">seit ${_fmtDate(new Date(l.ts).toISOString().slice(0,10))}${l.due?` · <span style="${_overdue(l)?'color:#c0392b;font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join('')}
+    const d=ts=>_fmtDate(new Date(ts).toISOString().slice(0,10));
+    return `<div class="crm-sec"><h4><span class="ttl">🛒 Aus dem Shop</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop ansehen</button></span>`:''}</h4>
+      ${ls.length?`<div class="small" style="font-weight:700;margin:2px 0 4px">🔁 Gerade ausgeliehen</div>`+ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
+        <div class="small">seit ${d(l.ts)}${l.due?` · <span style="${_overdue(l)?'color:#c0392b;font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join(''):''}
+      ${sent.length?`<div class="small" style="font-weight:700;margin:8px 0 4px">📤 Erhalten</div>`+sent.slice(0,15).map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
+        <div class="small">${d(l.ts)}${l.note?' · '+esc(l.note):''}</div></div></div>`).join('')+(sent.length>15?`<div class="small" style="color:var(--muted)">… und ${sent.length-15} weitere</div>`:''):''}
     </div>`;
   }catch(e){ return ''; }
 }
@@ -746,7 +791,7 @@ function _verlaufHtml(){
   const opts=['<option value="">Alle Artikel</option>'].concat(its.map(i=>`<option value="${esc(i.id)}"${fLogItem===i.id?' selected':''}>${esc(itemLabel(i))}</option>`)).join('');
   const rows=shown.map(l=>`<tr><td style="white-space:nowrap">${_fmtTs(l.ts)}</td><td>${esc(l.byName||'')}</td><td style="white-space:nowrap">${LOG_T[l.type]||esc(l.type)}</td>
     <td style="text-align:right;font-weight:700">${l.type==='korrektur'?(l.qty>0?'+':'')+l.qty:l.qty}</td><td>${esc(l.itemName||'')}</td>
-    <td>${l.from?esc(placeLabel(l.from)):''}${l.from&&l.to&&l.from!==l.to?' → ':''}${l.to&&l.to!==l.from?esc(placeLabel(l.to)):''}</td><td>${esc(l.note||'')}</td></tr>`).join('');
+    <td>${l.from?esc(placeLabel(l.from)):''}${l.from&&l.to&&l.from!==l.to?' → ':''}${l.to&&l.to!==l.from?esc(placeLabel(l.to)):''}${l.recipientName?' → '+esc(_recipLabel(l)):''}</td><td>${esc(l.note||'')}</td></tr>`).join('');
   return `<div class="shop-bar"><select onchange="shopSetLogItem(this.value)">${opts}</select><span class="shop-sp"></span>
     <span style="font-size:12px;color:var(--muted)">${logs.length} Buchung${logs.length===1?'':'en'}${logs.length>300?' (neueste 300)':''}</span></div>
     ${rows?`<div style="overflow-x:auto"><table class="shop-log"><thead><tr><th>Wann</th><th>Wer</th><th>Art</th><th>Menge</th><th>Artikel</th><th>Ort</th><th>Notiz</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="shop-empty">Noch keine Buchungen.</div>'}`;
@@ -816,7 +861,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
