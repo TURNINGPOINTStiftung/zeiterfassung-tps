@@ -19,9 +19,9 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans'];
 // Shop-Sammlungen (js/crm/shop.js): crm/<coll>/<id>, flach wie alle anderen Sammlungen.
-export const SHOP_COLLS = ['shopItems','shopPlaces','shopOrders','shopLog'];
+export const SHOP_COLLS = ['shopItems','shopPlaces','shopOrders','shopLog','shopLoans'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -134,7 +134,7 @@ export function restoreHistory(entry){
 
 function freshCrm(){
   const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null, pathAccess:null,
-                shopItems:{}, shopPlaces:{}, shopOrders:{}, shopLog:{} };
+                shopItems:{}, shopPlaces:{}, shopOrders:{}, shopLog:{}, shopLoans:{} };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }

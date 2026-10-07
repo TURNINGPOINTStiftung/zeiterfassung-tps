@@ -2398,7 +2398,7 @@ function crmImportContactsFile(inp){
 // Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
 function crmCanCreateItems(){ return { termin: (crmFull()||crmRestricted()), va: crmFull() }; }
 // Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
-const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog']);
+const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans']);
 function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
     Object.keys(d).forEach(tk=>{ if(_KAL_RESERVED.has(tk)) return; const ents=d[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; if(!e||typeof e!=='object') return; out.push({tree:tk, eid, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); });
@@ -4947,7 +4947,7 @@ function crmHistRestore(key){
 // ══════════════════════════════════════════════════════════════════
 //  CRM-Konfiguration (admin): Bäume & Stammdaten-Felder editierbar
 // ══════════════════════════════════════════════════════════════════
-const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess','shopItems','shopPlaces','shopOrders','shopLog'];
+const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans'];
 const _clone = o => JSON.parse(JSON.stringify(o));
 // Arbeitskopie der Config: aus crm/config oder (falls leer) aus den Defaults.
 function _cfgWork(){

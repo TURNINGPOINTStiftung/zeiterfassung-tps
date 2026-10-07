@@ -11,8 +11,25 @@
 //  Daten: crm/shopItems, crm/shopPlaces, crm/shopOrders, crm/shopLog (CRM-Ref, dort dürfen
 //  allowlistete Nutzer schreiben). Mitteilungen über die gemeinsame Leiste (renderZeNotices).
 // ═════════════════════════════════════════════════════════════════
-import { listShop, getShop, saveShop, deleteShop, newId } from './crm-data.js';
-import { openModal, closeModal, toast } from '../utils.js';
+//  Ausleihe (Leihmaterial = nicht verbraucht: Werkzeug, Beachflags, Aufsteller …):
+//  crm/shopLoans/<id> = { itemId, itemName, qty, fromPlace, borrowerId|null, borrowerName,
+//  due, anlass, note, ts, byId, byName, orderId, status:'aktiv'|'zurueck', returns:[…],
+//  ackBorrower }. Während der Ausleihe ist die Menge an KEINEM Ort, sondern „verliehen";
+//  der Gesamtbestand (total) zählt sie mit.
+// Namespace-Import statt benannter Importe: Liefert ein Gerät nach einem Update kurz noch die
+// ALTE crm-data.js aus dem Cache (ohne Shop-Funktionen), würde ein benannter Import die GANZE
+// App beim Start abbrechen („does not provide an export named …"). So fehlt höchstens kurz der Shop.
+import * as CD from './crm-data.js';
+import * as U from '../utils.js';
+import * as D from '../data.js';      // NUR Lesen (Personenliste fürs Verleihen)
+const listShop =(c)=>CD.listShop?CD.listShop(c):[];
+const getShop  =(c,id)=>CD.getShop?CD.getShop(c,id):null;
+const saveShop =(c,r)=>CD.saveShop?CD.saveShop(c,r):_stale();
+const deleteShop=(c,id)=>CD.deleteShop?CD.deleteShop(c,id):_stale();
+const newId    =()=>CD.newId();
+const openModal=(h,w)=>U.openModal(h,w), closeModal=()=>U.closeModal(), toast=(m,t)=>U.toast(m,t);
+const getData  =()=>D.getData();
+function _stale(){ try{ U.toast('Shop wird gerade aktualisiert – bitte die App neu laden.','err'); }catch(e){} return Promise.resolve(); }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
@@ -26,9 +43,9 @@ const STATUS={
   erledigt:  {l:'Erledigt',       c:'#16a34a'},
   abgelehnt: {l:'Abgelehnt',      c:'#c0392b'},
 };
-const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe' };
+const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe' };
 
-let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='';
+let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv';
 
 // ── Rechte ─────────────────────────────────────────────────────────
 function _acc(){
@@ -48,7 +65,17 @@ function items(){ return listShop('shopItems').sort((a,b)=>String(a.kategorie||'
 function orders(){ return listShop('shopOrders').sort((a,b)=>(b.ts||0)-(a.ts||0)); }
 function placeOf(id){ return getShop('shopPlaces',id); }
 function placeLabel(id){ const p=placeOf(id); if(!p) return id?'(Ort gelöscht)':'–'; return (PLACE_TYPES[p.typ]||PLACE_TYPES.sonst).i+' '+p.name; }
-function total(it){ return Object.values((it&&it.stock)||{}).reduce((s,v)=>s+_num(v),0); }
+function inPlaces(it){ return Object.values((it&&it.stock)||{}).reduce((s,v)=>s+_num(v),0); }
+function loans(){ return listShop('shopLoans').sort((a,b)=>(b.ts||0)-(a.ts||0)); }
+function activeLoans(itemId){ return loans().filter(l=>l.status==='aktiv' && (!itemId || l.itemId===itemId)); }
+function lent(it){ return it ? activeLoans(it.id).reduce((s,l)=>s+_num(l.qty),0) : 0; }
+// Gesamtbestand = an Orten + gerade verliehen (Leihmaterial gehört weiter zum Bestand)
+function total(it){ return inPlaces(it)+lent(it); }
+const _overdue=l=>l.status==='aktiv' && l.due && l.due<_todayIso();
+function people(){
+  try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&!u.archived)
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'})); }catch(e){ return []; }
+}
 function itemLabel(it){ return it ? (it.name+(it.variante?' · '+it.variante:'')) : ''; }
 function cats(){ const s=new Set(CATS_DEFAULT); items().forEach(i=>{ if(i.kategorie) s.add(i.kategorie); }); return [...s]; }
 const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
