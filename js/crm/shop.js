@@ -403,8 +403,11 @@ function shopOrderNew(itemId){
   const its=items(); const pls=places();
   const itOpts=['<option value="">– Freier Wunsch (nicht im Katalog) –</option>']
     .concat(its.map(i=>`<option value="${esc(i.id)}"${i.id===itemId?' selected':''}>${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}</option>`)).join('');
-  const plOpts=['<option value="">– bitte wählen –</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}">${esc(placeLabel(p.id))}</option>`))
-    .concat(['<option value="__abholen">🙋 Hole ich selbst ab</option>','<option value="__sonst">✏️ Anderer Ort …</option>']).join('');
+  const plOpts=pls.map(p=>`<option value="${esc(p.id)}">${esc(placeLabel(p.id))}</option>`).join('');
+  const ents=_crmEntities(); const byTree={};
+  ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
+  const vOpts='<option value="">– bitte wählen –</option>'+Object.keys(byTree).map(k=>{ const g=byTree[k];
+    return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
   openModal(`<h3>🛒 Bestellen / Bedarf melden</h3>
     <div class="shop-f"><label>Was?</label><select id="so-item" onchange="shopOrderItemChg()">${itOpts}</select></div>
     <div class="shop-f" id="so-free-w" style="display:${itemId?'none':''}"><label>Was wird gebraucht? *</label><textarea id="so-free" rows="2" placeholder="z. B. 200 Visitenkarten für mich, Roll-up „Wassersport", 2 Schäkel M10"></textarea></div>
@@ -412,8 +415,17 @@ function shopOrderNew(itemId){
       <div class="shop-f"><label id="so-date-l">${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'Gebraucht ab':'Bis wann?'}</label><input id="so-date" type="date" min="${_todayIso()}"></div></div>
     <div class="shop-f" id="so-ret-w" style="display:${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'':'none'}"><label>🔁 Rückgabe bis *</label><input id="so-ret" type="date" min="${_todayIso()}"></div>
     <div class="shop-f"><label>Wofür / Anlass</label><input id="so-anlass" placeholder="z. B. Messe Kiel, Regatta, Schulbesuch"></div>
-    <div class="shop-f2"><div class="shop-f"><label>Wohin?</label><select id="so-ort" onchange="document.getElementById('so-ort2-w').style.display=this.value==='__sonst'?'':'none'">${plOpts}</select></div>
-      <div class="shop-f" id="so-ort2-w" style="display:none"><label>Anderer Ort</label><input id="so-ort2" placeholder="z. B. Schule XY, Hafen"></div></div>
+    <div class="shop-f"><label>Wohin / für wen? *</label><select id="so-ziel" onchange="shopOrderZielChg()">
+      <option value="">– bitte wählen –</option>
+      <option value="home">🏠 Zu mir nach Hause</option>
+      ${ents.length?'<option value="crm">🏛️ Für einen Verein / Partner</option>':''}
+      ${pls.length?'<option value="place">🏢 Ins Büro / an einen Ort</option>':''}
+      <option value="other">✏️ Andere Adresse / Person</option></select></div>
+    <div class="shop-f" id="so-crm-w" style="display:none"><label>Welcher Verein / Partner? *</label><select id="so-crm" onchange="shopOrderZielChg(true)">${vOpts}</select></div>
+    <div class="shop-f" id="so-place-w" style="display:none"><label>Welcher Ort? *</label><select id="so-place">${plOpts}</select></div>
+    <div class="shop-f" id="so-name-w" style="display:none"><label>Empfänger *</label><input id="so-name" placeholder="z. B. Schule XY, Max Muster"></div>
+    <div class="shop-f" id="so-adr-w" style="display:none"><label>Lieferadresse <span id="so-adr-h" style="font-weight:400;color:var(--muted)"></span></label>
+      <textarea id="so-adr" rows="3" placeholder="Straße Nr.&#10;PLZ Ort"></textarea></div>
     <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
@@ -424,14 +436,35 @@ function shopOrderItemChg(){
   const r=document.getElementById('so-ret-w'); if(r) r.style.display=leih?'':'none';
   const l=document.getElementById('so-date-l'); if(l) l.textContent=leih?'Gebraucht ab':'Bis wann?';
 }
+// Ziel umschalten: passende Felder zeigen + Lieferadresse vorbelegen
+// (Verein → Adresse aus dem CRM; Zuhause → Adresse der letzten eigenen „Nach Hause"-Bestellung)
+function shopOrderZielChg(onlyAdr){
+  const z=_val('so-ziel'); const show=(id,on)=>{ const e=document.getElementById(id); if(e) e.style.display=on?'':'none'; };
+  if(!onlyAdr){ show('so-crm-w',z==='crm'); show('so-place-w',z==='place'); show('so-name-w',z==='other'); show('so-adr-w',z==='home'||z==='crm'||z==='other'); }
+  const adr=document.getElementById('so-adr'), h=document.getElementById('so-adr-h'); if(!adr) return;
+  let pre='', hint='';
+  if(z==='home'){
+    const last=orders().find(o=>o.byId===_me().id && o.ziel==='home' && o.adresse);
+    pre=last?last.adresse:''; hint=last?'(von deiner letzten Bestellung)':'(wird für die nächste Bestellung gemerkt)';
+  } else if(z==='crm'){
+    const v=_val('so-crm'); if(v){ const [t,e]=v.split('::'); const ent=CD.getEntity?CD.getEntity(t,e):null; pre=String((ent&&ent.stamm&&ent.stamm.adresse)||''); hint=pre?'(aus dem CRM)':'(im CRM ist keine Adresse hinterlegt)'; }
+  }
+  adr.value=pre; if(h) h.textContent=hint;
+}
 function shopOrderSave(){
   const itemId=_val('so-item'), free=_val('so-free');
   const it=itemId?getShop('shopItems',itemId):null;
   if(!it && !free){ toast('Bitte beschreiben, was gebraucht wird.','err'); return; }
   const q=Math.round(_num(_val('so-qty'))); if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
-  let ort=_val('so-ort'), ortText='';
-  if(ort==='__sonst'){ ortText=_val('so-ort2'); if(!ortText){ toast('Bitte den Ort angeben.','err'); return; } ort=''; }
-  else if(ort==='__abholen'){ ortText='Holt selbst ab'; ort=''; }
+  const ziel=_val('so-ziel'); let zielRef=null, zielName='', ort='', ortText='';
+  const adresse=_val('so-adr');
+  if(!ziel){ toast('Bitte angeben, wohin bzw. für wen.','err'); return; }
+  if(ziel==='home'){ zielName=_me().name||''; ortText='🏠 zu '+zielName+' nach Hause'; }
+  else if(ziel==='crm'){ const v=_val('so-crm'); if(!v){ toast('Bitte den Verein / Partner auswählen.','err'); return; }
+    const [t,e]=v.split('::'); const x=_crmEntities().find(k=>k.tree===t&&k.eid===e); zielRef={tree:t,eid:e}; zielName=x?x.name:'?'; ortText='🏛️ '+zielName; }
+  else if(ziel==='place'){ ort=_val('so-place'); if(!ort){ toast('Bitte den Ort auswählen.','err'); return; } }
+  else { zielName=_val('so-name'); if(!zielName){ toast('Bitte den Empfänger angeben.','err'); return; } ortText='✏️ '+zielName; }
+  if((ziel==='home'||ziel==='other') && !adresse){ toast('Bitte die Lieferadresse angeben.','err'); return; }
   const leih=!!(it&&it.leihbar); const ret=leih?_val('so-ret'):'';
   if(leih && !ret){ toast('Bitte angeben, bis wann es zurückkommt.','err'); return; }
   if(leih && _val('so-date') && ret<_val('so-date')){ toast('Die Rückgabe liegt vor dem Startdatum.','err'); return; }
@@ -439,6 +472,7 @@ function shopOrderSave(){
   saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
     itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':free, menge:q, einheit:it?(it.einheit||'Stück'):'',
     termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
+    ziel, zielRef, zielName, adresse,
     leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
   closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
   TAB='bestellungen'; renderShop();
@@ -446,7 +480,16 @@ function shopOrderSave(){
 
 // ── Tab: Bestellungen ──────────────────────────────────────────────
 function _orderWhat(o){ const it=o.itemId?getShop('shopItems',o.itemId):null; return `${o.menge}× ${esc(it?itemLabel(it):(o.itemName||o.freitext||'?'))}`; }
-function _orderWhere(o){ return o.ortId?esc(placeLabel(o.ortId)):(o.ortText?esc(o.ortText):''); }
+function _orderWhere(o){
+  if(o.ziel==='crm'&&o.zielRef) return esc(bLabel({borrowerRef:o.zielRef,borrowerName:o.zielName}));
+  return o.ortId?esc(placeLabel(o.ortId)):(o.ortText?esc(o.ortText):'');
+}
+// Empfänger einer Bestellung (für Verschicken/Verleihen beim Ausgeben)
+function _orderRecipient(o){
+  if(o.ziel==='crm'&&o.zielRef) return {bId:null, bRef:o.zielRef, bName:bName({borrowerRef:o.zielRef,borrowerName:o.zielName})};
+  if(o.ziel==='other') return {bId:null, bRef:null, bName:o.zielName||'?'};
+  return {bId:o.byId||null, bRef:null, bName:o.byName||'?'};   // home + alte Bestellungen → Besteller
+}
 function _ordersHtml(mgr){
   const me=_me();
   let os=orders(); if(!mgr) os=os.filter(o=>o.byId===me.id);
@@ -469,6 +512,7 @@ function _ordersHtml(mgr){
       <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span></div>
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
+        ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
         ${o.note?`<br>📝 ${esc(o.note)}`:''}
         ${o.handledByName?`<br>Bearbeitet von ${esc(o.handledByName)} · ${_fmtTs(o.handledTs)}${o.fromPlace?` · aus ${esc(placeLabel(o.fromPlace))}`:''}`:''}
         ${o.answer?`<br>💬 ${esc(o.answer)}`:''}</div></div>
@@ -512,18 +556,24 @@ function shopOrderIssue(id){
   const o=getShop('shopOrders',id); if(!o||!canManage()) return;
   const it=o.itemId?getShop('shopItems',o.itemId):null;
   if(!it){ toast('Der Artikel existiert nicht mehr – bitte „Erledigt" nutzen.','err'); return; }
-  const leih=!!(o.leihe||it.leihbar);
-  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && (leih || p!==o.ortId));
-  if(!from.length){ toast('Kein Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
+  const leih=!!it.leihbar;
   const canMoveTo=!!(o.ortId && placeOf(o.ortId));
-  openModal(`<h3>📦 Ausgeben</h3><p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · für <b>${esc(o.byName||'')}</b></p>
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && (!canMoveTo || p!==o.ortId));
+  if(!from.length){ toast('Kein Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
+  const rc=_orderRecipient(o);
+  // Vorwahl nach Ziel: Ort → umlagern · Person/Verein → Leihmaterial verleihen, sonst verschicken
+  const def = canMoveTo ? 'move' : (leih ? 'leihe' : 'versand');
+  const opt=(v,l)=>`<option value="${v}"${def===v?' selected':''}>${l}</option>`;
+  openModal(`<h3>📦 Ausgeben / Verschicken</h3><p style="font-size:13px;margin:0 0 6px">${_orderWhat(o)} · bestellt von <b>${esc(o.byName||'')}</b></p>
+    <div style="font-size:13px;background:#f1f4f8;border-radius:8px;padding:8px 10px;margin:0 0 10px">Ziel: <b>${_orderWhere(o)||'–'}</b>${o.adresse?`<div style="white-space:pre-line;margin-top:3px">📮 ${esc(o.adresse)}</div>`:''}</div>
     <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="si-from">${from.map(p=>`<option value="${esc(p)}">${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
       <div class="shop-f"><label>Menge</label><input id="si-qty" type="number" min="1" step="1" value="${o.menge||1}"></div></div>
-    <div class="shop-f"><label>Was passiert mit dem Bestand?</label><select id="si-mode" onchange="document.getElementById('si-due-w').style.display=this.value==='leihe'?'':'none'">
-      ${leih?`<option value="leihe" selected>🔁 Ausleihe an ${esc(o.byName||'Besteller')} (kommt zurück)</option>`:''}
-      ${canMoveTo?`<option value="move"${leih?'':' selected'}>⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand – z. B. Werkzeug, Flaggen)</option>`:''}
-      <option value="out"${(canMoveTo||leih)?'':' selected'}>➖ Vom Bestand abziehen (verbraucht / weitergegeben – z. B. Flyer)</option></select></div>
-    <div class="shop-f" id="si-due-w" style="display:${leih?'':'none'}"><label>Rückgabe bis</label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
+    <div class="shop-f"><label>Was passiert?</label><select id="si-mode" onchange="document.getElementById('si-due-w').style.display=this.value==='leihe'?'':'none'">
+      ${canMoveTo?opt('move',`⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand)`):''}
+      ${leih?opt('leihe',`🔁 Verleihen an ${esc(rc.bName)} (kommt zurück)`):''}
+      ${opt('versand',`📤 Verschicken an ${esc(rc.bName)} (bleibt dort, wird abgezogen)`)}
+      ${opt('out','➖ Nur vom Bestand abziehen (ohne Empfänger)')}</select></div>
+    <div class="shop-f" id="si-due-w" style="display:${def==='leihe'?'':'none'}"><label>Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
     <div class="shop-f"><label>Nachricht an ${esc(o.byName||'Besteller')} (optional)</label><input id="si-ans" placeholder="z. B. liegt im Bus, Fach links"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderIssueSave(${jsq(id)})">Ausgeben</button></div>`);
@@ -535,12 +585,23 @@ function shopOrderIssueSave(id){
   if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
   if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
   const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
+  const rc=_orderRecipient(o);
   if(mode==='leihe'){
     saveShop('shopItems', it);
     const due=_val('si-due');
-    _createLoan(it, from, q, o.byId||null, o.byName||'?', due, o.anlass||'', o.note||'', o.id, true);
+    // viaOrder=true nur, wenn der Besteller selbst der Ausleiher ist (er bekommt ja schon die Bestell-Mitteilung)
+    _createLoan(it, from, q, rc.bId, rc.bName, due, o.anlass||'', o.note||'', o.id, rc.bId===o.byId, rc.bRef);
     _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:'leihe', rueckgabe:due});
-    closeModal(); toast('Ausgeliehen ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
+    closeModal(); toast('Verliehen an '+rc.bName+' ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
+  }
+  if(mode==='versand'){
+    saveShop('shopItems', it);
+    const cu=_me();
+    saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
+      type:'versand', qty:q, from, to:null, note:note+(o.adresse?' · '+o.adresse.replace(/\n/g,', '):''),
+      recipientName:rc.bName, recipientId:rc.bId||null, recipientRef:rc.bRef||null, orderId:o.id });
+    _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:'versand'});
+    closeModal(); toast('Verschickt an '+rc.bName+' ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
   }
   if(mode==='move' && o.ortId){ _applyDelta(it, o.ortId, q); saveShop('shopItems', it); _log(it,'umlagern',q,from,o.ortId,note,o.id); }
   else { saveShop('shopItems', it); _log(it,'ausgabe',q,from,null,note,o.id); }
@@ -812,7 +873,7 @@ function shopNotices(){
     }
     if(o.byId===cu.id && !o.ackOrderer && (o.status==='ausgegeben'||o.status==='erledigt'||o.status==='abgelehnt')){
       const st=STATUS[o.status];
-      out.push({ ts:o.handledTs||o.ts, html:`🛒 Deine Bestellung ${_orderWhat(o)} ist <b>${st.l.toLowerCase()}</b>${o.handledByName?' ('+esc(o.handledByName)+')':''}${o.answer?': „'+esc(o.answer)+'“':''}${o.status==='ausgegeben'&&o.issueMode==='move'&&o.ortId?' – liegt jetzt: '+esc(placeLabel(o.ortId)):''}${o.issueMode==='leihe'&&o.rueckgabe?' – 🔁 bitte zurückgeben bis '+_fmtDate(o.rueckgabe):''}`,
+      out.push({ ts:o.handledTs||o.ts, html:`🛒 Deine Bestellung ${_orderWhat(o)} ist <b>${st.l.toLowerCase()}</b>${o.handledByName?' ('+esc(o.handledByName)+')':''}${o.answer?': „'+esc(o.answer)+'“':''}${o.status==='ausgegeben'&&o.issueMode==='move'&&o.ortId?' – liegt jetzt: '+esc(placeLabel(o.ortId)):''}${o.issueMode==='leihe'?' – 🔁 verliehen an '+esc(_orderRecipient(o).bName)+(o.rueckgabe?', zurück bis '+_fmtDate(o.rueckgabe):' (Dauerleihe)'):''}${o.issueMode==='versand'?' – 📤 verschickt an '+esc(_orderRecipient(o).bName):''}`,
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeAck(${JSON.stringify(o.id)})` });
     }
   });
@@ -859,7 +920,7 @@ function shopNoticeAck(id){
 Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
-  shopOrderNew, shopOrderItemChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
+  shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
   shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave,
