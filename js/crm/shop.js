@@ -252,8 +252,8 @@ function _itemsGrid(mgr){
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       <div class="shop-act">
         <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">${it.leihbar?'🔁 Ausleihen':'🛒 Bestellen'}</button>
-        ${mgr?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – kommt zurück">🔁 Verleihen</button>
-        <button class="shop-btn sm" onclick="shopSend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – bleibt dort">📤 Verschicken</button>`:''}
+        ${mgr&&it.leihbar?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – kommt zurück">🔁 Verleihen</button>`:''}
+        ${mgr?`<button class="shop-btn sm" onclick="shopSend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – bleibt dort">📤 Verschicken</button>`:''}
         ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
         <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
@@ -592,6 +592,7 @@ function _whoRead(px){
 function shopLend(itemId){
   if(!canManage()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
+  if(!it.leihbar){ toast('Verbrauchsmaterial wird nicht verliehen – bitte „📤 Verschicken" nutzen (oder den Artikel als Leihmaterial markieren).','err'); return; }
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
   openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar · kommt zurück</p>
@@ -630,7 +631,7 @@ function shopSend(itemId){
     <div class="shop-f2"><div class="shop-f"><label>Wie?</label><select id="ss-how"><option>Post / Versand</option><option>Persönlich übergeben</option><option>Abgeholt</option></select></div>
       <div class="shop-f"><label>Wofür / Anlass</label><input id="ss-anlass" placeholder="z. B. Vereinsfest, Messe"></div></div>
     <div class="shop-f"><label>Notiz</label><input id="ss-note" placeholder="z. B. Sendungsnummer"></div>
-    <p style="font-size:12px;color:var(--muted);margin:0">Soll es zurückkommen? Dann besser „🔁 Verleihen".</p>
+    ${it.leihbar?'<p style="font-size:12px;color:var(--muted);margin:0">Soll es zurückkommen? Dann besser „🔁 Verleihen".</p>':''}
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopSendSave(${jsq(itemId)})">Verschicken</button></div>`);
 }
