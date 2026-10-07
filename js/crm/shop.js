@@ -278,7 +278,6 @@ function _bestandHtml(mgr){
       <select onchange="shopSetCat(this.value)">${catOpts}</select>
       <select onchange="shopSetPlace(this.value)">${plOpts}</select>
       <span class="shop-sp"></span>
-      <button class="shop-btn" onclick="shopOrderNew('')">＋ Freier Wunsch</button>
       ${mgr?`<button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>`:''}
     </div>
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
@@ -310,14 +309,11 @@ function _itemsGrid(mgr){
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
-      <div class="shop-act">
-        <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">${it.leihbar?'🔁 Ausleihen':'🛒 Bestellen'}</button>
-        ${mgr&&it.leihbar?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – kommt zurück">🔁 Verleihen</button>`:''}
-        ${mgr?`<button class="shop-btn sm" onclick="shopSend(${jsq(it.id)})" title="An Mitarbeiter, Verein oder andere – bleibt dort">📤 Verschicken</button>`:''}
-        ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
+      ${mgr?`<div class="shop-act">
+        <button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
-        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
-      </div></div></div>`;
+        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>
+      </div>`:''}</div></div>`;
   }).join('')}</div>`;
 }
 function _catIcon(c){ return ({'Flaggen':'🚩','Flyer':'📄','Branding':'🎨','Visitenkarten':'🪪','Bootsmaterial':'⛵','Werkzeug':'🛠️'})[c]||'📦'; }
@@ -613,7 +609,9 @@ function _ordersHtml(mgr){
       ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
   }).join('');
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fOrd===s[0]?'on':''}" onclick="shopSetOrd(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
-      <span class="shop-sp"></span><button class="shop-btn pri" onclick="shopOrderNew('')">＋ Bestellen</button></div>
+      <span class="shop-sp"></span>
+      ${mgr?`<button class="shop-btn" onclick="shopPickItem('send')" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken">📤 Direkt verschicken</button>`:''}
+      <button class="shop-btn pri" onclick="shopOrderNew('')">＋ Bestellen</button></div>
     <div class="shop-list">${rows||`<div class="shop-empty">${mgr?'Keine Bestellungen in dieser Ansicht.':'Du hast hier keine Bestellungen.'}</div>`}</div>`;
 }
 function shopSetOrd(v){ fOrd=v; renderShop(); }
@@ -795,6 +793,18 @@ function shopLendSave(itemId){
   _createLoan(it, from, q, bId, bName, due, _val('sl-anlass'), _val('sl-note'), null, false, bRef);
   closeModal(); toast(`${q}× verliehen an ${bName} ✓`,'ok'); renderShop();
 }
+// Verwalter: erst Artikel wählen, dann Verschicken bzw. Verleihen (ohne vorherige Bestellung)
+function shopPickItem(mode){
+  if(!canManage()) return;
+  const lend=mode==='lend';
+  const list=items().filter(i=>inPlaces(i)>0 && (!lend || i.leihbar));
+  if(!list.length){ toast(lend?'Kein Leihmaterial mit verfügbarem Bestand.':'Kein Artikel mit Bestand.','err'); return; }
+  openModal(`<h3>${lend?'🔁 Verleihen':'📤 Direkt verschicken'} – welcher Artikel?</h3>
+    <div class="shop-f"><label>Artikel</label><select id="spi-item">${list.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''} (${inPlaces(i)} verfügbar)</option>`).join('')}</select></div>
+    ${lend?'':'<p style="font-size:12px;color:var(--muted);margin:0">Leihmaterial, das zurückkommen soll, besser über „🔁 Ausleihen" → „Verleihen".</p>'}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="${lend?'shopLend':'shopSend'}(document.getElementById('spi-item').value)">Weiter</button></div>`);
+}
 // ── Verschicken / abgeben (Verbrauch MIT Empfänger: Flyer an Verein, Visitenkarten an Mitarbeiter …)
 function shopSend(itemId){
   if(!canManage()) return;
@@ -884,7 +894,8 @@ function _loansHtml(mgr){
   }).join('');
   const seg=[['aktiv','Ausgeliehen'],['zurueck','Zurückgegeben']];
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fLoan===s[0]?'on':''}" onclick="shopSetLoan(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
-      <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">${mgr?'Verleihen über „🔁 Verleihen" am Artikel':'Ausleihen über „🔁 Ausleihen" am Artikel'}</span></div>
+      <span class="shop-sp"></span>${mgr?`<button class="shop-btn pri" onclick="shopPickItem('lend')">🔁 Verleihen</button>`
+        :`<button class="shop-btn pri" onclick="shopOrderNew('')" title="Leihmaterial anfragen – mit Rückgabedatum">🔁 Ausleihen anfragen</button>`}</div>
     <div class="shop-list">${rows||`<div class="shop-empty">${fLoan==='aktiv'?(mgr?'Gerade ist nichts verliehen.':'Du hast gerade nichts ausgeliehen.'):'Noch keine Rückgaben.'}</div>`}</div>`;
 }
 function shopSetLoan(v){ fLoan=v; renderShop(); }
@@ -1052,7 +1063,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
