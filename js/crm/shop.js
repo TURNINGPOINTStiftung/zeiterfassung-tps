@@ -81,12 +81,23 @@ function _crmEntities(){
   return out;
 }
 function bType(l){ return l.borrowerRef&&l.borrowerRef.eid ? 'crm' : (l.borrowerId ? 'user' : 'frei'); }
-function bKey(l){ const t=bType(l); return t==='crm' ? 'c:'+l.borrowerRef.tree+'/'+l.borrowerRef.eid : t==='user' ? 'u:'+l.borrowerId : 'f:'+String(l.borrowerName||'').trim().toLowerCase(); }
-function bName(l){   // CRM-Name live (Umbenennung im CRM zieht nach)
-  if(bType(l)==='crm'){ try{ const e=CD.getEntity&&CD.getEntity(l.borrowerRef.tree,l.borrowerRef.eid); if(e&&e.stamm&&e.stamm.name) return e.stamm.name; }catch(err){} }
+// borrowerRef {tree,eid,kid?}: kid = Kontakt/Mitglied innerhalb des Vereins/Verbands
+function bKey(l){ const t=bType(l); return t==='crm' ? 'c:'+l.borrowerRef.tree+'/'+l.borrowerRef.eid+(l.borrowerRef.kid?'/'+l.borrowerRef.kid:'') : t==='user' ? 'u:'+l.borrowerId : 'f:'+String(l.borrowerName||'').trim().toLowerCase(); }
+function _crmContact(ref){ try{ const e=CD.getEntity&&CD.getEntity(ref.tree,ref.eid); return {e, k:(e&&ref.kid)?(e.kontakte||[]).find(x=>x.id===ref.kid)||null:null}; }catch(err){ return {e:null,k:null}; } }
+function bName(l){   // CRM-Name live (Umbenennung im CRM zieht nach); mit Kontakt: „Max Muster (TSV Kronshagen)"
+  if(bType(l)==='crm'){ const {e,k}=_crmContact(l.borrowerRef); const en=(e&&e.stamm&&e.stamm.name)||'';
+    if(k&&k.name) return k.name+(en?' ('+en+')':''); if(en&&!l.borrowerRef.kid) return en; }
   return l.borrowerName||'?';
 }
-function bIcon(l){ return ({crm:'🏛️',user:'👤',frei:'✏️'})[bType(l)]; }
+function bIcon(l){ return bType(l)==='crm'&&l.borrowerRef.kid ? '👤' : ({crm:'🏛️',user:'👤',frei:'✏️'})[bType(l)]; }
+// Kontakte eines CRM-Eintrags als <option>s (für das „An Person"-Feld)
+function _contactOpts(tree,eid){
+  const {e}=_crmContact({tree,eid}); const ks=(e&&e.kontakte)||[];
+  return '<option value="">– an den Verein / Partner selbst –</option>'+ks.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'}))
+    .map(k=>`<option value="${esc(k.id)}">${esc(k.name||'(ohne Name)')}${k.funktion?' ('+esc(k.funktion)+')':''}${k.adresse?' · 📮':''}</option>`).join('');
+}
+// Adresse für einen CRM-Empfänger: eigene Kontakt-Adresse, sonst die des Vereins
+function _crmAddress(ref){ const {e,k}=_crmContact(ref); return String((k&&k.adresse)||(e&&e.stamm&&e.stamm.adresse)||'').trim(); }
 function bLabel(l){ return bIcon(l)+' '+bName(l); }
 function people(){
   try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&!u.archived)
@@ -421,7 +432,8 @@ function shopOrderNew(itemId){
       ${ents.length?'<option value="crm">🏛️ Für einen Verein / Partner</option>':''}
       ${pls.length?'<option value="place">🏢 Ins Büro / an einen Ort</option>':''}
       <option value="other">✏️ Andere Adresse / Person</option></select></div>
-    <div class="shop-f" id="so-crm-w" style="display:none"><label>Welcher Verein / Partner? *</label><select id="so-crm" onchange="shopOrderZielChg(true)">${vOpts}</select></div>
+    <div class="shop-f2" id="so-crm-w" style="display:none"><div class="shop-f"><label>Welcher Verein / Partner? *</label><select id="so-crm" onchange="shopOrderCrmChg()">${vOpts}</select></div>
+      <div class="shop-f" id="so-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="so-k" onchange="shopOrderZielChg(true)"></select></div></div>
     <div class="shop-f" id="so-place-w" style="display:none"><label>Welcher Ort? *</label><select id="so-place">${plOpts}</select></div>
     <div class="shop-f" id="so-name-w" style="display:none"><label>Empfänger *</label><input id="so-name" placeholder="z. B. Schule XY, Max Muster"></div>
     <div class="shop-f" id="so-adr-w" style="display:none"><label>Lieferadresse <span id="so-adr-h" style="font-weight:400;color:var(--muted)"></span></label>
@@ -447,9 +459,17 @@ function shopOrderZielChg(onlyAdr){
     const last=orders().find(o=>o.byId===_me().id && o.ziel==='home' && o.adresse);
     pre=last?last.adresse:''; hint=last?'(von deiner letzten Bestellung)':'(wird für die nächste Bestellung gemerkt)';
   } else if(z==='crm'){
-    const v=_val('so-crm'); if(v){ const [t,e]=v.split('::'); const ent=CD.getEntity?CD.getEntity(t,e):null; pre=String((ent&&ent.stamm&&ent.stamm.adresse)||''); hint=pre?'(aus dem CRM)':'(im CRM ist keine Adresse hinterlegt)'; }
+    const v=_val('so-crm'); if(v){ const [t,e]=v.split('::'); const kid=_val('so-k')||null;
+      const {k}=_crmContact({tree:t,eid:e,kid}); pre=_crmAddress({tree:t,eid:e,kid});
+      hint=pre?((k&&k.adresse)?'(Adresse des Kontakts aus dem CRM)':'(Vereinsadresse aus dem CRM)'):'(im CRM ist keine Adresse hinterlegt)'; }
   }
   adr.value=pre; if(h) h.textContent=hint;
+}
+function shopOrderCrmChg(){
+  const v=_val('so-crm'); const w=document.getElementById('so-k-w'), s=document.getElementById('so-k');
+  if(v && s){ const [t,e]=v.split('::'); s.innerHTML=_contactOpts(t,e); if(w) w.style.display=''; }
+  else if(w) w.style.display='none';
+  shopOrderZielChg(true);
 }
 function shopOrderSave(){
   const itemId=_val('so-item'), free=_val('so-free');
@@ -461,7 +481,8 @@ function shopOrderSave(){
   if(!ziel){ toast('Bitte angeben, wohin bzw. für wen.','err'); return; }
   if(ziel==='home'){ zielName=_me().name||''; ortText='🏠 zu '+zielName+' nach Hause'; }
   else if(ziel==='crm'){ const v=_val('so-crm'); if(!v){ toast('Bitte den Verein / Partner auswählen.','err'); return; }
-    const [t,e]=v.split('::'); const x=_crmEntities().find(k=>k.tree===t&&k.eid===e); zielRef={tree:t,eid:e}; zielName=x?x.name:'?'; ortText='🏛️ '+zielName; }
+    const [t,e]=v.split('::'); const kid=_val('so-k')||null; zielRef=kid?{tree:t,eid:e,kid}:{tree:t,eid:e};
+    zielName=bName({borrowerRef:zielRef}); ortText=(kid?'👤 ':'🏛️ ')+zielName; }
   else if(ziel==='place'){ ort=_val('so-place'); if(!ort){ toast('Bitte den Ort auswählen.','err'); return; } }
   else { zielName=_val('so-name'); if(!zielName){ toast('Bitte den Empfänger angeben.','err'); return; } ortText='✏️ '+zielName; }
   if((ziel==='home'||ziel==='other') && !adresse){ toast('Bitte die Lieferadresse angeben.','err'); return; }
@@ -635,19 +656,36 @@ function _whoPickerHtml(px){
   ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
   const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
     return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
-  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="document.getElementById('${px}-other-w').style.display=this.value==='__other'?'':'none'">
+  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="shopWhoChg('${px}')">
         <option value="">– bitte wählen –</option>
         ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
         ${crmGroups}
         <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
-      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name</label><input id="${px}-other" placeholder="z. B. Max Muster, Schule XY"></div></div>`;
+      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name</label><input id="${px}-other" placeholder="z. B. Max Muster, Schule XY"></div>
+      <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" onchange="shopWhoChg('${px}',true)"></select></div></div>
+      <div class="shop-f" id="${px}-adr-w" style="display:none;font-size:12px;color:var(--muted);margin-top:-4px"></div>`;
+}
+// Empfänger gewechselt: freies Namensfeld bzw. Kontaktliste des Vereins zeigen + Adresse anzeigen
+function shopWhoChg(px, onlyAdr){
+  const who=_val(px+'-who'); const g=id=>document.getElementById(px+id);
+  if(!onlyAdr){
+    if(g('-other-w')) g('-other-w').style.display=who==='__other'?'':'none';
+    const isC=who.startsWith('c:');
+    if(g('-k-w')) g('-k-w').style.display=isC?'':'none';
+    if(isC && g('-k')){ const [tree,eid]=who.slice(2).split('::'); g('-k').innerHTML=_contactOpts(tree,eid); }
+  }
+  const aw=g('-adr-w'); if(!aw) return;
+  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const adr=_crmAddress({tree,eid,kid:_val(px+'-k')||null});
+    aw.style.display=''; aw.innerHTML=adr?'📮 '+esc(adr).replace(/\n/g,', '):'📮 Im CRM ist keine Adresse hinterlegt.'; }
+  else aw.style.display='none';
 }
 // → {bId, bRef, bName} oder null (mit Hinweis)
 function _whoRead(px){
   const who=_val(px+'-who');
   if(who==='__other'){ const n=_val(px+'-other'); if(!n){ toast('Bitte einen Namen eingeben.','err'); return null; } return {bId:null,bRef:null,bName:n}; }
   if(who.startsWith('u:')){ const id=who.slice(2); const u=people().find(x=>x.id===id); return {bId:id,bRef:null,bName:u?u.name:id}; }
-  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const x=_crmEntities().find(e=>e.tree===tree&&e.eid===eid); return {bId:null,bRef:{tree,eid},bName:x?x.name:'?'}; }
+  if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const kid=_val(px+'-k')||null;
+    const ref=kid?{tree,eid,kid}:{tree,eid}; return {bId:null,bRef:ref,bName:bName({borrowerRef:ref})}; }
   toast('Bitte auswählen, wer es bekommt.','err'); return null;
 }
 function shopLend(itemId){
@@ -705,11 +743,11 @@ function shopSendSave(itemId){
   saveShop('shopItems', it);
   const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
   saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
-    type:'versand', qty:q, from, to:null, note:[how,anlass,note].filter(Boolean).join(' · '),
+    type:'versand', qty:q, from, to:null, note:[how,anlass,note,(w.bRef?_crmAddress(w.bRef).split('\n').join(', '):'')].filter(Boolean).join(' · '),
     recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:null });
   closeModal(); toast(`${q}× an ${w.bName} verschickt ✓`,'ok'); renderShop();
 }
-function _recipLabel(l){ if(!l.recipientName) return ''; return (l.recipientRef?'🏛️ ':l.recipientId?'👤 ':'✏️ ')+bName({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
+function _recipLabel(l){ if(!l.recipientName) return ''; return bLabel({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
 function shopReturn(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
   const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
@@ -809,10 +847,12 @@ function shopLoansForEntity(tree, eid){
     if(!ls.length && !sent.length) return '';
     const can=canUse();
     const d=ts=>_fmtDate(new Date(ts).toISOString().slice(0,10));
+    // Ging es an einen bestimmten Kontakt/Mitglied? → „ → Max Muster"
+    const pers=ref=>{ if(!ref||!ref.kid) return ''; const {k}=_crmContact(ref); return k&&k.name?' → 👤 '+esc(k.name):''; };
     return `<div class="crm-sec"><h4><span class="ttl">🛒 Aus dem Shop</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop ansehen</button></span>`:''}</h4>
-      ${ls.length?`<div class="small" style="font-weight:700;margin:2px 0 4px">🔁 Gerade ausgeliehen</div>`+ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
+      ${ls.length?`<div class="small" style="font-weight:700;margin:2px 0 4px">🔁 Gerade ausgeliehen</div>`+ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.borrowerRef)}</span>
         <div class="small">seit ${d(l.ts)}${l.due?` · <span style="${_overdue(l)?'color:#c0392b;font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join(''):''}
-      ${sent.length?`<div class="small" style="font-weight:700;margin:8px 0 4px">📤 Erhalten</div>`+sent.slice(0,15).map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
+      ${sent.length?`<div class="small" style="font-weight:700;margin:8px 0 4px">📤 Erhalten</div>`+sent.slice(0,15).map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.recipientRef)}</span>
         <div class="small">${d(l.ts)}${l.note?' · '+esc(l.note):''}</div></div></div>`).join('')+(sent.length>15?`<div class="small" style="color:var(--muted)">… und ${sent.length-15} weitere</div>`:''):''}
     </div>`;
   }catch(e){ return ''; }
@@ -920,7 +960,7 @@ function shopNoticeAck(id){
 Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
-  shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
+  shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
   shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave,
