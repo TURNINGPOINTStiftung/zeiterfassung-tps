@@ -132,6 +132,8 @@ function _styles(){
   .shop-pl{display:flex;flex-wrap:wrap;gap:4px}
   .shop-pl span{font-size:12px;padding:2px 7px;border-radius:6px;background:#f1f4f8;color:#2c3e50}
   .shop-pl span.hl{background:#dbe6fb;font-weight:700}
+  .shop-pl span.lent{background:#eef2ff;color:#1e40af}
+  .shop-pl span.lent.late{background:#fdecea;color:#c0392b;font-weight:700}
   .shop-act{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
   .shop-empty{color:var(--muted);font-size:14px;padding:24px 0;text-align:center}
   .shop-list{display:flex;flex-direction:column;gap:8px}
@@ -166,11 +168,15 @@ export function renderShop(){
     if(!mgr && (TAB==='orte'||TAB==='verlauf')) TAB='bestand';
     const os=orders();
     const nOpen = mgr ? os.filter(o=>o.status==='offen').length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
-    const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')]]
+    const myLoans=activeLoans().filter(l=>mgr||l.borrowerId===me.id);
+    const nLate=myLoans.filter(_overdue).length;
+    const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
+      ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
       .concat(mgr?[['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
+    else if(TAB==='ausleihen') body=_loansHtml(mgr);
     else if(TAB==='orte') body=_orteHtml();
     else body=_verlaufHtml();
     root.innerHTML=`<div class="shop-wrap">
@@ -214,16 +220,20 @@ function _itemsGrid(mgr){
       .sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
       .map(pid=>`<span class="${fPlace===pid?'hl':''}">${esc(placeLabel(pid))}: <b>${_num(it.stock[pid])}</b></span>`).join('');
     const img=it.foto?`<div class="shop-img" style="background-image:url('${it.foto}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+    const ln=activeLoans(it.id);
+    const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}" title="${esc(l.anlass||'')}">🔁 ${esc(l.borrowerName||'?')}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):''}</span>`).join('');
+    const avail=inPlaces(it);
     return `<div class="shop-card${low?' low':''}">${img}<div class="shop-cb">
-      ${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${it.leihbar?'<span class="shop-cat" style="background:#dbe6fb;color:#1e40af">🔁 Leihmaterial</span>':''}</div>
       <div class="shop-name">${esc(it.name)}</div>
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
-      <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt</small></div>
+      <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
-      <div class="shop-pl">${pl||'<span style="color:var(--muted)">kein Bestand</span>'}</div>
+      <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       <div class="shop-act">
-        <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">🛒 Bestellen</button>
+        <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">${it.leihbar?'🔁 Ausleihen':'🛒 Bestellen'}</button>
+        ${mgr&&it.leihbar?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)},'')">🔁 Verleihen</button>`:''}
         ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
         <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
@@ -263,6 +273,8 @@ function shopItemEdit(id){
       <div class="shop-f"><label>Mindestbestand <span style="font-weight:400;color:var(--muted)">(Warnung darunter)</span></label><input id="si-min" type="number" min="0" step="1" value="${esc(v.min)}"></div>
     </div>
     <div class="shop-f"><label>Notiz</label><input id="si-note" value="${esc(v.note)}" placeholder="z. B. Druckerei, Bestellnummer, Hinweise"></div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="si-leih" ${v.leihbar?'checked':''} style="width:auto;margin-top:2px">
+      <span><b>🔁 Leihmaterial</b> – wird nicht verbraucht, sondern ausgeliehen und zurückgegeben (Werkzeug, Beachflags, Aufsteller …)</span></label>
     ${initStock}
     <div class="modal-btns">
       ${it?`<button class="btn btn-outline" style="margin-right:auto;color:var(--danger);border-color:var(--danger)" onclick="shopItemDelete(${jsq(it.id)})">🗑 Löschen</button>`:''}
@@ -289,7 +301,8 @@ function shopItemSave(id){
   const ex=id?getShop('shopItems',id):null; const cu=_me();
   const it=Object.assign({}, ex||{ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'' }, {
     name, kategorie:_val('si-cat'), variante:_val('si-var'), einheit:_val('si-unit')||'Stück',
-    min:_val('si-min')===''?'':_num(_val('si-min')), note:_val('si-note'), foto:window._shopPhoto||'' });
+    min:_val('si-min')===''?'':_num(_val('si-min')), note:_val('si-note'), foto:window._shopPhoto||'',
+    leihbar:!!(document.getElementById('si-leih')||{}).checked });
   const inits=[];
   if(!ex) document.querySelectorAll('.shop-init').forEach(inp=>{ const q=Math.round(_num(inp.value)); if(q>0){ _applyDelta(it, inp.dataset.pl, q); inits.push([inp.dataset.pl,q]); } });
   saveShop('shopItems', it);
@@ -299,6 +312,7 @@ function shopItemSave(id){
 function shopItemDelete(id){
   const it=getShop('shopItems',id); if(!it) return;
   const tot=total(it);
+  if(activeLoans(id).length){ toast('Dieser Artikel ist noch verliehen – erst zurückgeben lassen.','err'); return; }
   if(!confirm(`Artikel „${itemLabel(it)}" löschen?`+(tot?`\n\nAchtung: Es sind noch ${tot} ${it.einheit||'Stück'} im Bestand.`:''))) return;
   deleteShop('shopItems', id); closeModal(); toast('Artikel gelöscht.','ok'); renderShop();
 }
@@ -375,7 +389,8 @@ function shopOrderNew(itemId){
     <div class="shop-f"><label>Was?</label><select id="so-item" onchange="shopOrderItemChg()">${itOpts}</select></div>
     <div class="shop-f" id="so-free-w" style="display:${itemId?'none':''}"><label>Was wird gebraucht? *</label><textarea id="so-free" rows="2" placeholder="z. B. 200 Visitenkarten für mich, Roll-up „Wassersport", 2 Schäkel M10"></textarea></div>
     <div class="shop-f2"><div class="shop-f"><label>Menge *</label><input id="so-qty" type="number" min="1" step="1" value="1"></div>
-      <div class="shop-f"><label>Bis wann?</label><input id="so-date" type="date" min="${_todayIso()}"></div></div>
+      <div class="shop-f"><label id="so-date-l">${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'Gebraucht ab':'Bis wann?'}</label><input id="so-date" type="date" min="${_todayIso()}"></div></div>
+    <div class="shop-f" id="so-ret-w" style="display:${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'':'none'}"><label>🔁 Rückgabe bis *</label><input id="so-ret" type="date" min="${_todayIso()}"></div>
     <div class="shop-f"><label>Wofür / Anlass</label><input id="so-anlass" placeholder="z. B. Messe Kiel, Regatta, Schulbesuch"></div>
     <div class="shop-f2"><div class="shop-f"><label>Wohin?</label><select id="so-ort" onchange="document.getElementById('so-ort2-w').style.display=this.value==='__sonst'?'':'none'">${plOpts}</select></div>
       <div class="shop-f" id="so-ort2-w" style="display:none"><label>Anderer Ort</label><input id="so-ort2" placeholder="z. B. Schule XY, Hafen"></div></div>
@@ -383,7 +398,12 @@ function shopOrderNew(itemId){
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
 }
-function shopOrderItemChg(){ const v=_val('so-item'); const w=document.getElementById('so-free-w'); if(w) w.style.display=v?'none':''; }
+function shopOrderItemChg(){
+  const v=_val('so-item'); const w=document.getElementById('so-free-w'); if(w) w.style.display=v?'none':'';
+  const leih=!!(v && (getShop('shopItems',v)||{}).leihbar);
+  const r=document.getElementById('so-ret-w'); if(r) r.style.display=leih?'':'none';
+  const l=document.getElementById('so-date-l'); if(l) l.textContent=leih?'Gebraucht ab':'Bis wann?';
+}
 function shopOrderSave(){
   const itemId=_val('so-item'), free=_val('so-free');
   const it=itemId?getShop('shopItems',itemId):null;
@@ -392,11 +412,14 @@ function shopOrderSave(){
   let ort=_val('so-ort'), ortText='';
   if(ort==='__sonst'){ ortText=_val('so-ort2'); if(!ortText){ toast('Bitte den Ort angeben.','err'); return; } ort=''; }
   else if(ort==='__abholen'){ ortText='Holt selbst ab'; ort=''; }
+  const leih=!!(it&&it.leihbar); const ret=leih?_val('so-ret'):'';
+  if(leih && !ret){ toast('Bitte angeben, bis wann es zurückkommt.','err'); return; }
+  if(leih && _val('so-date') && ret<_val('so-date')){ toast('Die Rückgabe liegt vor dem Startdatum.','err'); return; }
   const cu=_me();
   saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
     itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':free, menge:q, einheit:it?(it.einheit||'Stück'):'',
     termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
-    status:'offen', seenBy:{}, ackOrderer:false });
+    leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
   closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
   TAB='bestellungen'; renderShop();
 }
@@ -425,7 +448,7 @@ function _ordersHtml(mgr){
     return `<div class="shop-row"><div class="main">
       <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span></div>
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
-        ${o.termin?` · <span class="${late?'shop-late':''}">bis ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${where?` · nach: ${where}`:''}
+        ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.note?`<br>📝 ${esc(o.note)}`:''}
         ${o.handledByName?`<br>Bearbeitet von ${esc(o.handledByName)} · ${_fmtTs(o.handledTs)}${o.fromPlace?` · aus ${esc(placeLabel(o.fromPlace))}`:''}`:''}
         ${o.answer?`<br>💬 ${esc(o.answer)}`:''}</div></div>
@@ -469,15 +492,18 @@ function shopOrderIssue(id){
   const o=getShop('shopOrders',id); if(!o||!canManage()) return;
   const it=o.itemId?getShop('shopItems',o.itemId):null;
   if(!it){ toast('Der Artikel existiert nicht mehr – bitte „Erledigt" nutzen.','err'); return; }
-  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && p!==o.ortId);
+  const leih=!!(o.leihe||it.leihbar);
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && (leih || p!==o.ortId));
   if(!from.length){ toast('Kein Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
   const canMoveTo=!!(o.ortId && placeOf(o.ortId));
   openModal(`<h3>📦 Ausgeben</h3><p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · für <b>${esc(o.byName||'')}</b></p>
     <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="si-from">${from.map(p=>`<option value="${esc(p)}">${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
       <div class="shop-f"><label>Menge</label><input id="si-qty" type="number" min="1" step="1" value="${o.menge||1}"></div></div>
-    <div class="shop-f"><label>Was passiert mit dem Bestand?</label><select id="si-mode">
-      ${canMoveTo?`<option value="move" selected>⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand – z. B. Werkzeug, Flaggen)</option>`:''}
-      <option value="out"${canMoveTo?'':' selected'}>➖ Vom Bestand abziehen (verbraucht / weitergegeben – z. B. Flyer)</option></select></div>
+    <div class="shop-f"><label>Was passiert mit dem Bestand?</label><select id="si-mode" onchange="document.getElementById('si-due-w').style.display=this.value==='leihe'?'':'none'">
+      ${leih?`<option value="leihe" selected>🔁 Ausleihe an ${esc(o.byName||'Besteller')} (kommt zurück)</option>`:''}
+      ${canMoveTo?`<option value="move"${leih?'':' selected'}>⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand – z. B. Werkzeug, Flaggen)</option>`:''}
+      <option value="out"${(canMoveTo||leih)?'':' selected'}>➖ Vom Bestand abziehen (verbraucht / weitergegeben – z. B. Flyer)</option></select></div>
+    <div class="shop-f" id="si-due-w" style="display:${leih?'':'none'}"><label>Rückgabe bis</label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
     <div class="shop-f"><label>Nachricht an ${esc(o.byName||'Besteller')} (optional)</label><input id="si-ans" placeholder="z. B. liegt im Bus, Fach links"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderIssueSave(${jsq(id)})">Ausgeben</button></div>`);
@@ -489,6 +515,13 @@ function shopOrderIssueSave(id){
   if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
   if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
   const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
+  if(mode==='leihe'){
+    saveShop('shopItems', it);
+    const due=_val('si-due');
+    _createLoan(it, from, q, o.byId||null, o.byName||'?', due, o.anlass||'', o.note||'', o.id, true);
+    _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:'leihe', rueckgabe:due});
+    closeModal(); toast('Ausgeliehen ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
+  }
   if(mode==='move' && o.ortId){ _applyDelta(it, o.ortId, q); saveShop('shopItems', it); _log(it,'umlagern',q,from,o.ortId,note,o.id); }
   else { saveShop('shopItems', it); _log(it,'ausgabe',q,from,null,note,o.id); }
   _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:mode});
@@ -500,6 +533,114 @@ function shopOrderCancel(id){
   if(!confirm('Bestellung zurückziehen?')) return;
   deleteShop('shopOrders', id); toast('Bestellung zurückgezogen.','ok'); renderShop();
 }
+
+// ── Ausleihe ───────────────────────────────────────────────────────
+// Bestand wurde vom Aufrufer bereits am Quell-Ort abgezogen (it gespeichert).
+function _createLoan(it, fromPlace, qty, borrowerId, borrowerName, due, anlass, note, orderId, viaOrder){
+  const cu=_me();
+  const l={ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
+    qty, fromPlace, borrowerId:borrowerId||null, borrowerName:borrowerName||'?', due:due||'', anlass:anlass||'', note:note||'',
+    orderId:orderId||null, status:'aktiv', returns:[],
+    // Über eine Bestellung → Besteller bekommt schon die Bestell-Mitteilung; direkt verliehen → eigene Mitteilung
+    ackBorrower: !!viaOrder || !borrowerId || borrowerId===cu.id };
+  saveShop('shopLoans', l);
+  _log(it,'verleih',qty,fromPlace,null,'an '+(borrowerName||'?')+(due?' bis '+_fmtDate(due):'')+(anlass?' · '+anlass:''),orderId);
+  return l;
+}
+function shopLend(itemId){
+  if(!canManage()) return;
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
+  if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
+  const ppl=people();
+  openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar</p>
+    <div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="sl-who" onchange="document.getElementById('sl-other-w').style.display=this.value==='__other'?'':'none'">
+        <option value="">– bitte wählen –</option>${ppl.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}<option value="__other">✏️ Andere Person / Verein …</option></select></div>
+      <div class="shop-f" id="sl-other-w" style="display:none"><label>Name</label><input id="sl-other" placeholder="z. B. SV Kiel, Max Muster"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="sl-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
+      <div class="shop-f"><label>Menge</label><input id="sl-qty" type="number" min="1" step="1" value="1"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis *</label><input id="sl-due" type="date" min="${_todayIso()}"></div>
+      <div class="shop-f"><label>Wofür / Anlass</label><input id="sl-anlass" placeholder="z. B. Regatta, Messe"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="sl-note" placeholder="z. B. Zustand bei Ausgabe, Zubehör"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopLendSave(${jsq(itemId)})">Verleihen</button></div>`);
+}
+function shopLendSave(itemId){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const who=_val('sl-who'); let bId=null, bName='';
+  if(who==='__other'){ bName=_val('sl-other'); if(!bName){ toast('Bitte einen Namen eingeben.','err'); return; } }
+  else if(who){ const u=people().find(x=>x.id===who); bId=who; bName=u?u.name:who; }
+  else { toast('Bitte auswählen, wer es bekommt.','err'); return; }
+  const from=_val('sl-from'), q=Math.round(_num(_val('sl-qty'))), due=_val('sl-due');
+  if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  if(!due){ toast('Bitte ein Rückgabedatum angeben.','err'); return; }
+  if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
+  saveShop('shopItems', it);
+  _createLoan(it, from, q, bId, bName, due, _val('sl-anlass'), _val('sl-note'), null, false);
+  closeModal(); toast(`${q}× verliehen an ${bName} ✓`,'ok'); renderShop();
+}
+function shopReturn(loanId){
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
+  const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
+  const pls=places(); if(!pls.length){ toast('Es gibt keinen Ort für die Rückgabe.','err'); return; }
+  const def=placeOf(l.fromPlace)?l.fromPlace:pls[0].id;
+  openModal(`<h3>↩ Zurückgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${_num(l.qty)}× ${esc(l.itemName||'')}</b> · ausgeliehen von ${esc(l.borrowerName||'?')}${l.due?' · bis '+_fmtDate(l.due):''}</p>
+    <div class="shop-f2"><div class="shop-f"><label>Zurück nach</label>${_placeSelect('sr-to', def, false)}</div>
+      <div class="shop-f"><label>Menge</label><input id="sr-qty" type="number" min="1" max="${_num(l.qty)}" step="1" value="${_num(l.qty)}"></div></div>
+    <div class="shop-f"><label>Zustand / Notiz</label><input id="sr-note" placeholder="z. B. alles ok, Stange verbogen, Akku fehlt"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopReturnSave(${jsq(loanId)})">Zurückgeben</button></div>`);
+}
+function shopReturnSave(loanId){
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
+  const to=_val('sr-to'), q=Math.round(_num(_val('sr-qty'))), note=_val('sr-note'), open=_num(l.qty);
+  if(q<=0||q>open){ toast(`Bitte eine Menge zwischen 1 und ${open} eingeben.`,'err'); return; }
+  const it=getShop('shopItems',l.itemId);
+  if(it){ _applyDelta(it, to, q); saveShop('shopItems', it); _log(it,'rueckgabe',q,null,to,'von '+(l.borrowerName||'?')+(note?' · '+note:'')); }
+  const cu=_me();
+  if(!Array.isArray(l.returns)) l.returns=[];
+  l.returns.push({ ts:Date.now(), qty:q, to, note, byId:cu.id||'', byName:cu.name||'' });
+  l.qty=open-q;
+  if(l.qty<=0){ l.status='zurueck'; l.returnedTs=Date.now(); }
+  saveShop('shopLoans', l);
+  closeModal(); toast(l.status==='zurueck'?'Zurückgegeben ✓':`${q} zurück – ${l.qty} noch ausgeliehen.`,'ok'); renderShop();
+}
+function shopLoanDue(loanId){
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
+  openModal(`<h3>📅 Rückgabe verlängern</h3><p style="font-size:13px;margin:0 0 10px">${_num(l.qty)}× ${esc(l.itemName||'')} · ${esc(l.borrowerName||'')}</p>
+    <div class="shop-f"><label>Neue Rückgabe bis</label><input id="sld-due" type="date" value="${esc(l.due||'')}"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopLoanDueSave(${jsq(loanId)})">Speichern</button></div>`);
+}
+function shopLoanDueSave(loanId){
+  const l=getShop('shopLoans',loanId); if(!l) return;
+  const d=_val('sld-due'); if(!d){ toast('Bitte ein Datum wählen.','err'); return; }
+  l.due=d; l.ackOverdue=''; saveShop('shopLoans', l); closeModal(); toast('Rückgabe bis '+_fmtDate(d)+' ✓','ok'); renderShop();
+}
+function _loansHtml(mgr){
+  const me=_me();
+  let ls=loans(); if(!mgr) ls=ls.filter(l=>l.borrowerId===me.id);
+  if(fLoan==='aktiv') ls=ls.filter(l=>l.status==='aktiv').sort((a,b)=>String(a.due||'9').localeCompare(String(b.due||'9')));
+  else ls=ls.filter(l=>l.status!=='aktiv');
+  const rows=ls.map(l=>{
+    const late=_overdue(l); const ret=Array.isArray(l.returns)?l.returns:[];
+    const canRet=l.status==='aktiv' && (mgr || l.borrowerId===me.id);
+    return `<div class="shop-row"${late?' style="border-color:#e5484d"':''}><div class="main">
+      <div class="t">🔁 ${_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0)}× ${esc(l.itemName||'?')}
+        ${l.status==='aktiv'?(late?'<span class="shop-st" style="background:#c0392b">Überfällig</span>':'<span class="shop-st" style="background:#2563eb">Ausgeliehen</span>'):'<span class="shop-st" style="background:#16a34a">Zurück</span>'}</div>
+      <div class="m">${mgr?`an <b>${esc(l.borrowerName||'?')}</b> · `:''}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
+        ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:''}${l.anlass?` · ${esc(l.anlass)}`:''}
+        ${l.note?`<br>📝 ${esc(l.note)}`:''}
+        ${ret.map(r=>`<br>↩ ${_num(r.qty)} zurück nach ${esc(placeLabel(r.to))} · ${_fmtTs(r.ts)} (${esc(r.byName||'')})${r.note?' – '+esc(r.note):''}`).join('')}</div></div>
+      ${canRet?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>
+        ${mgr?`<button class="shop-btn sm" onclick="shopLoanDue(${jsq(l.id)})">📅 Verlängern</button>`:''}</div>`:''}</div>`;
+  }).join('');
+  const seg=[['aktiv','Ausgeliehen'],['zurueck','Zurückgegeben']];
+  return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fLoan===s[0]?'on':''}" onclick="shopSetLoan(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
+      <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">${mgr?'Verleihen über „🔁 Verleihen" am Artikel':'Ausleihen über „🔁 Ausleihen" am Artikel'}</span></div>
+    <div class="shop-list">${rows||`<div class="shop-empty">${fLoan==='aktiv'?(mgr?'Gerade ist nichts verliehen.':'Du hast gerade nichts ausgeliehen.'):'Noch keine Rückgaben.'}</div>`}</div>`;
+}
+function shopSetLoan(v){ fLoan=v; renderShop(); }
 
 // ── Tab: Orte ──────────────────────────────────────────────────────
 function _orteHtml(){
@@ -571,12 +712,32 @@ function shopNotices(){
     }
     if(o.byId===cu.id && !o.ackOrderer && (o.status==='ausgegeben'||o.status==='erledigt'||o.status==='abgelehnt')){
       const st=STATUS[o.status];
-      out.push({ ts:o.handledTs||o.ts, html:`🛒 Deine Bestellung ${_orderWhat(o)} ist <b>${st.l.toLowerCase()}</b>${o.handledByName?' ('+esc(o.handledByName)+')':''}${o.answer?': „'+esc(o.answer)+'“':''}${o.status==='ausgegeben'&&o.issueMode==='move'&&o.ortId?' – liegt jetzt: '+esc(placeLabel(o.ortId)):''}`,
+      out.push({ ts:o.handledTs||o.ts, html:`🛒 Deine Bestellung ${_orderWhat(o)} ist <b>${st.l.toLowerCase()}</b>${o.handledByName?' ('+esc(o.handledByName)+')':''}${o.answer?': „'+esc(o.answer)+'“':''}${o.status==='ausgegeben'&&o.issueMode==='move'&&o.ortId?' – liegt jetzt: '+esc(placeLabel(o.ortId)):''}${o.issueMode==='leihe'&&o.rueckgabe?' – 🔁 bitte zurückgeben bis '+_fmtDate(o.rueckgabe):''}`,
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeAck(${JSON.stringify(o.id)})` });
     }
   });
+  // Ausleihe: direkt verliehen (Ausleiher) · überfällig (Ausleiher, 1× pro Tag) · Sammelmeldung für Verwalter
+  const today=_todayIso();
+  activeLoans().forEach(l=>{
+    if(l.borrowerId!==cu.id) return;
+    if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Der Shop')}</b> hat dir ${_num(l.qty)}× ${esc(l.itemName||'')} ausgeliehen${l.due?' – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':''}.`,
+      open:'shopLoanNoticeOpen()', ack:`shopLoanAck(${JSON.stringify(l.id)})` });
+    else if(_overdue(l) && l.ackOverdue!==today) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${_num(l.qty)}× ${esc(l.itemName||'')} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
+      open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });
+  });
+  if(mgr){
+    const late=activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id);
+    let acked=''; try{ acked=localStorage.getItem('tps_shop_od_ack_'+cu.id)||''; }catch(e){}
+    if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(l.borrowerName||'?')}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
+      open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
+  }
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
+function shopLoanNoticeOpen(){ TAB='ausleihen'; fLoan='aktiv'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
+function _noticesRefresh(){ try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){} }
+function shopLoanAck(id){ const l=getShop('shopLoans',id); if(!l) return; l.ackBorrower=true; saveShop('shopLoans', l); _noticesRefresh(); }
+function shopLoanSnooze(id){ const l=getShop('shopLoans',id); if(!l) return; l.ackOverdue=_todayIso(); saveShop('shopLoans', l); _noticesRefresh(); }
+function shopLoanMgrAck(){ try{ localStorage.setItem('tps_shop_od_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
 function shopNoticeOpen(id){
   const o=getShop('shopOrders',id);
   if(o){ const cu=_me(); if(o.byId===cu.id && o.status!=='offen' && o.status!=='inarbeit') shopNoticeAck(id); else if(canManage()) shopNoticeSeen(id); }
@@ -601,4 +762,6 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck });
+  shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
+  shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
+  shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
