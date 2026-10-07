@@ -504,17 +504,49 @@ export function savePathAccess(pa){
   return _write('pathAccess', null, val);
 }
 
-// ── Vollbackup: gesamten CRM-Blob exportieren / wiederherstellen ───
-// exportCrmBlob liefert eine tiefe Kopie aller CRM-Daten (Bäume, config, access, vorlagen,
-// teamprojekte, veranstaltungen, verteiler). restoreCrmBlob ersetzt ALLES (ein Backup-Restore)
-// – Cache + localStorage + ein einziger _ref.set(). Nur über die Verwaltung mit Bestätigung.
-export function exportCrmBlob(){ try{ return JSON.parse(JSON.stringify(getCrm())); }catch(e){ return getCrm(); } }
+// ── Backups: CRM und Shop GETRENNT (User-Vorgabe) ──────────────────
+// Beide liegen technisch unter crm/, werden aber unabhängig gesichert/eingespielt:
+//  • exportCrmBlob / restoreCrmBlob  → alles AUSSER den Shop-Sammlungen (SHOP_COLLS)
+//  • exportShopBlob / restoreShopBlob → NUR die Shop-Sammlungen
+// Restore per update() mit Einzelpfaden statt set() auf crm/ → der jeweils andere Teil bleibt
+// unberührt. Ältere Backups (Shop steckte noch im CRM-Blob) werden so automatisch richtig behandelt.
+function _deep(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return o; } }
+export function exportCrmBlob(){
+  const all=_deep(getCrm()); SHOP_COLLS.forEach(k=>{ delete all[k]; }); return all;
+}
+export function exportShopBlob(){
+  const all=getCrm(); const out={ _v:1 }; SHOP_COLLS.forEach(k=>{ out[k]=_deep(all[k]||{}); }); return out;
+}
+// Teilt einen (alten) CRM-Blob in CRM-Teil und Shop-Teil (Shop-Teil null, wenn keiner drin ist)
+export function splitShopFromCrm(obj){
+  if(!obj || typeof obj!=='object') return { crm:obj, shop:null };
+  const crm={}, shop={ _v:1 }; let has=false;
+  Object.keys(obj).forEach(k=>{ if(SHOP_COLLS.includes(k)){ shop[k]=obj[k]; has=true; } else crm[k]=obj[k]; });
+  return { crm, shop: has?shop:null };
+}
+function _applyUpdates(updates, label){
+  _persistLocal();
+  try{ if(_ref && Object.keys(updates).length) return _ref.update(updates).catch(e=>console.warn(label+' Firebase-Fehler:', e && e.message)); }
+  catch(e){ console.warn(label+':', e && e.message); }
+  return Promise.resolve();
+}
 export function restoreCrmBlob(obj){
   if(!obj || typeof obj!=='object' || Array.isArray(obj)) return Promise.resolve();
-  _cache = obj; _persistLocal();
-  try{ if(_ref) return _ref.set(obj).catch(e=>console.warn('CRM restoreCrmBlob Firebase-Fehler:', e && e.message)); }
-  catch(e){ console.warn('CRM restoreCrmBlob:', e && e.message); }
-  return Promise.resolve();
+  const cur=getCrm(); const updates={};
+  // CRM-Schlüssel, die es im Backup nicht gibt → entfernen; Shop-Schlüssel NIE anfassen
+  Object.keys(cur).forEach(k=>{ if(!SHOP_COLLS.includes(k) && !(k in obj)) updates[k]=null; });
+  Object.keys(obj).forEach(k=>{ if(!SHOP_COLLS.includes(k)) updates[k]=obj[k]; });
+  const next=Object.assign({}, cur); Object.keys(updates).forEach(k=>{ if(updates[k]===null) delete next[k]; else next[k]=updates[k]; });
+  _cache=_normalize(next);
+  return _applyUpdates(updates,'CRM restoreCrmBlob');
+}
+export function restoreShopBlob(obj){
+  if(!obj || typeof obj!=='object' || Array.isArray(obj)) return Promise.resolve();
+  const cur=getCrm(); const updates={};
+  SHOP_COLLS.forEach(k=>{ const v=obj[k]; updates[k]=(v && typeof v==='object' && Object.keys(v).length) ? v : null; });
+  const next=Object.assign({}, cur); SHOP_COLLS.forEach(k=>{ next[k]=updates[k]||{}; });
+  _cache=_normalize(next);
+  return _applyUpdates(updates,'Shop restoreShopBlob');
 }
 
 // ── CRM-Konfiguration (admin-editierbare Bäume & Felder) ───────────

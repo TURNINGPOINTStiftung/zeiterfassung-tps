@@ -4645,7 +4645,7 @@ function ensureVerwMounted(){
        <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
        <div class="verw-panel" id="verw-tab-data" style="display:none"><div class="crm-sec"><h4><span class="ttl">💾 Datenexport</span></h4>
          <div class="small" style="color:var(--muted);margin-bottom:10px">Lese-Kopie zum Sichern oder Auswerten. Passwort-Daten sind nicht enthalten. Wiederherstellen (Import) kann nur der Administrator.</div>
-         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-sm-crm primary" onclick="exportAllData()">⬇ Vollbackup (Zeiterfassung + CRM)</button><button class="btn-sm-crm" onclick="exportData()">⬇ Nur Zeiterfassung</button><button class="btn-sm-crm" onclick="exportCrmOnly()">⬇ Nur CRM</button></div>
+         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-sm-crm primary" onclick="exportAllData()">⬇ Vollbackup (Zeiterfassung + CRM + Shop)</button><button class="btn-sm-crm" onclick="exportData()">⬇ Nur Zeiterfassung</button><button class="btn-sm-crm" onclick="exportCrmOnly()">⬇ Nur CRM</button><button class="btn-sm-crm" onclick="window.exportShopOnly&&exportShopOnly()">⬇ Nur Shop</button></div>
        </div></div>
      </div>`;
     verwShowTab(['crm','data'].includes(_verwTab())?_verwTab():'users');

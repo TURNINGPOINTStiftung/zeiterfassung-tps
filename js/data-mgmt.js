@@ -60,24 +60,40 @@ export function exportData(){
   _dlJson(_exportZe(), 'Zeiterfassung-Backup');
   toast('Zeiterfassungs-Backup erstellt ✓','ok');
 }
-// Alles: Zeiterfassung + CRM in EINER Datei (echtes Komplett-Backup)
+// Alles: Zeiterfassung + CRM + Shop in EINER Datei (drei getrennte Teile)
 export function exportAllData(){
   if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
-  let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
-  _dlJson({ _type:'tps-vollbackup', exportedAt:new Date().toISOString(), zeiterfassung:_exportZe(), crm:crm }, 'TPS-Vollbackup');
-  toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM) ✓':'Nur Zeiterfassung gesichert – CRM war nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
+  let crm=null, shop=null;
+  try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
+  try{ shop=window.shopExportBlob?window.shopExportBlob():null; }catch(e){}
+  _dlJson({ _type:'tps-vollbackup', _v:2, exportedAt:new Date().toISOString(), zeiterfassung:_exportZe(), crm:crm, shop:shop }, 'TPS-Vollbackup');
+  toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM + Shop) ✓':'Nur Zeiterfassung gesichert – CRM/Shop waren nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
 }
-// Nur CRM
+// Nur CRM (ohne Shop)
 export function exportCrmOnly(){
   if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
   let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
   if(!crm){ toast('CRM-Daten nicht verfügbar – bitte das CRM einmal öffnen und erneut versuchen.','err'); return; }
-  _dlJson({ _type:'tps-crm-backup', exportedAt:new Date().toISOString(), crm:crm }, 'CRM-Backup');
-  toast('CRM-Backup erstellt ✓','ok');
+  _dlJson({ _type:'tps-crm-backup', _v:2, exportedAt:new Date().toISOString(), crm:crm }, 'CRM-Backup');
+  toast('CRM-Backup erstellt ✓ (ohne Shop)','ok');
 }
+// Nur Shop (Artikel, Orte, Bestellungen, Ausleihen, Verlauf, Einstellung)
+export function exportShopOnly(){
+  if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
+  let shop=null; try{ shop=window.shopExportBlob?window.shopExportBlob():null; }catch(e){}
+  if(!shop){ toast('Shop-Daten nicht verfügbar – bitte die App neu laden und erneut versuchen.','err'); return; }
+  _dlJson({ _type:'tps-shop-backup', _v:1, exportedAt:new Date().toISOString(), shop:shop }, 'Shop-Backup');
+  toast('Shop-Backup erstellt ✓','ok');
+}
+// Direkt hier registrieren (nicht über main.js importieren): eine neue benannte Import-Beziehung
+// würde bei einem Cache-Mischzustand nach dem Update den App-Start blockieren.
+try{ window.exportShopOnly=exportShopOnly; }catch(e){}
 
-// Import: erkennt automatisch Vollbackup ({_type:'tps-vollbackup', zeiterfassung, crm}),
-// CRM-Backup ({_type:'tps-crm-backup', crm}) oder ein reines Zeiterfassungs-Blob ({users,entries}).
+// Import: erkennt automatisch Vollbackup ({_type:'tps-vollbackup', zeiterfassung, crm, shop?}),
+// CRM-Backup ({_type:'tps-crm-backup', crm}), Shop-Backup ({_type:'tps-shop-backup', shop})
+// oder ein reines Zeiterfassungs-Blob ({users,entries}). CRM und Shop werden GETRENNT eingespielt:
+// ein CRM-Backup lässt den Shop unberührt und umgekehrt. Alte Vollbackups (Shop steckte im CRM-Teil)
+// stellen den Shop trotzdem mit her.
 export function importData(e){
   if(!_isAdmin()){ toast('Nur der Administrator darf Daten importieren/überschreiben.','err'); try{ e.target.value=''; }catch(_){} return; }
   const file=e.target.files[0]; if(!file) return;
@@ -87,19 +103,28 @@ export function importData(e){
       const d=JSON.parse(ev.target.result);
       const isVoll = d && d._type==='tps-vollbackup';
       const isCrm  = d && d._type==='tps-crm-backup';
-      const ze  = isVoll ? d.zeiterfassung : (isCrm ? null : d);
+      const isShop = d && d._type==='tps-shop-backup';
+      const ze  = isVoll ? d.zeiterfassung : ((isCrm||isShop) ? null : d);
       const crm = (isVoll||isCrm) ? d.crm : null;
+      // Shop: eigener Teil, bei alten Vollbackups aus dem CRM-Teil herausgelöst; ein CRM-Backup
+      // spielt NIE den Shop ein (Trennung), auch wenn eine alte Datei Shop-Daten enthält.
+      let shop = isShop ? d.shop : (isVoll ? (d.shop || null) : null);
+      if(isVoll && !shop && crm && window.crmSplitShop){ try{ shop=window.crmSplitShop(crm).shop; }catch(_){} }
+      if((crm||isShop||shop) && !window.crmBackupSplitReady){ toast('Die App ist noch nicht vollständig aktualisiert – bitte neu laden (Profil → App aktualisieren) und erneut einspielen.','err'); try{ e.target.value=''; }catch(_){} return; }
       const hasZE = !!(ze && ze.users && ze.entries);
-      if(!hasZE && !crm) throw new Error('unrecognized');
-      const what = (hasZE&&crm) ? 'Zeiterfassung UND CRM' : (crm ? 'nur CRM' : 'nur Zeiterfassung');
-      if(!confirm(`Backup einspielen: ${what}.\n\nDie betroffenen aktuellen Daten werden vollständig ersetzt. Fortfahren?`)){ try{ e.target.value=''; }catch(_){} return; }
+      if(!hasZE && !crm && !shop) throw new Error('unrecognized');
+      const parts=[hasZE&&'Zeiterfassung', crm&&'CRM', shop&&'Shop'].filter(Boolean);
+      const what = parts.length>1 ? parts.join(' + ') : 'nur '+parts[0];
+      const keep=['CRM','Shop'].filter(p=>!parts.includes(p));
+      if(!confirm(`Backup einspielen: ${what}.\n\nDie betroffenen aktuellen Daten werden vollständig ersetzt.`+(keep.length?`\n${keep.join(' und ')} bleib${keep.length>1?'en':'t'} unverändert.`:'')+`\n\nFortfahren?`)){ try{ e.target.value=''; }catch(_){} return; }
       const tasks=[];
       if(hasZE){
         // Beabsichtigte Vollersetzung: Datenverlust-Schutz für DIESEN Schreibvorgang erlauben.
         window._allowDataShrink=true;
         tasks.push(Promise.resolve(saveRaw(ze)).finally(()=>{ window._allowDataShrink=false; }));
       }
-      if(crm && window.crmRestoreBlob){ tasks.push(Promise.resolve(window.crmRestoreBlob(crm))); }
+      if(crm && window.crmRestoreBlob){ tasks.push(Promise.resolve(window.crmRestoreBlob(crm))); }   // lässt den Shop unberührt
+      if(shop && window.shopRestoreBlob){ tasks.push(Promise.resolve(window.shopRestoreBlob(shop))); } // lässt das CRM unberührt
       Promise.all(tasks).finally(()=>{
         toast('Import erfolgreich – Seite wird neu geladen…','ok');
         setTimeout(()=>location.reload(),1200);

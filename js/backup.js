@@ -39,8 +39,14 @@ export async function runAutoBackup(){
         db.ref('crm').once('value').then(s=>s.val()).catch(()=>null),
       ]);
       if(ze && Array.isArray(ze.users) && ze.users.length){
-        const blob = { _type:'tps-vollbackup', source:'auto', exportedAt:new Date().toISOString(),
-                       byUser:window.cu.id, zeiterfassung:ze, crm };
+        // CRM und Shop getrennt ablegen (Shop liegt technisch unter crm/shop*) – so lässt sich beim
+        // Einspielen jeder Teil einzeln wiederherstellen.
+        const SHOP_KEYS=['shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig'];
+        let crmPart=crm, shopPart=null;
+        if(crm && typeof crm==='object'){ crmPart={}; shopPart={ _v:1 };
+          Object.keys(crm).forEach(k=>{ if(SHOP_KEYS.includes(k)) shopPart[k]=crm[k]; else crmPart[k]=crm[k]; }); }
+        const blob = { _type:'tps-vollbackup', _v:2, source:'auto', exportedAt:new Date().toISOString(),
+                       byUser:window.cu.id, zeiterfassung:ze, crm:crmPart, shop:shopPart };
         const body = new Blob([JSON.stringify(blob)], {type:'application/json'});
         // Merker NUR nach erfolgreichem Upload setzen. Wird verweigert (Datei existiert schon, weil
         // ein anderes Gerät gleichzeitig schneller war – oder Regeln noch nicht aktiv), bleibt der

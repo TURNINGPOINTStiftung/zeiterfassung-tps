@@ -1097,3 +1097,12 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
+
+// ── Backup-Anbindung (Verwaltung → Daten & Backup) – über window, Laufzeit-Prüfung statt
+//    benannter Importe (siehe Kopf: Namespace-Import gegen Cache-Mischzustände) ──
+window.shopExportBlob   = ()=> CD.exportShopBlob ? CD.exportShopBlob() : null;
+window.shopRestoreBlob  = (o)=> CD.restoreShopBlob ? CD.restoreShopBlob(o) : Promise.resolve();
+window.crmSplitShop     = (o)=> CD.splitShopFromCrm ? CD.splitShopFromCrm(o) : { crm:o, shop:null };
+// true nur, wenn die NEUE (CRM/Shop trennende) Datenschicht geladen ist – der Import prüft das,
+// damit ein Gerät mit altem Cache beim CRM-Restore nie versehentlich den Shop mit ersetzt.
+window.crmBackupSplitReady = !!(CD.splitShopFromCrm && CD.restoreShopBlob);
