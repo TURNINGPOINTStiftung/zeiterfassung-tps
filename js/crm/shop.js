@@ -1,0 +1,577 @@
+// ═════════════════════════════════════════════════════════════════
+//  Shop-Modul (eigener ☰-Pfad, isoliert – wie kalender.js)
+//  1) Lager: Artikel (Flaggen, Flyer, Branding, Bootsmaterial, Werkzeug …) mit Bestand
+//     PRO ORT (Büro, Bus, Boot, Lager …), Mindestbestand, Foto, Umlagern, Buchungsverlauf.
+//  2) Bestellungen: Mitarbeiter melden Bedarf (Katalog-Artikel oder freier Wunsch) mit
+//     Menge, Anlass, Wunschtermin, Lieferort. Verwalter bearbeitet: In Bearbeitung →
+//     Ausgeben (Bestand abziehen ODER an den Lieferort umlagern) / Erledigt / Abgelehnt.
+//  Rechte (Verwaltung → Mitarbeiter → Zugriffe → Shop): Kein / Nutzen (sehen + bestellen)
+//  / Verwaltend (zusätzlich Artikel, Orte, Buchungen, Bestellungen bearbeiten).
+//  Standard = Kein → anfangs nur Admin.
+//  Daten: crm/shopItems, crm/shopPlaces, crm/shopOrders, crm/shopLog (CRM-Ref, dort dürfen
+//  allowlistete Nutzer schreiben). Mitteilungen über die gemeinsame Leiste (renderZeNotices).
+// ═════════════════════════════════════════════════════════════════
+import { listShop, getShop, saveShop, deleteShop, newId } from './crm-data.js';
+import { openModal, closeModal, toast } from '../utils.js';
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
+
+const CATS_DEFAULT=['Flaggen','Flyer','Branding','Visitenkarten','Bootsmaterial','Werkzeug','Sonstiges'];
+const PLACE_TYPES={ buero:{i:'🏢',l:'Büro'}, bus:{i:'🚐',l:'Bus / Fahrzeug'}, boot:{i:'⛵',l:'Boot'}, lager:{i:'📦',l:'Lager'}, sonst:{i:'📍',l:'Sonstiges'} };
+const STATUS={
+  offen:     {l:'Offen',          c:'#d97706'},
+  inarbeit:  {l:'In Bearbeitung', c:'#2563eb'},
+  ausgegeben:{l:'Ausgegeben',     c:'#16a34a'},
+  erledigt:  {l:'Erledigt',       c:'#16a34a'},
+  abgelehnt: {l:'Abgelehnt',      c:'#c0392b'},
+};
+const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe' };
+
+let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='';
+
+// ── Rechte ─────────────────────────────────────────────────────────
+function _acc(){
+  const cu=window.cu; if(!cu) return 'kein';
+  if(cu.role==='admin') return 'verwaltend';
+  let ma={}; try{ ma=(window.crmModuleAccess&&window.crmModuleAccess(cu))||{}; }catch(e){}
+  return ma.shop||'kein';
+}
+const canManage=()=>_acc()==='verwaltend';
+const canUse=()=>_acc()!=='kein';
+const _me=()=>window.cu||{};
+
+// ── Daten-Helfer ───────────────────────────────────────────────────
+const _num=v=>{ const n=parseFloat(String(v==null?'':v).replace(',','.')); return isFinite(n)?n:0; };
+function places(){ return listShop('shopPlaces').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'})); }
+function items(){ return listShop('shopItems').sort((a,b)=>String(a.kategorie||'').localeCompare(String(b.kategorie||''),'de')||String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'})); }
+function orders(){ return listShop('shopOrders').sort((a,b)=>(b.ts||0)-(a.ts||0)); }
+function placeOf(id){ return getShop('shopPlaces',id); }
+function placeLabel(id){ const p=placeOf(id); if(!p) return id?'(Ort gelöscht)':'–'; return (PLACE_TYPES[p.typ]||PLACE_TYPES.sonst).i+' '+p.name; }
+function total(it){ return Object.values((it&&it.stock)||{}).reduce((s,v)=>s+_num(v),0); }
+function itemLabel(it){ return it ? (it.name+(it.variante?' · '+it.variante:'')) : ''; }
+function cats(){ const s=new Set(CATS_DEFAULT); items().forEach(i=>{ if(i.kategorie) s.add(i.kategorie); }); return [...s]; }
+const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
+const _fmtTs=ts=>{ if(!ts) return ''; const d=new Date(ts); return d.toLocaleDateString('de-DE')+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); };
+const _todayIso=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+
+function _log(it, type, qty, from, to, note, orderId){
+  const cu=_me();
+  return saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
+    itemId:it.id, itemName:itemLabel(it), type, qty, from:from||null, to:to||null, note:note||'', orderId:orderId||null });
+}
+// Bestand an einem Ort ändern (delta ±). Liefert false, wenn es unter 0 ginge.
+function _applyDelta(it, placeId, delta){
+  if(!it.stock || typeof it.stock!=='object') it.stock={};
+  const cur=_num(it.stock[placeId]); const nv=cur+delta;
+  if(nv<0) return false;
+  if(nv===0) delete it.stock[placeId]; else it.stock[placeId]=nv;
+  return true;
+}
+
+// ── Stile ──────────────────────────────────────────────────────────
+let _css=false;
+function _styles(){
+  if(_css) return; _css=true;
+  const st=document.createElement('style');
+  st.textContent=`
+  .shop-wrap{padding:16px 22px;max-width:1200px;width:100%;box-sizing:border-box}
+  .shop-h{font-size:20px;font-weight:700;color:var(--primary);margin:0 0 4px}
+  .shop-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+  .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
+  .shop-tabs button{border:none;background:none;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+  .shop-tabs button.on{color:var(--primary);border-bottom-color:var(--primary)}
+  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#d97706;color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+  .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--card,#fff);color:var(--text)}
+  .shop-bar input[type=search]{flex:1;min-width:160px}
+  .shop-sp{flex:1}
+  .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--card,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
+  .shop-btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+  .shop-btn.ok{background:#16a34a;border-color:#16a34a;color:#fff}
+  .shop-btn.warn{border-color:#c0392b;color:#c0392b}
+  .shop-btn.sm{padding:3px 8px;font-size:12px}
+  .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .shop-card{background:var(--card,#fff);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .shop-card.low{border-color:#e5484d}
+  .shop-img{height:130px;background:#f1f4f8 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:42px;color:#b6c0cc}
+  .shop-cb{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
+  .shop-name{font-weight:700;font-size:15px;color:var(--text)}
+  .shop-var{font-size:12px;color:var(--muted)}
+  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#eef2f7;color:#4a5a6e;align-self:flex-start}
+  .shop-tot{font-size:22px;font-weight:700;color:var(--primary)}
+  .shop-tot small{font-size:12px;font-weight:600;color:var(--muted)}
+  .shop-low{font-size:12px;font-weight:700;color:#e5484d}
+  .shop-pl{display:flex;flex-wrap:wrap;gap:4px}
+  .shop-pl span{font-size:12px;padding:2px 7px;border-radius:6px;background:#f1f4f8;color:#2c3e50}
+  .shop-pl span.hl{background:#dbe6fb;font-weight:700}
+  .shop-act{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
+  .shop-empty{color:var(--muted);font-size:14px;padding:24px 0;text-align:center}
+  .shop-list{display:flex;flex-direction:column;gap:8px}
+  .shop-row{background:var(--card,#fff);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .shop-row .main{flex:1;min-width:220px}
+  .shop-row .t{font-weight:700;font-size:14px;color:var(--text)}
+  .shop-row .m{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+  .shop-st{display:inline-block;font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:9px}
+  .shop-late{color:#c0392b;font-weight:700}
+  .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
+  .shop-seg button{border:none;background:var(--card,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
+  .shop-seg button.on{background:var(--primary);color:#fff}
+  .shop-f{margin-bottom:10px}
+  .shop-f label{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
+  .shop-f input,.shop-f select,.shop-f textarea{width:100%;box-sizing:border-box;padding:6px 8px;font-size:14px;border:1.5px solid var(--border);border-radius:6px}
+  .shop-f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .shop-ph{width:110px;height:110px;border-radius:8px;border:1.5px dashed var(--border);background:#f6f8fa center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center}
+  .shop-log td,.shop-log th{padding:5px 8px;font-size:12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+  .shop-log{width:100%;border-collapse:collapse;background:var(--card,#fff)}
+  @media(max-width:640px){ .shop-wrap{padding:12px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr} }
+  `;
+  document.head.appendChild(st);
+}
+
+// ── Haupt-Render ───────────────────────────────────────────────────
+export function renderShop(){
+  try{
+    _styles();
+    const root=document.getElementById('shop-root'); if(!root) return;
+    if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
+    const mgr=canManage(); const me=_me();
+    if(!mgr && (TAB==='orte'||TAB==='verlauf')) TAB='bestand';
+    const os=orders();
+    const nOpen = mgr ? os.filter(o=>o.status==='offen').length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
+    const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')]]
+      .concat(mgr?[['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
+    let body='';
+    if(TAB==='bestand') body=_bestandHtml(mgr);
+    else if(TAB==='bestellungen') body=_ordersHtml(mgr);
+    else if(TAB==='orte') body=_orteHtml();
+    else body=_verlaufHtml();
+    root.innerHTML=`<div class="shop-wrap">
+      <div class="shop-h">🛒 Shop</div>
+      <p class="shop-sub">Was liegt wo – und was wird gebraucht? ${mgr?'Du verwaltest den Shop.':'Bestelle hier Material, Werbemittel und Werkzeug.'}</p>
+      <div class="shop-tabs">${tabs.map(t=>`<button class="${TAB===t[0]?'on':''}" onclick="shopTab(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
+      ${body}
+    </div>`;
+  }catch(e){ console.error('renderShop Fehler:',e); }
+}
+function shopTab(t){ TAB=t; renderShop(); }
+
+// ── Tab: Bestand ───────────────────────────────────────────────────
+function _bestandHtml(mgr){
+  const pls=places();
+  const catOpts=['<option value="">Alle Kategorien</option>'].concat(cats().map(c=>`<option${fCat===c?' selected':''}>${esc(c)}</option>`)).join('');
+  const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('');
+  const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
+  return `${hint}<div class="shop-bar">
+      <input type="search" id="shop-q" placeholder="Suchen …" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
+      <select onchange="shopSetCat(this.value)">${catOpts}</select>
+      <select onchange="shopSetPlace(this.value)">${plOpts}</select>
+      <span class="shop-sp"></span>
+      <button class="shop-btn" onclick="shopOrderNew('')">＋ Freier Wunsch</button>
+      ${mgr?`<button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>`:''}
+    </div>
+    <div id="shop-items">${_itemsGrid(mgr)}</div>`;
+}
+function _itemsGrid(mgr){
+  const q=fQ.trim().toLowerCase();
+  const list=items().filter(it=>{
+    if(fCat && it.kategorie!==fCat) return false;
+    if(fPlace && !_num((it.stock||{})[fPlace])) return false;
+    if(q && !(`${it.name} ${it.variante||''} ${it.kategorie||''} ${it.note||''}`.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten mit „＋ Artikel" an.':'Noch keine Artikel im Shop.')}</div>`;
+  return `<div class="shop-grid">${list.map(it=>{
+    const tot=total(it); const low=_num(it.min)>0 && tot<_num(it.min);
+    const pl=Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0)
+      .sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
+      .map(pid=>`<span class="${fPlace===pid?'hl':''}">${esc(placeLabel(pid))}: <b>${_num(it.stock[pid])}</b></span>`).join('');
+    const img=it.foto?`<div class="shop-img" style="background-image:url('${it.foto}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+    return `<div class="shop-card${low?' low':''}">${img}<div class="shop-cb">
+      ${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}
+      <div class="shop-name">${esc(it.name)}</div>
+      ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
+      <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt</small></div>
+      ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
+      <div class="shop-pl">${pl||'<span style="color:var(--muted)">kein Bestand</span>'}</div>
+      ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
+      <div class="shop-act">
+        <button class="shop-btn sm pri" onclick="shopOrderNew(${jsq(it.id)})">🛒 Bestellen</button>
+        ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
+        <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
+        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
+      </div></div></div>`;
+  }).join('')}</div>`;
+}
+function _catIcon(c){ return ({'Flaggen':'🚩','Flyer':'📄','Branding':'🎨','Visitenkarten':'🪪','Bootsmaterial':'⛵','Werkzeug':'🛠️'})[c]||'📦'; }
+function shopSetQ(v){ fQ=v; const g=document.getElementById('shop-items'); if(g) g.innerHTML=_itemsGrid(canManage()); }
+function shopSetCat(v){ fCat=v; renderShop(); }
+function shopSetPlace(v){ fPlace=v; renderShop(); }
+
+// ── Artikel anlegen / bearbeiten ───────────────────────────────────
+function shopItemEdit(id){
+  if(!canManage()) return;
+  const it=id?getShop('shopItems',id):null;
+  const v=it||{name:'',kategorie:'',variante:'',einheit:'Stück',min:'',note:'',foto:''};
+  window._shopPhoto=v.foto||'';
+  const pls=places();
+  const initStock = it ? '' : (pls.length ? `<div class="shop-f"><label>Anfangsbestand je Ort</label>
+      <div class="shop-f2">${pls.map(p=>`<div><span style="font-size:12px">${esc(placeLabel(p.id))}</span><input type="number" min="0" step="1" class="shop-init" data-pl="${esc(p.id)}" placeholder="0"></div>`).join('')}</div></div>`
+      : `<div class="shop-f" style="font-size:12px;color:var(--muted)">Tipp: Lege unter „📍 Orte" Orte an, dann kannst du hier gleich den Bestand eintragen.</div>`);
+  openModal(`<h3>${it?'✎ Artikel bearbeiten':'＋ Neuer Artikel'}</h3>
+    <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div><div id="shop-ph" class="shop-ph" style="${v.foto?`background-image:url('${v.foto}')`:''}">${v.foto?'':'kein Foto'}</div>
+        <label class="shop-btn sm" style="display:inline-block;margin-top:6px;cursor:pointer">📷 Foto<input type="file" accept="image/*" style="display:none" onchange="shopPhotoPick(this)"></label>
+        <button type="button" class="shop-btn sm" style="margin-top:6px" onclick="shopPhotoClear()">✕</button></div>
+      <div style="flex:1;min-width:220px">
+        <div class="shop-f"><label>Name *</label><input id="si-name" value="${esc(v.name)}" placeholder="z. B. Beachflag"></div>
+        <div class="shop-f2">
+          <div class="shop-f"><label>Kategorie</label><input id="si-cat" list="si-cats" value="${esc(v.kategorie)}" placeholder="z. B. Flaggen"><datalist id="si-cats">${cats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+          <div class="shop-f"><label>Größe / Variante</label><input id="si-var" value="${esc(v.variante)}" placeholder="z. B. 2 × 5 m"></div>
+        </div>
+      </div>
+    </div>
+    <div class="shop-f2">
+      <div class="shop-f"><label>Einheit</label><input id="si-unit" value="${esc(v.einheit||'Stück')}" placeholder="Stück, Packung, Rolle …"></div>
+      <div class="shop-f"><label>Mindestbestand <span style="font-weight:400;color:var(--muted)">(Warnung darunter)</span></label><input id="si-min" type="number" min="0" step="1" value="${esc(v.min)}"></div>
+    </div>
+    <div class="shop-f"><label>Notiz</label><input id="si-note" value="${esc(v.note)}" placeholder="z. B. Druckerei, Bestellnummer, Hinweise"></div>
+    ${initStock}
+    <div class="modal-btns">
+      ${it?`<button class="btn btn-outline" style="margin-right:auto;color:var(--danger);border-color:var(--danger)" onclick="shopItemDelete(${jsq(it.id)})">🗑 Löschen</button>`:''}
+      <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="shopItemSave(${jsq(id||'')})">Speichern</button></div>`);
+}
+// Foto verkleinern (max. 480 px, JPEG) → klein genug für die Datenbank
+function shopPhotoPick(inp){
+  const f=inp&&inp.files&&inp.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ const img=new Image(); img.onload=()=>{
+      const max=480, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      window._shopPhoto=c.toDataURL('image/jpeg',0.72);
+      const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=`url('${window._shopPhoto}')`; ph.textContent=''; }
+    }; img.onerror=()=>toast('Bild konnte nicht gelesen werden.','err'); img.src=rd.result; };
+  rd.readAsDataURL(f);
+}
+function shopPhotoClear(){ window._shopPhoto=''; const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=''; ph.textContent='kein Foto'; } }
+function _val(id){ const el=document.getElementById(id); return el?String(el.value||'').trim():''; }
+function shopItemSave(id){
+  const name=_val('si-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  const ex=id?getShop('shopItems',id):null; const cu=_me();
+  const it=Object.assign({}, ex||{ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'' }, {
+    name, kategorie:_val('si-cat'), variante:_val('si-var'), einheit:_val('si-unit')||'Stück',
+    min:_val('si-min')===''?'':_num(_val('si-min')), note:_val('si-note'), foto:window._shopPhoto||'' });
+  const inits=[];
+  if(!ex) document.querySelectorAll('.shop-init').forEach(inp=>{ const q=Math.round(_num(inp.value)); if(q>0){ _applyDelta(it, inp.dataset.pl, q); inits.push([inp.dataset.pl,q]); } });
+  saveShop('shopItems', it);
+  inits.forEach(([pl,q])=>_log(it,'zugang',q,null,pl,'Anfangsbestand'));
+  closeModal(); toast(ex?'Artikel gespeichert ✓':'Artikel angelegt ✓','ok'); renderShop();
+}
+function shopItemDelete(id){
+  const it=getShop('shopItems',id); if(!it) return;
+  const tot=total(it);
+  if(!confirm(`Artikel „${itemLabel(it)}" löschen?`+(tot?`\n\nAchtung: Es sind noch ${tot} ${it.einheit||'Stück'} im Bestand.`:''))) return;
+  deleteShop('shopItems', id); closeModal(); toast('Artikel gelöscht.','ok'); renderShop();
+}
+
+// ── Buchen (Zugang / Abgang / Korrektur) ───────────────────────────
+function _placeSelect(id, sel, withQty, it){
+  return `<select id="${id}">${places().map(p=>`<option value="${esc(p.id)}"${sel===p.id?' selected':''}>${esc(placeLabel(p.id))}${withQty&&it?` (${_num((it.stock||{})[p.id])})`:''}</option>`).join('')}</select>`;
+}
+function shopBook(id){
+  if(!canManage()) return;
+  const it=getShop('shopItems',id); if(!it) return;
+  if(!places().length){ toast('Bitte zuerst unter „📍 Orte" einen Ort anlegen.','err'); return; }
+  openModal(`<h3>± Bestand buchen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · gesamt ${total(it)} ${esc(it.einheit||'Stück')}</p>
+    <div class="shop-f"><label>Art</label><select id="sb-type">
+      <option value="zugang">➕ Zugang (geliefert, gedruckt, gekauft)</option>
+      <option value="abgang">➖ Abgang (verbraucht, verteilt, kaputt)</option>
+      <option value="korrektur">✎ Korrektur (gezählt – Bestand genau setzen)</option></select></div>
+    <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('sb-pl', fPlace, true, it)}</div>
+      <div class="shop-f"><label>Menge</label><input id="sb-qty" type="number" min="0" step="1" placeholder="0"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="sb-note" placeholder="z. B. Lieferung Druckerei, Messe Kiel"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopBookSave(${jsq(id)})">Buchen</button></div>`);
+}
+function shopBookSave(id){
+  const it=getShop('shopItems',id); if(!it) return;
+  const type=_val('sb-type'), pl=_val('sb-pl'), note=_val('sb-note');
+  const qRaw=_val('sb-qty'); if(qRaw===''){ toast('Bitte eine Menge eingeben.','err'); return; }
+  const q=Math.round(_num(qRaw)); if(q<0){ toast('Menge darf nicht negativ sein.','err'); return; }
+  const cur=_num((it.stock||{})[pl]);
+  let delta = type==='zugang' ? q : type==='abgang' ? -q : (q-cur);
+  if(type!=='korrektur' && q===0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  if(!_applyDelta(it, pl, delta)){ toast(`Am Ort sind nur ${cur} vorhanden.`,'err'); return; }
+  saveShop('shopItems', it);
+  if(type==='korrektur') _log(it,'korrektur',delta,pl,pl,(note?note+' · ':'')+`${cur} → ${q}`);
+  else _log(it,type,q,type==='abgang'?pl:null,type==='zugang'?pl:null,note);
+  closeModal(); toast('Gebucht ✓','ok'); renderShop();
+}
+
+// ── Umlagern ───────────────────────────────────────────────────────
+function shopMove(id){
+  if(!canManage()) return;
+  const it=getShop('shopItems',id); if(!it) return;
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
+  if(!from.length){ toast('Kein Bestand zum Umlagern.','err'); return; }
+  if(places().length<2){ toast('Zum Umlagern braucht es mindestens zwei Orte.','err'); return; }
+  openModal(`<h3>⇄ Umlagern</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b></p>
+    <div class="shop-f2"><div class="shop-f"><label>Von</label><select id="sm-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
+      <div class="shop-f"><label>Nach</label>${_placeSelect('sm-to','',true,it)}</div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Menge</label><input id="sm-qty" type="number" min="1" step="1" value="1"></div>
+      <div class="shop-f"><label>Notiz</label><input id="sm-note" placeholder="z. B. für Regatta am Wochenende"></div></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopMoveSave(${jsq(id)})">Umlagern</button></div>`);
+}
+function shopMoveSave(id){
+  const it=getShop('shopItems',id); if(!it) return;
+  const from=_val('sm-from'), to=_val('sm-to'), q=Math.round(_num(_val('sm-qty'))), note=_val('sm-note');
+  if(from===to){ toast('Von und Nach sind gleich.','err'); return; }
+  if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
+  _applyDelta(it, to, q);
+  saveShop('shopItems', it); _log(it,'umlagern',q,from,to,note);
+  closeModal(); toast(`${q} umgelagert: ${placeLabel(from)} → ${placeLabel(to)} ✓`,'ok'); renderShop();
+}
+
+// ── Bestellen ──────────────────────────────────────────────────────
+function shopOrderNew(itemId){
+  if(!canUse()) return;
+  const its=items(); const pls=places();
+  const itOpts=['<option value="">– Freier Wunsch (nicht im Katalog) –</option>']
+    .concat(its.map(i=>`<option value="${esc(i.id)}"${i.id===itemId?' selected':''}>${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}</option>`)).join('');
+  const plOpts=['<option value="">– bitte wählen –</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}">${esc(placeLabel(p.id))}</option>`))
+    .concat(['<option value="__abholen">🙋 Hole ich selbst ab</option>','<option value="__sonst">✏️ Anderer Ort …</option>']).join('');
+  openModal(`<h3>🛒 Bestellen / Bedarf melden</h3>
+    <div class="shop-f"><label>Was?</label><select id="so-item" onchange="shopOrderItemChg()">${itOpts}</select></div>
+    <div class="shop-f" id="so-free-w" style="display:${itemId?'none':''}"><label>Was wird gebraucht? *</label><textarea id="so-free" rows="2" placeholder="z. B. 200 Visitenkarten für mich, Roll-up „Wassersport", 2 Schäkel M10"></textarea></div>
+    <div class="shop-f2"><div class="shop-f"><label>Menge *</label><input id="so-qty" type="number" min="1" step="1" value="1"></div>
+      <div class="shop-f"><label>Bis wann?</label><input id="so-date" type="date" min="${_todayIso()}"></div></div>
+    <div class="shop-f"><label>Wofür / Anlass</label><input id="so-anlass" placeholder="z. B. Messe Kiel, Regatta, Schulbesuch"></div>
+    <div class="shop-f2"><div class="shop-f"><label>Wohin?</label><select id="so-ort" onchange="document.getElementById('so-ort2-w').style.display=this.value==='__sonst'?'':'none'">${plOpts}</select></div>
+      <div class="shop-f" id="so-ort2-w" style="display:none"><label>Anderer Ort</label><input id="so-ort2" placeholder="z. B. Schule XY, Hafen"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
+}
+function shopOrderItemChg(){ const v=_val('so-item'); const w=document.getElementById('so-free-w'); if(w) w.style.display=v?'none':''; }
+function shopOrderSave(){
+  const itemId=_val('so-item'), free=_val('so-free');
+  const it=itemId?getShop('shopItems',itemId):null;
+  if(!it && !free){ toast('Bitte beschreiben, was gebraucht wird.','err'); return; }
+  const q=Math.round(_num(_val('so-qty'))); if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  let ort=_val('so-ort'), ortText='';
+  if(ort==='__sonst'){ ortText=_val('so-ort2'); if(!ortText){ toast('Bitte den Ort angeben.','err'); return; } ort=''; }
+  else if(ort==='__abholen'){ ortText='Holt selbst ab'; ort=''; }
+  const cu=_me();
+  saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
+    itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':free, menge:q, einheit:it?(it.einheit||'Stück'):'',
+    termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
+    status:'offen', seenBy:{}, ackOrderer:false });
+  closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
+  TAB='bestellungen'; renderShop();
+}
+
+// ── Tab: Bestellungen ──────────────────────────────────────────────
+function _orderWhat(o){ const it=o.itemId?getShop('shopItems',o.itemId):null; return `${o.menge}× ${esc(it?itemLabel(it):(o.itemName||o.freitext||'?'))}`; }
+function _orderWhere(o){ return o.ortId?esc(placeLabel(o.ortId)):(o.ortText?esc(o.ortText):''); }
+function _ordersHtml(mgr){
+  const me=_me();
+  let os=orders(); if(!mgr) os=os.filter(o=>o.byId===me.id);
+  const act=o=>o.status==='offen'||o.status==='inarbeit';
+  if(fOrd==='aktiv') os=os.filter(act); else if(fOrd==='fertig') os=os.filter(o=>!act(o));
+  const seg=[['aktiv','Offen & in Arbeit'],['fertig','Abgeschlossen'],['alle','Alle']];
+  const rows=os.map(o=>{
+    const st=STATUS[o.status]||STATUS.offen;
+    const late=o.termin && act(o) && o.termin<_todayIso();
+    const where=_orderWhere(o);
+    const btns=[];
+    if(mgr && act(o)){
+      if(o.status==='offen') btns.push(`<button class="shop-btn sm" onclick="shopOrderStatus(${jsq(o.id)},'inarbeit')">▶ In Bearbeitung</button>`);
+      if(o.itemId) btns.push(`<button class="shop-btn sm ok" onclick="shopOrderIssue(${jsq(o.id)})">📦 Ausgeben</button>`);
+      btns.push(`<button class="shop-btn sm${o.itemId?'':' ok'}" onclick="shopOrderDone(${jsq(o.id)},'erledigt')">✓ Erledigt</button>`);
+      btns.push(`<button class="shop-btn sm warn" onclick="shopOrderDone(${jsq(o.id)},'abgelehnt')">✕ Ablehnen</button>`);
+    }
+    if(o.byId===me.id && o.status==='offen') btns.push(`<button class="shop-btn sm warn" onclick="shopOrderCancel(${jsq(o.id)})">Zurückziehen</button>`);
+    return `<div class="shop-row"><div class="main">
+      <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span></div>
+      <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
+        ${o.termin?` · <span class="${late?'shop-late':''}">bis ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${where?` · nach: ${where}`:''}
+        ${o.note?`<br>📝 ${esc(o.note)}`:''}
+        ${o.handledByName?`<br>Bearbeitet von ${esc(o.handledByName)} · ${_fmtTs(o.handledTs)}${o.fromPlace?` · aus ${esc(placeLabel(o.fromPlace))}`:''}`:''}
+        ${o.answer?`<br>💬 ${esc(o.answer)}`:''}</div></div>
+      ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
+  }).join('');
+  return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fOrd===s[0]?'on':''}" onclick="shopSetOrd(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
+      <span class="shop-sp"></span><button class="shop-btn pri" onclick="shopOrderNew('')">＋ Bestellen</button></div>
+    <div class="shop-list">${rows||`<div class="shop-empty">${mgr?'Keine Bestellungen in dieser Ansicht.':'Du hast hier keine Bestellungen.'}</div>`}</div>`;
+}
+function shopSetOrd(v){ fOrd=v; renderShop(); }
+function _handled(o,status,extra){
+  const cu=_me();
+  Object.assign(o,{status, handledById:cu.id||'', handledByName:cu.name||'', handledTs:Date.now(), ackOrderer:false}, extra||{});
+  if(!o.seenBy||typeof o.seenBy!=='object') o.seenBy={};
+  o.seenBy[cu.id]=Date.now();
+  saveShop('shopOrders', o);
+}
+function shopOrderStatus(id,status){
+  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  _handled(o,status); toast('Status: '+STATUS[status].l,'ok'); renderShop();
+}
+function shopOrderDone(id,status){
+  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  const isRej=status==='abgelehnt';
+  openModal(`<h3>${isRej?'✕ Bestellung ablehnen':'✓ Als erledigt markieren'}</h3>
+    <p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · von <b>${esc(o.byName||'')}</b></p>
+    <div class="shop-f"><label>${isRej?'Begründung *':'Nachricht an '+esc(o.byName||'Besteller')+' (optional)'}</label>
+      <textarea id="sd-ans" rows="3" placeholder="${isRej?'z. B. nicht mehr lieferbar, bitte Alternative …':'z. B. liegt im Büro im Regal, bei der Druckerei bestellt …'}"></textarea></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopOrderDoneSave(${jsq(id)},${jsq(status)})">${isRej?'Ablehnen':'Erledigt'}</button></div>`);
+}
+function shopOrderDoneSave(id,status){
+  const o=getShop('shopOrders',id); if(!o) return;
+  const ans=_val('sd-ans');
+  if(status==='abgelehnt' && !ans){ toast('Bitte eine Begründung angeben.','err'); return; }
+  _handled(o,status,{answer:ans});
+  closeModal(); toast(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.','ok'); renderShop();
+}
+// Ausgeben: Bestand am Quell-Ort abziehen ODER an den Lieferort umlagern (z. B. Werkzeug aufs Boot)
+function shopOrderIssue(id){
+  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  const it=o.itemId?getShop('shopItems',o.itemId):null;
+  if(!it){ toast('Der Artikel existiert nicht mehr – bitte „Erledigt" nutzen.','err'); return; }
+  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && p!==o.ortId);
+  if(!from.length){ toast('Kein Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
+  const canMoveTo=!!(o.ortId && placeOf(o.ortId));
+  openModal(`<h3>📦 Ausgeben</h3><p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · für <b>${esc(o.byName||'')}</b></p>
+    <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="si-from">${from.map(p=>`<option value="${esc(p)}">${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
+      <div class="shop-f"><label>Menge</label><input id="si-qty" type="number" min="1" step="1" value="${o.menge||1}"></div></div>
+    <div class="shop-f"><label>Was passiert mit dem Bestand?</label><select id="si-mode">
+      ${canMoveTo?`<option value="move" selected>⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand – z. B. Werkzeug, Flaggen)</option>`:''}
+      <option value="out"${canMoveTo?'':' selected'}>➖ Vom Bestand abziehen (verbraucht / weitergegeben – z. B. Flyer)</option></select></div>
+    <div class="shop-f"><label>Nachricht an ${esc(o.byName||'Besteller')} (optional)</label><input id="si-ans" placeholder="z. B. liegt im Bus, Fach links"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopOrderIssueSave(${jsq(id)})">Ausgeben</button></div>`);
+}
+function shopOrderIssueSave(id){
+  const o=getShop('shopOrders',id); if(!o) return;
+  const it=getShop('shopItems',o.itemId); if(!it) return;
+  const from=_val('si-from'), mode=_val('si-mode'), q=Math.round(_num(_val('si-qty'))), ans=_val('si-ans');
+  if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
+  const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
+  if(mode==='move' && o.ortId){ _applyDelta(it, o.ortId, q); saveShop('shopItems', it); _log(it,'umlagern',q,from,o.ortId,note,o.id); }
+  else { saveShop('shopItems', it); _log(it,'ausgabe',q,from,null,note,o.id); }
+  _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:mode});
+  closeModal(); toast('Ausgegeben ✓ – Besteller wird benachrichtigt.','ok'); renderShop();
+}
+function shopOrderCancel(id){
+  const o=getShop('shopOrders',id); if(!o) return;
+  if(o.byId!==_me().id||o.status!=='offen') return;
+  if(!confirm('Bestellung zurückziehen?')) return;
+  deleteShop('shopOrders', id); toast('Bestellung zurückgezogen.','ok'); renderShop();
+}
+
+// ── Tab: Orte ──────────────────────────────────────────────────────
+function _orteHtml(){
+  const its=items();
+  const rows=places().map(p=>{
+    const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
+    const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
+    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))}</div>
+      <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
+      <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
+      <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
+  }).join('');
+  return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Wo liegen Sachen? Büro, Bus, Boote, Lager …</span><span class="shop-sp"></span>
+    <button class="shop-btn pri" onclick="shopPlaceEdit('')">＋ Ort</button></div>
+    <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>`;
+}
+function shopPlaceEdit(id){
+  if(!canManage()) return;
+  const p=id?getShop('shopPlaces',id):null; const v=p||{name:'',typ:'buero',note:''};
+  openModal(`<h3>${p?'✎ Ort bearbeiten':'＋ Neuer Ort'}</h3>
+    <div class="shop-f2"><div class="shop-f"><label>Name *</label><input id="sp-name" value="${esc(v.name)}" placeholder="z. B. Boot 1, Bus, Büro Kiel"></div>
+      <div class="shop-f"><label>Art</label><select id="sp-typ">${Object.keys(PLACE_TYPES).map(k=>`<option value="${k}"${v.typ===k?' selected':''}>${PLACE_TYPES[k].i} ${PLACE_TYPES[k].l}</option>`).join('')}</select></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="sp-note" value="${esc(v.note||'')}" placeholder="z. B. Liegeplatz, Schlüssel bei …"></div>
+    <div class="modal-btns">${p?`<button class="btn btn-outline" style="margin-right:auto;color:var(--danger);border-color:var(--danger)" onclick="shopPlaceDelete(${jsq(p.id)})">🗑 Löschen</button>`:''}
+    <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopPlaceSave(${jsq(id||'')})">Speichern</button></div>`);
+}
+function shopPlaceSave(id){
+  const name=_val('sp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  const ex=id?getShop('shopPlaces',id):null;
+  if(places().some(p=>p.id!==id && String(p.name).toLowerCase()===name.toLowerCase())){ toast('Einen Ort mit diesem Namen gibt es schon.','err'); return; }
+  saveShop('shopPlaces', Object.assign({}, ex||{id:newId(), createdAt:Date.now()}, {name, typ:_val('sp-typ')||'sonst', note:_val('sp-note')}));
+  closeModal(); toast('Ort gespeichert ✓','ok'); renderShop();
+}
+function shopPlaceDelete(id){
+  const p=getShop('shopPlaces',id); if(!p) return;
+  const used=items().filter(i=>_num((i.stock||{})[id])>0);
+  if(used.length){ toast(`An „${p.name}" liegt noch Bestand (${used.length} Artikel) – erst umlagern.`,'err'); return; }
+  if(!confirm(`Ort „${p.name}" löschen?`)) return;
+  deleteShop('shopPlaces', id); if(fPlace===id) fPlace=''; closeModal(); toast('Ort gelöscht.','ok'); renderShop();
+}
+
+// ── Tab: Verlauf ───────────────────────────────────────────────────
+function _verlaufHtml(){
+  const its=items();
+  let logs=listShop('shopLog').sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(fLogItem) logs=logs.filter(l=>l.itemId===fLogItem);
+  const shown=logs.slice(0,300);
+  const opts=['<option value="">Alle Artikel</option>'].concat(its.map(i=>`<option value="${esc(i.id)}"${fLogItem===i.id?' selected':''}>${esc(itemLabel(i))}</option>`)).join('');
+  const rows=shown.map(l=>`<tr><td style="white-space:nowrap">${_fmtTs(l.ts)}</td><td>${esc(l.byName||'')}</td><td style="white-space:nowrap">${LOG_T[l.type]||esc(l.type)}</td>
+    <td style="text-align:right;font-weight:700">${l.type==='korrektur'?(l.qty>0?'+':'')+l.qty:l.qty}</td><td>${esc(l.itemName||'')}</td>
+    <td>${l.from?esc(placeLabel(l.from)):''}${l.from&&l.to&&l.from!==l.to?' → ':''}${l.to&&l.to!==l.from?esc(placeLabel(l.to)):''}</td><td>${esc(l.note||'')}</td></tr>`).join('');
+  return `<div class="shop-bar"><select onchange="shopSetLogItem(this.value)">${opts}</select><span class="shop-sp"></span>
+    <span style="font-size:12px;color:var(--muted)">${logs.length} Buchung${logs.length===1?'':'en'}${logs.length>300?' (neueste 300)':''}</span></div>
+    ${rows?`<div style="overflow-x:auto"><table class="shop-log"><thead><tr><th>Wann</th><th>Wer</th><th>Art</th><th>Menge</th><th>Artikel</th><th>Ort</th><th>Notiz</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="shop-empty">Noch keine Buchungen.</div>'}`;
+}
+function shopSetLogItem(v){ fLogItem=v; renderShop(); }
+
+// ── Mitteilungen (für die gemeinsame Leiste in gfberichte.js) ──────
+// Verwalter: neue (offene) Bestellungen, die er noch nicht gesehen hat.
+// Besteller: Bestellung ausgegeben / erledigt / abgelehnt, noch nicht quittiert.
+function shopNotices(){
+  const cu=window.cu; if(!cu||!canUse()) return [];
+  const mgr=canManage(); const out=[];
+  orders().forEach(o=>{
+    if(mgr && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id])){
+      out.push({ ts:o.ts, html:`🛒 Neue Bestellung von <b>${esc(o.byName||'?')}</b>: ${_orderWhat(o)}${o.termin?` (bis ${_fmtDate(o.termin)})`:''}${o.anlass?' – '+esc(o.anlass):''}`,
+        open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeSeen(${JSON.stringify(o.id)})` });
+    }
+    if(o.byId===cu.id && !o.ackOrderer && (o.status==='ausgegeben'||o.status==='erledigt'||o.status==='abgelehnt')){
+      const st=STATUS[o.status];
+      out.push({ ts:o.handledTs||o.ts, html:`🛒 Deine Bestellung ${_orderWhat(o)} ist <b>${st.l.toLowerCase()}</b>${o.handledByName?' ('+esc(o.handledByName)+')':''}${o.answer?': „'+esc(o.answer)+'“':''}${o.status==='ausgegeben'&&o.issueMode==='move'&&o.ortId?' – liegt jetzt: '+esc(placeLabel(o.ortId)):''}`,
+        open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeAck(${JSON.stringify(o.id)})` });
+    }
+  });
+  return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+function shopNoticeOpen(id){
+  const o=getShop('shopOrders',id);
+  if(o){ const cu=_me(); if(o.byId===cu.id && o.status!=='offen' && o.status!=='inarbeit') shopNoticeAck(id); else if(canManage()) shopNoticeSeen(id); }
+  TAB='bestellungen'; fOrd='alle';
+  try{ window.switchModule && window.switchModule('shop'); }catch(e){}
+}
+function shopNoticeSeen(id){
+  const o=getShop('shopOrders',id); const cu=_me(); if(!o||!cu.id) return;
+  if(!o.seenBy||typeof o.seenBy!=='object') o.seenBy={};
+  o.seenBy[cu.id]=Date.now(); saveShop('shopOrders', o);
+  try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
+}
+function shopNoticeAck(id){
+  const o=getShop('shopOrders',id); if(!o) return;
+  o.ackOrderer=true; saveShop('shopOrders', o);
+  try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
+}
+
+Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+  shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
+  shopBook, shopBookSave, shopMove, shopMoveSave,
+  shopOrderNew, shopOrderItemChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
+  shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
+  shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
+  shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck });

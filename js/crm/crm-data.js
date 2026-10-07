@@ -19,7 +19,9 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog'];
+// Shop-Sammlungen (js/crm/shop.js): crm/<coll>/<id>, flach wie alle anderen Sammlungen.
+export const SHOP_COLLS = ['shopItems','shopPlaces','shopOrders','shopLog'];
 
 let _cache   = null;   // In-Memory-Cache des gesamten CRM
 let _ref     = null;   // firebase.database().ref('crm')  – erst nach Init
@@ -126,11 +128,13 @@ export function restoreHistory(entry){
   if(coll==='veranstaltungen') return saveVeranstaltung(data);
   if(coll==='vorlagen')     return saveVorlage(data);
   if(coll==='verteiler')    return saveVerteiler(data);
+  if(SHOP_COLLS.includes(coll)) return saveShop(coll, data);
   return saveEntity(coll, data);  // sonst: Baum-Eintrag
 }
 
 function freshCrm(){
-  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null, pathAccess:null };
+  const out = { vorlagen:{}, teamprojekte:{}, access:{}, verteiler:{}, veranstaltungen:{}, workflows:{}, config:null, pathAccess:null,
+                shopItems:{}, shopPlaces:{}, shopOrders:{}, shopLog:{} };
   DEFAULT_TREE_KEYS.forEach(k=>{ out[k]={}; });
   return out;
 }
@@ -203,6 +207,13 @@ export function ensureCrmReady(){
             if((window._activeModule === 'crm' || window._activeModule === 'kanban') && !window._crmModalOpen && _onChange){
               _onChange();
             }
+            // Shop: eigenes Modul – live nachziehen (nicht während ein Dialog offen ist)
+            if(window._activeModule === 'shop' && window.renderShop){
+              const mb=document.getElementById('modal-bg');
+              if(!(mb && mb.classList.contains('show'))) window.renderShop();
+            }
+            // Mitteilungsleiste (Shop-Bestellungen) auffrischen
+            try{ window.renderZeNotices && window.renderZeNotices(); }catch(e){}
           }catch(e){ console.warn('CRM Snapshot Fehler (ignoriert):', e); }
         });
       }
@@ -348,6 +359,35 @@ export function listTeamProjekte(team){
   if(team!=null) arr = arr.filter(p => (p.team||'') === (team||''));
   return arr.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||''), 'de', {sensitivity:'base'}));
 }
+
+// ── Shop (Lager + Bestellungen) ────────────────────────────────────
+// Generisch für alle SHOP_COLLS: crm/<coll>/<id>. Verlauf (crm_history) nur für Artikel/Orte/
+// Bestellungen – das Buchungs-Log (shopLog) IST selbst der Verlauf.
+export function saveShop(coll, rec){
+  if(!SHOP_COLLS.includes(coll) || !rec || !rec.id) return Promise.resolve();
+  rec.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d[coll] || typeof d[coll]!=='object') d[coll] = {};
+  d[coll][rec.id] = rec;
+  _cache = d;
+  _persistLocal();
+  if(coll!=='shopLog') _logHistory(coll, rec.id, 'save', rec, rec.name||rec.itemName||rec.freitext||'');
+  try{ return _write(coll, rec.id, rec); }catch(e){ console.warn('CRM saveShop:', e && e.message); }
+  return Promise.resolve();
+}
+export function deleteShop(coll, id){
+  if(!SHOP_COLLS.includes(coll) || !id) return Promise.resolve();
+  const d = getCrm();
+  const prev = d[coll] && d[coll][id];
+  if(prev && coll!=='shopLog') _logHistory(coll, id, 'delete', prev, prev.name||prev.itemName||prev.freitext||'');
+  if(d[coll]) delete d[coll][id];
+  _cache = d;
+  _persistLocal();
+  try{ return _write(coll, id, null); }catch(e){ console.warn('CRM deleteShop:', e && e.message); }
+  return Promise.resolve();
+}
+export function listShop(coll){ const d=getCrm(); return Object.values((d && d[coll]) || {}); }
+export function getShop(coll, id){ const d=getCrm(); return (d && d[coll] && d[coll][id]) || null; }
 
 // ── E-Mail-Verteiler (gespeicherte Adresslisten) ──────────────────
 // Liegen unter crm/verteiler/<id> = { id, name, emails:[], note?, … }.

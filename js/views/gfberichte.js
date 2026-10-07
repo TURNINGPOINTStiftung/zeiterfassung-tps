@@ -450,7 +450,9 @@ export function renderZeNotices(){
   _ensureNoticeCss();
   let bar=document.getElementById('ze-notice-bar');
   const list=_myNotices();
-  if(!list.length){ if(bar) bar.remove(); return; }
+  // Weitere Mitteilungs-Quellen (z. B. Shop-Bestellungen): [{ts, html, open:'js()', ack:'js()'}]
+  let extra=[]; try{ extra=(window.shopNotices&&window.shopNotices())||[]; }catch(e){ extra=[]; }
+  if(!list.length&&!extra.length){ if(bar) bar.remove(); return; }
   if(!bar){
     bar=document.createElement('div'); bar.id='ze-notice-bar';
     const mb=document.getElementById('module-bar');
@@ -464,6 +466,11 @@ export function renderZeNotices(){
     return '<div class="ze-notice"><span class="tx">'+tx+'</span>'
       +'<button class="pri" onclick="zeNoticeOpen(\''+esc(n.k)+'\')">Öffnen</button>'
       +'<button onclick="zeNoticeAck(\''+esc(n.k)+'\')">✓ Gelesen</button></div>';
+  }).join('')
+  +extra.map(function(n){
+    return '<div class="ze-notice"><span class="tx">'+n.html+'</span>'
+      +'<button class="pri" onclick="'+esc(n.open)+'">Öffnen</button>'
+      +'<button onclick="'+esc(n.ack)+'">✓ Gelesen</button></div>';
   }).join('');
 }
 

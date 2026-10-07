@@ -25,6 +25,7 @@ const _UF_PATHS=[
   {key:'ki',            label:'KI', icon:'🧠'},
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
   {key:'messe',         label:'Messemodus', icon:'🎪'},
+  {key:'shop',          label:'Shop', icon:'🛒'},
   {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
 ];
 
@@ -761,6 +762,7 @@ function userForm(u={}){
         ${modBlock('messe','🎪','Messemodus')}
         ${modBlock('auswertung','📊','Auswertung')}
         ${modBlock('kalender','📅','Kalender','<div style="font-size:12px;color:var(--muted)">Darf den Kalender ansehen.</div>')}
+        ${modBlock('shop','🛒','Shop (Lager &amp; Bestellungen)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
@@ -869,7 +871,7 @@ function collectUserForm(){
   ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel']
     .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
   // 2) Weitere Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
-  [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung'],['kalender','verw_kalender']]
+  [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung'],['kalender','verw_kalender'],['shop','verw_shop']]
     .forEach(([k,vk])=>{ const s=_mod(k); if(s===null) return; perms['path_'+k]=(s!=='kein'); if(s==='verwaltend') perms[vk]=true; });
   // 3) CRM: „Verwaltend" → CRM-Verwalter-Recht (Umfang/Level separat via crmSetUserAccess)
   if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;

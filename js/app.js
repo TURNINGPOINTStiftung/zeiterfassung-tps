@@ -12,7 +12,7 @@ function _hasAnyAccess(cu){
   try{
     const ma = window.crmModuleAccess ? window.crmModuleAccess(cu) : null;
     if(!ma) return true; // Zugriffslogik noch nicht bereit → nicht aussperren
-    if(['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung'].some(k=>ma[k]&&ma[k]!=='kein')) return true;
+    if(['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung','shop'].some(k=>ma[k]&&ma[k]!=='kein')) return true;
     if(ma.system==='ja') return true;
   }catch(e){ return true; }
   try{ if(hasPermission('tab_uebersicht',cu)||hasPermission('tab_gfberichte',cu)||hasPermission('zugriff_verwaltung',cu)) return true; }catch(e){}
@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v387':'';
+  if(_hv) _hv.textContent=_showVer?'v388':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -131,7 +131,7 @@ export function initApp(){
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
   const _canVerw = isAdmin || hasPermission('zugriff_verwaltung',cu);
-  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || _lastMod==='shop' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   switchModule(crmOnly ? 'crm' : (_modOk?_lastMod:'zeiterfassung'));
   // Mitteilungsleiste (z. B. „GF hat deine Zeiterfassung zurückgegeben") – in allen Modulen sichtbar
@@ -146,7 +146,7 @@ export function initApp(){
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }
 
-const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',verwaltung:'Verwaltung'};
+const MODULE_LABELS={zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',shop:'Shop',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
@@ -166,7 +166,7 @@ export function switchModule(name){
   if(main) main.style.display=isZE?'':'none';
   // Projektmanagement + Verteiler sind eigene ☰-Pfade, nutzen aber denselben #mod-crm-Rahmen (gemeinsame CRM-Engine).
   const frame = (name==='kanban'||name==='verteiler') ? 'crm' : name;
-  ['website','forum','crm','auswertung','verwaltung','ki','kalender'].forEach(m=>{
+  ['website','forum','crm','auswertung','verwaltung','ki','kalender','shop'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(frame===m)?'flex':'none';
   });
@@ -180,6 +180,7 @@ export function switchModule(name){
   if(name==='verwaltung'){ try{ window.renderVerwaltung&&window.renderVerwaltung(); }catch(e){ console.error('Verwaltung Render-Fehler (ignoriert):',e); } }
   if(name==='ki'){ try{ window.renderKI&&window.renderKI(); }catch(e){ console.error('KI Render-Fehler (ignoriert):',e); } }
   if(name==='kalender'){ try{ window.renderKalender&&window.renderKalender(); }catch(e){ console.error('Kalender Render-Fehler (ignoriert):',e); } }
+  if(name==='shop'){ try{ window.renderShop&&window.renderShop(); }catch(e){ console.error('Shop Render-Fehler (ignoriert):',e); } }
   // Suche/Glocke der oberen Leiste ans aktive Modul angleichen (in CRM-Pfaden füllen, sonst leeren)
   try{ window.crmUpdateTopTools&&window.crmUpdateTopTools(); }catch(e){}
 }

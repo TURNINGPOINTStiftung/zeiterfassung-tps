@@ -311,6 +311,7 @@ const _PATH_DEFS=[
   {key:'ki',            label:'KI', icon:'🧠'},
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
   {key:'messe',         label:'Messemodus', icon:'🎪'},
+  {key:'shop',          label:'Shop', icon:'🛒'},
   {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
 ];
 const _ROLE_COLS=[
@@ -338,6 +339,7 @@ function _defaultPathAccess(key, cu){
     case 'kalender': return true;   // Standard: ALLE sehen den Kalender (pro Person übersteuerbar)
     case 'verwaltung': return _canVerwCrm();
     case 'messe': return (lvl==='admin'||lvl==='full');
+    case 'shop': return false;   // Standard: nur Admin – pro Person in der Verwaltung freischalten
     default: return false;
   }
 }
@@ -373,7 +375,7 @@ function _canAdminFor(key, u){
 // UND als eine Quelle der Wahrheit. Reine Lese-Funktion, ändert nichts.
 function crmModuleAccess(u){
   const out={};
-  ['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung','kalender'].forEach(k=>{
+  ['zeiterfassung','crm','kanban','verteiler','ki','messe','auswertung','kalender','shop'].forEach(k=>{
     out[k] = !canUsePath(k, u) ? 'kein' : (_canAdminFor(k, u) ? 'verwaltend' : 'nutzen');
   });
   const lvl=_accessLevelOf(u);
@@ -394,7 +396,7 @@ function crmSetupModuleBar(){
       // canUsePath() = Admin immer · explizite Matrix (Ja/Nein je Rolle) · sonst Standard
       // (= exakt das bisherige Verhalten). So ändert sich ohne Konfiguration nichts.
       const show={};
-      ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','kalender','verwaltung','messe']
+      ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','kalender','verwaltung','messe','shop']
         .forEach(k=>{ show[k]=canUsePath(k, cu); });
       let count=0;
       Object.keys(show).forEach(mod=>{
@@ -2396,7 +2398,7 @@ function crmImportContactsFile(inp){
 // Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
 function crmCanCreateItems(){ return { termin: (crmFull()||crmRestricted()), va: crmFull() }; }
 // Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
-const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess']);
+const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog']);
 function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
     Object.keys(d).forEach(tk=>{ if(_KAL_RESERVED.has(tk)) return; const ents=d[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; if(!e||typeof e!=='object') return; out.push({tree:tk, eid, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); });
@@ -4945,7 +4947,7 @@ function crmHistRestore(key){
 // ══════════════════════════════════════════════════════════════════
 //  CRM-Konfiguration (admin): Bäume & Stammdaten-Felder editierbar
 // ══════════════════════════════════════════════════════════════════
-const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess'];
+const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess','shopItems','shopPlaces','shopOrders','shopLog'];
 const _clone = o => JSON.parse(JSON.stringify(o));
 // Arbeitskopie der Config: aus crm/config oder (falls leer) aus den Defaults.
 function _cfgWork(){

@@ -93,6 +93,7 @@
         <button class="mb-mod" data-mod="messe" onclick="closeModuleMenu();messeStart()" style="display:none">Messemodus</button>
         <button class="mb-mod" data-mod="auswertung" onclick="switchModule('auswertung')" style="display:none">Auswertung</button>
         <button class="mb-mod" data-mod="kalender" onclick="switchModule('kalender')" style="display:none">Kalender</button>
+        <button class="mb-mod" data-mod="shop" onclick="switchModule('shop')" style="display:none">Shop</button>
         <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
       </div>
     </div>
@@ -402,6 +403,10 @@
     <div id="kalender-root"></div>
   </div>
 
+  <div id="mod-shop" class="mod-frame" style="display:none">
+    <div id="shop-root"></div>
+  </div>
+
   <div id="mod-verwaltung" class="mod-frame" style="display:none">
     <div id="verw-root"></div>
   </div>
@@ -474,6 +479,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=248"></script>
+<script type="module" src="js/main.js?v=249"></script>
 </body>
 </html>
