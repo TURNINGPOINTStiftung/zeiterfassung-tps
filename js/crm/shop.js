@@ -22,6 +22,7 @@
 import * as CD from './crm-data.js';
 import * as U from '../utils.js';
 import * as D from '../data.js';      // NUR Lesen (Personenliste fürs Verleihen)
+import * as CC from './crm-config.js'; // NUR Lesen (CRM-Bereiche fürs Verleihen an Vereine)
 const listShop =(c)=>CD.listShop?CD.listShop(c):[];
 const getShop  =(c,id)=>CD.getShop?CD.getShop(c,id):null;
 const saveShop =(c,r)=>CD.saveShop?CD.saveShop(c,r):_stale();
@@ -71,7 +72,22 @@ function activeLoans(itemId){ return loans().filter(l=>l.status==='aktiv' && (!i
 function lent(it){ return it ? activeLoans(it.id).reduce((s,l)=>s+_num(l.qty),0) : 0; }
 // Gesamtbestand = an Orten + gerade verliehen (Leihmaterial gehört weiter zum Bestand)
 function total(it){ return inPlaces(it)+lent(it); }
-const _overdue=l=>l.status==='aktiv' && l.due && l.due<_todayIso();
+const _overdue=l=>l.status==='aktiv' && l.due && l.due<_todayIso();   // ohne due = Dauerleihe → nie überfällig
+// ── Ausleihende: Mitarbeiter (borrowerId) · CRM-Eintrag/Verein (borrowerRef {tree,eid}) · freier Name
+function _crmEntities(){
+  const out=[];
+  try{ (CC.getTrees?CC.getTrees():[]).forEach(tr=>{ (CD.listEntities?CD.listEntities(tr.key):[]).forEach(e=>{
+    out.push({tree:tr.key, treeLabel:tr.label||tr.key, icon:tr.icon||'🏛️', eid:e.id, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); }); }); }catch(e){}
+  return out;
+}
+function bType(l){ return l.borrowerRef&&l.borrowerRef.eid ? 'crm' : (l.borrowerId ? 'user' : 'frei'); }
+function bKey(l){ const t=bType(l); return t==='crm' ? 'c:'+l.borrowerRef.tree+'/'+l.borrowerRef.eid : t==='user' ? 'u:'+l.borrowerId : 'f:'+String(l.borrowerName||'').trim().toLowerCase(); }
+function bName(l){   // CRM-Name live (Umbenennung im CRM zieht nach)
+  if(bType(l)==='crm'){ try{ const e=CD.getEntity&&CD.getEntity(l.borrowerRef.tree,l.borrowerRef.eid); if(e&&e.stamm&&e.stamm.name) return e.stamm.name; }catch(err){} }
+  return l.borrowerName||'?';
+}
+function bIcon(l){ return ({crm:'🏛️',user:'👤',frei:'✏️'})[bType(l)]; }
+function bLabel(l){ return bIcon(l)+' '+bName(l); }
 function people(){
   try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&!u.archived)
     .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de',{sensitivity:'base'})); }catch(e){ return []; }
@@ -193,7 +209,9 @@ function shopTab(t){ TAB=t; renderShop(); }
 function _bestandHtml(mgr){
   const pls=places();
   const catOpts=['<option value="">Alle Kategorien</option>'].concat(cats().map(c=>`<option${fCat===c?' selected':''}>${esc(c)}</option>`)).join('');
-  const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('');
+  const bws=_borrowers();
+  const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('')
+    +(bws.length?`<optgroup label="🔁 Ausgeliehen an">${bws.map(b=>`<option value="${esc('loan:'+b.key)}"${fPlace==='loan:'+b.key?' selected':''}>${esc(b.label)}</option>`).join('')}</optgroup>`:'');
   const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
   return `${hint}<div class="shop-bar">
       <input type="search" id="shop-q" placeholder="Suchen …" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
@@ -209,7 +227,8 @@ function _itemsGrid(mgr){
   const q=fQ.trim().toLowerCase();
   const list=items().filter(it=>{
     if(fCat && it.kategorie!==fCat) return false;
-    if(fPlace && !_num((it.stock||{})[fPlace])) return false;
+    if(fPlace.startsWith('loan:')){ if(!activeLoans(it.id).some(l=>'loan:'+bKey(l)===fPlace)) return false; }
+    else if(fPlace && !_num((it.stock||{})[fPlace])) return false;
     if(q && !(`${it.name} ${it.variante||''} ${it.kategorie||''} ${it.note||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
@@ -221,7 +240,7 @@ function _itemsGrid(mgr){
       .map(pid=>`<span class="${fPlace===pid?'hl':''}">${esc(placeLabel(pid))}: <b>${_num(it.stock[pid])}</b></span>`).join('');
     const img=it.foto?`<div class="shop-img" style="background-image:url('${it.foto}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
     const ln=activeLoans(it.id);
-    const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}" title="${esc(l.anlass||'')}">🔁 ${esc(l.borrowerName||'?')}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):''}</span>`).join('');
+    const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
     return `<div class="shop-card${low?' low':''}">${img}<div class="shop-cb">
       <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${it.leihbar?'<span class="shop-cat" style="background:#dbe6fb;color:#1e40af">🔁 Leihmaterial</span>':''}</div>
@@ -536,15 +555,15 @@ function shopOrderCancel(id){
 
 // ── Ausleihe ───────────────────────────────────────────────────────
 // Bestand wurde vom Aufrufer bereits am Quell-Ort abgezogen (it gespeichert).
-function _createLoan(it, fromPlace, qty, borrowerId, borrowerName, due, anlass, note, orderId, viaOrder){
+function _createLoan(it, fromPlace, qty, borrowerId, borrowerName, due, anlass, note, orderId, viaOrder, borrowerRef){
   const cu=_me();
   const l={ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
-    qty, fromPlace, borrowerId:borrowerId||null, borrowerName:borrowerName||'?', due:due||'', anlass:anlass||'', note:note||'',
+    qty, fromPlace, borrowerId:borrowerId||null, borrowerRef:borrowerRef||null, borrowerName:borrowerName||'?', due:due||'', anlass:anlass||'', note:note||'',
     orderId:orderId||null, status:'aktiv', returns:[],
     // Über eine Bestellung → Besteller bekommt schon die Bestell-Mitteilung; direkt verliehen → eigene Mitteilung
     ackBorrower: !!viaOrder || !borrowerId || borrowerId===cu.id };
   saveShop('shopLoans', l);
-  _log(it,'verleih',qty,fromPlace,null,'an '+(borrowerName||'?')+(due?' bis '+_fmtDate(due):'')+(anlass?' · '+anlass:''),orderId);
+  _log(it,'verleih',qty,fromPlace,null,'an '+(borrowerName||'?')+(due?' bis '+_fmtDate(due):' (Dauerleihe)')+(anlass?' · '+anlass:''),orderId);
   return l;
 }
 function shopLend(itemId){
@@ -553,30 +572,41 @@ function shopLend(itemId){
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
   const ppl=people();
+  // CRM-Einträge je Bereich gruppiert (Vereine, Sozialakteure …) – nach Name sortiert
+  const ents=_crmEntities(); const byTree={};
+  ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
+  const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
+    return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
   openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar</p>
     <div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="sl-who" onchange="document.getElementById('sl-other-w').style.display=this.value==='__other'?'':'none'">
-        <option value="">– bitte wählen –</option>${ppl.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}<option value="__other">✏️ Andere Person / Verein …</option></select></div>
-      <div class="shop-f" id="sl-other-w" style="display:none"><label>Name</label><input id="sl-other" placeholder="z. B. SV Kiel, Max Muster"></div></div>
+        <option value="">– bitte wählen –</option>
+        ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
+        ${crmGroups}
+        <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
+      <div class="shop-f" id="sl-other-w" style="display:none"><label>Name</label><input id="sl-other" placeholder="z. B. Max Muster, Schule XY"></div></div>
     <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="sl-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
       <div class="shop-f"><label>Menge</label><input id="sl-qty" type="number" min="1" step="1" value="1"></div></div>
-    <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis *</label><input id="sl-due" type="date" min="${_todayIso()}"></div>
-      <div class="shop-f"><label>Wofür / Anlass</label><input id="sl-anlass" placeholder="z. B. Regatta, Messe"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis <span id="sl-due-req">*</span></label><input id="sl-due" type="date" min="${_todayIso()}">
+        <label style="display:flex;gap:6px;align-items:center;font-weight:400;margin-top:5px;cursor:pointer"><input type="checkbox" id="sl-perm" style="width:auto" onchange="const d=document.getElementById('sl-due');d.disabled=this.checked;if(this.checked)d.value='';document.getElementById('sl-due-req').style.display=this.checked?'none':''"> Dauerleihe (ohne Rückgabedatum)</label></div>
+      <div class="shop-f"><label>Wofür / Anlass</label><input id="sl-anlass" placeholder="z. B. Regatta, Messe, fester Standort"></div></div>
     <div class="shop-f"><label>Notiz</label><input id="sl-note" placeholder="z. B. Zustand bei Ausgabe, Zubehör"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopLendSave(${jsq(itemId)})">Verleihen</button></div>`);
 }
 function shopLendSave(itemId){
   const it=getShop('shopItems',itemId); if(!it) return;
-  const who=_val('sl-who'); let bId=null, bName='';
+  const who=_val('sl-who'); let bId=null, bRef=null, bName='';
   if(who==='__other'){ bName=_val('sl-other'); if(!bName){ toast('Bitte einen Namen eingeben.','err'); return; } }
-  else if(who){ const u=people().find(x=>x.id===who); bId=who; bName=u?u.name:who; }
+  else if(who.startsWith('u:')){ const id=who.slice(2); const u=people().find(x=>x.id===id); bId=id; bName=u?u.name:id; }
+  else if(who.startsWith('c:')){ const [tree,eid]=who.slice(2).split('::'); const x=_crmEntities().find(e=>e.tree===tree&&e.eid===eid); bRef={tree,eid}; bName=x?x.name:'?'; }
   else { toast('Bitte auswählen, wer es bekommt.','err'); return; }
-  const from=_val('sl-from'), q=Math.round(_num(_val('sl-qty'))), due=_val('sl-due');
+  const perm=!!(document.getElementById('sl-perm')||{}).checked;
+  const from=_val('sl-from'), q=Math.round(_num(_val('sl-qty'))), due=perm?'':_val('sl-due');
   if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
-  if(!due){ toast('Bitte ein Rückgabedatum angeben.','err'); return; }
+  if(!due && !perm){ toast('Bitte ein Rückgabedatum angeben – oder „Dauerleihe" anhaken.','err'); return; }
   if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
   saveShop('shopItems', it);
-  _createLoan(it, from, q, bId, bName, due, _val('sl-anlass'), _val('sl-note'), null, false);
+  _createLoan(it, from, q, bId, bName, due, _val('sl-anlass'), _val('sl-note'), null, false, bRef);
   closeModal(); toast(`${q}× verliehen an ${bName} ✓`,'ok'); renderShop();
 }
 function shopReturn(loanId){
@@ -584,7 +614,7 @@ function shopReturn(loanId){
   const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
   const pls=places(); if(!pls.length){ toast('Es gibt keinen Ort für die Rückgabe.','err'); return; }
   const def=placeOf(l.fromPlace)?l.fromPlace:pls[0].id;
-  openModal(`<h3>↩ Zurückgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${_num(l.qty)}× ${esc(l.itemName||'')}</b> · ausgeliehen von ${esc(l.borrowerName||'?')}${l.due?' · bis '+_fmtDate(l.due):''}</p>
+  openModal(`<h3>↩ Zurückgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${_num(l.qty)}× ${esc(l.itemName||'')}</b> · ausgeliehen von ${esc(bLabel(l))}${l.due?' · bis '+_fmtDate(l.due):''}</p>
     <div class="shop-f2"><div class="shop-f"><label>Zurück nach</label>${_placeSelect('sr-to', def, false)}</div>
       <div class="shop-f"><label>Menge</label><input id="sr-qty" type="number" min="1" max="${_num(l.qty)}" step="1" value="${_num(l.qty)}"></div></div>
     <div class="shop-f"><label>Zustand / Notiz</label><input id="sr-note" placeholder="z. B. alles ok, Stange verbogen, Akku fehlt"></div>
@@ -596,7 +626,7 @@ function shopReturnSave(loanId){
   const to=_val('sr-to'), q=Math.round(_num(_val('sr-qty'))), note=_val('sr-note'), open=_num(l.qty);
   if(q<=0||q>open){ toast(`Bitte eine Menge zwischen 1 und ${open} eingeben.`,'err'); return; }
   const it=getShop('shopItems',l.itemId);
-  if(it){ _applyDelta(it, to, q); saveShop('shopItems', it); _log(it,'rueckgabe',q,null,to,'von '+(l.borrowerName||'?')+(note?' · '+note:'')); }
+  if(it){ _applyDelta(it, to, q); saveShop('shopItems', it); _log(it,'rueckgabe',q,null,to,'von '+bName(l)+(note?' · '+note:'')); }
   const cu=_me();
   if(!Array.isArray(l.returns)) l.returns=[];
   l.returns.push({ ts:Date.now(), qty:q, to, note, byId:cu.id||'', byName:cu.name||'' });
@@ -607,15 +637,15 @@ function shopReturnSave(loanId){
 }
 function shopLoanDue(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
-  openModal(`<h3>📅 Rückgabe verlängern</h3><p style="font-size:13px;margin:0 0 10px">${_num(l.qty)}× ${esc(l.itemName||'')} · ${esc(l.borrowerName||'')}</p>
-    <div class="shop-f"><label>Neue Rückgabe bis</label><input id="sld-due" type="date" value="${esc(l.due||'')}"></div>
+  openModal(`<h3>📅 Rückgabedatum</h3><p style="font-size:13px;margin:0 0 10px">${_num(l.qty)}× ${esc(l.itemName||'')} · ${esc(bLabel(l))}</p>
+    <div class="shop-f"><label>Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="sld-due" type="date" value="${esc(l.due||'')}"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopLoanDueSave(${jsq(loanId)})">Speichern</button></div>`);
 }
 function shopLoanDueSave(loanId){
   const l=getShop('shopLoans',loanId); if(!l) return;
-  const d=_val('sld-due'); if(!d){ toast('Bitte ein Datum wählen.','err'); return; }
-  l.due=d; l.ackOverdue=''; saveShop('shopLoans', l); closeModal(); toast('Rückgabe bis '+_fmtDate(d)+' ✓','ok'); renderShop();
+  const d=_val('sld-due');
+  l.due=d; l.ackOverdue=''; saveShop('shopLoans', l); closeModal(); toast(d?'Rückgabe bis '+_fmtDate(d)+' ✓':'Jetzt Dauerleihe ✓','ok'); renderShop();
 }
 function _loansHtml(mgr){
   const me=_me();
@@ -628,12 +658,12 @@ function _loansHtml(mgr){
     return `<div class="shop-row"${late?' style="border-color:#e5484d"':''}><div class="main">
       <div class="t">🔁 ${_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0)}× ${esc(l.itemName||'?')}
         ${l.status==='aktiv'?(late?'<span class="shop-st" style="background:#c0392b">Überfällig</span>':'<span class="shop-st" style="background:#2563eb">Ausgeliehen</span>'):'<span class="shop-st" style="background:#16a34a">Zurück</span>'}</div>
-      <div class="m">${mgr?`an <b>${esc(l.borrowerName||'?')}</b> · `:''}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
-        ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:''}${l.anlass?` · ${esc(l.anlass)}`:''}
+      <div class="m">${mgr?`an <b>${esc(bLabel(l))}</b> · `:''}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
+        ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:(l.status==='aktiv'?' · Dauerleihe':'')}${l.anlass?` · ${esc(l.anlass)}`:''}
         ${l.note?`<br>📝 ${esc(l.note)}`:''}
         ${ret.map(r=>`<br>↩ ${_num(r.qty)} zurück nach ${esc(placeLabel(r.to))} · ${_fmtTs(r.ts)} (${esc(r.byName||'')})${r.note?' – '+esc(r.note):''}`).join('')}</div></div>
       ${canRet?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>
-        ${mgr?`<button class="shop-btn sm" onclick="shopLoanDue(${jsq(l.id)})">📅 Verlängern</button>`:''}</div>`:''}</div>`;
+        ${mgr?`<button class="shop-btn sm" onclick="shopLoanDue(${jsq(l.id)})">📅 ${l.due?'Verlängern':'Datum setzen'}</button>`:''}</div>`:''}</div>`;
   }).join('');
   const seg=[['aktiv','Ausgeliehen'],['zurueck','Zurückgegeben']];
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fLoan===s[0]?'on':''}" onclick="shopSetLoan(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
@@ -653,10 +683,34 @@ function _orteHtml(){
       <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
       <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
   }).join('');
+  const bws=_borrowers();
+  const bRows=bws.map(b=>`<div class="shop-row"><div class="main"><div class="t">${esc(b.label)}</div>
+      <div class="m">${b.loans.length} Leihe${b.loans.length===1?'':'n'} · `+b.loans.map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')}${l.due?` (bis <span class="${_overdue(l)?'shop-late':''}">${_fmtDate(l.due)}</span>)`:' (dauerhaft)'}`).join(', ')+`</div></div>
+      <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq('loan:'+b.key)});shopTab('bestand')">Ansehen</button></div></div>`).join('');
   return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Wo liegen Sachen? Büro, Bus, Boote, Lager …</span><span class="shop-sp"></span>
     <button class="shop-btn pri" onclick="shopPlaceEdit('')">＋ Ort</button></div>
-    <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>`;
+    <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>
+    ${bRows?`<h4 style="margin:18px 0 8px;color:var(--primary)">🔁 Unterwegs bei (ausgeliehen)</h4><div class="shop-list">${bRows}</div>`:''}`;
 }
+// Alle, die gerade etwas ausgeliehen haben – gruppiert (Mitarbeiter, CRM-Einträge, freie Namen)
+function _borrowers(){
+  const m={};
+  activeLoans().forEach(l=>{ const k=bKey(l); (m[k]=m[k]||{key:k, label:bLabel(l), loans:[]}).loans.push(l); });
+  return Object.values(m).sort((a,b)=>a.label.localeCompare(b.label,'de',{sensitivity:'base'}));
+}
+// Für die CRM-Detailseite eines Vereins/Eintrags: laufende Leihgaben (HTML, leer wenn keine)
+function shopLoansForEntity(tree, eid){
+  try{
+    const ls=activeLoans().filter(l=>l.borrowerRef&&l.borrowerRef.tree===tree&&l.borrowerRef.eid===eid);
+    if(!ls.length) return '';
+    const can=canUse();
+    return `<div class="crm-sec"><h4><span class="ttl">🔁 Leihgaben vom Shop</span>${can?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop öffnen</button></span>`:''}</h4>
+      ${ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}</span>
+        <div class="small">seit ${_fmtDate(new Date(l.ts).toISOString().slice(0,10))}${l.due?` · <span style="${_overdue(l)?'color:#c0392b;font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join('')}
+    </div>`;
+  }catch(e){ return ''; }
+}
+function shopOpenBorrower(key){ fPlace=key; TAB='bestand'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 function shopPlaceEdit(id){
   if(!canManage()) return;
   const p=id?getShop('shopPlaces',id):null; const v=p||{name:'',typ:'buero',note:''};
@@ -728,7 +782,7 @@ function shopNotices(){
   if(mgr){
     const late=activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id);
     let acked=''; try{ acked=localStorage.getItem('tps_shop_od_ack_'+cu.id)||''; }catch(e){}
-    if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(l.borrowerName||'?')}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
+    if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
   }
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
@@ -762,6 +816,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
+  shopLoansForEntity, shopOpenBorrower,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });

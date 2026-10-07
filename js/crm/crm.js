@@ -1682,7 +1682,9 @@ function paintDetail(){
   const _stBadges=crmStatusBadges(e), _catBadges=crmCatBadges(e, window._crmTree);
   const scBar = `<div class="crm-scbar">${_stBadges||''}${(_stBadges&&_catBadges)?' ':''}${_catBadges||''}${(!_stBadges&&!_catBadges)?'<span class="small" style="color:var(--muted)">Kein Status · keine Kategorie – über „✎ Stammdaten" setzen</span>':''}${_statusLogHtml(e)}</div>`;
   const bodyByTab={
-    allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec,
+    allgemeines: (stammSec || `<div class="crm-sec"><div class="small" style="color:var(--muted)">Keine Stammdaten hinterlegt. Über „✎ Stammdaten" bearbeiten.</div></div>`) + kooperationenSecHtml(e) + kontakteSec
+      // Leihgaben aus dem Shop (Beachflags, Werkzeug …), die gerade bei diesem Eintrag sind
+      + (()=>{ try{ return window.shopLoansForEntity ? window.shopLoansForEntity(window._crmTree, e.id) : ''; }catch(_e){ return ''; } })(),
     aufgaben: neuBtn + termineSec + vaSection + aufgabenSec,
     kommunikation: statusSec,
     statistik: statsSec,
