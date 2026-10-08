@@ -72,6 +72,8 @@ function _styles(){
   .home-chip .star{border:none;background:none;cursor:pointer;font-size:16px;padding:4px 10px 4px 4px;color:#b8bec7;line-height:1}
   .home-chip .star.on{color:#f5a623}
   body.mod-start #ze-notice-bar{display:none}
+  body.mod-start #mb-menu-btn{display:none !important}   /* auf der Startseite übernehmen die Kacheln das ☰-Menü */
+  a.home-tile{display:block}
   @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-bgl{width:120%;right:-30%;bottom:0} .home-grid{grid-template-columns:minmax(0,1fr)} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
   document.head.appendChild(st);
 }
@@ -280,11 +282,18 @@ function homeZe(view){ try{ window.switchModule&&window.switchModule('zeiterfass
 
 // ── Kacheln: genau die Module, die im ☰-Menü sichtbar sind (= Rechte) ──
 const TILE_IC={ zeiterfassung:'🕒', crm:'📇', kanban:'🗂️', verteiler:'✉️', kalender:'📅', shop:'🛒', verwaltung:'⚙️', auswertung:'📊', ki:'🧠', messe:'🎪', website:'🌐', forum:'💬' };
+// Externe Links als Kacheln (für ALLE, öffnen in neuem Tab) – ersetzen die Platzhalter-Module Website/Forum.
+// Forum erscheint, sobald eine Adresse eingetragen ist.
+const LINKS=[
+  { l:'Website', ic:'🌐', url:'https://www.turningpoint-stiftung.com/' },
+  { l:'Forum', ic:'💬', url:'https://forum.turningpoint-stiftung.com/' },
+];
 let _tileObs=null;
 function _fillTiles(){
   const box=_el('home-tiles'); if(!box) return;
-  const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>b.dataset.mod!=='start' && b.style.display!=='none');
-  const html=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('');
+  const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>!['start','website','forum'].includes(b.dataset.mod) && b.style.display!=='none');
+  const html=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('')
+    +LINKS.filter(x=>x.url).map(x=>`<a class="home-tile" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">${x.ic}</span>${esc(x.l)} <span style="font-size:11px;color:var(--muted)">↗</span></a>`).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   // Das ☰-Menü bekommt seine Rechte erst NACH dem Laden der CRM-Daten (crmSetupModuleBar, asynchron) –
   // beim App-Start ist die Startseite schneller. Darum Kacheln nachziehen, sobald sich das Menü ändert.
