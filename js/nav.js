@@ -18,7 +18,6 @@
 //  Alles best effort: ein Fehler hier darf die App nie stören.
 // ══════════════════════════════════════════════════════════════════
 import * as CD from './crm/crm-data.js';
-import * as CC from './crm/crm-config.js';
 
 const CRM_KEYS=['_crmMode','_crmTree','_crmSelId','_crmDetailTab','_crmProjSel','_crmTeamProjSel','_crmTeamSel','_crmVaSel'];
 const CRM_MODS=['crm','kanban','verteiler'];
@@ -208,11 +207,8 @@ function start(){
       if(target && !_allowed(target)) setTimeout(()=>{ try{ window.toast && window.toast('Für diesen Link fehlt dir der Zugriff.','err'); }catch(e){} }, 800); }
     if(_isModalOpen()) _pushModal();
     window.addEventListener('popstate', onPop);
-    _watchModal(); _watchCrumbs(); renderCrumbs(); renderCrumbsG();
-    const after=()=>{ setTimeout(renderCrumbsG, 150); if(_restoring) return; setTimeout(()=>{ if(!_restoring) _pushView(); }, 80); };
-    window.addEventListener('popstate', ()=>setTimeout(renderCrumbsG, 300));
-    // Reiter-Wechsel ohne Klick (z. B. Mitteilung „Öffnen") → Leiste regelmäßig nachziehen (billig)
-    setInterval(renderCrumbsG, 2000);
+    _watchModal(); _watchCrumbs(); renderCrumbs();
+    const after=()=>{ if(_restoring) return; setTimeout(()=>{ if(!_restoring) _pushView(); }, 80); };
     document.addEventListener('click', after, true);
     document.addEventListener('change', after, true);
     // Namen (CRM) laden evtl. erst später → Adresse einmal nachziehen
@@ -220,108 +216,33 @@ function start(){
   }catch(e){ console.warn('[Nav] Start fehlgeschlagen:', e); }
 }
 
-// ── Brotkrumen-Leiste im CRM-Rahmen (CRM, Projektmanagement, Verteiler) ──
-// „CRM › 🏛️ Vereine › TSV Kronshagen › Aufgaben & Termine" – jede Ebene außer der letzten ist anklickbar.
-// Erscheint erst ab der dritten Ebene (in Listen reicht die normale Ansicht). Aktualisiert sich bei jedem
-// Neuzeichnen von #crm-root (MutationObserver) – auch wenn nicht per Klick navigiert wurde.
-const MODE_L={ teams:'👥 Teams', meine:'🗂️ Meine Projekte', veranstaltungen:'📅 Veranstaltungen', verteiler:'✉️ Verteiler' };
-let _crumbs=[];
-function _modLabel(mod){ const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]'); return (b&&b.textContent.trim())||mod; }
-function _crumbList(){
-  const s=snap(); if(!CRM_MODS.includes(s.mod)||!s.c) return [];
-  const c=s.c, mode=c._crmMode||'kontakte';
-  const base=extra=>{ const o={}; CRM_KEYS.forEach(k=>o[k]=null); return { nav:1, mod:s.mod, c:Object.assign(o,extra) }; };
-  const out=[{ l:_modLabel(s.mod), t:base({}) }];
-  if(mode==='kontakte'){
-    if(!c._crmTree) return out;
-    let tl=c._crmTree; try{ const tr=(CC.getTrees?CC.getTrees():[]).find(x=>x.key===c._crmTree); if(tr) tl=(tr.icon?tr.icon+' ':'')+tr.label; }catch(e){}
-    out.push({ l:tl, t:base({_crmMode:'kontakte',_crmTree:c._crmTree}) });
-    if(c._crmSelId){ out.push({ l:_entName(c._crmTree,c._crmSelId)||'Eintrag', t:base({_crmMode:'kontakte',_crmTree:c._crmTree,_crmSelId:c._crmSelId,_crmDetailTab:'allgemeines'}) });
-      const at=document.querySelector('#crm-root .crm-subtab.active'); const al=at?at.textContent.replace(/\s*\(\d+\)\s*$/,'').trim():'';
-      if(at && at.getAttribute('onclick') && !/allgemeines/.test(at.getAttribute('onclick'))) out.push({ l:al, t:null }); }
-    return out;
-  }
-  out.push({ l:MODE_L[mode]||(mode.charAt(0).toUpperCase()+mode.slice(1)), t:base({_crmMode:mode}) });
-  if(mode==='teams' && c._crmTeamSel) out.push({ l:String(c._crmTeamSel), t:base({_crmMode:'teams',_crmTeamSel:c._crmTeamSel}) });
-  if((mode==='teams'||mode==='meine') && c._crmTeamProjSel) out.push({ l:_qName('_crmTeamProjSel',c._crmTeamProjSel)||'Projekt', t:null });
-  if(mode==='veranstaltungen' && c._crmVaSel) out.push({ l:_qName('_crmVaSel',c._crmVaSel)||'Veranstaltung', t:null });
-  return out;
-}
+// ── ⭐ Favorit-Knopf im CRM-Rahmen + „Zuletzt geöffnet" erfassen ──
+// (Die Brotkrumen-Leisten v415/v424 sind auf User-Wunsch wieder entfernt – „stört eher".)
+// Geblieben ist nur der ⭐: direkt HINTER dem Namen (erste <h2> der Detailansicht – Verein/Eintrag,
+// Veranstaltung, Projekt; User-Wunsch), nur mit Startseite. Wird bei jedem Neuzeichnen von #crm-root
+// (MutationObserver) wieder angehängt, weil paint() die Überschrift neu baut.
 function renderCrumbs(){
   try{
-    const frame=document.getElementById('mod-crm'), root=document.getElementById('crm-root'); if(!frame||!root) return;
-    let bar=document.getElementById('nav-crumbs');
-    if(!bar){ bar=document.createElement('div'); bar.id='nav-crumbs';
-      bar.style.cssText='display:none;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 18px 0;font-size:13px;color:var(--muted,#6b7280)';
-      frame.insertBefore(bar, root); }
-    _crumbs=_crumbList();
+    const root=document.getElementById('crm-root'); if(!root) return;
+    const old=document.getElementById('nav-crumbs'); if(old) old.remove();   // Leiste aus v415–v424
     // Geöffneten Eintrag für „Zuletzt geöffnet" auf der Startseite merken (js/home.js)
     const _s=snap(); try{ window.homeTrack && window.homeTrack(_s); }catch(e){}
-    if(_crumbs.length<3){ bar.style.display='none'; bar.innerHTML=''; return; }
-    // Mit Startseite beginnt der Pfad immer bei „🏠 Start" – und es gibt den ⭐-Knopf für Favoriten
     let home=false; try{ home=!!(window.homeEnabled && window.homeEnabled()); }catch(e){}
-    if(home) _crumbs.unshift({ l:'🏠 Start', t:{ nav:1, mod:'start' } });
-    const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-    let star=''; try{ const fk=home && window.homeCurrentKey ? window.homeCurrentKey(_s) : '';
-      if(fk){ const on=window.homeFavHas(fk);
-        star=`<button id="nav-fav" onclick="navFav()" title="${on?'Aus den Favoriten entfernen':'Als Favorit merken (erscheint auf der Startseite)'}" style="margin-left:6px;border:1px solid var(--border,#dde1e7);background:var(--white,#fff);border-radius:14px;padding:1px 10px;font-size:13px;cursor:pointer;color:${on?'#d48806':'var(--muted,#6b7280)'}">${on?'★ Favorit':'☆ Favorit'}</button>`; } }catch(e){}
-    bar.innerHTML=_crumbs.map((x,i)=>{ const last=i===_crumbs.length-1;
-      return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
-        ? `<span style="color:var(--text,#1f2937);font-weight:600">${esc(x.l)}</span>`
-        : `<a href="#" onclick="navCrumb(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ')+star;
-    bar.style.display='flex';
+    const fk=home && window.homeCurrentKey ? window.homeCurrentKey(_s) : '';
+    const h=root.querySelector('h2');
+    const cur=document.getElementById('nav-fav');
+    if(!fk || !h){ if(cur) cur.remove(); return; }
+    const on=window.homeFavHas(fk);
+    const btn=cur && h.contains(cur) ? cur : document.createElement('button');
+    btn.id='nav-fav'; btn.type='button'; btn.setAttribute('onclick','event.stopPropagation();navFav()');
+    btn.title=on?'Aus den Favoriten entfernen':'Als Favorit merken (erscheint auf der Startseite)';
+    btn.setAttribute('aria-label', btn.title);
+    btn.style.cssText='border:none;background:none;cursor:pointer;font-size:.9em;line-height:1;padding:0 4px;margin-left:6px;vertical-align:middle;color:'+(on?'#f5a623':'#b8bec7');
+    btn.textContent=on?'★':'☆';
+    if(btn!==cur){ if(cur) cur.remove(); h.appendChild(btn); }
   }catch(e){}
 }
 function navFav(){ try{ const k=window.homeCurrentKey&&window.homeCurrentKey(snap()); if(k){ window.homeFavToggle(k); renderCrumbs(); } }catch(e){} }
-
-// ── Brotkrumen außerhalb des CRM (Zeiterfassung, Shop, Kalender, Verwaltung, Auswertung, KI) ──
-// „🏠 Start › Shop › Ausleihen" – nur mit eingeschalteter Startseite (sonst fehlt die Ebene darüber).
-// Eine gemeinsame Leiste direkt unter der Kopfzeile; im CRM-Rahmen gibt es die eigene (renderCrumbs).
-let _gCrumbs=[], _gLast='';
-const _txt=el=>el?el.textContent.replace(/\s*\d+\s*$/,'').replace(/\s+/g,' ').trim():'';   // Zähler-Badges abschneiden
-function _gCrumbList(){
-  const mod=window._activeModule||''; if(!mod || mod==='start' || CRM_MODS.includes(mod)) return [];
-  let home=false; try{ home=!!(window.homeEnabled && window.homeEnabled()); }catch(e){} if(!home) return [];
-  const out=[{ l:'🏠 Start', t:{ nav:1, mod:'start' } }];
-  const s=snap(); let sub='', modT={ nav:1, mod };
-  try{
-    if(mod==='zeiterfassung'){
-      sub=_txt(document.querySelector('#app-nav .nav-tab.active'));
-      const first=[...document.querySelectorAll('#app-nav .nav-tab')].find(t=>t.style.display!=='none');
-      if(first) modT.v=first.dataset.view;
-    } else if(mod==='shop'){ sub=_txt(document.querySelector('#shop-root .shop-tabs button.on')); modT.r={t:'bestand'}; }
-    else if(mod==='kalender'){ sub=_txt(document.querySelector('#kal-tabs button.on')); modT.r={v:'monat'}; }
-    else if(mod==='verwaltung'){ sub=_txt(document.querySelector('#verw-root .verw-tab.active'));
-      const f=document.querySelector('#verw-root .verw-tab'); if(f) modT.vt=f.getAttribute('data-vtab'); }
-  }catch(e){}
-  const subIsHome=_key(modT)===_key(s);
-  if(sub && sub===_modLabel(mod)) sub='';   // „Zeiterfassung › Zeiterfassung" vermeiden
-  out.push({ l:_modLabel(mod), t:(sub&&!subIsHome)?modT:null });
-  if(sub) out.push({ l:sub, t:null });
-  return out;
-}
-function renderCrumbsG(){
-  try{
-    let bar=document.getElementById('nav-crumbs-g');
-    if(!bar){ const mb=document.getElementById('module-bar'); if(!mb||!mb.parentNode) return;
-      bar=document.createElement('div'); bar.id='nav-crumbs-g';
-      bar.style.cssText='display:none;flex-wrap:wrap;align-items:center;gap:4px;padding:6px 18px;font-size:13px;color:var(--muted,#6b7280);background:var(--white,#fff);border-bottom:1px solid var(--border,#dde1e7)';
-      mb.parentNode.insertBefore(bar, mb.nextSibling); }
-    _gCrumbs=_gCrumbList();
-    const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-    const html=_gCrumbs.length<2?'':_gCrumbs.map((x,i)=>{ const last=i===_gCrumbs.length-1;
-      return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
-        ? `<span style="color:var(--text,#1f2937);font-weight:600">${esc(x.l)}</span>`
-        : `<a href="#" onclick="navCrumbG(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ');
-    if(html===_gLast) return; _gLast=html;
-    bar.innerHTML=html; bar.style.display=html?'flex':'none';
-  }catch(e){}
-}
-function navCrumbG(i){ const x=_gCrumbs[i]; if(!x||!x.t) return; apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbsG(); }, 150); }
-function navCrumb(i){
-  const x=_crumbs[i]; if(!x||!x.t) return;
-  apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbs(); }, 120);
-}
 let _crumbT=null;
 function _watchCrumbs(){
   const root=document.getElementById('crm-root'); if(!root) return;
@@ -345,6 +266,6 @@ async function navCopyLink(){
   setTimeout(wait, 400);
 })();
 
-try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav; window.navCrumbG=navCrumbG;
+try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navFav=navFav;
   window.navResetInitial=()=>{ _initHash=''; };   // frischer Login (auth.js doLogin): gemerkte Ansicht verwerfen
 }catch(e){}

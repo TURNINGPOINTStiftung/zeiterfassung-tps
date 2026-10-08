@@ -40,12 +40,13 @@ const CARDS=[
   { k:'todo',   l:'📌 Was ansteht' },
   { k:'notes',  l:'🔔 Mitteilungen' },
   { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf' },
-  { k:'recent', l:'⭐ Favoriten & zuletzt geöffnet' },
+  { k:'favs',   l:'⭐ Favoriten' },
+  { k:'recent', l:'🕘 Zuletzt geöffnet', hint:'Standard aus – bei Bedarf pro Rolle einschalten' },
   { k:'tiles',  l:'🧩 Kacheln (Module, Website, Forum)' },
 ];
 const HOME_ROLES=[['admin','Admin'],['mitarbeiter','Mitarbeiter'],['berater','Berater'],['freiberuflich','Freiberuflich'],['leitung','Leitung'],['geschaeftsfuehrer','GF']];
 const ALL_R=HOME_ROLES.map(r=>r[0]);
-const CARD_DEF={ wx:ALL_R, stamp:ALL_R.filter(r=>r!=='admin'), sys:['admin'], todo:ALL_R, notes:ALL_R, team:['leitung','geschaeftsfuehrer'], recent:ALL_R, tiles:ALL_R };
+const CARD_DEF={ wx:ALL_R, stamp:ALL_R.filter(r=>r!=='admin'), sys:['admin'], todo:ALL_R, notes:ALL_R, team:['leitung','geschaeftsfuehrer'], favs:ALL_R, recent:[], tiles:ALL_R };
 function _rp(){ try{ return D.getData().rolePermissions||{}; }catch(e){ return {}; } }
 function cardRoles(k){ const v=_rp()['home_'+k]; return Array.isArray(v)?v:(CARD_DEF[k]||ALL_R); }
 function cardOn(k,u){
@@ -100,9 +101,11 @@ function _styles(){
   .home-in{position:relative;z-index:1;max-width:1180px;margin:0 auto}
   .home-hi{font-size:24px;font-weight:700;color:var(--primary,#203869);margin:0}
   .home-date{font-size:14px;color:var(--muted);margin:2px 0 18px}
-  .home-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  /* Frei fließende Karten (Masonry über CSS-Spalten): unterschiedlich hoch, Lücken werden aufgefüllt (User-Wunsch) */
+  .home-grid{columns:3 300px;column-gap:14px}
+  .home-grid > *{break-inside:avoid;-webkit-column-break-inside:avoid;margin:0 0 14px}
   .home-card{background:rgba(255,255,255,.80);backdrop-filter:blur(1px);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-  .home-card.wide{grid-column:1/-1}
+  .home-card.wide, .home-grid > .home-tiles{column-span:all;-webkit-column-span:all}
   .home-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:6px}
   .home-row{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
   .home-row:first-of-type{border-top:none}.home-row:hover{color:var(--primary,#203869)}
@@ -135,7 +138,7 @@ function _styles(){
   body.mod-start #ze-notice-bar{display:none}
   body.mod-start #mb-menu-btn{display:none !important}   /* auf der Startseite übernehmen die Kacheln das ☰-Menü */
   a.home-tile{display:block}
-  @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-grid{grid-template-columns:minmax(0,1fr)} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
+  @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-grid{columns:1} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
   document.head.appendChild(st);
 }
 
@@ -159,6 +162,7 @@ export function renderHome(){
       todo: ()=>'<div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>',
       notes:()=>'<div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>',
       team: ()=>'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>',
+      favs:  ()=>'<div class="home-card wide" id="home-favs" style="display:none"></div>',
       recent:()=>'<div class="home-card wide" id="home-recent" style="display:none"></div>',
       tiles:()=>'<div class="home-tiles" id="home-tiles" style="grid-column:1/-1;margin-top:0"></div>',
     };
@@ -223,7 +227,9 @@ function _fillStamp(){
 function _fillNotes(){
   const box=document.querySelector('#home-notes .home-notes'); if(!box) return;
   const items=[...document.querySelectorAll('#ze-notice-bar .ze-notice')];
-  const html=items.length?items.map(n=>n.outerHTML).join(''):'<div class="home-empty">Keine neuen Mitteilungen. ✓</div>';
+  // Alles gelesen → Karte ganz ausblenden (User: „im Grunde ein leeres Feld"); kommt bei neuen Mitteilungen wieder
+  const card=document.getElementById('home-notes'); if(card) card.style.display=items.length?'':'none';
+  const html=items.map(n=>n.outerHTML).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   box.onclick=()=>setTimeout(_fillNotes,250);   // nach „✓ Gelesen" sofort aktualisieren
 }
@@ -351,21 +357,20 @@ function homeOpenItem(key){
     else if(k==='tp'){ window._crmMode='teams'; window._crmTeamProjSel=a; window.switchModule(vis('kanban')?'kanban':'crm'); }
   }catch(e){}
 }
+// ⭐ Favoriten und 🕘 Zuletzt geöffnet sind getrennte Karten (v425, User: „Zuletzt" eher nervig →
+// eigene Karte, Standard aus, per Rolle/Profil schaltbar). Leere Karten bleiben unsichtbar.
+const _chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
+  return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${inf.icon} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
 async function _fillRecent(){
-  const box=_el('home-recent'); if(!box) return;
   try{ if(CD.ensureCrmReady) await CD.ensureCrmReady(); }catch(e){}
   _migrateFavs();
-  const favs=_favList(), rec=_arr(_rk());
-  if(!favs.length && !rec.length){ box.style.display='none'; return; }
-  const chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
-    return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${inf.icon} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
-  const fHtml=favs.map(x=>chip(x,true)).filter(Boolean).join('');
-  const fKeys=new Set(favs.map(x=>x.key));
-  const rHtml=rec.filter(x=>!fKeys.has(x.key)).map(x=>chip(x,false)).filter(Boolean).slice(0,8).join('');
-  if(!fHtml && !rHtml){ box.style.display='none'; return; }
-  box.style.display='';
-  box.innerHTML=`${fHtml?`<p class="home-h">⭐ Favoriten</p><div class="home-chips">${fHtml}</div>`:''}
-    ${rHtml?`<p class="home-h" style="${fHtml?'margin-top:14px':''}">🕘 Zuletzt geöffnet</p><div class="home-chips">${rHtml}</div>`:''}`;
+  const favs=_favList(); const fKeys=new Set(favs.map(x=>x.key));
+  const fb=_el('home-favs');
+  if(fb){ const h=favs.map(x=>_chip(x,true)).filter(Boolean).join('');
+    fb.style.display=h?'':'none'; fb.innerHTML=h?`<p class="home-h">⭐ Favoriten</p><div class="home-chips">${h}</div>`:''; }
+  const rb=_el('home-recent');
+  if(rb){ const h=_arr(_rk()).filter(x=>!fKeys.has(x.key)).map(x=>_chip(x,false)).filter(Boolean).slice(0,8).join('');
+    rb.style.display=h?'':'none'; rb.innerHTML=h?`<p class="home-h">🕘 Zuletzt geöffnet</p><div class="home-chips">${h}</div>`:''; }
 }
 
 // ── Team (Leitung / Geschäftsführung) ─────────────────────────────
