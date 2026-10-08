@@ -101,12 +101,29 @@ function _styles(){
   .home-in{position:relative;z-index:1;max-width:none;margin:0}
   .home-hi{font-size:24px;font-weight:700;color:var(--primary,#203869);margin:0}
   .home-date{font-size:14px;color:var(--muted);margin:2px 0 18px}
-  /* Frei fließende Karten (Masonry über CSS-Spalten): unterschiedlich hoch, Lücken werden aufgefüllt (User-Wunsch) */
-  .home-grid{columns:4 320px;column-gap:14px}
-  .home-grid > *{break-inside:avoid;-webkit-column-break-inside:avoid;margin:0 0 14px}
+  /* Spalten wie ein Kanban-Board: Karten unterschiedlich hoch, Anordnung frei per Ziehen (✥ Anordnen) */
+  .home-top{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+  .home-top .home-date{margin-bottom:0}
+  .home-arr-btn{margin-left:auto;border:1px solid var(--border);background:rgba(255,255,255,.85);border-radius:20px;padding:5px 14px;font-size:13px;cursor:pointer;color:var(--muted)}
+  .home-arr-btn:hover{color:var(--primary,#203869);border-color:var(--primary,#203869)}
+  .home-cols{display:flex;gap:14px;align-items:flex-start}
+  .home-col{flex:1;min-width:0;min-height:30px;display:flex;flex-direction:column}
+  .home-slot{position:relative}
+  .home-slot > .home-card{margin-bottom:14px}
   .home-card{background:rgba(255,255,255,.80);backdrop-filter:blur(1px);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-  .home-card.wide, .home-grid > .home-tiles{column-span:all;-webkit-column-span:all}
-  .home-grid > .home-tiles{margin-top:8px}
+  .home-tiles-wrap{margin-top:4px}
+  /* Anordnen-Modus */
+  .home-arrange .home-col{outline:2px dashed #c9d3e3;outline-offset:4px;border-radius:14px;min-height:120px;padding-bottom:6px}
+  .home-arrange .home-slot{cursor:grab;touch-action:none;user-select:none}
+  .home-arrange .home-slot > .home-card{display:block !important;min-height:56px}
+  .home-arrange .home-slot > .home-card *{pointer-events:none}
+  .home-arrange .home-slot > .home-card:hover{border-color:var(--primary,#203869)}
+  .home-slot .home-x{display:none;position:absolute;top:6px;right:8px;z-index:2;border:none;background:#fff;border-radius:50%;width:26px;height:26px;cursor:pointer;color:#b42318;font-size:14px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  .home-arrange .home-slot .home-x{display:block}
+  .home-ph{border:2px dashed var(--primary,#203869);border-radius:14px;margin-bottom:14px;background:rgba(32,56,105,.05)}
+  .home-ghost{position:fixed;z-index:9999;pointer-events:none;opacity:.9;transform:rotate(1.5deg);box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  .home-tray{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.85);border:1px solid var(--border);font-size:13px}
+  .home-tray button{border:1px solid var(--border);background:#fff;border-radius:16px;padding:3px 10px;cursor:pointer;font-size:13px}
   .home-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:6px}
   .home-row{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
   .home-row:first-of-type{border-top:none}.home-row:hover{color:var(--primary,#203869)}
@@ -139,7 +156,7 @@ function _styles(){
   body.mod-start #ze-notice-bar{display:none}
   body.mod-start #mb-menu-btn{display:none !important}   /* auf der Startseite übernehmen die Kacheln das ☰-Menü */
   a.home-tile{display:block}
-  @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-grid{columns:1} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
+  @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
   document.head.appendChild(st);
 }
 
@@ -163,29 +180,100 @@ export function renderHome(){
       todo: ()=>'<div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>',
       notes:()=>'<div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>',
       team: ()=>'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>',
-      favs:  ()=>'<div class="home-card wide" id="home-favs" style="display:none"></div>',
-      recent:()=>'<div class="home-card wide" id="home-recent" style="display:none"></div>',
-      tiles:()=>'<div class="home-tiles" id="home-tiles" style="grid-column:1/-1;margin-top:0"></div>',
+      favs:  ()=>'<div class="home-card" id="home-favs" style="display:none"></div>',
+      recent:()=>'<div class="home-card" id="home-recent" style="display:none"></div>',
     };
-    const hid=_hiddenCards(); _renderedHidden=JSON.stringify(hid);   // im Profil persönlich ausgeblendet
-    const grid=cardOrder().filter(k=>cardOn(k,cu) && !hid.includes(k)).map(k=>BOX[k]?BOX[k]():'').join('');
+    const hid=_hiddenCards();
+    const avail=cardOrder().filter(k=>k!=='tiles' && cardOn(k,cu) && BOX[k] && BOX[k]());   // für die Person sinnvolle Karten
+    const vis=avail.filter(k=>!hid.includes(k));
+    const n=_colCount(); _renderedN=n;
+    const cols=_layoutFor(n, vis);
+    _renderedHidden=JSON.stringify([hid, _prefs()&&_prefs().layouts||null]);
     // Persönliche Einstellungen kommen aus den CRM-Daten – sind die beim ersten Zeichnen noch nicht da,
     // einmal nachzeichnen, sobald geladen (nur wenn sich etwas geändert hat).
-    try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule==='start' && JSON.stringify(_hiddenCards())!==_renderedHidden) renderHome(); }); }catch(e){}
-    root.innerHTML=`<div class="home-wrap">
+    try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule==='start' && !_arranging && JSON.stringify([_hiddenCards(), _prefs()&&_prefs().layouts||null])!==_renderedHidden) renderHome(); }); }catch(e){}
+    const slot=k=>`<div class="home-slot" data-k="${k}"><button class="home-x" title="Karte ausblenden" onpointerdown="event.stopPropagation()" onclick="homeHideCard('${k}',true)">✕</button>${BOX[k]()}</div>`;
+    const hiddenAvail=avail.filter(k=>hid.includes(k));
+    root.innerHTML=`<div class="home-wrap${_arranging?' home-arrange':''}">
       <img class="home-bgl" src="icons/tps-logo-segel.svg" alt="" aria-hidden="true">
       <div class="home-in">
-        <p class="home-hi">${esc(gruss)}${first?', '+esc(first):''}</p>
-        <p class="home-date">${esc(datum)}</p>
-        <div class="home-grid">${grid}</div>
+        <div class="home-top"><div><p class="home-hi">${esc(gruss)}${first?', '+esc(first):''}</p>
+          <p class="home-date">${esc(datum)}</p></div>
+          ${_arranging?`<button class="home-arr-btn" onclick="homeArrangeReset()">↺ Standard</button><button class="home-arr-btn" style="margin-left:0;background:var(--primary,#203869);color:#fff;border-color:var(--primary,#203869)" onclick="homeArrange(false)">✓ Fertig</button>`
+            :`<button class="home-arr-btn" onclick="homeArrange(true)" title="Karten verschieben und ausblenden">✥ Anordnen</button>`}</div>
+        ${_arranging?`<div class="home-tray"><b>Karten ziehen</b> – zwischen Spalten und nach oben/unten. ✕ blendet aus.${hiddenAvail.length?' &nbsp;Ausgeblendet: '+hiddenAvail.map(k=>{ const c=CARDS.find(x=>x.k===k); return `<button onclick="homeHideCard('${k}',false)">＋ ${esc(c?c.l:k)}</button>`; }).join(''):''}</div>`:''}
+        <div class="home-cols" id="home-cols">${cols.map((c,i)=>`<div class="home-col" data-col="${i}">${c.map(slot).join('')}</div>`).join('')}</div>
+        ${cardOn('tiles',cu) && !hid.includes('tiles')?'<div class="home-tiles-wrap"><div class="home-tiles" id="home-tiles"></div></div>':''}
       </div></div>`;
+    if(_arranging) _armDrag();
     _fillStamp(); _fillNotes(); _fillTiles(); _fillTeam(); _fillRecent(); _fillSys();
     _fillTodo(); _fillWeather();
     clearInterval(_tick);
-    _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; return; } _fillStamp(); _fillNotes(); }, 5000);
+    _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; _arranging=false; return; } _fillStamp(); _fillNotes(); }, 5000);
   }catch(e){ console.error('renderHome:',e); }
 }
 const _el=id=>document.getElementById(id);
+
+// ── Spalten-Layout & ✥ Anordnen (wie ein Kanban-Board) ─────────────
+// Anordnung PRO PERSON, geräteübergreifend in crm/userPrefs: layouts = { "<Spaltenzahl>": [[karten…],…] }.
+// Je Spaltenzahl gemerkt (Handy 1, Tablet 2, PC 3–4), weil eine 4-Spalten-Anordnung am Handy anders aussieht.
+// Fehlt sie für die aktuelle Breite → aus einer anderen ableiten bzw. Standard (Rollen-Reihenfolge, zeilenweise).
+let _arranging=false, _renderedN=0;
+function _colCount(){ const w=(document.getElementById('home-root')||document.body).clientWidth||window.innerWidth; return Math.max(1, Math.min(4, Math.floor((w-40)/330))); }
+function _layoutFor(n, vis){
+  const ls=(_prefs()&&_prefs().layouts)||{};
+  let src=Array.isArray(ls[n])?ls[n]:null;
+  let cols=Array.from({length:n},()=>[]);
+  if(src){ src.forEach((c,i)=>(c||[]).forEach(k=>{ if(vis.includes(k)) cols[i%n].push(k); })); }
+  else {   // aus der größten gespeicherten Anordnung ableiten (Spalte j → j mod n), sonst zeilenweise verteilen
+    const other=Object.keys(ls).map(Number).filter(x=>Array.isArray(ls[x])).sort((a,b)=>b-a)[0];
+    if(other) ls[other].forEach((c,j)=>(c||[]).forEach(k=>{ if(vis.includes(k)) cols[j%n].push(k); }));
+  }
+  const placed=new Set(cols.flat());
+  // Neue/nicht platzierte Karten: Standard zeilenweise (Leserichtung links→rechts), sonst in die kürzeste Spalte
+  vis.filter(k=>!placed.has(k)).forEach((k,i)=>{ const tgt=(src||Object.keys(ls).length)?cols.reduce((a,c,ci)=>c.length<cols[a].length?ci:a,0):(i%n); cols[tgt].push(k); });
+  return cols;
+}
+function homeArrange(on){ _arranging=!!on; renderHome(); }
+function homeArrangeReset(){ if(!confirm('Anordnung der Startseite auf den Standard zurücksetzen?')) return; _savePrefs({ layouts:{} }); renderHome(); }
+function _saveLayout(){
+  const cols=[...document.querySelectorAll('#home-cols .home-col')].map(c=>[...c.querySelectorAll(':scope > .home-slot')].map(s=>s.dataset.k));
+  const ls=Object.assign({}, (_prefs()&&_prefs().layouts)||{}); ls[cols.length]=cols;
+  _savePrefs({ layouts:ls });
+}
+// Ziehen mit Maus UND Finger (Pointer-Events; HTML5-Drag&Drop geht auf dem Handy nicht)
+function _armDrag(){
+  document.querySelectorAll('#home-cols .home-slot').forEach(sl=>{
+    sl.onpointerdown=ev=>{
+      if(ev.button>0) return; ev.preventDefault();
+      const r=sl.getBoundingClientRect(), offX=ev.clientX-r.left, offY=ev.clientY-r.top;
+      const ghost=sl.cloneNode(true); ghost.classList.add('home-ghost'); ghost.style.width=r.width+'px'; ghost.style.left=r.left+'px'; ghost.style.top=r.top+'px';
+      document.body.appendChild(ghost);
+      const ph=document.createElement('div'); ph.className='home-ph'; ph.style.height=Math.max(50,r.height-14)+'px';
+      sl.parentNode.insertBefore(ph, sl); sl.style.display='none';
+      const move=e=>{
+        ghost.style.left=(e.clientX-offX)+'px'; ghost.style.top=(e.clientY-offY)+'px';
+        const cols=[...document.querySelectorAll('#home-cols .home-col')]; if(!cols.length) return;
+        let col=cols.find(c=>{ const b=c.getBoundingClientRect(); return e.clientX>=b.left-7 && e.clientX<=b.right+7; })
+          || cols.reduce((a,c)=>Math.abs(c.getBoundingClientRect().left-e.clientX)<Math.abs(a.getBoundingClientRect().left-e.clientX)?c:a, cols[0]);
+        const sibs=[...col.querySelectorAll(':scope > .home-slot')].filter(x=>x!==sl);
+        const before=sibs.find(x=>{ const b=x.getBoundingClientRect(); return e.clientY < b.top+b.height/2; });
+        if(before) col.insertBefore(ph, before); else col.appendChild(ph);
+        // am Rand automatisch scrollen
+        if(e.clientY<60) window.scrollBy(0,-12); else if(e.clientY>window.innerHeight-60) window.scrollBy(0,12);
+      };
+      const up=()=>{
+        document.removeEventListener('pointermove',move); document.removeEventListener('pointerup',up); document.removeEventListener('pointercancel',up);
+        ph.parentNode.insertBefore(sl, ph); ph.remove(); ghost.remove(); sl.style.display='';
+        _saveLayout();
+      };
+      document.addEventListener('pointermove',move); document.addEventListener('pointerup',up); document.addEventListener('pointercancel',up);
+    };
+  });
+}
+// Breite geändert (Fenster, Handy gedreht) → andere Spaltenzahl → neu zeichnen
+let _rsT=null;
+window.addEventListener('resize',()=>{ clearTimeout(_rsT); _rsT=setTimeout(()=>{ if(window._activeModule==='start' && _colCount()!==_renderedN) renderHome(); },250); });
 
 // ── Stempeln ───────────────────────────────────────────────────────
 function _stampAllowed(cu){
@@ -368,10 +456,10 @@ async function _fillRecent(){
   const favs=_favList(); const fKeys=new Set(favs.map(x=>x.key));
   const fb=_el('home-favs');
   if(fb){ const h=favs.map(x=>_chip(x,true)).filter(Boolean).join('');
-    fb.style.display=h?'':'none'; fb.innerHTML=h?`<p class="home-h">⭐ Favoriten</p><div class="home-chips">${h}</div>`:''; }
+    fb.style.display=h?'':'none'; fb.innerHTML=`<p class="home-h">⭐ Favoriten</p>`+(h?`<div class="home-chips">${h}</div>`:'<div class="home-empty">Noch keine – ☆ hinter einem Namen im CRM antippen.</div>'); }
   const rb=_el('home-recent');
   if(rb){ const h=_arr(_rk()).filter(x=>!fKeys.has(x.key)).map(x=>_chip(x,false)).filter(Boolean).slice(0,8).join('');
-    rb.style.display=h?'':'none'; rb.innerHTML=h?`<p class="home-h">🕘 Zuletzt geöffnet</p><div class="home-chips">${h}</div>`:''; }
+    rb.style.display=h?'':'none'; rb.innerHTML=`<p class="home-h">🕘 Zuletzt geöffnet</p>`+(h?`<div class="home-chips">${h}</div>`:'<div class="home-empty">Noch nichts geöffnet.</div>'); }
 }
 
 // ── Team (Leitung / Geschäftsführung) ─────────────────────────────
@@ -524,4 +612,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
