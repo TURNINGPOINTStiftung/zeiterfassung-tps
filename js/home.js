@@ -11,6 +11,7 @@ import * as D from './data.js';
 import * as CA from './calc.js';
 import * as R from './roles.js';
 import * as CD from './crm/crm-data.js';
+import * as CC from './crm/crm-config.js';
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const jsq=s=>esc(JSON.stringify(String(s==null?'':s)));
@@ -64,6 +65,12 @@ function _styles(){
   .home-days{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
   .home-day{flex:1;min-width:90px;background:var(--bg,#f0f2f5);border-radius:10px;padding:6px 8px;font-size:12px;text-align:center}
   .home-notes .ze-notice{margin:0 0 6px;border-radius:10px;background:#fff4e5;padding:8px 10px}
+  .home-chips{display:flex;gap:8px;flex-wrap:wrap}
+  .home-chip{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:20px;background:var(--white,#fff);font-size:13.5px;max-width:100%}
+  .home-chip .lbl{padding:6px 4px 6px 12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+  .home-chip .lbl:hover{color:var(--primary,#203869)}
+  .home-chip .star{border:none;background:none;cursor:pointer;font-size:16px;padding:4px 10px 4px 4px;color:#b8bec7;line-height:1}
+  .home-chip .star.on{color:#f5a623}
   body.mod-start #ze-notice-bar{display:none}
   @media(max-width:640px){ .home-wrap{padding:14px 12px 30px} .home-bgl{width:120%;right:-30%;bottom:0} .home-grid{grid-template-columns:minmax(0,1fr)} .home-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} .home-hi{font-size:20px} }`;
   document.head.appendChild(st);
@@ -92,10 +99,11 @@ export function renderHome(){
           <div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>
           <div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>
           ${leitung?'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>':''}
+          <div class="home-card wide" id="home-recent" style="display:none"></div>
         </div>
         <div class="home-tiles" id="home-tiles"></div>
       </div></div>`;
-    _fillStamp(); _fillNotes(); _fillTiles(); if(leitung) _fillTeam();
+    _fillStamp(); _fillNotes(); _fillTiles(); if(leitung) _fillTeam(); _fillRecent();
     _fillTodo(); _fillWeather();
     clearInterval(_tick);
     _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; return; } _fillStamp(); _fillNotes(); }, 5000);
@@ -181,6 +189,74 @@ async function _fillTodo(){
   box.innerHTML='<p class="home-h">📌 Was ansteht</p>'+(rows.length?rows.slice(0,8).map(r=>r.html).join('')+more:'<div class="home-empty">Gerade steht nichts an. ✓</div>');
 }
 function homeOpenVa(id){ try{ window._crmMode='veranstaltungen'; window._crmVaSel=id; window.switchModule&&window.switchModule('crm'); }catch(e){} }
+
+// ── ⭐ Favoriten & zuletzt geöffnet ─────────────────────────────────
+// Erfasst werden geöffnete CRM-Einträge (Vereine, Kontakte …), Veranstaltungen und Projekte – gemeldet
+// von js/nav.js (renderCrumbs → homeTrack). Gespeichert PRO GERÄT im Browser (localStorage), je Nutzer.
+// Schlüssel: 'e|<tree>|<id>' · 'va|<id>' · 'tp|<id>'.
+const _rk=()=>'tps_home_recent_'+((window.cu&&window.cu.id)||'');
+const _fk=()=>'tps_home_favs_'+((window.cu&&window.cu.id)||'');
+const _arr=k=>{ const a=_lsGet(k); return Array.isArray(a)?a:[]; };
+function _itemOf(s){   // nav-Snapshot → Eintrag oder null
+  if(!s||!s.c) return null; const c=s.c, mode=c._crmMode||'kontakte';
+  if(mode==='kontakte' && c._crmTree && c._crmSelId) return { key:'e|'+c._crmTree+'|'+c._crmSelId };
+  if(mode==='veranstaltungen' && c._crmVaSel) return { key:'va|'+c._crmVaSel };
+  if((mode==='teams'||mode==='meine') && c._crmTeamProjSel) return { key:'tp|'+c._crmTeamProjSel };
+  return null;
+}
+function _info(key){   // → {label, icon} oder null (gelöscht / keine Daten)
+  const [k,a,b]=String(key).split('|');
+  try{
+    if(k==='e'){ const e=CD.getEntity&&CD.getEntity(a,b); if(!e) return null;
+      let ic='📇'; try{ const tr=(CC.getTrees?CC.getTrees():[]).find(t=>t.key===a); if(tr&&tr.icon) ic=tr.icon; }catch(err){}
+      return { label:(e.stamm&&e.stamm.name)||'Eintrag', icon:ic }; }
+    if(k==='va'){ const v=CD.getVeranstaltung&&CD.getVeranstaltung(a); return v?{ label:v.titel||'Veranstaltung', icon:'📅' }:null; }
+    if(k==='tp'){ const p=CD.getTeamProjekt&&CD.getTeamProjekt(a); return p?{ label:p.name||'Projekt', icon:'📂' }:null; }
+  }catch(e){}
+  return null;
+}
+function homeTrack(s){
+  try{ const it=_itemOf(s); if(!it) return;
+    const inf=_info(it.key); if(!inf) return;
+    const a=_arr(_rk()).filter(x=>x.key!==it.key); a.unshift({ key:it.key, label:inf.label, ts:Date.now() });
+    _lsSet(_rk(), a.slice(0,15));
+  }catch(e){}
+}
+function homeFavHas(key){ return _arr(_fk()).some(x=>x.key===key); }
+function homeFavToggle(key){
+  if(!key) return false;
+  let a=_arr(_fk()); const on=a.some(x=>x.key===key);
+  if(on) a=a.filter(x=>x.key!==key); else { const inf=_info(key); a.push({ key, label:inf?inf.label:'' }); }
+  _lsSet(_fk(), a);
+  try{ window.toast && window.toast(on?'Aus den Favoriten entfernt':'⭐ Zu den Favoriten hinzugefügt – erscheint auf der Startseite', on?'':'ok'); }catch(e){}
+  if(window._activeModule==='start') _fillRecent();
+  return !on;
+}
+function homeCurrentKey(s){ const it=_itemOf(s||(window.navSnapshot&&window.navSnapshot())); return it?it.key:''; }
+function homeOpenItem(key){
+  const [k,a,b]=String(key).split('|');
+  const vis=m=>{ const x=document.querySelector('.mb-mod[data-mod="'+m+'"]'); return !!(x && x.style.display!=='none'); };
+  try{
+    if(k==='e'){ window._crmSearch=''; window._crmMode='kontakte'; window._crmTree=a; window._crmSelId=b; window._crmDetailTab='allgemeines'; window._crmProjSel=''; window.switchModule('crm'); }
+    else if(k==='va'){ window._crmMode='veranstaltungen'; window._crmVaSel=a; window.switchModule('crm'); }
+    else if(k==='tp'){ window._crmMode='teams'; window._crmTeamProjSel=a; window.switchModule(vis('kanban')?'kanban':'crm'); }
+  }catch(e){}
+}
+async function _fillRecent(){
+  const box=_el('home-recent'); if(!box) return;
+  const favs=_arr(_fk()), rec=_arr(_rk());
+  if(!favs.length && !rec.length){ box.style.display='none'; return; }
+  try{ if(CD.ensureCrmReady) await CD.ensureCrmReady(); }catch(e){}
+  const chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
+    return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${inf.icon} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
+  const fHtml=favs.map(x=>chip(x,true)).filter(Boolean).join('');
+  const fKeys=new Set(favs.map(x=>x.key));
+  const rHtml=rec.filter(x=>!fKeys.has(x.key)).map(x=>chip(x,false)).filter(Boolean).slice(0,8).join('');
+  if(!fHtml && !rHtml){ box.style.display='none'; return; }
+  box.style.display='';
+  box.innerHTML=`${fHtml?`<p class="home-h">⭐ Favoriten</p><div class="home-chips">${fHtml}</div>`:''}
+    ${rHtml?`<p class="home-h" style="${fHtml?'margin-top:14px':''}">🕘 Zuletzt geöffnet</p><div class="home-chips">${rHtml}</div>`:''}`;
+}
 
 // ── Team (Leitung / Geschäftsführung) ─────────────────────────────
 function _fillTeam(){
@@ -271,4 +347,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeEnabled, homeGo, homeOpenVa, homeZe, homeTile }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeEnabled, homeGo, homeOpenVa, homeZe, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}

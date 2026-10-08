@@ -252,17 +252,24 @@ function renderCrumbs(){
       bar.style.cssText='display:none;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 18px 0;font-size:13px;color:var(--muted,#6b7280)';
       frame.insertBefore(bar, root); }
     _crumbs=_crumbList();
+    // Geöffneten Eintrag für „Zuletzt geöffnet" auf der Startseite merken (js/home.js)
+    const _s=snap(); try{ window.homeTrack && window.homeTrack(_s); }catch(e){}
     if(_crumbs.length<3){ bar.style.display='none'; bar.innerHTML=''; return; }
-    // Mit Startseite beginnt der Pfad immer bei „🏠 Start"
-    try{ if(window.homeEnabled && window.homeEnabled()) _crumbs.unshift({ l:'🏠 Start', t:{ nav:1, mod:'start' } }); }catch(e){}
+    // Mit Startseite beginnt der Pfad immer bei „🏠 Start" – und es gibt den ⭐-Knopf für Favoriten
+    let home=false; try{ home=!!(window.homeEnabled && window.homeEnabled()); }catch(e){}
+    if(home) _crumbs.unshift({ l:'🏠 Start', t:{ nav:1, mod:'start' } });
     const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    let star=''; try{ const fk=home && window.homeCurrentKey ? window.homeCurrentKey(_s) : '';
+      if(fk){ const on=window.homeFavHas(fk);
+        star=`<button id="nav-fav" onclick="navFav()" title="${on?'Aus den Favoriten entfernen':'Als Favorit merken (erscheint auf der Startseite)'}" style="margin-left:6px;border:1px solid var(--border,#dde1e7);background:var(--white,#fff);border-radius:14px;padding:1px 10px;font-size:13px;cursor:pointer;color:${on?'#d48806':'var(--muted,#6b7280)'}">${on?'★ Favorit':'☆ Favorit'}</button>`; } }catch(e){}
     bar.innerHTML=_crumbs.map((x,i)=>{ const last=i===_crumbs.length-1;
       return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
         ? `<span style="color:var(--text,#1f2937);font-weight:600">${esc(x.l)}</span>`
-        : `<a href="#" onclick="navCrumb(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ');
+        : `<a href="#" onclick="navCrumb(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ')+star;
     bar.style.display='flex';
   }catch(e){}
 }
+function navFav(){ try{ const k=window.homeCurrentKey&&window.homeCurrentKey(snap()); if(k){ window.homeFavToggle(k); renderCrumbs(); } }catch(e){} }
 function navCrumb(i){
   const x=_crumbs[i]; if(!x||!x.t) return;
   apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbs(); }, 120);
@@ -290,4 +297,4 @@ async function navCopyLink(){
   setTimeout(wait, 400);
 })();
 
-try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; }catch(e){}
+try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav; }catch(e){}
