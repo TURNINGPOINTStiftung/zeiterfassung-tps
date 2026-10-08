@@ -363,6 +363,10 @@ function _canAdminFor(key, u){
   if(!u) return false;
   if(u.role==='admin') return true;
   const p=u.perms||{};
+  // Ausdrücklich im Mitarbeiter-Dialog gesetzte Modul-Stufe hat Vorrang vor der Voll-Verwaltung:
+  // „Shop: Nutzen" bei einer Person mit System-Verwaltung bleibt dann auch wirklich „Nutzen".
+  // (CRM + Zeiterfassung haben eigene Verwalter-Rechte und bleiben wie bisher.)
+  if(key!=='crm' && key!=='zeiterfassung' && Object.prototype.hasOwnProperty.call(p,'path_'+key) && !p['verw_'+key]) return false;
   if(p['zugriff_verwaltung']) return true;               // Voll-Admin darf alles verwalten
   if(key==='crm')          return !!p['zugriff_verwaltung_crm'];
   if(key==='zeiterfassung')return !!p['zugriff_verwaltung_ze'];
