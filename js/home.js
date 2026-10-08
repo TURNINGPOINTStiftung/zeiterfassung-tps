@@ -280,10 +280,17 @@ function homeZe(view){ try{ window.switchModule&&window.switchModule('zeiterfass
 
 // ── Kacheln: genau die Module, die im ☰-Menü sichtbar sind (= Rechte) ──
 const TILE_IC={ zeiterfassung:'🕒', crm:'📇', kanban:'🗂️', verteiler:'✉️', kalender:'📅', shop:'🛒', verwaltung:'⚙️', auswertung:'📊', ki:'🧠', messe:'🎪', website:'🌐', forum:'💬' };
+let _tileObs=null;
 function _fillTiles(){
   const box=_el('home-tiles'); if(!box) return;
   const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>b.dataset.mod!=='start' && b.style.display!=='none');
-  box.innerHTML=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('');
+  const html=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('');
+  if(box.innerHTML!==html) box.innerHTML=html;
+  // Das ☰-Menü bekommt seine Rechte erst NACH dem Laden der CRM-Daten (crmSetupModuleBar, asynchron) –
+  // beim App-Start ist die Startseite schneller. Darum Kacheln nachziehen, sobald sich das Menü ändert.
+  if(!_tileObs){ const dd=document.getElementById('mb-dropdown');
+    if(dd){ _tileObs=new MutationObserver(()=>{ if(window._activeModule==='start') _fillTiles(); });
+      _tileObs.observe(dd,{ subtree:true, attributes:true, attributeFilter:['style'] }); } }
 }
 function homeTile(mod){ const b=document.querySelector('#mb-dropdown .mb-mod[data-mod="'+mod+'"]'); if(b) b.click(); }
 
