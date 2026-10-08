@@ -1249,7 +1249,7 @@ function nextTermin(termine){ return (termine||[]).filter(t=>t&&t.datum).sort((a
 function allDue(){
   const out=[];
   items().filter(isEinzeln).forEach(it=>unitsOf(it).forEach(u=>(u.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'u|'+it.id+'|'+u.id+'|'+t.id, kind:'unit', itemId:it.id, unitId:u.id, placeId:u.placeId, t,
-    title:_unitTitle(it,u), where:placeLabel(u.placeId) }); })));
+    title:_unitTitle(it,u), where:placeLabel(u.placeId)+(u.marke?' · '+u.marke:'') }); })));
   places().forEach(p=>(p.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:'' }); }));
   return out.sort((a,b)=>a.t.datum.localeCompare(b.t.datum));
 }
@@ -1279,27 +1279,47 @@ function _termRead(px, old){
 
 // ── Stücke verwalten (Verwalter) ──
 let _unitSel=new Set();
+let _unitBrand={};   // Filter je Artikel: '' = alle Marken, '—' = ohne Marke, sonst Markenname
+// Alle bekannten Marken/Modelle (für Vorschläge beim Eintippen) – über alle Artikel hinweg
+function _allBrands(){ const s=new Set(); items().forEach(it=>Object.values(it.units||{}).forEach(u=>{ if(u.marke) s.add(u.marke); })); return [...s].sort((a,b)=>a.localeCompare(b,'de',{sensitivity:'base'})); }
+function _brandDatalist(id){ return `<datalist id="${id}">${_allBrands().map(b=>`<option value="${esc(b)}">`).join('')}</datalist>`; }
+function _brandChip(u){ return u.marke?` <span class="shop-cat" style="background:#f3e8ff;color:#6b21a8">${esc(u.marke)}</span>`:''; }
+function shopUnitBrand(itemId,v){ _unitBrand[itemId]=v; _unitSel.clear(); shopUnits(itemId); }
+function shopUnitSelAll(itemId,on){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const f=_unitBrand[itemId]||'';
+  unitsOf(it).filter(u=>!f||(f==='—'?!u.marke:u.marke===f)).forEach(u=>{ if(on) _unitSel.add(u.id); else _unitSel.delete(u.id); });
+  shopUnits(itemId);
+}
 function shopUnits(itemId){
   if(!canManage()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
   if(!isEinzeln(it)){ toast('Dieser Artikel wird nicht einzeln erfasst (✎ → „Einzeln erfassen").','err'); return; }
-  const us=unitsOf(it);
+  const all=unitsOf(it);
+  // Marken-Filter (nur anzeigen, wenn es überhaupt Marken gibt)
+  const brands=[...new Set(all.map(u=>u.marke).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'de',{sensitivity:'base'}));
+  let f=_unitBrand[itemId]||''; if(f && f!=='—' && !brands.includes(f)) f=_unitBrand[itemId]='';
+  const us=all.filter(u=>!f||(f==='—'?!u.marke:u.marke===f));
   _unitSel=new Set([..._unitSel].filter(id=>(it.units||{})[id]));
+  const brandBar=brands.length?`<div class="shop-posadd" style="margin:0 0 6px"><span style="font-size:12px">Marke / Modell:</span>
+      <select onchange="shopUnitBrand(${jsq(it.id)},this.value)"><option value="">Alle (${all.length})</option>${brands.map(b=>`<option value="${esc(b)}"${f===b?' selected':''}>${esc(b)} (${all.filter(u=>u.marke===b).length})</option>`).join('')}${all.some(u=>!u.marke)?`<option value="—"${f==='—'?' selected':''}>ohne Angabe (${all.filter(u=>!u.marke).length})</option>`:''}</select>
+      <label style="font-size:12px;display:flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer"><input type="checkbox" style="width:auto" ${us.length&&us.every(u=>_unitSel.has(u.id))?'checked':''} onchange="shopUnitSelAll(${jsq(it.id)},this.checked)"> alle angezeigten markieren</label></div>`:'';
   const rows=us.map(u=>{ const nt=nextTermin(u.termine);
     return `<div class="shop-pos-row"><input type="checkbox" style="width:auto" ${_unitSel.has(u.id)?'checked':''} onchange="shopUnitSel(${jsq(u.id)},this.checked)">
-      <span class="nm"><b>${esc(u.nr||'?')}</b>${u.serial?` <span style="color:var(--muted);font-size:11px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:11px">· ${esc(u.note)}</span>`:''}</span>
+      <span class="nm"><b>${esc(u.nr||'?')}</b>${_brandChip(u)}${u.serial?` <span style="color:var(--muted);font-size:11px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:11px">· ${esc(u.note)}</span>`:''}</span>
       <span style="font-size:12px;white-space:nowrap">${esc(placeLabel(u.placeId))}</span>
       ${nt?dueBadge(nt):'<span style="font-size:11px;color:var(--muted)">kein Termin</span>'}
       <button type="button" class="shop-btn sm" onclick="shopUnitEdit(${jsq(it.id)},${jsq(u.id)})">✎</button>
       <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');
   openModal(`<h3>🏷️ Stücke – ${esc(itemLabel(it))}</h3>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${us.length} Stück${us.length===1?'':'e'} · jedes mit eigenem Ort und eigenen Terminen. Die Menge je Ort ergibt sich daraus.</p>
-    <div class="shop-pos" style="max-height:48vh">${rows||'<div style="font-size:12px;color:var(--muted);padding:6px">Noch keine Stücke – unten anlegen.</div>'}</div>
-    ${us.length?`<div class="shop-posadd"><span style="font-size:12px">Markierte (${_unitSel.size}) verschieben nach</span>${_placeSelect('su-moveto','',false)}<button type="button" class="shop-btn sm" onclick="shopUnitsMove(${jsq(it.id)})">⇄ Verschieben</button></div>`:''}
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${all.length} Stück${all.length===1?'':'e'}${f?` · angezeigt: ${us.length}`:''} · jedes mit eigenem Ort und eigenen Terminen. Die Menge je Ort ergibt sich daraus.</p>
+    ${brandBar}
+    <div class="shop-pos" style="max-height:48vh">${rows||`<div style="font-size:12px;color:var(--muted);padding:6px">${all.length?'Keine Stücke für diesen Filter.':'Noch keine Stücke – unten anlegen.'}</div>`}</div>
+    ${us.length?`<div class="shop-posadd"><span id="su-selcount" style="font-size:12px">Markierte (${_unitSel.size}) verschieben nach</span>${_placeSelect('su-moveto','',false)}<button type="button" class="shop-btn sm" onclick="shopUnitsMove(${jsq(it.id)})">⇄ Verschieben</button></div>`:''}
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal();renderShop()">Schließen</button>
       <button class="btn btn-primary" onclick="shopUnitsAdd(${jsq(it.id)})">＋ Stücke anlegen</button></div>`, true);
 }
-function shopUnitSel(uid,on){ if(on) _unitSel.add(uid); else _unitSel.delete(uid); const s=document.querySelector('.shop-posadd span'); if(s&&/Markierte/.test(s.textContent)) s.textContent=`Markierte (${_unitSel.size}) verschieben nach`; }
+function shopUnitSel(uid,on){ if(on) _unitSel.add(uid); else _unitSel.delete(uid); const s=document.getElementById('su-selcount'); if(s) s.textContent=`Markierte (${_unitSel.size}) verschieben nach`; }
 function shopUnitsMove(itemId){
   const it=getShop('shopItems',itemId); if(!it) return;
   const to=_val('su-moveto'); const ids=[..._unitSel].filter(id=>(it.units||{})[id] && it.units[id].placeId!==to);
@@ -1317,7 +1337,8 @@ function shopUnitsAdd(itemId){
       <div class="shop-f"><label>Ort</label>${_placeSelect('ua-pl', fPlace, false)}</div></div>
     <div class="shop-f2"><div class="shop-f"><label>Bezeichnung</label><input id="ua-pre" value="${esc(it.name)} " placeholder="z. B. Weste "></div>
       <div class="shop-f"><label>Nummern ab</label><input id="ua-start" type="number" min="0" step="1" value="${n0+1}"></div></div>
-    <p style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Ergibt z. B. „${esc(it.name)} ${String(n0+1).padStart(2,'0')}", „${esc(it.name)} ${String(n0+2).padStart(2,'0')}" … (später einzeln änderbar)</p>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Ergibt z. B. „${esc(it.name)} ${String(n0+1).padStart(2,'0')}", „${esc(it.name)} ${String(n0+2).padStart(2,'0')}" … (später einzeln änderbar, z. B. auf den eingestickten Namen)</p>
+    <div class="shop-f"><label>Marke / Modell <span style="font-weight:400;color:var(--muted)">(optional, für alle neuen Stücke)</span></label><input id="ua-marke" list="ua-brands" placeholder="z. B. Secumar 275" autocomplete="off">${_brandDatalist('ua-brands')}</div>
     ${_termEditorHtml('ua',[])}
     <div class="modal-btns"><button class="btn btn-outline" onclick="shopUnits(${jsq(itemId)})">Zurück</button>
       <button class="btn btn-primary" onclick="shopUnitsAddSave(${jsq(itemId)})">Anlegen</button></div>`);
@@ -1327,18 +1348,19 @@ function shopUnitsAddSave(itemId){
   const n=Math.round(_num(_val('ua-n'))); if(n<1||n>200){ toast('Anzahl zwischen 1 und 200.','err'); return; }
   const pl=_val('ua-pl'); if(!pl){ toast('Bitte einen Ort wählen.','err'); return; }
   const pre=(document.getElementById('ua-pre')||{}).value||''; const start=Math.round(_num(_val('ua-start')));
-  const termTpl=_termRead('ua',[]); const width=Math.max(2,String(start+n-1).length);
+  const termTpl=_termRead('ua',[]); const width=Math.max(2,String(start+n-1).length); const marke=_val('ua-marke');
   if(!it.units||typeof it.units!=='object') it.units={};
   for(let i=0;i<n;i++){ const id=newId();
-    it.units[id]={ id, nr:(pre+String(start+i).padStart(width,'0')).trim(), serial:'', placeId:pl, note:'', termine:termTpl.map(t=>Object.assign({},t,{id:newId(),verlauf:[]})) }; }
+    it.units[id]={ id, nr:(pre+String(start+i).padStart(width,'0')).trim(), marke, serial:'', placeId:pl, note:'', termine:termTpl.map(t=>Object.assign({},t,{id:newId(),verlauf:[]})) }; }
   _syncStock(it); saveShop('shopItems', it); _log(it,'zugang',n,null,pl,'Stücke angelegt');
   toast(`${n} Stück${n===1?'':'e'} angelegt ✓`,'ok'); shopUnits(itemId);
 }
 function shopUnitEdit(itemId, unitId){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   openModal(`<h3>✎ ${esc(itemLabel(it))} · ${esc(u.nr||'')}</h3>
-    <div class="shop-f2"><div class="shop-f"><label>Bezeichnung *</label><input id="ue-nr" value="${esc(u.nr||'')}"></div>
-      <div class="shop-f"><label>Seriennummer</label><input id="ue-serial" value="${esc(u.serial||'')}" placeholder="optional"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Bezeichnung * <span style="font-weight:400;color:var(--muted)">(z. B. eingestickter Name)</span></label><input id="ue-nr" value="${esc(u.nr||'')}"></div>
+      <div class="shop-f"><label>Marke / Modell</label><input id="ue-marke" list="ue-brands" value="${esc(u.marke||'')}" placeholder="z. B. Secumar 275" autocomplete="off">${_brandDatalist('ue-brands')}</div></div>
+    <div class="shop-f"><label>Seriennummer</label><input id="ue-serial" value="${esc(u.serial||'')}" placeholder="optional"></div>
     <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('ue-pl', u.placeId, false)}</div>
       <div class="shop-f"><label>Notiz</label><input id="ue-note" value="${esc(u.note||'')}" placeholder="z. B. Größe L, Farbe"></div></div>
     ${_termEditorHtml('ue', u.termine)}
@@ -1349,7 +1371,7 @@ function shopUnitSave(itemId, unitId){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   const nr=_val('ue-nr'); if(!nr){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
   const to=_val('ue-pl'), from=u.placeId;
-  Object.assign(u,{ nr, serial:_val('ue-serial'), note:_val('ue-note'), placeId:to, termine:_termRead('ue', u.termine) });
+  Object.assign(u,{ nr, marke:_val('ue-marke'), serial:_val('ue-serial'), note:_val('ue-note'), placeId:to, termine:_termRead('ue', u.termine) });
   _syncStock(it); saveShop('shopItems', it);
   if(to!==from) _log(it,'umlagern',1,from,to,'Stück: '+nr);
   toast('Gespeichert ✓','ok'); shopUnits(itemId);
@@ -1370,7 +1392,7 @@ function _unitUse(it){
   openModal(`<h3>➖ Verbrauch melden – ${esc(itemLabel(it))}</h3>
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Welches Stück wurde benutzt / ist kaputt?</p>
     <div class="shop-pos" style="max-height:50vh">${us.map(u=>{ const nt=nextTermin(u.termine);
-      return `<div class="shop-pos-row"><span class="nm"><b>${esc(u.nr||'?')}</b> · ${esc(placeLabel(u.placeId))}</span>${nt?dueBadge(nt):''}
+      return `<div class="shop-pos-row"><span class="nm"><b>${esc(u.nr||'?')}</b>${_brandChip(u)} · ${esc(placeLabel(u.placeId))}</span>${nt?dueBadge(nt):''}
         <button type="button" class="shop-btn sm" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)},true)">➖ Verbraucht</button></div>`; }).join('')}</div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button></div>`);
 }
@@ -1606,7 +1628,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck, shopTermAdd, shopUnits, shopUnitSel, shopUnitsMove, shopUnitsAdd, shopUnitsAddSave, shopUnitEdit, shopUnitSave, shopUnitRetire, shopSetDue, shopDueDone, shopDueDoneSave, shopAddMonths, shopDueNoticeOpen, shopDueAck,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck, shopTermAdd, shopUnits, shopUnitSel, shopUnitBrand, shopUnitSelAll, shopUnitsMove, shopUnitsAdd, shopUnitsAddSave, shopUnitEdit, shopUnitSave, shopUnitRetire, shopSetDue, shopDueDone, shopDueDoneSave, shopAddMonths, shopDueNoticeOpen, shopDueAck,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
