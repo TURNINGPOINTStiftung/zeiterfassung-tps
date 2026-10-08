@@ -179,18 +179,18 @@ function _styles(){
   const st=document.createElement('style');
   st.textContent=`
   .shop-wrap{padding:16px 22px;width:100%;box-sizing:border-box}
-  .shop-h{font-size:20px;font-weight:700;color:var(--primary);margin:0 0 4px}
+  .shop-h{font-size:20px;font-weight:700;color:var(--primary,#203869);margin:0 0 4px}
   .shop-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
   .shop-tabs button{border:none;background:none;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
-  .shop-tabs button.on{color:var(--primary);border-bottom-color:var(--primary)}
+  .shop-tabs button.on{color:var(--primary,#203869);border-bottom-color:var(--primary,#203869)}
   .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#d97706;color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
   .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--card,#fff);color:var(--text)}
   .shop-bar input[type=search]{flex:1;min-width:160px}
   .shop-sp{flex:1}
   .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--card,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
-  .shop-btn.pri{background:var(--primary);border-color:var(--primary);color:#fff}
+  .shop-btn.pri{background:var(--primary,#203869);border-color:var(--primary,#203869);color:#fff}
   .shop-btn.ok{background:#16a34a;border-color:#16a34a;color:#fff}
   .shop-btn.warn{border-color:#c0392b;color:#c0392b}
   .shop-btn.sm{padding:3px 8px;font-size:12px}
@@ -202,7 +202,7 @@ function _styles(){
   .shop-name{font-weight:700;font-size:15px;color:var(--text)}
   .shop-var{font-size:12px;color:var(--muted)}
   .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#eef2f7;color:#4a5a6e;align-self:flex-start}
-  .shop-tot{font-size:22px;font-weight:700;color:var(--primary)}
+  .shop-tot{font-size:22px;font-weight:700;color:var(--primary,#203869)}
   .shop-tot small{font-size:12px;font-weight:600;color:var(--muted)}
   .shop-low{font-size:12px;font-weight:700;color:#e5484d}
   .shop-pl{display:flex;flex-wrap:wrap;gap:4px}
@@ -221,7 +221,7 @@ function _styles(){
   .shop-late{color:#c0392b;font-weight:700}
   .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
   .shop-seg button{border:none;background:var(--card,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
-  .shop-seg button.on{background:var(--primary);color:#fff}
+  .shop-seg button.on{background:var(--primary,#203869);color:#fff}
   .shop-f{margin-bottom:10px}
   .shop-f label{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
   .shop-f input,.shop-f select,.shop-f textarea{width:100%;box-sizing:border-box;padding:6px 8px;font-size:14px;border:1.5px solid var(--border);border-radius:6px}
@@ -229,7 +229,26 @@ function _styles(){
   .shop-ph{width:110px;height:110px;border-radius:8px;border:1.5px dashed var(--border);background:#f6f8fa center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center}
   .shop-log td,.shop-log th{padding:5px 8px;font-size:12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
   .shop-log{width:100%;border-collapse:collapse;background:var(--card,#fff)}
-  @media(max-width:640px){ .shop-wrap{padding:12px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr} }
+  .shop-pos{display:flex;flex-direction:column;gap:4px;border:1.5px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px;max-height:40vh;overflow-y:auto}
+  .shop-pos-row,.shop-cart-row{display:flex;gap:6px;align-items:center}
+  .shop-pos-row .nm,.shop-cart-row .nm{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
+  .shop-pos-row input[type=number],.shop-cart-row input{width:64px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
+  .shop-pos-row select{max-width:170px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px}
+  .shop-posadd{display:flex;gap:6px;align-items:center;margin-top:4px}
+  .shop-posadd select,.shop-posadd input:not([type=number]){flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
+  .shop-posadd input[type=number]{padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
+  .shop-cart{position:fixed;right:18px;bottom:18px;width:340px;max-width:calc(100vw - 24px);max-height:70vh;display:flex;flex-direction:column;background:var(--card,#fff);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);z-index:55}
+  .shop-cart.min{width:auto;background:none;border:none;box-shadow:none}
+  .shop-cart-pill{background:var(--primary,#203869);color:#fff;border:none;border-radius:22px;padding:10px 16px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+  .shop-cart-h{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
+  .shop-cart-list{overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px}
+  .shop-cart-free{padding:0 12px 8px}
+  .shop-cart-free input{width:100%;box-sizing:border-box;padding:6px 8px;border:1.5px dashed var(--border);border-radius:6px;font-size:13px}
+  .shop-cart-act{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border)}
+  .shop-cart-act .shop-btn{flex:1}
+  @media(max-width:640px){ .shop-wrap{padding:12px 12px 90px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr}
+    .shop-cart{right:8px;left:8px;bottom:8px;width:auto;max-height:65vh} .shop-cart.min{left:auto}
+    .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1} }
   `;
   document.head.appendChild(st);
 }
@@ -260,7 +279,8 @@ export function renderShop(){
       <p class="shop-sub">Was liegt wo – und was wird gebraucht? ${mgr?'Du verwaltest den Shop.':'Bestelle hier Material, Werbemittel und Werkzeug.'}</p>
       <div class="shop-tabs">${tabs.map(t=>`<button class="${TAB===t[0]?'on':''}" onclick="shopTab(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
       ${body}
-    </div>`;
+    </div><div id="shop-cart"></div>`;
+    _cartPaint();
   }catch(e){ console.error('renderShop Fehler:',e); }
 }
 function shopTab(t){ TAB=t; renderShop(); }
@@ -309,11 +329,12 @@ function _itemsGrid(mgr){
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
-      ${mgr?`<div class="shop-act">
-        <button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
+      <div class="shop-act">
+        <button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${it.leihbar?'🔁':'🛒'} ＋</button>
+        ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
-        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>
-      </div>`:''}</div></div>`;
+        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
+      </div></div></div>`;
   }).join('')}</div>`;
 }
 function _catIcon(c){ return ({'Flaggen':'🚩','Flyer':'📄','Branding':'🎨','Visitenkarten':'🪪','Bootsmaterial':'⛵','Werkzeug':'🛠️'})[c]||'📦'; }
@@ -453,23 +474,98 @@ function shopMoveSave(id){
   closeModal(); toast(`${q} umgelagert: ${placeLabel(from)} → ${placeLabel(to)} ✓`,'ok'); renderShop();
 }
 
-// ── Bestellen ──────────────────────────────────────────────────────
+// ── Warenkorb (pro Person, im Browser) ─────────────────────────────
+// Positionen: [{key, itemId|null, freitext, menge, from?}] – from = gewählter Quell-Ort beim Direktversand.
+// Der Korb ist zugleich die Positionsliste in „Bestellen" und „Direkt verschicken" (eine Quelle).
+let cartOpen=false;
+function _cartKey(){ return 'tps_shop_cart_'+(_me().id||''); }
+function cartGet(){ try{ const a=JSON.parse(localStorage.getItem(_cartKey())||'[]'); return Array.isArray(a)?a.filter(p=>p&&(p.itemId?getShop('shopItems',p.itemId):p.freitext)):[]; }catch(e){ return []; } }
+function cartSet(a){ try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} _cartPaint(); _posPaint(); }
+function _posLabel(p){ const it=p.itemId?getShop('shopItems',p.itemId):null; return it?itemLabel(it):(p.freitext||'?'); }
+function shopCartAdd(itemId, qty){
+  if(!canUse()) return;
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const a=cartGet(); const p=a.find(x=>x.itemId===itemId);
+  if(p) p.menge=_num(p.menge)+(qty||1); else a.push({key:newId(), itemId, menge:qty||1});
+  cartOpen=true; cartSet(a); toast(`${itemLabel(it)} im Korb ✓`,'ok');
+}
+function shopCartAddFree(inpId){
+  const t=_val(inpId||'pos-free'); if(!t){ toast('Bitte beschreiben, was gebraucht wird.','err'); return; }
+  const a=cartGet(); a.push({key:newId(), itemId:null, freitext:t, menge:1}); cartSet(a);
+  const el=document.getElementById(inpId||'pos-free'); if(el) el.value='';
+}
+function shopPosAddSel(){
+  const id=_val('pos-item'), q=Math.max(1,Math.round(_num(_val('pos-qty'))||1)); if(!id) return;
+  const a=cartGet(); const p=a.find(x=>x.itemId===id);
+  if(p) p.menge=_num(p.menge)+q; else a.push({key:newId(), itemId:id, menge:q});
+  cartSet(a); const s=document.getElementById('pos-item'); if(s) s.value=''; const n=document.getElementById('pos-qty'); if(n) n.value='1';
+}
+function shopCartQty(key,v){ const a=cartGet(); const p=a.find(x=>x.key===key); if(!p) return; p.menge=Math.max(1,Math.round(_num(v))||1); cartSet(a); }
+function shopCartFrom(key,v){ const a=cartGet(); const p=a.find(x=>x.key===key); if(!p) return; p.from=v; try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} }
+function shopCartDel(key){ cartSet(cartGet().filter(x=>x.key!==key)); }
+function shopCartClear(){ if(cartGet().length && !confirm('Korb leeren?')) return; cartSet([]); }
+function shopCartToggle(){ cartOpen=!cartOpen; _cartPaint(); }
+// Schwebende Korb-Leiste (nur im Shop sichtbar, liegt im #shop-root)
+function _cartPaint(){
+  const box=document.getElementById('shop-cart'); if(!box) return;
+  const a=cartGet(); const mgr=canManage();
+  if(!a.length){ box.innerHTML=''; box.className=''; return; }
+  const n=a.reduce((s,p)=>s+_num(p.menge),0);
+  if(!cartOpen){ box.className='shop-cart min'; box.innerHTML=`<button class="shop-cart-pill" onclick="shopCartToggle()">🛒 Korb <b>${a.length}</b>${a.length!==n?` <span style="opacity:.8">(${n} Stück)</span>`:''}</button>`; return; }
+  box.className='shop-cart';
+  box.innerHTML=`<div class="shop-cart-h"><b>🛒 Korb</b> <span style="color:var(--muted);font-size:12px">${a.length} Position${a.length===1?'':'en'}</span><span class="shop-sp"></span>
+      <button class="shop-btn sm" onclick="shopCartClear()" title="Korb leeren">🗑</button><button class="shop-btn sm" onclick="shopCartToggle()" title="Einklappen">▾</button></div>
+    <div class="shop-cart-list">${a.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
+      return `<div class="shop-cart-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>
+        <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
+        <button class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="shopCartDel(${jsq(p.key)})" title="Entfernen">✕</button></div>`; }).join('')}</div>
+    <div class="shop-cart-free"><input id="cart-free" placeholder="＋ Freier Wunsch (nicht im Katalog) …" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('cart-free');}"></div>
+    <div class="shop-cart-act"><button class="shop-btn pri" onclick="shopOrderNew()">🛒 Bestellen …</button>
+      ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken">📤 Direkt verschicken …</button>`:''}</div>`;
+}
+// Positionsliste im offenen Fenster (Bestellen: Menge · Direkt verschicken: zusätzlich Quell-Ort)
+let _posMode='';
+function _posEditorHtml(mode){
+  _posMode=mode;
+  const its=items().filter(i=>mode!=='send'||inPlaces(i)>0);
+  return `<div class="shop-f"><label>Positionen *</label><div id="shop-pos" class="shop-pos"></div>
+    <div class="shop-posadd"><select id="pos-item"><option value="">＋ Artikel hinzufügen …</option>${its.map(i=>`<option value="${esc(i.id)}">${i.leihbar?'🔁 ':''}${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}${mode==='send'?` (${inPlaces(i)} verfügbar)`:''}</option>`).join('')}</select>
+      <input id="pos-qty" type="number" min="1" step="1" value="1" style="width:70px"><button type="button" class="shop-btn sm" onclick="shopPosAddSel()">＋</button></div>
+    ${mode==='order'?`<div class="shop-posadd"><input id="pos-free" placeholder="Freier Wunsch (nicht im Katalog), z. B. 200 Visitenkarten für mich" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('pos-free');}"><button type="button" class="shop-btn sm" onclick="shopCartAddFree('pos-free')">＋</button></div>`:''}</div>`;
+}
+function _posPaint(){
+  const box=document.getElementById('shop-pos'); if(!box) return;
+  const a=cartGet().filter(p=>_posMode!=='send'||p.itemId);
+  if(!a.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">Noch keine Position – unten hinzufügen.</div>'; }
+  else box.innerHTML=a.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
+    let src='';
+    if(_posMode==='send' && it){ const fr=Object.keys(it.stock||{}).filter(x=>_num(it.stock[x])>0);
+      if(!p.from||!fr.includes(p.from)) p.from=fr[0]||'';
+      src=`<select onchange="shopCartFrom(${jsq(p.key)},this.value)" title="Aus Ort">${fr.map(x=>`<option value="${esc(x)}"${x===p.from?' selected':''}>${esc(placeLabel(x))} (${_num(it.stock[x])})</option>`).join('')}</select>`; }
+    return `<div class="shop-pos-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>${src}
+      <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
+      <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="shopCartDel(${jsq(p.key)})">✕</button></div>`; }).join('');
+  if(_posMode==='send'){ try{ localStorage.setItem(_cartKey(), JSON.stringify(cartGet().map(p=>{ const q=a.find(x=>x.key===p.key); return q?Object.assign(p,{from:q.from}):p; }))); }catch(e){} }
+  // Bestellen: Leihmaterial im Korb → „Rückgabe bis" einblenden
+  const leih=a.some(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null; return it&&it.leihbar; });
+  const r=document.getElementById('so-ret-w'); if(r) r.style.display=leih?'':'none';
+  const l=document.getElementById('so-date-l'); if(l) l.textContent=leih?'Gebraucht ab':'Bis wann?';
+}
+
+// ── Bestellen (mehrere Positionen aus dem Korb, EIN Ziel) ──────────
 function shopOrderNew(itemId){
   if(!canUse()) return;
-  const its=items(); const pls=places();
-  const itOpts=['<option value="">– Freier Wunsch (nicht im Katalog) –</option>']
-    .concat(its.map(i=>`<option value="${esc(i.id)}"${i.id===itemId?' selected':''}>${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}</option>`)).join('');
+  if(itemId) { const a=cartGet(); if(!a.some(p=>p.itemId===itemId)) { a.push({key:newId(), itemId, menge:1}); try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} } }
+  const pls=places();
   const plOpts=pls.map(p=>`<option value="${esc(p.id)}">${esc(placeLabel(p.id))}</option>`).join('');
   const ents=_crmEntities(); const byTree={};
   ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
   const vOpts='<option value="">– bitte wählen –</option>'+Object.keys(byTree).map(k=>{ const g=byTree[k];
     return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
   openModal(`<h3>🛒 Bestellen / Bedarf melden</h3>
-    <div class="shop-f"><label>Was?</label><select id="so-item" onchange="shopOrderItemChg()">${itOpts}</select></div>
-    <div class="shop-f" id="so-free-w" style="display:${itemId?'none':''}"><label>Was wird gebraucht? *</label><textarea id="so-free" rows="2" placeholder="z. B. 200 Visitenkarten für mich, Roll-up „Wassersport", 2 Schäkel M10"></textarea></div>
-    <div class="shop-f2"><div class="shop-f"><label>Menge *</label><input id="so-qty" type="number" min="1" step="1" value="1"></div>
-      <div class="shop-f"><label id="so-date-l">${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'Gebraucht ab':'Bis wann?'}</label><input id="so-date" type="date" min="${_todayIso()}"></div></div>
-    <div class="shop-f" id="so-ret-w" style="display:${(itemId&&(getShop('shopItems',itemId)||{}).leihbar)?'':'none'}"><label>🔁 Rückgabe bis *</label><input id="so-ret" type="date" min="${_todayIso()}"></div>
+    ${_posEditorHtml('order')}
+    <div class="shop-f2"><div class="shop-f"><label id="so-date-l">Bis wann?</label><input id="so-date" type="date" min="${_todayIso()}"></div>
+      <div class="shop-f" id="so-ret-w" style="display:none"><label>🔁 Rückgabe bis * <span style="font-weight:400;color:var(--muted)">(für Leihmaterial)</span></label><input id="so-ret" type="date" min="${_todayIso()}"></div></div>
     <div class="shop-f"><label>Wofür / Anlass</label><input id="so-anlass" placeholder="z. B. Messe Kiel, Regatta, Schulbesuch"></div>
     <div class="shop-f"><label>Wohin / für wen? *</label><select id="so-ziel" onchange="shopOrderZielChg()">
       <option value="">– bitte wählen –</option>
@@ -487,13 +583,9 @@ function shopOrderNew(itemId){
     <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
+  _posPaint();
 }
-function shopOrderItemChg(){
-  const v=_val('so-item'); const w=document.getElementById('so-free-w'); if(w) w.style.display=v?'none':'';
-  const leih=!!(v && (getShop('shopItems',v)||{}).leihbar);
-  const r=document.getElementById('so-ret-w'); if(r) r.style.display=leih?'':'none';
-  const l=document.getElementById('so-date-l'); if(l) l.textContent=leih?'Gebraucht ab':'Bis wann?';
-}
+function shopOrderItemChg(){ _posPaint(); }   // (alt, bleibt für evtl. noch offene Fenster)
 // Ziel umschalten: passende Felder zeigen + Lieferadresse vorbelegen
 // (Verein → Adresse aus dem CRM; Zuhause → Adresse der letzten eigenen „Nach Hause"-Bestellung)
 function shopOrderZielChg(onlyAdr){
@@ -539,10 +631,10 @@ function shopOrderCrmChg(){
   shopOrderZielChg(true);
 }
 function shopOrderSave(){
-  const itemId=_val('so-item'), free=_val('so-free');
-  const it=itemId?getShop('shopItems',itemId):null;
-  if(!it && !free){ toast('Bitte beschreiben, was gebraucht wird.','err'); return; }
-  const q=Math.round(_num(_val('so-qty'))); if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
+  const cart=cartGet();
+  if(!cart.length){ toast('Bitte mindestens eine Position hinzufügen.','err'); return; }
+  const positionen=cart.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
+    return { itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':(p.freitext||''), menge:Math.max(1,Math.round(_num(p.menge))||1), einheit:it?(it.einheit||'Stück'):'', leihe:!!(it&&it.leihbar) }; });
   const ziel=_val('so-ziel'); let zielRef=null, zielName='', ort='', ortText='';
   const adresse=_val('so-adr');
   if(!ziel){ toast('Bitte angeben, wohin bzw. für wen.','err'); return; }
@@ -555,21 +647,34 @@ function shopOrderSave(){
   if(ziel==='other'){ zielName=_val('so-name'); if(!zielName){ toast('Bitte den Empfänger angeben.','err'); return; }
     const p=personByName(zielName); if(p){ zielUserId=p.id; zielName=p.name; ortText='👤 '+zielName; } else ortText='✏️ '+zielName; }
   if((ziel==='home'||ziel==='other') && !adresse){ toast('Bitte die Lieferadresse angeben.','err'); return; }
-  const leih=!!(it&&it.leihbar); const ret=leih?_val('so-ret'):'';
-  if(leih && !ret){ toast('Bitte angeben, bis wann es zurückkommt.','err'); return; }
+  const leih=positionen.some(p=>p.leihe); const ret=leih?_val('so-ret'):'';
+  if(leih && !ret){ toast('Bitte angeben, bis wann das Leihmaterial zurückkommt.','err'); return; }
   if(leih && _val('so-date') && ret<_val('so-date')){ toast('Die Rückgabe liegt vor dem Startdatum.','err'); return; }
-  const cu=_me();
+  const cu=_me(); const one=positionen.length===1?positionen[0]:null;
   saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
-    itemId:it?it.id:null, itemName:it?itemLabel(it):'', freitext:it?'':free, menge:q, einheit:it?(it.einheit||'Stück'):'',
+    positionen,
+    // Einzel-Felder nur bei EINER Position (Abwärtskompatibilität mit älteren Ansichten)
+    itemId:one?one.itemId:null, itemName:one?one.itemName:'', freitext:one?one.freitext:'', menge:one?one.menge:positionen.reduce((s,p)=>s+p.menge,0), einheit:one?one.einheit:'',
     termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
     ziel, zielRef, zielName, zielUserId, adresse,
     leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
+  cartOpen=false; cartSet([]);
   closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
   TAB='bestellungen'; renderShop();
 }
 
 // ── Tab: Bestellungen ──────────────────────────────────────────────
-function _orderWhat(o){ const it=o.itemId?getShop('shopItems',o.itemId):null; return `${o.menge}× ${esc(it?itemLabel(it):(o.itemName||o.freitext||'?'))}`; }
+// Positionen einer Bestellung – ältere Bestellungen (ein Artikel) als eine Position
+function _pos(o){
+  if(Array.isArray(o.positionen) && o.positionen.length) return o.positionen;
+  return [{ itemId:o.itemId||null, itemName:o.itemName||'', freitext:o.freitext||'', menge:o.menge||1, einheit:o.einheit||'', leihe:!!o.leihe }];
+}
+function _posTxt(p){ const it=p.itemId?getShop('shopItems',p.itemId):null; return `${_num(p.menge)}× ${esc(it?itemLabel(it):(p.itemName||p.freitext||'?'))}`; }
+function _orderWhat(o){
+  const ps=_pos(o);
+  if(ps.length===1) return _posTxt(ps[0]);
+  return `${ps.length} Positionen: `+ps.slice(0,3).map(_posTxt).join(', ')+(ps.length>3?' …':'');
+}
 function _orderWhere(o){
   if(o.ziel==='crm'&&o.zielRef) return esc(bLabel({borrowerRef:o.zielRef,borrowerName:o.zielName}));
   return o.ortId?esc(placeLabel(o.ortId)):(o.ortText?esc(o.ortText):'');
@@ -594,13 +699,17 @@ function _ordersHtml(mgr){
     const btns=[];
     if(mgr && act(o)){
       if(o.status==='offen') btns.push(`<button class="shop-btn sm" onclick="shopOrderStatus(${jsq(o.id)},'inarbeit')">▶ In Bearbeitung</button>`);
-      if(o.itemId) btns.push(`<button class="shop-btn sm ok" onclick="shopOrderIssue(${jsq(o.id)})">📦 Ausgeben</button>`);
-      btns.push(`<button class="shop-btn sm${o.itemId?'':' ok'}" onclick="shopOrderDone(${jsq(o.id)},'erledigt')">✓ Erledigt</button>`);
+      const hasItem=_pos(o).some(p=>p.itemId);
+      if(hasItem) btns.push(`<button class="shop-btn sm ok" onclick="shopOrderIssue(${jsq(o.id)})">📦 Ausgeben</button>`);
+      btns.push(`<button class="shop-btn sm${hasItem?'':' ok'}" onclick="shopOrderDone(${jsq(o.id)},'erledigt')">✓ Erledigt</button>`);
       btns.push(`<button class="shop-btn sm warn" onclick="shopOrderDone(${jsq(o.id)},'abgelehnt')">✕ Ablehnen</button>`);
     }
     if(o.byId===me.id && o.status==='offen') btns.push(`<button class="shop-btn sm warn" onclick="shopOrderCancel(${jsq(o.id)})">Zurückziehen</button>`);
+    const ps=_pos(o);
+    const head = ps.length===1 ? _orderWhat(o) : `🧾 ${ps.length} Positionen`;
+    const posList = ps.length>1 ? `<div class="m" style="margin:2px 0 3px">${ps.map(p=>`• ${_posTxt(p)}${p.leihe?' 🔁':''}`).join('<br>')}</div>` : '';
     return `<div class="shop-row"><div class="main">
-      <div class="t">${_orderWhat(o)} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}</div>
+      <div class="t">${head} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}</div>${posList}
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
@@ -611,8 +720,8 @@ function _ordersHtml(mgr){
   }).join('');
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fOrd===s[0]?'on':''}" onclick="shopSetOrd(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
       <span class="shop-sp"></span>
-      ${mgr?`<button class="shop-btn" onclick="shopPickItem('send')" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken">📤 Direkt verschicken</button>`:''}
-      <button class="shop-btn pri" onclick="shopOrderNew('')">＋ Bestellen</button></div>
+      ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken – mehrere Artikel möglich">📤 Direkt verschicken</button>`:''}
+      <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button></div>
     <div class="shop-list">${rows||`<div class="shop-empty">${mgr?'Keine Bestellungen in dieser Ansicht.':'Du hast hier keine Bestellungen.'}</div>`}</div>`;
 }
 function shopSetOrd(v){ fOrd=v; renderShop(); }
@@ -645,61 +754,79 @@ function shopOrderDoneSave(id,status){
   closeModal(); toast(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.','ok'); renderShop();
 }
 // Ausgeben: Bestand am Quell-Ort abziehen ODER an den Lieferort umlagern (z. B. Werkzeug aufs Boot)
+// Ausgeben – PRO POSITION: Quell-Ort, Menge, Art (umlagern / verleihen / verschicken / abziehen / nicht)
 function shopOrderIssue(id){
   const o=getShop('shopOrders',id); if(!o||!canManage()) return;
-  const it=o.itemId?getShop('shopItems',o.itemId):null;
-  if(!it){ toast('Der Artikel existiert nicht mehr – bitte „Erledigt" nutzen.','err'); return; }
-  const leih=!!it.leihbar;
   const canMoveTo=!!(o.ortId && placeOf(o.ortId));
-  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0 && (!canMoveTo || p!==o.ortId));
-  if(!from.length){ toast('Kein Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
   const rc=_orderRecipient(o);
-  // Vorwahl nach Ziel: Ort → umlagern · Person/Verein → Leihmaterial verleihen, sonst verschicken
-  const def = canMoveTo ? 'move' : (leih ? 'leihe' : 'versand');
-  const opt=(v,l)=>`<option value="${v}"${def===v?' selected':''}>${l}</option>`;
-  openModal(`<h3>📦 Ausgeben / Verschicken</h3><p style="font-size:13px;margin:0 0 6px">${_orderWhat(o)} · bestellt von <b>${esc(o.byName||'')}</b></p>
-    <div style="font-size:13px;background:#f1f4f8;border-radius:8px;padding:8px 10px;margin:0 0 10px">Ziel: <b>${_orderWhere(o)||'–'}</b>${o.adresse?`<div style="white-space:pre-line;margin-top:3px">📮 ${esc(o.adresse)}</div>`:''}</div>
-    <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="si-from">${from.map(p=>`<option value="${esc(p)}">${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
-      <div class="shop-f"><label>Menge</label><input id="si-qty" type="number" min="1" step="1" value="${o.menge||1}"></div></div>
-    <div class="shop-f"><label>Was passiert?</label><select id="si-mode" onchange="document.getElementById('si-due-w').style.display=this.value==='leihe'?'':'none'">
-      ${canMoveTo?opt('move',`⇄ Umlagern nach ${esc(placeLabel(o.ortId))} (bleibt im Bestand)`):''}
-      ${leih?opt('leihe',`🔁 Verleihen an ${esc(rc.bName)} (kommt zurück)`):''}
-      ${opt('versand',`📤 Verschicken an ${esc(rc.bName)} (bleibt dort, wird abgezogen)`)}
-      ${opt('out','➖ Nur vom Bestand abziehen (ohne Empfänger)')}</select></div>
-    <div class="shop-f" id="si-due-w" style="display:${def==='leihe'?'':'none'}"><label>Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
+  const ps=_pos(o);
+  let anyRow=false;
+  const rows=ps.map((p,i)=>{
+    const it=p.itemId?getShop('shopItems',p.itemId):null;
+    if(!it) return `<div class="shop-pos-row"><span class="nm">✏️ ${esc(p.itemName||p.freitext||'?')} · ${_num(p.menge)}</span><span style="font-size:12px;color:var(--muted)">${p.itemId?'Artikel gelöscht':'freier Wunsch – manuell erledigen'}</span></div>`;
+    const from=Object.keys(it.stock||{}).filter(x=>_num(it.stock[x])>0 && (!canMoveTo || x!==o.ortId));
+    if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:#c0392b">kein Bestand</span></div>`;
+    anyRow=true;
+    // Vorwahl nach Ziel: Ort → umlagern · Person/Verein → Leihmaterial verleihen, sonst verschicken
+    const def = canMoveTo ? 'move' : (it.leihbar ? 'leihe' : 'versand');
+    const opt=(v,l)=>`<option value="${v}"${def===v?' selected':''}>${l}</option>`;
+    return `<div class="shop-pos-row" data-i="${i}"><span class="nm">${it.leihbar?'🔁 ':''}${esc(itemLabel(it))}</span>
+      <select class="si-from" title="Aus Ort">${from.map(x=>`<option value="${esc(x)}">${esc(placeLabel(x))} (${_num(it.stock[x])})</option>`).join('')}</select>
+      <input class="si-qty" type="number" min="1" step="1" value="${_num(p.menge)||1}" title="Menge">
+      <select class="si-mode" onchange="shopIssueModeChg()" title="Was passiert?">
+        ${canMoveTo?opt('move',`⇄ nach ${esc(placeLabel(o.ortId))}`):''}
+        ${it.leihbar?opt('leihe','🔁 verleihen'):''}
+        ${opt('versand','📤 verschicken')}
+        ${opt('out','➖ nur abziehen')}
+        ${opt('skip','– nicht ausgeben')}</select></div>`;
+  }).join('');
+  if(!anyRow){ toast('Für keine Position ist Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
+  openModal(`<h3>📦 Ausgeben / Verschicken</h3><p style="font-size:13px;margin:0 0 6px">bestellt von <b>${esc(o.byName||'')}</b> · ${_fmtTs(o.ts)}</p>
+    <div style="font-size:13px;background:#f1f4f8;border-radius:8px;padding:8px 10px;margin:0 0 10px">Ziel: <b>${_orderWhere(o)||'–'}</b>${o.ziel!=='place'?` · Empfänger: <b>${esc(rc.bName)}</b>`:''}${o.adresse?`<div style="white-space:pre-line;margin-top:3px">📮 ${esc(o.adresse)}</div>`:''}</div>
+    <div class="shop-f"><label>Positionen <span style="font-weight:400;color:var(--muted)">(Aus Ort · Menge · was passiert)</span></label><div class="shop-pos" id="si-rows">${rows}</div></div>
+    <div class="shop-f" id="si-due-w" style="display:none"><label>🔁 Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
     <div class="shop-f"><label>Nachricht an ${esc(o.byName||'Besteller')} (optional)</label><input id="si-ans" placeholder="z. B. liegt im Bus, Fach links"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderIssueSave(${jsq(id)})">Ausgeben</button></div>`);
+  shopIssueModeChg();
+}
+function shopIssueModeChg(){
+  const any=[...document.querySelectorAll('#si-rows .si-mode')].some(s=>s.value==='leihe');
+  const w=document.getElementById('si-due-w'); if(w) w.style.display=any?'':'none';
 }
 function shopOrderIssueSave(id){
   const o=getShop('shopOrders',id); if(!o) return;
-  const it=getShop('shopItems',o.itemId); if(!it) return;
-  const from=_val('si-from'), mode=_val('si-mode'), q=Math.round(_num(_val('si-qty'))), ans=_val('si-ans');
-  if(q<=0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
-  if(!_applyDelta(it, from, -q)){ toast(`Am Ort sind nur ${_num((it.stock||{})[from])} vorhanden.`,'err'); return; }
+  const ps=_pos(o); const ans=_val('si-ans'), due=_val('si-due');
+  const rows=[...document.querySelectorAll('#si-rows .shop-pos-row[data-i]')].map(r=>({
+    i:+r.dataset.i, from:r.querySelector('.si-from').value, q:Math.round(_num(r.querySelector('.si-qty').value)), mode:r.querySelector('.si-mode').value }))
+    .filter(r=>r.mode!=='skip');
+  if(!rows.length){ toast('Keine Position zum Ausgeben ausgewählt.','err'); return; }
+  if(rows.some(r=>r.q<=0)){ toast('Bitte überall eine Menge größer 0 eingeben.','err'); return; }
+  // Erst ALLES prüfen (auch mehrfach derselbe Artikel/Ort), dann buchen – nie halb ausgeben
+  const need={};
+  for(const r of rows){ const it=getShop('shopItems',ps[r.i].itemId); if(!it){ toast('Ein Artikel existiert nicht mehr.','err'); return; }
+    const k=it.id+'|'+r.from; need[k]=(need[k]||0)+r.q;
+    if(need[k]>_num((it.stock||{})[r.from])){ toast(`${itemLabel(it)}: am Ort ${placeLabel(r.from)} sind nur ${_num((it.stock||{})[r.from])} vorhanden.`,'err'); return; } }
   const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
-  const rc=_orderRecipient(o);
-  if(mode==='leihe'){
-    saveShop('shopItems', it);
-    const due=_val('si-due');
-    // viaOrder=true nur, wenn der Besteller selbst der Ausleiher ist (er bekommt ja schon die Bestell-Mitteilung)
-    _createLoan(it, from, q, rc.bId, rc.bName, due, o.anlass||'', o.note||'', o.id, rc.bId===o.byId, rc.bRef);
-    _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:'leihe', rueckgabe:due});
-    closeModal(); toast('Verliehen an '+rc.bName+' ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
-  }
-  if(mode==='versand'){
-    saveShop('shopItems', it);
-    const cu=_me();
-    saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
-      type:'versand', qty:q, from, to:null, note:note+(o.adresse?' · '+o.adresse.replace(/\n/g,', '):''),
-      recipientName:rc.bName, recipientId:rc.bId||null, recipientRef:rc.bRef||null, orderId:o.id });
-    _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:'versand'});
-    closeModal(); toast('Verschickt an '+rc.bName+' ✓ – '+(o.byName||'Besteller')+' wird benachrichtigt.','ok'); renderShop(); return;
-  }
-  if(mode==='move' && o.ortId){ _applyDelta(it, o.ortId, q); saveShop('shopItems', it); _log(it,'umlagern',q,from,o.ortId,note,o.id); }
-  else { saveShop('shopItems', it); _log(it,'ausgabe',q,from,null,note,o.id); }
-  _handled(o,'ausgegeben',{answer:ans, fromPlace:from, issuedQty:q, issueMode:mode});
-  closeModal(); toast('Ausgegeben ✓ – Besteller wird benachrichtigt.','ok'); renderShop();
+  const rc=_orderRecipient(o); const cu=_me(); const issued=[];
+  rows.forEach(r=>{
+    const it=getShop('shopItems',ps[r.i].itemId);
+    _applyDelta(it, r.from, -r.q);
+    if(r.mode==='move' && o.ortId){ _applyDelta(it, o.ortId, r.q); saveShop('shopItems', it); _log(it,'umlagern',r.q,r.from,o.ortId,note,o.id); }
+    else if(r.mode==='leihe'){ saveShop('shopItems', it);
+      // viaOrder=true nur, wenn der Besteller selbst der Ausleiher ist (er bekommt ja schon die Bestell-Mitteilung)
+      _createLoan(it, r.from, r.q, rc.bId, rc.bName, due, o.anlass||'', o.note||'', o.id, rc.bId===o.byId, rc.bRef); }
+    else if(r.mode==='versand'){ saveShop('shopItems', it);
+      saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
+        type:'versand', qty:r.q, from:r.from, to:null, note:note+(o.adresse?' · '+o.adresse.split('\n').join(', '):''),
+        recipientName:rc.bName, recipientId:rc.bId||null, recipientRef:rc.bRef||null, orderId:o.id }); }
+    else { saveShop('shopItems', it); _log(it,'ausgabe',r.q,r.from,null,note,o.id); }
+    issued.push({ itemId:it.id, itemName:itemLabel(it), qty:r.q, from:r.from, mode:r.mode });
+  });
+  const modes=[...new Set(issued.map(x=>x.mode))];
+  _handled(o,'ausgegeben',{answer:ans, fromPlace:issued[0].from, issuedQty:issued.reduce((s,x)=>s+x.qty,0),
+    issueMode: modes.length===1?modes[0]:'mixed', issued, rueckgabe: modes.includes('leihe')?due:(o.rueckgabe||'')});
+  closeModal(); toast(`Ausgegeben ✓ (${issued.length} Position${issued.length===1?'':'en'}) – ${o.byName||'Besteller'} wird benachrichtigt.`,'ok'); renderShop();
 }
 function shopOrderCancel(id){
   const o=getShop('shopOrders',id); if(!o) return;
@@ -806,9 +933,54 @@ function shopPickItem(mode){
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="${lend?'shopLend':'shopSend'}(document.getElementById('spi-item').value)">Weiter</button></div>`);
 }
+// ── Direkt verschicken – MEHRERE Artikel aus dem Korb an EIN Ziel (Verwalter) ──
+function shopCartSend(){
+  if(!canManage()) return;
+  openModal(`<h3>📤 Direkt verschicken</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ohne Bestellung – die Sachen bleiben beim Empfänger (werden vom Bestand abgezogen). Erscheint danach auch unter „Bestellungen".</p>
+    ${_whoPickerHtml('ss')}
+    ${_posEditorHtml('send')}
+    <div class="shop-f2"><div class="shop-f"><label>Wie?</label><select id="ss-how"><option>Post / Versand</option><option>Persönlich übergeben</option><option>Abgeholt</option></select></div>
+      <div class="shop-f"><label>Wofür / Anlass</label><input id="ss-anlass" placeholder="z. B. Vereinsfest, Messe"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="ss-note" placeholder="z. B. Sendungsnummer"></div>
+    <p style="font-size:12px;color:var(--muted);margin:0">Soll Leihmaterial zurückkommen? Dann besser über „🔁 Ausleihen" → „Verleihen".</p>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+    <button class="btn btn-primary" onclick="shopCartSendSave()">Verschicken</button></div>`);
+  _posPaint();
+}
+function shopCartSendSave(){
+  const w=_whoRead('ss'); if(!w) return;
+  const pos=cartGet().filter(p=>p.itemId);
+  if(!pos.length){ toast('Bitte mindestens einen Artikel hinzufügen.','err'); return; }
+  // Quell-Orte aus dem Fenster übernehmen + alles prüfen, bevor gebucht wird
+  const rows=pos.map(p=>{ const it=getShop('shopItems',p.itemId); const fr=Object.keys((it&&it.stock)||{}).filter(x=>_num(it.stock[x])>0);
+    return { it, from:(p.from&&fr.includes(p.from))?p.from:fr[0], q:Math.max(1,Math.round(_num(p.menge))||1) }; });
+  const need={};
+  for(const r of rows){ if(!r.it||!r.from){ toast(`${r.it?itemLabel(r.it):'Artikel'}: kein Bestand.`,'err'); return; }
+    const k=r.it.id+'|'+r.from; need[k]=(need[k]||0)+r.q;
+    if(need[k]>_num(r.it.stock[r.from])){ toast(`${itemLabel(r.it)}: am Ort ${placeLabel(r.from)} sind nur ${_num(r.it.stock[r.from])} vorhanden.`,'err'); return; } }
+  const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
+  const adr=w.bRef?_crmAddress(w.bRef):(w.bId?userAddress(w.bId):'');
+  const ts=Date.now(); const oid=newId();
+  rows.forEach(r=>{ _applyDelta(r.it, r.from, -r.q); saveShop('shopItems', r.it);
+    saveShop('shopLog',{ id:newId(), ts, byId:cu.id||'', byName:cu.name||'', itemId:r.it.id, itemName:itemLabel(r.it),
+      type:'versand', qty:r.q, from:r.from, to:null, note:[how,anlass,note,adr.split('\n').join(', ')].filter(Boolean).join(' · '),
+      recipientName:w.bName, recipientId:w.bId||null, recipientRef:w.bRef||null, orderId:oid }); });
+  const positionen=rows.map(r=>({ itemId:r.it.id, itemName:itemLabel(r.it), freitext:'', menge:r.q, einheit:r.it.einheit||'Stück', leihe:false }));
+  const base=_directOrder({ ts, byId:cu.id||'', byName:cu.name||'', recipientRef:w.bRef||null, recipientId:w.bId||null, recipientName:w.bName,
+    from:rows[0].from, qty:rows.reduce((s,r)=>s+r.q,0), itemId:rows.length===1?rows[0].it.id:null, itemName:rows.length===1?itemLabel(rows[0].it):'' },
+    rows.length===1?rows[0].it:null, how, anlass, note, adr);
+  saveShop('shopOrders', Object.assign(base, { id:oid, positionen,
+    issued:rows.map(r=>({ itemId:r.it.id, itemName:itemLabel(r.it), qty:r.q, from:r.from, mode:'versand' })) }));
+  cartOpen=false; cartSet(cartGet().filter(p=>!p.itemId));   // freie Wünsche bleiben im Korb
+  if(TAB==='bestellungen') fOrd='alle';
+  closeModal(); toast(`${rows.length} Position${rows.length===1?'':'en'} an ${w.bName} verschickt ✓`,'ok'); renderShop();
+}
 // ── Verschicken / abgeben (Verbrauch MIT Empfänger: Flyer an Verein, Visitenkarten an Mitarbeiter …)
+// Einzelner Artikel: legt ihn in den Korb und öffnet „Direkt verschicken" (eine Bedienung für alles)
 function shopSend(itemId){
   if(!canManage()) return;
+  if(itemId && getShop('shopItems',itemId)){ const a=cartGet(); if(!a.some(p=>p.itemId===itemId)){ a.push({key:newId(), itemId, menge:1}); try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} } shopCartSend(); return; }
   const it=getShop('shopItems',itemId); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Kein Bestand zum Verschicken.','err'); return; }
@@ -948,7 +1120,7 @@ function _orteHtml(){
   return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Wo liegen Sachen? Büro, Bus, Boote, Lager …</span><span class="shop-sp"></span>
     <button class="shop-btn pri" onclick="shopPlaceEdit('')">＋ Ort</button></div>
     <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>
-    ${bRows?`<h4 style="margin:18px 0 8px;color:var(--primary)">🔁 Unterwegs bei (ausgeliehen)</h4><div class="shop-list">${bRows}</div>`:''}
+    ${bRows?`<h4 style="margin:18px 0 8px;color:var(--primary,#203869)">🔁 Unterwegs bei (ausgeliehen)</h4><div class="shop-list">${bRows}</div>`:''}
     ${_orgSettingHtml()}`;
 }
 function _orgSettingHtml(){
@@ -956,7 +1128,7 @@ function _orgSettingHtml(){
   const opts=_crmEntities().sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}))
     .map(x=>`<option value="${esc(x.tree)}::${esc(x.eid)}"${(o&&!o.auto&&cur===x.tree+'::'+x.eid)?' selected':''}>${esc(x.name)}</option>`).join('');
   const n=e?(e.kontakte||[]).length:0;
-  return `<h4 style="margin:18px 0 8px;color:var(--primary)">🏢 Eigene Organisation im CRM</h4>
+  return `<h4 style="margin:18px 0 8px;color:var(--primary,#203869)">🏢 Eigene Organisation im CRM</h4>
     <div class="shop-row"><div class="main"><div class="m" style="font-size:13px;color:var(--text)">Die Adressen der Mitarbeiter kommen aus den <b>CRM-Kontakten</b> dieses Eintrags (Zuordnung per E-Mail oder Name) – im Profil gepflegt, nichts doppelt.
       <br>Aktuell: <b>${e?esc((e.stamm&&e.stamm.name)||''):'– nicht gefunden –'}</b>${o&&o.auto?' (automatisch erkannt)':''}${e?` · ${n} Kontakt${n===1?'':'e'}`:''}</div></div>
       <select onchange="shopSetOrg(this.value)" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;max-width:280px"><option value="">🔍 Automatisch („Turning Point")</option>${opts}</select></div>`;
@@ -1093,7 +1265,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
