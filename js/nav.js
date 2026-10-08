@@ -208,8 +208,11 @@ function start(){
       if(target && !_allowed(target)) setTimeout(()=>{ try{ window.toast && window.toast('Für diesen Link fehlt dir der Zugriff.','err'); }catch(e){} }, 800); }
     if(_isModalOpen()) _pushModal();
     window.addEventListener('popstate', onPop);
-    _watchModal(); _watchCrumbs(); renderCrumbs();
-    const after=()=>{ if(_restoring) return; setTimeout(()=>{ if(!_restoring) _pushView(); }, 80); };
+    _watchModal(); _watchCrumbs(); renderCrumbs(); renderCrumbsG();
+    const after=()=>{ setTimeout(renderCrumbsG, 150); if(_restoring) return; setTimeout(()=>{ if(!_restoring) _pushView(); }, 80); };
+    window.addEventListener('popstate', ()=>setTimeout(renderCrumbsG, 300));
+    // Reiter-Wechsel ohne Klick (z. B. Mitteilung „Öffnen") → Leiste regelmäßig nachziehen (billig)
+    setInterval(renderCrumbsG, 2000);
     document.addEventListener('click', after, true);
     document.addEventListener('change', after, true);
     // Namen (CRM) laden evtl. erst später → Adresse einmal nachziehen
@@ -270,6 +273,51 @@ function renderCrumbs(){
   }catch(e){}
 }
 function navFav(){ try{ const k=window.homeCurrentKey&&window.homeCurrentKey(snap()); if(k){ window.homeFavToggle(k); renderCrumbs(); } }catch(e){} }
+
+// ── Brotkrumen außerhalb des CRM (Zeiterfassung, Shop, Kalender, Verwaltung, Auswertung, KI) ──
+// „🏠 Start › Shop › Ausleihen" – nur mit eingeschalteter Startseite (sonst fehlt die Ebene darüber).
+// Eine gemeinsame Leiste direkt unter der Kopfzeile; im CRM-Rahmen gibt es die eigene (renderCrumbs).
+let _gCrumbs=[], _gLast='';
+const _txt=el=>el?el.textContent.replace(/\s*\d+\s*$/,'').replace(/\s+/g,' ').trim():'';   // Zähler-Badges abschneiden
+function _gCrumbList(){
+  const mod=window._activeModule||''; if(!mod || mod==='start' || CRM_MODS.includes(mod)) return [];
+  let home=false; try{ home=!!(window.homeEnabled && window.homeEnabled()); }catch(e){} if(!home) return [];
+  const out=[{ l:'🏠 Start', t:{ nav:1, mod:'start' } }];
+  const s=snap(); let sub='', modT={ nav:1, mod };
+  try{
+    if(mod==='zeiterfassung'){
+      sub=_txt(document.querySelector('#app-nav .nav-tab.active'));
+      const first=[...document.querySelectorAll('#app-nav .nav-tab')].find(t=>t.style.display!=='none');
+      if(first) modT.v=first.dataset.view;
+    } else if(mod==='shop'){ sub=_txt(document.querySelector('#shop-root .shop-tabs button.on')); modT.r={t:'bestand'}; }
+    else if(mod==='kalender'){ sub=_txt(document.querySelector('#kal-tabs button.on')); modT.r={v:'monat'}; }
+    else if(mod==='verwaltung'){ sub=_txt(document.querySelector('#verw-root .verw-tab.active'));
+      const f=document.querySelector('#verw-root .verw-tab'); if(f) modT.vt=f.getAttribute('data-vtab'); }
+  }catch(e){}
+  const subIsHome=_key(modT)===_key(s);
+  if(sub && sub===_modLabel(mod)) sub='';   // „Zeiterfassung › Zeiterfassung" vermeiden
+  out.push({ l:_modLabel(mod), t:(sub&&!subIsHome)?modT:null });
+  if(sub) out.push({ l:sub, t:null });
+  return out;
+}
+function renderCrumbsG(){
+  try{
+    let bar=document.getElementById('nav-crumbs-g');
+    if(!bar){ const mb=document.getElementById('module-bar'); if(!mb||!mb.parentNode) return;
+      bar=document.createElement('div'); bar.id='nav-crumbs-g';
+      bar.style.cssText='display:none;flex-wrap:wrap;align-items:center;gap:4px;padding:6px 18px;font-size:13px;color:var(--muted,#6b7280);background:var(--white,#fff);border-bottom:1px solid var(--border,#dde1e7)';
+      mb.parentNode.insertBefore(bar, mb.nextSibling); }
+    _gCrumbs=_gCrumbList();
+    const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const html=_gCrumbs.length<2?'':_gCrumbs.map((x,i)=>{ const last=i===_gCrumbs.length-1;
+      return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
+        ? `<span style="color:var(--text,#1f2937);font-weight:600">${esc(x.l)}</span>`
+        : `<a href="#" onclick="navCrumbG(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ');
+    if(html===_gLast) return; _gLast=html;
+    bar.innerHTML=html; bar.style.display=html?'flex':'none';
+  }catch(e){}
+}
+function navCrumbG(i){ const x=_gCrumbs[i]; if(!x||!x.t) return; apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbsG(); }, 150); }
 function navCrumb(i){
   const x=_crumbs[i]; if(!x||!x.t) return;
   apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbs(); }, 120);
@@ -297,6 +345,6 @@ async function navCopyLink(){
   setTimeout(wait, 400);
 })();
 
-try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav;
+try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav; window.navCrumbG=navCrumbG;
   window.navResetInitial=()=>{ _initHash=''; };   // frischer Login (auth.js doLogin): gemerkte Ansicht verwerfen
 }catch(e){}
