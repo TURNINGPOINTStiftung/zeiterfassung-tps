@@ -233,6 +233,9 @@ function _styles(){
   .shop-row .main{flex:1;min-width:220px}
   .shop-row .t{font-weight:700;font-size:14px;color:var(--text)}
   .shop-row .m{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+  .shop-row-done{padding:7px 12px;opacity:.92}
+  .shop-det summary{cursor:pointer;font-size:12px;color:var(--primary,#203869);margin-top:3px}
+  .shop-det[open] summary{margin-bottom:2px}
   .shop-st{display:inline-block;font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:9px}
   .shop-late{color:#c0392b;font-weight:700}
   .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
@@ -279,19 +282,19 @@ export function renderShop(){
     if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen'||TAB==='faellig')) TAB='bestand';
     const nDue = mgr ? allDue().filter(d=>d.t.datum<=_soonIso(30)).length : 0;
     const nOverDue = mgr ? allDue().filter(d=>d.t.datum<_todayIso()).length : 0;
-    const nRefill = mgr ? (()=>{ const r=_refillData(); return r.n+r.lowTotal.length; })() : 0;
+    _autoReorder();   // Orte unter Soll → automatische Bestellung (statt Nachfüll-Liste)
+    if(TAB==='nachfuellen') TAB='bestellungen';
     const os=orders();
     const nOpen = mgr ? os.filter(o=>o.status==='offen').length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
     const myLoans=activeLoans().filter(l=>mgr||l.borrowerId===me.id);
     const nLate=myLoans.filter(_overdue).length;
     const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
       ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
-      .concat(mgr?[['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')],['nachfuellen','⚠ Nachfüllen'+(nRefill?`<span class="shop-badge" style="background:#c0392b">${nRefill}</span>`:'')],['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
+      .concat(mgr?[['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')],['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
     else if(TAB==='ausleihen') body=_loansHtml(mgr);
-    else if(TAB==='nachfuellen') body=_refillHtml();
     else if(TAB==='faellig') body=_dueHtml();
     else if(TAB==='orte') body=_orteHtml();
     else body=_verlaufHtml();
@@ -351,7 +354,7 @@ function _itemsGrid(mgr){
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
       <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
-      ${short.length?`<div class="shop-low">⚠ Nachfüllen: ${short.map(s=>`${esc(placeLabel(s.pid))} (${s.ist}/${s.soll})`).join(', ')}</div>`:''}
+      ${short.length?`<div class="shop-low">⚠ Unter Soll: ${short.map(s=>`${esc(placeLabel(s.pid))} (${s.ist}/${s.soll})`).join(', ')} · 🤖 automatisch bestellt</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
@@ -550,37 +553,72 @@ function shopUseSave(id){
   saveShop('shopItems', it); _log(it,'verbrauch',q,pl,null,note);
   const s=sollAt(it,pl), ist=_num((it.stock||{})[pl]);
   closeModal();
-  toast(s&&ist<s?`Gemeldet ✓ – ${placeLabel(pl)} liegt jetzt unter Soll (${ist}/${s}), der Shop-Verwalter sieht das unter „Nachfüllen".`:'Verbrauch gemeldet ✓', 'ok');
+  toast(s&&ist<s?`Gemeldet ✓ – ${placeLabel(pl)} liegt jetzt unter Soll (${ist}/${s}) – Nachschub wurde automatisch bestellt.`:'Verbrauch gemeldet ✓', 'ok');
   renderShop();
 }
 
-// ── Nachfüllen (Verwalter): was fehlt wo? ──────────────────────────
+// ── Automatische Bestellung bei Unterschreitung des Soll-Bestands (User-Vorgabe) ──
+// Statt einer Nachfüll-Liste: Ort unter Soll → EINE Bestellung „🤖 Automatisch" JE ORT (User-Vorgabe:
+// gebündelt), Lieferort = Ort, Positionen = alle dort fehlenden Artikel mit Fehlmenge.
+// Deterministische ID je Ort+Laufnummer → mehrere Geräte erzeugen keine Dubletten.
+// Offene Auto-Bestellung zieht mit (offen: exakt der aktuelle Fehlbestand; in Bearbeitung: nur ergänzen/
+// erhöhen, nie wegnehmen); ist der Ort wieder voll, schließt sie sich selbst.
+// Hat ein Verwalter sie von Hand erledigt/abgelehnt, kommt erst bei GRÖSSERER Gesamt-Fehlmenge eine neue.
+let _autoBusy=false;
+function _autoReorder(){
+  if(_autoBusy || !canUse()) return; _autoBusy=true;
+  try{
+    const isOpen=o=>o.status==='offen'||o.status==='inarbeit';
+    const byKey={}; orders().filter(o=>o.auto&&o.autoKey).forEach(o=>{ (byKey[o.autoKey]=byKey[o.autoKey]||[]).push(o); });
+    const want={};   // placeId → [{it,s}]
+    items().forEach(it=>shortages(it).forEach(s=>{ (want[s.pid]=want[s.pid]||[]).push({it,s}); }));
+    const now=Date.now();
+    const posOf=({it,s})=>({ itemId:it.id, itemName:itemLabel(it), freitext:'', menge:s.fehlt, einheit:it.einheit||'Stück', leihe:false });
+    const sumF=list=>list.reduce((a,x)=>a+x.s.fehlt,0);
+    const anlassOf=(pid,list)=>`Unter Soll-Bestand: ${placeLabel(pid)} – `+list.map(x=>`${x.it.name} ${x.s.ist}/${x.s.soll}`).join(', ');
+    const sameP=(a,b)=>JSON.stringify(a.map(p=>[p.itemId,p.menge]))===JSON.stringify(b.map(p=>[p.itemId,p.menge]));
+    const setPos=(o,pos)=>{ o.positionen=pos; const one=pos.length===1?pos[0]:null;
+      o.itemId=one?one.itemId:null; o.itemName=one?one.itemName:''; o.menge=pos.reduce((a,p)=>a+_num(p.menge),0); o.einheit=one?one.einheit:''; };
+    // 1) anlegen / nachziehen – je Ort
+    Object.keys(want).forEach(pid=>{
+      const need=want[pid]; const list=(byKey[pid]||[]).sort((a,b)=>(b.ts||0)-(a.ts||0));
+      const open=list.find(isOpen);
+      if(open){
+        let pos;
+        if(open.status==='offen') pos=need.map(posOf);
+        else { pos=_pos(open).map(p=>Object.assign({},p));   // in Bearbeitung: nur ergänzen / erhöhen
+          need.forEach(x=>{ const p=pos.find(q=>q.itemId===x.it.id); if(!p) pos.push(posOf(x)); else if(_num(p.menge)<x.s.fehlt) p.menge=x.s.fehlt; }); }
+        if(!sameP(_pos(open),pos)){ setPos(open,pos); open.autoFehlt=sumF(need); open.anlass=anlassOf(pid,need); saveShop('shopOrders', open); }
+        return;
+      }
+      const last=list[0];   // zuletzt geschlossene
+      // von Hand erledigt/abgelehnt (und Ort seitdem nicht wieder voll gewesen) → erst bei größerer Fehlmenge neu
+      if(last && last.closedBy!=='auto' && !last.resolved && sumF(need)<=_num(last.autoFehlt)) return;
+      const id='auto_'+pid+'_'+list.length;
+      if(getShop('shopOrders',id)) return;
+      const o={ id, ts:now, byId:'auto', byName:'🤖 Automatisch', auto:true, autoKey:pid, autoFehlt:sumF(need),
+        freitext:'', termin:'', anlass:anlassOf(pid,need), ortId:pid, ortText:'', note:'', ziel:'place', zielRef:null, zielName:'', zielUserId:null, adresse:'',
+        leihe:false, rueckgabe:'', status:'offen', seenBy:{}, ackOrderer:true };
+      setPos(o, need.map(posOf));
+      saveShop('shopOrders', o);
+    });
+    // 2) wieder aufgefüllt → offene Auto-Bestellung schließen
+    Object.keys(byKey).forEach(key=>{ if(want[key]) return;
+      byKey[key].filter(isOpen).forEach(o=>{ Object.assign(o,{ status:'erledigt', closedBy:'auto', answer:'Soll-Bestand wieder erreicht – automatisch erledigt',
+        handledById:'auto', handledByName:'🤖 Automatisch', handledTs:now }); saveShop('shopOrders', o); });
+      // Ort war wieder voll → Sperre der zuletzt von Hand geschlossenen Auto-Bestellung aufheben
+      const last=byKey[key].filter(o=>!isOpen(o)).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+      if(last && last.closedBy!=='auto' && !last.resolved){ last.resolved=true; saveShop('shopOrders', last); } });
+  }catch(e){ console.warn('Auto-Bestellung:', e && e.message); }
+  finally{ _autoBusy=false; }
+}
+
+// ── Nachfüllen-Daten (Gesamt-Mindestbestand für den Hinweis in „Bestellungen") ──
 function _refillData(){
   const byPlace={}; let n=0;
   items().forEach(it=>shortages(it).forEach(s=>{ (byPlace[s.pid]=byPlace[s.pid]||[]).push(Object.assign({it},s)); n++; }));
   const lowTotal=items().filter(it=>_num(it.min)>0 && total(it)<_num(it.min));
   return { byPlace, n, lowTotal };
-}
-function _refillHtml(){
-  const {byPlace, lowTotal}=_refillData();
-  const pids=Object.keys(byPlace).sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'));
-  const sec1=pids.map(pid=>`<h4 style="margin:14px 0 6px;color:var(--primary,#203869)">${esc(placeLabel(pid))}</h4>
-    <div class="shop-list">${byPlace[pid].map(r=>{
-      // bester Quell-Ort: andere Orte mit dem meisten ÜBERSCHUSS (Bestand minus eigenes Soll)
-      const src=Object.keys(r.it.stock||{}).filter(x=>x!==pid && _num(r.it.stock[x])-sollAt(r.it,x)>0)
-        .sort((a,b)=>(_num(r.it.stock[b])-sollAt(r.it,b))-(_num(r.it.stock[a])-sollAt(r.it,a)))[0];
-      const avail=src?_num(r.it.stock[src])-sollAt(r.it,src):0;
-      return `<div class="shop-row"><div class="main"><div class="t">${esc(itemLabel(r.it))} <span class="shop-st" style="background:#c0392b">${r.ist} / ${r.soll}</span></div>
-        <div class="m">es fehlen <b>${r.fehlt}</b> ${esc(r.it.einheit||'Stück')}${src?` · übrig in ${esc(placeLabel(src))}: ${avail}`:' · nirgends übrig – nachkaufen'}</div></div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
-          ${src?`<button class="shop-btn sm ok" onclick="shopMove(${jsq(r.it.id)},${jsq(src)},${jsq(pid)},${Math.min(r.fehlt,avail)})">⇄ Auffüllen</button>`:''}
-          <button class="shop-btn sm" onclick="shopBook(${jsq(r.it.id)},'zugang',${jsq(pid)},${r.fehlt})">➕ Zugang buchen</button></div></div>`; }).join('')}</div>`).join('');
-  const sec2=lowTotal.length?`<h4 style="margin:18px 0 6px;color:var(--primary,#203869)">🛍️ Insgesamt unter Mindestbestand – nachkaufen</h4>
-    <div class="shop-list">${lowTotal.map(it=>`<div class="shop-row"><div class="main"><div class="t">${esc(itemLabel(it))} <span class="shop-st" style="background:#d97706">${total(it)} / ${_num(it.min)}</span></div>
-      <div class="m">es fehlen <b>${_num(it.min)-total(it)}</b> ${esc(it.einheit||'Stück')}${it.note?' · '+esc(it.note):''}</div></div>
-      <div><button class="shop-btn sm" onclick="shopBook(${jsq(it.id)},'zugang','',${_num(it.min)-total(it)})">➕ Zugang buchen</button></div></div>`).join('')}</div>`:'';
-  return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Orte unter Soll-Bestand und Artikel unter Mindestbestand. Den Soll-Bestand je Ort legst du im Artikel (✎) fest.</span></div>
-    ${sec1||'<div class="shop-empty" style="text-align:left">✓ Alle Orte haben ihren Soll-Bestand.</div>'}${sec2}`;
 }
 
 // ── Warenkorb (pro Person, im Browser) ─────────────────────────────
@@ -819,8 +857,22 @@ function _ordersHtml(mgr){
     const ps=_pos(o);
     const head = ps.length===1 ? _orderWhat(o) : `🧾 ${ps.length} Positionen`;
     const posList = ps.length>1 ? `<div class="m" style="margin:2px 0 3px">${ps.map(p=>`• ${_posTxt(p)}${p.leihe?' 🔁':''}`).join('<br>')}</div>` : '';
+    const badges=`<span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8">🤖 automatisch</span>':''}`;
+    // Abgeschlossen → kompakt: EINE Zeile je Bestellung, Positionen + Details zum Aufklappen
+    if(!act(o)){
+      const det=[o.anlass?`Anlass: ${esc(o.anlass)}`:'', o.adresse?`📮 ${esc(o.adresse).replace(/\n/g,', ')}`:'', o.note?`📝 ${esc(o.note)}`:'',
+        o.handledByName?`Bearbeitet von ${esc(o.handledByName)} · ${_fmtTs(o.handledTs)}${o.fromPlace?` · aus ${esc(placeLabel(o.fromPlace))}`:''}`:'',
+        o.answer?`💬 ${esc(o.answer)}`:''].filter(Boolean).join('<br>');
+      return `<div class="shop-row shop-row-done"><div class="main">
+        <div class="t" style="font-weight:600">${head} ${badges}</div>
+        <div class="m">${mgr?`${esc(o.byName||'?')} · `:''}${_fmtTs(o.ts)}${where?` · nach: ${where}`:''}</div>
+        <details class="shop-det"><summary>${ps.length>1?`Positionen (${ps.length}) & Details`:'Details'}</summary>
+          ${ps.length>1?`<div class="m" style="margin:4px 0">${ps.map(p=>`• ${_posTxt(p)}${p.leihe?' 🔁':''}`).join('<br>')}</div>`:''}
+          ${det?`<div class="m">${det}</div>`:''}</details></div>
+        ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
+    }
     return `<div class="shop-row"><div class="main">
-      <div class="t">${head} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}</div>${posList}
+      <div class="t">${head} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8" title="Automatisch, weil der Ort unter seinen Soll-Bestand gefallen ist">🤖 automatisch</span>':''}</div>${posList}
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
@@ -833,6 +885,8 @@ function _ordersHtml(mgr){
       <span class="shop-sp"></span>
       ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken – mehrere Artikel möglich">📤 Direkt verschicken</button>`:''}
       <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button></div>
+    ${mgr?(()=>{ const low=_refillData().lowTotal; return low.length?`<div class="shop-row" style="border-color:#d97706;background:#fff8e1;margin-bottom:8px"><div class="main"><div class="t">🛍️ Nachkaufen – insgesamt unter Mindestbestand</div>
+      <div class="m">${low.map(it=>`${esc(itemLabel(it))}: <b>${total(it)} / ${_num(it.min)}</b> <button class="shop-btn sm" style="margin:2px 4px" onclick="shopBook(${jsq(it.id)},'zugang','',${_num(it.min)-total(it)})">➕ Zugang buchen</button>`).join('<br>')}</div></div></div>`:''; })():''}
     <div class="shop-list">${rows||`<div class="shop-empty">${mgr?'Keine Bestellungen in dieser Ansicht.':'Du hast hier keine Bestellungen.'}</div>`}</div>`;
 }
 function shopSetOrd(v){ fOrd=v; renderShop(); }
@@ -862,7 +916,7 @@ function shopOrderDoneSave(id,status){
   const ans=_val('sd-ans');
   if(status==='abgelehnt' && !ans){ toast('Bitte eine Begründung angeben.','err'); return; }
   _handled(o,status,{answer:ans});
-  closeModal(); toast(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.','ok'); renderShop();
+  closeModal(); toast(o.auto?(status==='abgelehnt'?'Auto-Bestellung abgelehnt – neue erst, wenn noch mehr fehlt.':'Erledigt ✓'):(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.'),'ok'); renderShop();
 }
 // Ausgeben: Bestand am Quell-Ort abziehen ODER an den Lieferort umlagern (z. B. Werkzeug aufs Boot)
 // Ausgeben – PRO POSITION: Quell-Ort, Menge, Art (umlagern / verleihen / verschicken / abziehen / nicht)
@@ -938,7 +992,7 @@ function shopOrderIssueSave(id){
   const modes=[...new Set(issued.map(x=>x.mode))];
   _handled(o,'ausgegeben',{answer:ans, fromPlace:issued[0].from, issuedQty:issued.reduce((s,x)=>s+x.qty,0),
     issueMode: modes.length===1?modes[0]:'mixed', issued, rueckgabe: modes.includes('leihe')?due:(o.rueckgabe||'')});
-  closeModal(); toast(`Ausgegeben ✓ (${issued.length} Position${issued.length===1?'':'en'}) – ${o.byName||'Besteller'} wird benachrichtigt.`,'ok'); renderShop();
+  closeModal(); toast(`Ausgegeben ✓ (${issued.length} Position${issued.length===1?'':'en'})`+(o.auto?'':` – ${o.byName||'Besteller'} wird benachrichtigt.`),'ok'); renderShop();
 }
 function shopOrderCancel(id){
   const o=getShop('shopOrders',id); if(!o) return;
@@ -1383,7 +1437,7 @@ function shopUnitRetire(itemId, unitId, fromUse){
   const pl=u.placeId; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
   _log(it,'verbrauch',1,pl,null,'Stück: '+u.nr+(why?' · '+why:''));
   const s=sollAt(it,pl), ist=_num((it.stock||{})[pl]);
-  toast(s&&ist<s?`${u.nr} ausgebucht ✓ – ${placeLabel(pl)} jetzt unter Soll (${ist}/${s}).`:`${u.nr} ausgebucht ✓`,'ok');
+  toast(s&&ist<s?`${u.nr} ausgebucht ✓ – ${placeLabel(pl)} jetzt unter Soll (${ist}/${s}), Nachschub automatisch bestellt.`:`${u.nr} ausgebucht ✓`,'ok');
   if(fromUse){ closeModal(); renderShop(); } else shopUnits(itemId);
 }
 // „➖ Verbrauch" bei Einzelstücken: konkretes Stück wählen (für alle Nutzer)
@@ -1557,6 +1611,7 @@ function shopSetLogItem(v){ fLogItem=v; renderShop(); }
 // Besteller: Bestellung ausgegeben / erledigt / abgelehnt, noch nicht quittiert.
 function shopNotices(){
   const cu=window.cu; if(!cu||!canUse()) return [];
+  _autoReorder();   // auch ohne geöffneten Shop: Unterschreitungen sofort als Bestellung anlegen (idempotent)
   const mgr=canManage(); const out=[];
   orders().forEach(o=>{
     if(mgr && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id])){
@@ -1583,11 +1638,7 @@ function shopNotices(){
     let acked=''; try{ acked=localStorage.getItem('tps_shop_od_ack_'+cu.id)||''; }catch(e){}
     if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
-    // Nachfüllen: Orte unter Soll-Bestand – Sammelmeldung, 1× pro Tag (Gelesen merkt sich das Gerät)
-    const rf=_refillData(); const pids=Object.keys(rf.byPlace);
-    let ackR=''; try{ ackR=localStorage.getItem('tps_shop_soll_ack_'+cu.id)||''; }catch(e){}
-    if(pids.length && ackR!==today) out.push({ ts:Date.now(), html:`⚠ ${pids.length} Ort${pids.length===1?'':'e'} unter Soll-Bestand: `+pids.slice(0,3).map(pid=>`${esc(placeLabel(pid))} (`+rf.byPlace[pid].slice(0,2).map(r=>`${esc(r.it.name)} ${r.ist}/${r.soll}`).join(', ')+(rf.byPlace[pid].length>2?' …':'')+')').join(' · ')+(pids.length>3?' …':''),
-      open:'shopRefillNoticeOpen()', ack:'shopRefillAck()' });
+    // (Orte unter Soll-Bestand melden sich jetzt als automatische Bestellung → „Neue Bestellung"-Mitteilung oben)
     // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag
     const due=allDue().filter(d=>d.t.datum<=_soonIso(14));
     let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
