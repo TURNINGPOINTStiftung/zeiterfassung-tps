@@ -98,6 +98,7 @@ export function renderHome(){
         <div class="home-grid">
           <div class="home-card" id="home-wx"><p class="home-h">🌤️ Wetter &amp; Wind</p><div class="home-empty">Lädt …</div></div>
           ${_stampAllowed(cu)?'<div class="home-card" id="home-stamp"></div>':''}
+          ${_sysAllowed(cu)?'<div class="home-card" id="home-sys"><p class="home-h">🛠️ System</p><div class="home-empty">Lädt …</div></div>':''}
           <div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>
           <div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>
           ${leitung?'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>':''}
@@ -105,7 +106,7 @@ export function renderHome(){
         </div>
         <div class="home-tiles" id="home-tiles"></div>
       </div></div>`;
-    _fillStamp(); _fillNotes(); _fillTiles(); if(leitung) _fillTeam(); _fillRecent();
+    _fillStamp(); _fillNotes(); _fillTiles(); if(leitung) _fillTeam(); _fillRecent(); _fillSys();
     _fillTodo(); _fillWeather();
     clearInterval(_tick);
     _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; return; } _fillStamp(); _fillNotes(); }, 5000);
@@ -280,6 +281,53 @@ function _fillTeam(){
 }
 function homeZe(view){ try{ window.switchModule&&window.switchModule('zeiterfassung'); window.switchView&&window.switchView(view); }catch(e){} }
 
+// ── 🛠️ System (Admin / System-Verwaltung) ─────────────────────────
+function _sysAllowed(cu){ try{ return cu.role==='admin' || !!(R.hasPermission && R.hasPermission('zugriff_verwaltung',cu)); }catch(e){ return false; } }
+function _verClient(){ const t=(document.getElementById('hdr-version')||{}).textContent||''; return (t.match(/v\d+/)||[''])[0]; }
+let _verServer=null, _verTs=0;
+async function _checkServerVer(){
+  if(_verServer && Date.now()-_verTs<10*60000) return _verServer;
+  try{ const r=await fetch('service-worker.js?check='+Date.now(),{cache:'no-store'}); const t=await r.text();
+    const m=t.match(/tps-ze-(v\d+)/); _verServer=m?m[1]:null; _verTs=Date.now(); }catch(e){ _verServer=null; }
+  return _verServer;
+}
+async function _fillSys(){
+  const box=_el('home-sys'); if(!box) return;
+  const cu=window.cu||{}; const isAdm=cu.role==='admin';
+  const d=(()=>{ try{ return D.getData(); }catch(e){ return {}; } })();
+  const rows=[];
+  // Passwort-Anfragen
+  try{ const req=d.pwResetRequests||{}; const ids=Object.keys(req);
+    const names=ids.map(id=>{ const u=D.getUser&&D.getUser(id); return (u&&u.name)||id; });
+    rows.push(`<div class="home-row" onclick="homeVerw('users')"><span>🔑</span><span class="tx">Passwort-Anfragen${names.length?': '+esc(names.slice(0,3).join(', '))+(names.length>3?' …':''):''}</span><span class="home-pill ${ids.length?'red':'green'}">${ids.length||'keine'}</span></div>`);
+  }catch(e){}
+  // Letztes automatisches Tages-Backup (frisch vom Server, sonst aus dem Cache)
+  let last=''; try{ last=(d._fixes&&d._fixes.lastAppBackup)||''; }catch(e){}
+  try{ if(window.firebase && firebase.database){ const v=(await firebase.database().ref('zeiterfassung/_fixes/lastAppBackup').once('value')).val(); if(v) last=v; } }catch(e){}
+  const today=isoDay(new Date()), yest=isoDay(new Date(Date.now()-864e5));
+  const bState=!last?['amber','unbekannt']:(last===today?['green','heute ✓']:(last===yest?['green','gestern']:['red',fmtD(last)+String(last).slice(0,4)]));
+  rows.push(`<div class="home-row" ${isAdm?'onclick="window.showAppBackups&&showAppBackups()"':''}><span>☁️</span><span class="tx">Letztes automatisches Backup${last&&last!==today?' <span class="home-sub">· läuft beim ersten Gerät des Tages</span>':''}</span><span class="home-pill ${bState[0]}">${esc(bState[1])}</span></div>`);
+  // Verbindung
+  const off=!!window._offlineMode, unv=!!window._cloudUnverified;
+  rows.push(`<div class="home-row" style="cursor:default"><span>🌐</span><span class="tx">Verbindung zur Datenbank</span><span class="home-pill ${off?'red':(unv?'amber':'green')}">${off?'offline':(unv?'nicht bestätigt':'verbunden')}</span></div>`);
+  // Mitarbeiter
+  try{ const act=(d.users||[]).filter(u=>u && u.id!=='admin' && u.role!=='admin').length; const arc=(d.archivedUsers||[]).length;
+    rows.push(`<div class="home-row" onclick="homeVerw('users')"><span>👥</span><span class="tx">Mitarbeiter aktiv${arc?` <span class="home-sub">· ${arc} archiviert</span>`:''}</span><span class="home-pill">${act}</span></div>`); }catch(e){}
+  // Version (dieses Gerät vs. Server)
+  let vc=_verClient();
+  if(!vc){ try{ const ks=await caches.keys(); const k=ks.filter(x=>/^tps-ze-v\d+$/.test(x)).sort((a,b)=>parseInt(b.slice(8))-parseInt(a.slice(8)))[0]; if(k) vc=k.slice(7); }catch(e){} }
+  rows.push(`<div class="home-row" id="home-sys-ver" style="cursor:default"><span>📦</span><span class="tx">App-Version ${esc(vc||'')}</span><span class="home-pill">prüfe …</span></div>`);
+  box.innerHTML='<p class="home-h">🛠️ System</p>'+rows.join('');
+  const vs=await _checkServerVer(); const el=_el('home-sys-ver'); if(!el) return;
+  if(!vs||!vc){ el.querySelector('.home-pill').textContent='–'; return; }
+  const n=s=>parseInt(String(s).slice(1),10)||0;
+  if(n(vs)>n(vc)){ el.style.cursor='pointer'; el.setAttribute('onclick','location.reload()');
+    el.querySelector('.tx').innerHTML=`App-Version ${esc(vc)} <span class="home-sub">· ${esc(vs)} ist online – tippen zum Neuladen</span>`;
+    const p=el.querySelector('.home-pill'); p.className='home-pill amber'; p.textContent='Update'; }
+  else { const p=el.querySelector('.home-pill'); p.className='home-pill green'; p.textContent='aktuell'; }
+}
+function homeVerw(tab){ try{ window.switchModule&&window.switchModule('verwaltung'); [150,900,2500].forEach(ms=>setTimeout(()=>{ try{ window.verwShowTab&&window.verwShowTab(tab); }catch(e){} },ms)); }catch(e){} }
+
 // ── Kacheln: genau die Module, die im ☰-Menü sichtbar sind (= Rechte) ──
 const TILE_IC={ zeiterfassung:'🕒', crm:'📇', kanban:'🗂️', verteiler:'✉️', kalender:'📅', shop:'🛒', verwaltung:'⚙️', auswertung:'📊', ki:'🧠', messe:'🎪', website:'🌐', forum:'💬' };
 // Externe Links als Kacheln (für ALLE, öffnen in neuem Tab) – ersetzen die Platzhalter-Module Website/Forum.
@@ -363,4 +411,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeEnabled, homeGo, homeOpenVa, homeZe, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
