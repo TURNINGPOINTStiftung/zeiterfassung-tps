@@ -36,7 +36,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;'
 const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
 
 const CATS_DEFAULT=['Flaggen','Flyer','Branding','Visitenkarten','Bootsmaterial','Werkzeug','Sonstiges'];
-const PLACE_TYPES={ buero:{i:'🏢',l:'Büro'}, bus:{i:'🚐',l:'Bus / Fahrzeug'}, boot:{i:'⛵',l:'Boot'}, lager:{i:'📦',l:'Lager'}, sonst:{i:'📍',l:'Sonstiges'} };
+const PLACE_TYPES={ buero:{i:'🏢',l:'Büro'}, bus:{i:'🚐',l:'Bus / Fahrzeug'}, boot:{i:'⛵',l:'Boot'}, lager:{i:'📦',l:'Lager'}, anhaenger:{i:'🚛',l:'Anhänger / Trailer'}, sonst:{i:'📍',l:'Sonstiges'} };
 const STATUS={
   offen:     {l:'Offen',          c:'#d97706'},
   inarbeit:  {l:'In Bearbeitung', c:'#2563eb'},
@@ -44,7 +44,7 @@ const STATUS={
   erledigt:  {l:'Erledigt',       c:'#16a34a'},
   abgelehnt: {l:'Abgelehnt',      c:'#c0392b'},
 };
-const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet' };
+const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt' };
 
 let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv';
 
@@ -276,7 +276,9 @@ export function renderShop(){
     const root=document.getElementById('shop-root'); if(!root) return;
     if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
-    if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
+    if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen'||TAB==='faellig')) TAB='bestand';
+    const nDue = mgr ? allDue().filter(d=>d.t.datum<=_soonIso(30)).length : 0;
+    const nOverDue = mgr ? allDue().filter(d=>d.t.datum<_todayIso()).length : 0;
     const nRefill = mgr ? (()=>{ const r=_refillData(); return r.n+r.lowTotal.length; })() : 0;
     const os=orders();
     const nOpen = mgr ? os.filter(o=>o.status==='offen').length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
@@ -284,12 +286,13 @@ export function renderShop(){
     const nLate=myLoans.filter(_overdue).length;
     const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
       ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
-      .concat(mgr?[['nachfuellen','⚠ Nachfüllen'+(nRefill?`<span class="shop-badge" style="background:#c0392b">${nRefill}</span>`:'')],['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
+      .concat(mgr?[['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')],['nachfuellen','⚠ Nachfüllen'+(nRefill?`<span class="shop-badge" style="background:#c0392b">${nRefill}</span>`:'')],['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
     else if(TAB==='ausleihen') body=_loansHtml(mgr);
     else if(TAB==='nachfuellen') body=_refillHtml();
+    else if(TAB==='faellig') body=_dueHtml();
     else if(TAB==='orte') body=_orteHtml();
     else body=_verlaufHtml();
     root.innerHTML=`<div class="shop-wrap">
@@ -351,12 +354,16 @@ function _itemsGrid(mgr){
       ${short.length?`<div class="shop-low">⚠ Nachfüllen: ${short.map(s=>`${esc(placeLabel(s.pid))} (${s.ist}/${s.soll})`).join(', ')}</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
+      ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
+        const nOver=ts.filter(t=>t.datum&&t.datum<_todayIso()).length;
+        return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:#c0392b">(${nOver} überfällig)</b>`:''}</div>`; })():''}
       <div class="shop-act">
-        ${art!=='ausstattung'?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} ＋</button>`:''}
-        ${art!=='leihe'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
-        ${mgr?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
-        <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>
-        <button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
+        ${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} ＋</button>`:''}
+        ${art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
+        ${mgr&&isEinzeln(it)?`<button class="shop-btn sm" onclick="shopUnits(${jsq(it.id)})">🏷️ Stücke (${unitsOf(it).length})</button>`:''}
+        ${mgr&&!isEinzeln(it)?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
+        <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>`:''}
+        ${mgr?`<button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
       </div></div></div>`;
   }).join('')}</div>`;
 }
@@ -396,6 +403,8 @@ function shopItemEdit(id){
     <div class="shop-f"><label>Artikelart</label>
       ${Object.keys(ARTEN).map(k=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:3px 0;cursor:pointer;font-weight:400">
         <input type="radio" name="si-art" value="${k}" ${itemArt(v)===k?'checked':''} style="width:auto;margin-top:2px"><span><b>${ARTEN[k].i} ${ARTEN[k].l}</b> – ${ARTEN[k].d}</span></label>`).join('')}</div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="si-einzeln" ${v.einzeln?'checked':''} style="width:auto;margin-top:2px">
+      <span><b>🏷️ Einzeln erfassen</b> – jedes Stück mit eigener Bezeichnung, Ort und eigenen Terminen (Ablaufdatum, Prüfung …), z. B. Rettungswesten, Erste-Hilfe-Päckchen. Vorhandener Bestand wird dabei automatisch in Stücke umgewandelt.</span></label>
     ${pls.length?`<div class="shop-f"><label>Soll-Bestand je Ort <span style="font-weight:400;color:var(--muted)">(optional – darunter erscheint der Ort unter „⚠ Nachfüllen")</span></label>
       <div class="shop-f2">${pls.map(p=>`<div><span style="font-size:12px">${esc(placeLabel(p.id))}</span><input type="number" min="0" step="1" class="shop-soll" data-pl="${esc(p.id)}" placeholder="–" value="${_num((v.soll||{})[p.id])||''}"></div>`).join('')}</div></div>`:''}
     ${initStock}
@@ -431,9 +440,21 @@ function shopItemSave(id){
   it.soll=soll;
   const inits=[];
   if(!ex) document.querySelectorAll('.shop-init').forEach(inp=>{ const q=Math.round(_num(inp.value)); if(q>0){ _applyDelta(it, inp.dataset.pl, q); inits.push([inp.dataset.pl,q]); } });
+  // Einzeln erfassen: beim Einschalten den vorhandenen Bestand in Stücke umwandeln (Bestand bleibt gleich)
+  const wantEinzeln=!!(document.getElementById('si-einzeln')||{}).checked;
+  let made=0;
+  if(wantEinzeln){
+    if(!it.units||typeof it.units!=='object') it.units={};
+    const have={}; Object.values(it.units).forEach(u=>{ have[u.placeId]=(have[u.placeId]||0)+1; });
+    let nr=Object.keys(it.units).length;
+    Object.keys(it.stock||{}).forEach(pid=>{ const miss=_num(it.stock[pid])-(have[pid]||0);
+      for(let i=0;i<miss;i++){ const id=newId(); nr++; it.units[id]={ id, nr:it.name+' '+String(nr).padStart(2,'0'), serial:'', placeId:pid, note:'', termine:[] }; made++; } });
+    it.einzeln=true; _syncStock(it);
+  } else it.einzeln=false;
   saveShop('shopItems', it);
   inits.forEach(([pl,q])=>_log(it,'zugang',q,null,pl,'Anfangsbestand'));
-  closeModal(); toast(ex?'Artikel gespeichert ✓':'Artikel angelegt ✓','ok'); renderShop();
+  closeModal(); toast((ex?'Artikel gespeichert ✓':'Artikel angelegt ✓')+(made?` – ${made} Stück${made===1?'':'e'} angelegt, Termine unter „🏷️ Stücke"`:''),'ok');
+  if(wantEinzeln && made) shopUnits(it.id); else renderShop();
 }
 function shopItemDelete(id){
   const it=getShop('shopItems',id); if(!it) return;
@@ -448,6 +469,7 @@ function _placeSelect(id, sel, withQty, it){
   return `<select id="${id}">${places().map(p=>`<option value="${esc(p.id)}"${sel===p.id?' selected':''}>${esc(placeLabel(p.id))}${withQty&&it?` (${_num((it.stock||{})[p.id])})`:''}</option>`).join('')}</select>`;
 }
 function shopBook(id, preType, prePl, preQty){
+{ const _it=getShop('shopItems',id); if(isEinzeln(_it)){ toast('Einzeln erfasster Artikel – Bestand über „🏷️ Stücke" (anlegen / ausmustern).','ok'); shopUnits(id); return; } }
   if(!canManage()) return;
   const it=getShop('shopItems',id); if(!it) return;
   if(!places().length){ toast('Bitte zuerst unter „📍 Orte" einen Ort anlegen.','err'); return; }
@@ -479,6 +501,7 @@ function shopBookSave(id){
 
 // ── Umlagern ───────────────────────────────────────────────────────
 function shopMove(id, preFrom, preTo, preQty){
+{ const _it=getShop('shopItems',id); if(isEinzeln(_it)){ toast('Einzeln erfasster Artikel – Stücke unter „🏷️ Stücke" verschieben.','ok'); shopUnits(id); return; } }
   if(!canManage()) return;
   const it=getShop('shopItems',id); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
@@ -506,6 +529,7 @@ function shopMoveSave(id){
 // ── Verbrauch melden (ALLE mit Shop-Zugang – User-Entscheid) ───────
 // z. B. „1 Erste-Hilfe-Päckchen auf Boot 1 benutzt" → Bestand am Ort sinkt, Verlauf + ggf. Nachfüllen
 function shopUse(id){
+{ const _it=getShop('shopItems',id); if(isEinzeln(_it)) return _unitUse(_it); }
   if(!canUse()) return;
   const it=getShop('shopItems',id); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
@@ -570,6 +594,7 @@ function _posLabel(p){ const it=p.itemId?getShop('shopItems',p.itemId):null; ret
 function shopCartAdd(itemId, qty){
   if(!canUse()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
+  if(isEinzeln(it)){ toast('Einzeln erfasste Artikel laufen über „🏷️ Stücke", nicht über den Korb.','err'); return; }
   if(itemArt(it)==='ausstattung'){ toast('Ausstattung ist fest am Ort und nicht bestellbar – fehlt etwas, bitte „➖ Verbrauch" melden.','err'); return; }
   const a=cartGet(); const p=a.find(x=>x.itemId===itemId);
   if(p) p.menge=_num(p.menge)+(qty||1); else a.push({key:newId(), itemId, menge:qty||1});
@@ -613,7 +638,7 @@ function _cartPaint(){
 let _posMode='';
 function _posEditorHtml(mode){
   _posMode=mode;
-  const its=items().filter(i=>itemArt(i)!=='ausstattung' && (mode!=='send'||inPlaces(i)>0));
+  const its=items().filter(i=>itemArt(i)!=='ausstattung' && !isEinzeln(i) && (mode!=='send'||inPlaces(i)>0));
   return `<div class="shop-f"><label>Positionen *</label><div id="shop-pos" class="shop-pos"></div>
     <div class="shop-posadd"><select id="pos-item"><option value="">＋ Artikel hinzufügen …</option>${its.map(i=>`<option value="${esc(i.id)}">${i.leihbar?'🔁 ':''}${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}${mode==='send'?` (${inPlaces(i)} verfügbar)`:''}</option>`).join('')}</select>
       <input id="pos-qty" type="number" min="1" step="1" value="1" style="width:70px"><button type="button" class="shop-btn sm" onclick="shopPosAddSel()">＋</button></div>
@@ -849,6 +874,7 @@ function shopOrderIssue(id){
   let anyRow=false;
   const rows=ps.map((p,i)=>{
     const it=p.itemId?getShop('shopItems',p.itemId):null;
+    if(it && isEinzeln(it)) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:var(--muted)">einzeln erfasst – über „🏷️ Stücke" ausgeben</span></div>`;
     if(!it) return `<div class="shop-pos-row"><span class="nm">✏️ ${esc(p.itemName||p.freitext||'?')} · ${_num(p.menge)}</span><span style="font-size:12px;color:var(--muted)">${p.itemId?'Artikel gelöscht':'freier Wunsch – manuell erledigen'}</span></div>`;
     const from=Object.keys(it.stock||{}).filter(x=>_num(it.stock[x])>0 && (!canMoveTo || x!==o.ortId));
     if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:#c0392b">kein Bestand</span></div>`;
@@ -981,6 +1007,7 @@ function _whoRead(px){
 function shopLend(itemId){
   if(!canManage()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
+  if(isEinzeln(it)){ toast('Einzeln erfasste Artikel werden über „🏷️ Stücke" verwaltet.','err'); return; }
   if(!it.leihbar){ toast('Verbrauchsmaterial wird nicht verliehen – bitte „📤 Verschicken" nutzen (oder den Artikel als Leihmaterial markieren).','err'); return; }
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
@@ -1036,7 +1063,7 @@ function shopCartSend(){
 }
 function shopCartSendSave(){
   const w=_whoRead('ss'); if(!w) return;
-  const pos=cartGet().filter(p=>p.itemId);
+  const pos=cartGet().filter(p=>p.itemId && !isEinzeln(getShop('shopItems',p.itemId)));
   if(!pos.length){ toast('Bitte mindestens einen Artikel hinzufügen.','err'); return; }
   // Quell-Orte aus dem Fenster übernehmen + alles prüfen, bevor gebucht wird
   const rows=pos.map(p=>{ const it=getShop('shopItems',p.itemId); const fr=Object.keys((it&&it.stock)||{}).filter(x=>_num(it.stock[x])>0);
@@ -1188,13 +1215,227 @@ function _loansHtml(mgr){
 }
 function shopSetLoan(v){ fLoan=v; renderShop(); }
 
+// ══════════════════════════════════════════════════════════════════
+//  PAKET 3 – Einzelstücke (Exemplare) + Termine (Ablauf / Prüfung / TÜV)
+//  item.einzeln=true → item.units = { <unitId>: { id, nr, serial, placeId, note, termine:[…] } }
+//  item.stock wird dann IMMER aus den Stücken abgeleitet (_syncStock) – Soll/Nachfüllen laufen weiter.
+//  Termin = { id, art:'ablauf'|'pruefung', label, datum:'YYYY-MM-DD', intervall:<Monate|''>, verlauf:[…] }
+//  Orte haben optional place.termine (TÜV, HU, Wartung … – z. B. Bus, Trailer).
+//  Einzeln erfasste Artikel laufen bewusst NICHT über Korb/Verleihen/Verschicken (nur „Stücke").
+// ══════════════════════════════════════════════════════════════════
+const TERMIN_ART={ ablauf:{i:'⌛',l:'Ablaufdatum'}, pruefung:{i:'🔧',l:'Prüfung / Wartung'} };
+function isEinzeln(it){ return !!(it && it.einzeln); }
+function unitsOf(it){ return Object.values((it&&it.units)||{}).sort((a,b)=>placeLabel(a.placeId).localeCompare(placeLabel(b.placeId),'de')||String(a.nr||'').localeCompare(String(b.nr||''),'de',{numeric:true})); }
+function _syncStock(it){
+  if(!isEinzeln(it)) return;
+  const st={}; Object.values(it.units||{}).forEach(u=>{ if(u.placeId) st[u.placeId]=(st[u.placeId]||0)+1; });
+  it.stock=st;
+}
+function _addMonths(iso, m){
+  const [y,mo,d]=String(iso||_todayIso()).split('-').map(Number); const dt=new Date(y,(mo||1)-1+_num(m),d||1,12);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+function _soonIso(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dueState(datum){ if(!datum) return ''; if(datum<_todayIso()) return 'over'; if(datum<=_soonIso(30)) return 'soon'; return 'ok'; }
+function dueBadge(t){
+  if(!t||!t.datum) return '';
+  const s=dueState(t.datum), c=s==='over'?'#c0392b':s==='soon'?'#d97706':'#16a34a';
+  return `<span class="shop-st" style="background:${c}" title="${esc((TERMIN_ART[t.art]||TERMIN_ART.pruefung).l)}${t.intervall?' · alle '+_num(t.intervall)+' Monate':''}">${(TERMIN_ART[t.art]||TERMIN_ART.pruefung).i} ${esc(t.label||'')}${t.label?' ':''}${_fmtDate(t.datum)}${s==='over'?' · überfällig':''}</span>`;
+}
+// „Rettungsweste 04" statt „Rettungsweste · Rettungsweste 04", wenn die Bezeichnung den Namen schon enthält
+function _unitTitle(it,u){ const nr=String(u.nr||"?"); return nr.toLowerCase().startsWith(String(it.name||"").toLowerCase()) ? nr+(it.variante?" · "+it.variante:"") : itemLabel(it)+" · "+nr; }
+function nextTermin(termine){ return (termine||[]).filter(t=>t&&t.datum).sort((a,b)=>a.datum.localeCompare(b.datum))[0]||null; }
+// Alle Termine (Stücke + Orte) → [{key, kind, itemId, unitId, placeId, t, title, where}]
+function allDue(){
+  const out=[];
+  items().filter(isEinzeln).forEach(it=>unitsOf(it).forEach(u=>(u.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'u|'+it.id+'|'+u.id+'|'+t.id, kind:'unit', itemId:it.id, unitId:u.id, placeId:u.placeId, t,
+    title:_unitTitle(it,u), where:placeLabel(u.placeId) }); })));
+  places().forEach(p=>(p.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:'' }); }));
+  return out.sort((a,b)=>a.t.datum.localeCompare(b.t.datum));
+}
+
+// ── Termin-Editor (gemeinsam für Stücke und Orte) ──
+function _termRowHtml(px,t){
+  t=t||{id:newId(),art:'pruefung',label:'',datum:'',intervall:''};
+  return `<div class="shop-pos-row ${px}-term" data-id="${esc(t.id)}">
+    <select class="tr-art" style="max-width:150px">${Object.keys(TERMIN_ART).map(k=>`<option value="${k}"${t.art===k?' selected':''}>${TERMIN_ART[k].i} ${TERMIN_ART[k].l}</option>`).join('')}</select>
+    <input class="tr-label" placeholder="z. B. TÜV, Prüfung" value="${esc(t.label||'')}" style="flex:1;min-width:90px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+    <input class="tr-datum" type="date" value="${esc(t.datum||'')}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+    <input class="tr-int" type="number" min="0" step="1" placeholder="alle … Mon." title="Intervall in Monaten (leer = einmalig)" value="${t.intervall?_num(t.intervall):''}" style="width:92px">
+    <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="this.closest('.shop-pos-row').remove()">✕</button></div>`;
+}
+function _termEditorHtml(px, termine){
+  return `<div class="shop-f"><label>⏰ Termine <span style="font-weight:400;color:var(--muted)">(Ablauf, Prüfung, TÜV … · Intervall in Monaten → „Erledigt" setzt den nächsten Termin)</span></label>
+    <div class="shop-pos" id="${px}-terms">${(termine||[]).map(t=>_termRowHtml(px,t)).join('')}</div>
+    <button type="button" class="shop-btn sm" onclick="shopTermAdd('${px}')">＋ Termin</button></div>`;
+}
+function shopTermAdd(px){ const box=document.getElementById(px+'-terms'); if(box) box.insertAdjacentHTML('beforeend', _termRowHtml(px)); }
+function _termRead(px, old){
+  const prev={}; (old||[]).forEach(t=>{ if(t&&t.id) prev[t.id]=t; });
+  return [...document.querySelectorAll('.'+px+'-term')].map(r=>({ id:r.dataset.id, art:r.querySelector('.tr-art').value, label:r.querySelector('.tr-label').value.trim(),
+    datum:r.querySelector('.tr-datum').value, intervall:r.querySelector('.tr-int').value?Math.max(0,Math.round(_num(r.querySelector('.tr-int').value))):'',
+    verlauf:(prev[r.dataset.id]&&prev[r.dataset.id].verlauf)||[] })).filter(t=>t.datum);
+}
+
+// ── Stücke verwalten (Verwalter) ──
+let _unitSel=new Set();
+function shopUnits(itemId){
+  if(!canManage()) return;
+  const it=getShop('shopItems',itemId); if(!it) return;
+  if(!isEinzeln(it)){ toast('Dieser Artikel wird nicht einzeln erfasst (✎ → „Einzeln erfassen").','err'); return; }
+  const us=unitsOf(it);
+  _unitSel=new Set([..._unitSel].filter(id=>(it.units||{})[id]));
+  const rows=us.map(u=>{ const nt=nextTermin(u.termine);
+    return `<div class="shop-pos-row"><input type="checkbox" style="width:auto" ${_unitSel.has(u.id)?'checked':''} onchange="shopUnitSel(${jsq(u.id)},this.checked)">
+      <span class="nm"><b>${esc(u.nr||'?')}</b>${u.serial?` <span style="color:var(--muted);font-size:11px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:11px">· ${esc(u.note)}</span>`:''}</span>
+      <span style="font-size:12px;white-space:nowrap">${esc(placeLabel(u.placeId))}</span>
+      ${nt?dueBadge(nt):'<span style="font-size:11px;color:var(--muted)">kein Termin</span>'}
+      <button type="button" class="shop-btn sm" onclick="shopUnitEdit(${jsq(it.id)},${jsq(u.id)})">✎</button>
+      <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');
+  openModal(`<h3>🏷️ Stücke – ${esc(itemLabel(it))}</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${us.length} Stück${us.length===1?'':'e'} · jedes mit eigenem Ort und eigenen Terminen. Die Menge je Ort ergibt sich daraus.</p>
+    <div class="shop-pos" style="max-height:48vh">${rows||'<div style="font-size:12px;color:var(--muted);padding:6px">Noch keine Stücke – unten anlegen.</div>'}</div>
+    ${us.length?`<div class="shop-posadd"><span style="font-size:12px">Markierte (${_unitSel.size}) verschieben nach</span>${_placeSelect('su-moveto','',false)}<button type="button" class="shop-btn sm" onclick="shopUnitsMove(${jsq(it.id)})">⇄ Verschieben</button></div>`:''}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal();renderShop()">Schließen</button>
+      <button class="btn btn-primary" onclick="shopUnitsAdd(${jsq(it.id)})">＋ Stücke anlegen</button></div>`, true);
+}
+function shopUnitSel(uid,on){ if(on) _unitSel.add(uid); else _unitSel.delete(uid); const s=document.querySelector('.shop-posadd span'); if(s&&/Markierte/.test(s.textContent)) s.textContent=`Markierte (${_unitSel.size}) verschieben nach`; }
+function shopUnitsMove(itemId){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const to=_val('su-moveto'); const ids=[..._unitSel].filter(id=>(it.units||{})[id] && it.units[id].placeId!==to);
+  if(!ids.length){ toast('Bitte Stücke anhaken (die nicht schon dort liegen).','err'); return; }
+  const byFrom={}; ids.forEach(id=>{ const u=it.units[id]; (byFrom[u.placeId]=byFrom[u.placeId]||[]).push(u.nr); u.placeId=to; });
+  _syncStock(it); saveShop('shopItems', it);
+  Object.keys(byFrom).forEach(from=>_log(it,'umlagern',byFrom[from].length,from,to,'Stücke: '+byFrom[from].join(', ')));
+  _unitSel.clear(); toast(`${ids.length} Stück${ids.length===1?'':'e'} → ${placeLabel(to)} ✓`,'ok'); shopUnits(itemId);
+}
+function shopUnitsAdd(itemId){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const n0=unitsOf(it).length;
+  openModal(`<h3>＋ Stücke anlegen – ${esc(itemLabel(it))}</h3>
+    <div class="shop-f2"><div class="shop-f"><label>Anzahl</label><input id="ua-n" type="number" min="1" max="200" step="1" value="1"></div>
+      <div class="shop-f"><label>Ort</label>${_placeSelect('ua-pl', fPlace, false)}</div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Bezeichnung</label><input id="ua-pre" value="${esc(it.name)} " placeholder="z. B. Weste "></div>
+      <div class="shop-f"><label>Nummern ab</label><input id="ua-start" type="number" min="0" step="1" value="${n0+1}"></div></div>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Ergibt z. B. „${esc(it.name)} ${String(n0+1).padStart(2,'0')}", „${esc(it.name)} ${String(n0+2).padStart(2,'0')}" … (später einzeln änderbar)</p>
+    ${_termEditorHtml('ua',[])}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="shopUnits(${jsq(itemId)})">Zurück</button>
+      <button class="btn btn-primary" onclick="shopUnitsAddSave(${jsq(itemId)})">Anlegen</button></div>`);
+}
+function shopUnitsAddSave(itemId){
+  const it=getShop('shopItems',itemId); if(!it) return;
+  const n=Math.round(_num(_val('ua-n'))); if(n<1||n>200){ toast('Anzahl zwischen 1 und 200.','err'); return; }
+  const pl=_val('ua-pl'); if(!pl){ toast('Bitte einen Ort wählen.','err'); return; }
+  const pre=(document.getElementById('ua-pre')||{}).value||''; const start=Math.round(_num(_val('ua-start')));
+  const termTpl=_termRead('ua',[]); const width=Math.max(2,String(start+n-1).length);
+  if(!it.units||typeof it.units!=='object') it.units={};
+  for(let i=0;i<n;i++){ const id=newId();
+    it.units[id]={ id, nr:(pre+String(start+i).padStart(width,'0')).trim(), serial:'', placeId:pl, note:'', termine:termTpl.map(t=>Object.assign({},t,{id:newId(),verlauf:[]})) }; }
+  _syncStock(it); saveShop('shopItems', it); _log(it,'zugang',n,null,pl,'Stücke angelegt');
+  toast(`${n} Stück${n===1?'':'e'} angelegt ✓`,'ok'); shopUnits(itemId);
+}
+function shopUnitEdit(itemId, unitId){
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
+  openModal(`<h3>✎ ${esc(itemLabel(it))} · ${esc(u.nr||'')}</h3>
+    <div class="shop-f2"><div class="shop-f"><label>Bezeichnung *</label><input id="ue-nr" value="${esc(u.nr||'')}"></div>
+      <div class="shop-f"><label>Seriennummer</label><input id="ue-serial" value="${esc(u.serial||'')}" placeholder="optional"></div></div>
+    <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('ue-pl', u.placeId, false)}</div>
+      <div class="shop-f"><label>Notiz</label><input id="ue-note" value="${esc(u.note||'')}" placeholder="z. B. Größe L, Farbe"></div></div>
+    ${_termEditorHtml('ue', u.termine)}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="shopUnits(${jsq(itemId)})">Zurück</button>
+      <button class="btn btn-primary" onclick="shopUnitSave(${jsq(itemId)},${jsq(unitId)})">Speichern</button></div>`);
+}
+function shopUnitSave(itemId, unitId){
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
+  const nr=_val('ue-nr'); if(!nr){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
+  const to=_val('ue-pl'), from=u.placeId;
+  Object.assign(u,{ nr, serial:_val('ue-serial'), note:_val('ue-note'), placeId:to, termine:_termRead('ue', u.termine) });
+  _syncStock(it); saveShop('shopItems', it);
+  if(to!==from) _log(it,'umlagern',1,from,to,'Stück: '+nr);
+  toast('Gespeichert ✓','ok'); shopUnits(itemId);
+}
+// Ausmustern / verbraucht – Verwalter aus „Stücke", alle über „➖ Verbrauch"
+function shopUnitRetire(itemId, unitId, fromUse){
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
+  const why=prompt(`„${u.nr}" ausmustern / als verbraucht melden?\nGrund (optional):`, fromUse?'verbraucht':''); if(why===null) return;
+  const pl=u.placeId; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
+  _log(it,'verbrauch',1,pl,null,'Stück: '+u.nr+(why?' · '+why:''));
+  const s=sollAt(it,pl), ist=_num((it.stock||{})[pl]);
+  toast(s&&ist<s?`${u.nr} ausgebucht ✓ – ${placeLabel(pl)} jetzt unter Soll (${ist}/${s}).`:`${u.nr} ausgebucht ✓`,'ok');
+  if(fromUse){ closeModal(); renderShop(); } else shopUnits(itemId);
+}
+// „➖ Verbrauch" bei Einzelstücken: konkretes Stück wählen (für alle Nutzer)
+function _unitUse(it){
+  const us=unitsOf(it); if(!us.length){ toast('Keine Stücke vorhanden.','err'); return; }
+  openModal(`<h3>➖ Verbrauch melden – ${esc(itemLabel(it))}</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Welches Stück wurde benutzt / ist kaputt?</p>
+    <div class="shop-pos" style="max-height:50vh">${us.map(u=>{ const nt=nextTermin(u.termine);
+      return `<div class="shop-pos-row"><span class="nm"><b>${esc(u.nr||'?')}</b> · ${esc(placeLabel(u.placeId))}</span>${nt?dueBadge(nt):''}
+        <button type="button" class="shop-btn sm" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)},true)">➖ Verbraucht</button></div>`; }).join('')}</div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button></div>`);
+}
+
+// ── Tab „⏰ Fällig" (Verwalter) ──
+let fDue='soon';
+function _dueHtml(){
+  const all=allDue();
+  const lim={ over:_todayIso(), soon:_soonIso(30), q:_soonIso(90), all:'9999' }[fDue]||_soonIso(30);
+  const list=all.filter(d=>fDue==='over' ? d.t.datum<_todayIso() : d.t.datum<=lim);
+  const seg=[['over','Überfällig'],['soon','≤ 30 Tage'],['q','≤ 90 Tage'],['all','Alle']];
+  const rows=list.map(d=>`<div class="shop-row"${dueState(d.t.datum)==='over'?' style="border-color:#e5484d"':''}><div class="main">
+      <div class="t">${d.kind==='place'?'📍 ':'🏷️ '}${esc(d.title)} ${dueBadge(d.t)}</div>
+      <div class="m">${esc((TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)}${d.t.intervall?` · alle ${_num(d.t.intervall)} Monate`:' · einmalig'}${d.where?' · '+esc(d.where):''}${(d.t.verlauf||[]).length?` · zuletzt erledigt ${_fmtDate(d.t.verlauf[d.t.verlauf.length-1].am)}`:''}</div></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopDueDone(${jsq(d.key)})">✓ Erledigt</button>
+        ${d.kind==='unit'?`<button class="shop-btn sm" onclick="shopUnitEdit(${jsq(d.itemId)},${jsq(d.unitId)})">✎</button>`:`<button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(d.placeId)})">✎</button>`}</div></div>`).join('');
+  const nOver=all.filter(d=>d.t.datum<_todayIso()).length;
+  return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fDue===s[0]?'on':''}" onclick="shopSetDue(${jsq(s[0])})">${s[1]}${s[0]==='over'&&nOver?` (${nOver})`:''}</button>`).join('')}</span>
+      <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">Termine an Stücken (✎ Artikel → „Einzeln erfassen") und an Orten (📍 Orte → ✎)</span></div>
+    <div class="shop-list">${rows||`<div class="shop-empty">${all.length?'Nichts fällig in diesem Zeitraum. ✓':'Noch keine Termine erfasst.'}</div>`}</div>`;
+}
+function shopSetDue(v){ fDue=v; renderShop(); }
+function _dueFind(key){
+  const [k,a,b,c]=String(key).split('|');
+  if(k==='u'){ const it=getShop('shopItems',a); const u=it&&it.units&&it.units[b]; const t=u&&(u.termine||[]).find(x=>x.id===c); return t?{kind:'unit',it,u,t}:null; }
+  const p=getShop('shopPlaces',a); const t=p&&(p.termine||[]).find(x=>x.id===b); return t?{kind:'place',p,t}:null;
+}
+function shopDueDone(key){
+  if(!canManage()) return;
+  const f=_dueFind(key); if(!f){ toast('Termin nicht gefunden.','err'); return; }
+  const t=f.t, title=f.kind==='unit'?_unitTitle(f.it,f.u):placeLabel(f.p.id);
+  const iv=_num(t.intervall);
+  openModal(`<h3>✓ Erledigt – ${esc(title)}</h3>
+    <p style="font-size:13px;margin:0 0 10px">${esc((TERMIN_ART[t.art]||TERMIN_ART.pruefung).l)}${t.label?' · '+esc(t.label):''} · fällig ${_fmtDate(t.datum)}</p>
+    <div class="shop-f2"><div class="shop-f"><label>Erledigt am</label><input id="dd-am" type="date" value="${_todayIso()}" onchange="${iv?`document.getElementById('dd-next').value=shopAddMonths(this.value,${iv})`:''}"></div>
+      <div class="shop-f"><label>${t.art==='ablauf'?'Neues Ablaufdatum (nach Austausch)':'Nächster Termin'}${iv?` <span style="font-weight:400;color:var(--muted)">(+${iv} Mon.)</span>`:''}</label><input id="dd-next" type="date" value="${iv?_addMonths(_todayIso(),iv):''}"></div></div>
+    <div class="shop-f"><label>Notiz</label><input id="dd-note" placeholder="z. B. Prüfer, Ergebnis, neue Charge"></div>
+    ${f.kind==='unit'?'<p style="font-size:12px;color:var(--muted);margin:0">Ohne neues Datum? Dann das Stück lieber unter „🏷️ Stücke" ausmustern.</p>':''}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="shopDueDoneSave(${jsq(key)})">Speichern</button></div>`);
+}
+function shopDueDoneSave(key){
+  const f=_dueFind(key); if(!f) return;
+  const am=_val('dd-am')||_todayIso(), next=_val('dd-next'), note=_val('dd-note'), cu=_me();
+  if(!next){ toast('Bitte das nächste Datum angeben.','err'); return; }
+  if(!Array.isArray(f.t.verlauf)) f.t.verlauf=[];
+  f.t.verlauf.push({ am, faellig:f.t.datum, by:cu.name||'', note }); f.t.datum=next;
+  const lbl=(f.t.label||(TERMIN_ART[f.t.art]||TERMIN_ART.pruefung).l);
+  if(f.kind==='unit'){ saveShop('shopItems', f.it); _log(f.it,'termin',1,f.u.placeId,null,`${f.u.nr}: ${lbl} erledigt ${_fmtDate(am)} → nächster ${_fmtDate(next)}${note?' · '+note:''}`); }
+  else { saveShop('shopPlaces', f.p);
+    saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:null, itemName:'📍 '+f.p.name, type:'termin', qty:1, from:f.p.id, to:null,
+      note:`${lbl} erledigt ${_fmtDate(am)} → nächster ${_fmtDate(next)}${note?' · '+note:''}`, orderId:null }); }
+  closeModal(); toast('Erledigt ✓ – nächster Termin '+_fmtDate(next),'ok'); renderShop();
+}
+function shopAddMonths(iso,m){ return _addMonths(iso,m); }
+function shopDueNoticeOpen(){ TAB='faellig'; fDue='soon'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
+function shopDueAck(){ try{ localStorage.setItem('tps_shop_due_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
+
 // ── Tab: Orte ──────────────────────────────────────────────────────
 function _orteHtml(){
   const its=items();
   const rows=places().map(p=>{
     const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
     const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
-    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))}</div>
+    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}</div>
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
       <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
       <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
@@ -1253,6 +1494,7 @@ function shopPlaceEdit(id){
     <div class="shop-f2"><div class="shop-f"><label>Name *</label><input id="sp-name" value="${esc(v.name)}" placeholder="z. B. Boot 1, Bus, Büro Kiel"></div>
       <div class="shop-f"><label>Art</label><select id="sp-typ">${Object.keys(PLACE_TYPES).map(k=>`<option value="${k}"${v.typ===k?' selected':''}>${PLACE_TYPES[k].i} ${PLACE_TYPES[k].l}</option>`).join('')}</select></div></div>
     <div class="shop-f"><label>Notiz</label><input id="sp-note" value="${esc(v.note||'')}" placeholder="z. B. Liegeplatz, Schlüssel bei …"></div>
+    ${_termEditorHtml('sp', v.termine)}
     <div class="modal-btns">${p?`<button class="btn btn-outline" style="margin-right:auto;color:var(--danger);border-color:var(--danger)" onclick="shopPlaceDelete(${jsq(p.id)})">🗑 Löschen</button>`:''}
     <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopPlaceSave(${jsq(id||'')})">Speichern</button></div>`);
@@ -1261,7 +1503,7 @@ function shopPlaceSave(id){
   const name=_val('sp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const ex=id?getShop('shopPlaces',id):null;
   if(places().some(p=>p.id!==id && String(p.name).toLowerCase()===name.toLowerCase())){ toast('Einen Ort mit diesem Namen gibt es schon.','err'); return; }
-  saveShop('shopPlaces', Object.assign({}, ex||{id:newId(), createdAt:Date.now()}, {name, typ:_val('sp-typ')||'sonst', note:_val('sp-note')}));
+  saveShop('shopPlaces', Object.assign({}, ex||{id:newId(), createdAt:Date.now()}, {name, typ:_val('sp-typ')||'sonst', note:_val('sp-note'), termine:_termRead('sp', ex&&ex.termine)}));
   closeModal(); toast('Ort gespeichert ✓','ok'); renderShop();
 }
 function shopPlaceDelete(id){
@@ -1324,6 +1566,12 @@ function shopNotices(){
     let ackR=''; try{ ackR=localStorage.getItem('tps_shop_soll_ack_'+cu.id)||''; }catch(e){}
     if(pids.length && ackR!==today) out.push({ ts:Date.now(), html:`⚠ ${pids.length} Ort${pids.length===1?'':'e'} unter Soll-Bestand: `+pids.slice(0,3).map(pid=>`${esc(placeLabel(pid))} (`+rf.byPlace[pid].slice(0,2).map(r=>`${esc(r.it.name)} ${r.ist}/${r.soll}`).join(', ')+(rf.byPlace[pid].length>2?' …':'')+')').join(' · ')+(pids.length>3?' …':''),
       open:'shopRefillNoticeOpen()', ack:'shopRefillAck()' });
+    // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag
+    const due=allDue().filter(d=>d.t.datum<=_soonIso(14));
+    let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
+    if(due.length && ackD!==today){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
+      out.push({ ts:Date.now(), html:`⏰ ${due.length} Termin${due.length===1?'':'e'} fällig${over?` (${over} überfällig)`:''}: `+due.slice(0,3).map(d=>`${esc(d.title)} – ${esc(d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)} ${_fmtDate(d.t.datum)}`).join(' · ')+(due.length>3?' …':''),
+        open:'shopDueNoticeOpen()', ack:'shopDueAck()' }); }
   }
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
@@ -1358,7 +1606,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
-  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck,
+  shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck, shopTermAdd, shopUnits, shopUnitSel, shopUnitsMove, shopUnitsAdd, shopUnitsAddSave, shopUnitEdit, shopUnitSave, shopUnitRetire, shopSetDue, shopDueDone, shopDueDoneSave, shopAddMonths, shopDueNoticeOpen, shopDueAck,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
