@@ -140,7 +140,7 @@ function _styles(){
 }
 
 // ── Seite ──────────────────────────────────────────────────────────
-let _tick=null;
+let _tick=null, _renderedHidden='';
 export function renderHome(){
   try{
     _styles();
@@ -162,7 +162,11 @@ export function renderHome(){
       recent:()=>'<div class="home-card wide" id="home-recent" style="display:none"></div>',
       tiles:()=>'<div class="home-tiles" id="home-tiles" style="grid-column:1/-1;margin-top:0"></div>',
     };
-    const grid=cardOrder().filter(k=>cardOn(k,cu)).map(k=>BOX[k]?BOX[k]():'').join('');
+    const hid=_hiddenCards(); _renderedHidden=JSON.stringify(hid);   // im Profil persönlich ausgeblendet
+    const grid=cardOrder().filter(k=>cardOn(k,cu) && !hid.includes(k)).map(k=>BOX[k]?BOX[k]():'').join('');
+    // Persönliche Einstellungen kommen aus den CRM-Daten – sind die beim ersten Zeichnen noch nicht da,
+    // einmal nachzeichnen, sobald geladen (nur wenn sich etwas geändert hat).
+    try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule==='start' && JSON.stringify(_hiddenCards())!==_renderedHidden) renderHome(); }); }catch(e){}
     root.innerHTML=`<div class="home-wrap">
       <img class="home-bgl" src="icons/tps-logo-segel.svg" alt="" aria-hidden="true">
       <div class="home-in">
@@ -289,17 +293,55 @@ function homeTrack(s){
     _lsSet(_rk(), a.slice(0,15));
   }catch(e){}
 }
-function homeFavHas(key){ return _arr(_fk()).some(x=>x.key===key); }
+// ── Geräteübergreifend: crm/userPrefs/<uid> (Favoriten + ausgeblendete Karten) ──
+// Favoriten liegen zusätzlich lokal (Cache/Altbestand); „Zuletzt geöffnet" bleibt bewusst pro Gerät.
+function _prefs(){ try{ const uid=(window.cu&&window.cu.id)||''; return (CD.getUserPrefs&&CD.getUserPrefs(uid))||null; }catch(e){ return null; } }
+function _savePrefs(patch){
+  try{ const uid=(window.cu&&window.cu.id)||''; if(!uid||!CD.saveUserPrefs) return;
+    CD.saveUserPrefs(uid, Object.assign({}, _prefs()||{}, patch)); }catch(e){ console.warn('userPrefs speichern:',e&&e.message); }
+}
+function _favList(){ const p=_prefs(); return (p && Array.isArray(p.favs)) ? p.favs : _arr(_fk()); }
+function _hiddenCards(){ const p=_prefs(); return (p && Array.isArray(p.hiddenCards)) ? p.hiddenCards : []; }
+// Einmalig: vorhandene lokale Favoriten (v417, pro Gerät) in die geräteübergreifende Liste übernehmen
+function _migrateFavs(){
+  try{ const p=_prefs(); const loc=_arr(_fk()); if(!loc.length || !CD.saveUserPrefs) return;
+    const srv=(p&&Array.isArray(p.favs))?p.favs:[]; const keys=new Set(srv.map(x=>x.key));
+    const add=loc.filter(x=>!keys.has(x.key)); if(!add.length && p && Array.isArray(p.favs)) return;
+    _savePrefs({ favs:srv.concat(add) }); }catch(e){}
+}
+function homeFavHas(key){ return _favList().some(x=>x.key===key); }
 function homeFavToggle(key){
   if(!key) return false;
-  let a=_arr(_fk()); const on=a.some(x=>x.key===key);
+  let a=_favList().slice(); const on=a.some(x=>x.key===key);
   if(on) a=a.filter(x=>x.key!==key); else { const inf=_info(key); a.push({ key, label:inf?inf.label:'' }); }
-  _lsSet(_fk(), a);
+  _lsSet(_fk(), a); _savePrefs({ favs:a });
   try{ window.toast && window.toast(on?'Aus den Favoriten entfernt':'⭐ Zu den Favoriten hinzugefügt – erscheint auf der Startseite', on?'':'ok'); }catch(e){}
   if(window._activeModule==='start') _fillRecent();
   return !on;
 }
 function homeCurrentKey(s){ const it=_itemOf(s||(window.navSnapshot&&window.navSnapshot())); return it?it.key:''; }
+
+// ── Profil: Karten der eigenen Startseite ausblenden (geräteübergreifend) ──
+// Angeboten werden nur Karten, die die Rolle laut Verwaltung überhaupt hat.
+function homeProfileHtml(){
+  try{
+    const cu=window.cu; if(!cu || !homeEnabled(cu)) return '';
+    const hid=_hiddenCards();
+    const ks=cardOrder().filter(k=>cardOn(k,cu) && !(k==='stamp' && !_stampAllowed(cu)) && !(k==='sys' && !_sysAllowed(cu)));
+    if(!ks.length) return '';
+    return `<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+      <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:4px">🏠 Meine Startseite</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Welche Karten du sehen möchtest – gilt auf allen deinen Geräten, wird sofort gespeichert.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 12px">${ks.map(k=>{ const c=CARDS.find(x=>x.k===k);
+        return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" style="width:auto" ${hid.includes(k)?'':'checked'} onchange="homeHideCard('${k}',!this.checked)"> ${esc(c?c.l:k)}</label>`; }).join('')}</div>`;
+  }catch(e){ return ''; }
+}
+function homeHideCard(k,hide){
+  const s=new Set(_hiddenCards()); if(hide) s.add(k); else s.delete(k);
+  _savePrefs({ hiddenCards:[...s] });
+  try{ window.toast && window.toast(hide?'Karte ausgeblendet':'Karte wird wieder angezeigt','ok'); }catch(e){}
+  if(window._activeModule==='start') renderHome();
+}
 function homeOpenItem(key){
   const [k,a,b]=String(key).split('|');
   const vis=m=>{ const x=document.querySelector('.mb-mod[data-mod="'+m+'"]'); return !!(x && x.style.display!=='none'); };
@@ -311,9 +353,10 @@ function homeOpenItem(key){
 }
 async function _fillRecent(){
   const box=_el('home-recent'); if(!box) return;
-  const favs=_arr(_fk()), rec=_arr(_rk());
-  if(!favs.length && !rec.length){ box.style.display='none'; return; }
   try{ if(CD.ensureCrmReady) await CD.ensureCrmReady(); }catch(e){}
+  _migrateFavs();
+  const favs=_favList(), rec=_arr(_rk());
+  if(!favs.length && !rec.length){ box.style.display='none'; return; }
   const chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
     return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${inf.icon} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
   const fHtml=favs.map(x=>chip(x,true)).filter(Boolean).join('');
@@ -475,4 +518,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}

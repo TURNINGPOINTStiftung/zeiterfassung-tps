@@ -51,6 +51,7 @@ export function openProfileModal(){
       <select id="prof-bl">${blOpts}</select></div>
     ${adrSection}
     ${wstSection}
+    ${(()=>{ try{ return (window.homeProfileHtml&&window.homeProfileHtml())||''; }catch(e){ return ''; } })()}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px">🔒 Passwort ändern</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nur ausfüllen, wenn Sie Ihr Passwort ändern möchten.</div>

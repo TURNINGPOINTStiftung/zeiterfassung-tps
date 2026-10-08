@@ -19,7 +19,7 @@ const CRM_LS_KEY = 'tps_crm_v1';
 // über crm/config anlegen – ihre Daten landen unter crm/<key>/<id> und werden
 // generisch synchronisiert (siehe _normalize). 'config' & Co. sind reserviert.
 const DEFAULT_TREE_KEYS = ['vereine','sozialakteure','fundraising','marketing'];
-const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig'];
+const RESERVED_KEYS     = ['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs'];
 // Shop-Sammlungen (js/crm/shop.js): crm/<coll>/<id>, flach wie alle anderen Sammlungen.
 export const SHOP_COLLS = ['shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig'];
 
@@ -388,6 +388,23 @@ export function deleteShop(coll, id){
 }
 export function listShop(coll){ const d=getCrm(); return Object.values((d && d[coll]) || {}); }
 export function getShop(coll, id){ const d=getCrm(); return (d && d[coll] && d[coll][id]) || null; }
+
+// ── Persönliche Einstellungen (Startseite, js/home.js) ─────────────
+// crm/userPrefs/<userId> = { favs:[{key,label}], hiddenCards:[karte…], updatedAt }
+// Liegt unter crm/, weil dort alle angemeldeten Nutzer schreiben dürfen (zeiterfassung/users nur
+// wenige Felder). Geräteübergreifend: Favoriten + ausgeblendete Karten. NICHT in CRM-Bäumen zählen
+// (RESERVED_KEYS / _KAL_RESERVED / CFG_RESERVED / kalender _RESERVED).
+export function getUserPrefs(uid){ const d=getCrm(); return (uid && d && d.userPrefs && d.userPrefs[uid]) || null; }
+export function saveUserPrefs(uid, p){
+  if(!uid || !p || typeof p!=='object') return Promise.resolve();
+  p.updatedAt = Date.now();
+  const d = getCrm();
+  if(!d.userPrefs || typeof d.userPrefs!=='object') d.userPrefs = {};
+  d.userPrefs[uid] = p;
+  _cache = d;
+  _persistLocal();
+  return _write('userPrefs', uid, p);
+}
 
 // ── E-Mail-Verteiler (gespeicherte Adresslisten) ──────────────────
 // Liegen unter crm/verteiler/<id> = { id, name, emails:[], note?, … }.
