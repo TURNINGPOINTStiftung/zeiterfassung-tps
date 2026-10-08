@@ -372,7 +372,7 @@ export function renderShop(){
 }
 function shopTab(t){ TAB=t; renderShop(); }
 // Zurück-Taste (js/nav.js): Reiter gehört zum „Ort" in der App
-try{ (window._navRegs=window._navRegs||{}).shop={ get:()=>({t:TAB}), set:s=>{ if(s&&s.t) TAB=s.t; } }; }catch(e){}
+try{ (window._navRegs=window._navRegs||{}).shop={ get:()=>({t:TAB}), set:s=>{ if(s&&s.t) TAB=s.t; }, path:s=>s.t, parse:p=>({t:String(p).split('/')[0]}) }; }catch(e){}
 
 // ── Tab: Bestand ───────────────────────────────────────────────────
 function _bestandHtml(mgr){

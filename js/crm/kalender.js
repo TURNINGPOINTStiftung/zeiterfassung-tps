@@ -583,7 +583,7 @@ export function renderKalender(){
 
 function kalSetView(v){ V=v; renderKalender(); }
 // Zurück-Taste (js/nav.js): Ansicht (Woche/Monat/Jahr/Konflikte) gehört zum „Ort" in der App
-try{ (window._navRegs=window._navRegs||{}).kalender={ get:()=>({v:V}), set:s=>{ if(s&&s.v) V=s.v; } }; }catch(e){}
+try{ (window._navRegs=window._navRegs||{}).kalender={ get:()=>({v:V}), set:s=>{ if(s&&s.v) V=s.v; }, path:s=>s.v, parse:p=>({v:String(p).split('/')[0]}) }; }catch(e){}
 function kalSetTeam(t){ curTeam=t; renderKalender(); }
 function kalToday(){ const n=new Date(); curY=n.getFullYear(); curM=n.getMonth()+1; weekStart=_mondayOf(n); renderKalender(); }
 function kalSetSaison(s){ curSaison=s; renderKalender(); }
