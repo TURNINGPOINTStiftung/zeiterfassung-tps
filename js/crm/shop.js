@@ -322,7 +322,8 @@ function _bestandHtml(mgr){
       <select onchange="shopSetCat(this.value)">${catOpts}</select>
       <select onchange="shopSetPlace(this.value)">${plOpts}</select>
       <span class="shop-sp"></span>
-      ${mgr?`<button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>`:''}
+      <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button>
+      ${mgr?`<button class="shop-btn" onclick="shopItemEdit('')">＋ Artikel</button>`:''}
     </div>
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
 }
@@ -1245,27 +1246,33 @@ function shopLoanDueSave(loanId){
 }
 function _loansHtml(mgr){
   const me=_me();
-  let ls=loans(); if(!mgr) ls=ls.filter(l=>l.borrowerId===me.id);
-  if(fLoan==='aktiv') ls=ls.filter(l=>l.status==='aktiv').sort((a,b)=>String(a.due||'9').localeCompare(String(b.due||'9')));
-  else ls=ls.filter(l=>l.status!=='aktiv');
+  // „Gerade ausgeliehen" sehen ALLE (nur ansehen – zurückgeben nur die eigenen); „Meine" = eigene laufende;
+  // „Zurückgegeben": Verwalter alle, Mitarbeiter nur eigene
+  if(fLoan==='meine' && mgr) fLoan='aktiv';
+  let ls=loans();
+  if(fLoan==='aktiv') ls=ls.filter(l=>l.status==='aktiv');
+  else if(fLoan==='meine') ls=ls.filter(l=>l.status==='aktiv' && l.borrowerId===me.id);
+  else ls=ls.filter(l=>l.status!=='aktiv' && (mgr || l.borrowerId===me.id));
+  if(fLoan!=='zurueck') ls.sort((a,b)=>String(a.due||'9').localeCompare(String(b.due||'9')));
   const rows=ls.map(l=>{
     const late=_overdue(l); const ret=Array.isArray(l.returns)?l.returns:[];
     const canRet=l.status==='aktiv' && (mgr || l.borrowerId===me.id);
     return `<div class="shop-row"${late?' style="border-color:#e5484d"':''}><div class="main">
       <div class="t">🔁 ${_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0)}× ${esc(l.itemName||'?')}
         ${l.status==='aktiv'?(late?'<span class="shop-st" style="background:#c0392b">Überfällig</span>':'<span class="shop-st" style="background:#2563eb">Ausgeliehen</span>'):'<span class="shop-st" style="background:#16a34a">Zurück</span>'}</div>
-      <div class="m">${mgr?`an <b>${esc(bLabel(l))}</b> · `:''}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
+      <div class="m">${(mgr||l.borrowerId!==me.id)?`an <b>${esc(bLabel(l))}</b> · `:'an <b>dich</b> · '}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
         ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:(l.status==='aktiv'?' · Dauerleihe':'')}${l.anlass?` · ${esc(l.anlass)}`:''}
         ${l.note?`<br>📝 ${esc(l.note)}`:''}
         ${ret.map(r=>`<br>↩ ${_num(r.qty)} zurück nach ${esc(placeLabel(r.to))} · ${_fmtTs(r.ts)} (${esc(r.byName||'')})${r.note?' – '+esc(r.note):''}`).join('')}</div></div>
       ${canRet?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>
         ${mgr?`<button class="shop-btn sm" onclick="shopLoanDue(${jsq(l.id)})">📅 ${l.due?'Verlängern':'Datum setzen'}</button>`:''}</div>`:''}</div>`;
   }).join('');
-  const seg=[['aktiv','Ausgeliehen'],['zurueck','Zurückgegeben']];
+  const nMine=loans().filter(l=>l.status==='aktiv'&&l.borrowerId===me.id).length;
+  const seg=[['aktiv','Gerade ausgeliehen (alle)']].concat(mgr?[]:[['meine','Meine'+(nMine?` (${nMine})`:'')]]).concat([['zurueck','Zurückgegeben']]);
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fLoan===s[0]?'on':''}" onclick="shopSetLoan(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
       <span class="shop-sp"></span>${mgr?`<button class="shop-btn pri" onclick="shopPickItem('lend')">🔁 Verleihen</button>`
         :`<button class="shop-btn pri" onclick="shopOrderNew('')" title="Leihmaterial anfragen – mit Rückgabedatum">🔁 Ausleihen anfragen</button>`}</div>
-    <div class="shop-list">${rows||`<div class="shop-empty">${fLoan==='aktiv'?(mgr?'Gerade ist nichts verliehen.':'Du hast gerade nichts ausgeliehen.'):'Noch keine Rückgaben.'}</div>`}</div>`;
+    <div class="shop-list">${rows||`<div class="shop-empty">${fLoan==='aktiv'?'Gerade ist nichts ausgeliehen.':fLoan==='meine'?'Du hast gerade nichts ausgeliehen.':'Noch keine Rückgaben.'}</div>`}</div>`;
 }
 function shopSetLoan(v){ fLoan=v; renderShop(); }
 
