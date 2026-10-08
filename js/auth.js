@@ -223,6 +223,9 @@ export async function doLogin(){
   errEl.style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('visible');
+  // Neu angemeldet → immer vorn starten (Startseite, falls in der Verwaltung freigeschaltet),
+  // keine gemerkte Ansicht (#/…) aus einer früheren Sitzung wiederherstellen (User-Vorgabe).
+  try{ window.navResetInitial?.(); history.replaceState(null,'',location.pathname+location.search); }catch(e){}
   try{ window.initApp?.(); } catch(e){ console.error('initApp Fehler:',e); }
   try{ window.updateAbBadge?.(); } catch(e){ console.error('updateAbBadge Fehler:',e); }
 }
@@ -247,6 +250,9 @@ export async function doLogout(){
     _LOGOUT_CLEAR.forEach(k=>localStorage.removeItem(k));
     Object.keys(localStorage).filter(k=>k.startsWith('tp_zt_premigrate_')).forEach(k=>localStorage.removeItem(k));
   }catch(e){}
+  // Gemerkte Ansicht (#/… aus js/nav.js) verwerfen – nach dem nächsten Anmelden startet man vorn
+  // (Startseite, falls freigeschaltet), nicht in der Ansicht des vorherigen Nutzers.
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
   // Sauberer Neustart: beendet Live-Verbindungen und leert den Speicher im Tab.
   location.reload();
 }

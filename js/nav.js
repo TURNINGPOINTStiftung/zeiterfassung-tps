@@ -25,7 +25,7 @@ const CRM_MODS=['crm','kanban','verteiler'];
 // Extra-Auswahl im CRM als ?-Parameter (kurze, lesbare Namen)
 const CRM_Q={ _crmProjSel:'projekt', _crmTeamProjSel:'teamprojekt', _crmTeamSel:'team', _crmVaSel:'veranstaltung' };
 
-const _initHash=(()=>{ try{ return location.hash||''; }catch(e){ return ''; } })();   // vor allem anderen merken
+let _initHash=(()=>{ try{ return location.hash||''; }catch(e){ return ''; } })();   // vor allem anderen merken
 let _started=false, _restoring=false, _modalShown=false, _closingByPop=false;
 let _pendingBack=null, _awaitPop=0, _queue=[];
 
@@ -297,4 +297,6 @@ async function navCopyLink(){
   setTimeout(wait, 400);
 })();
 
-try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav; }catch(e){}
+try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; window.navFav=navFav;
+  window.navResetInitial=()=>{ _initHash=''; };   // frischer Login (auth.js doLogin): gemerkte Ansicht verwerfen
+}catch(e){}
