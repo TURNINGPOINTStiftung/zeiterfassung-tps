@@ -73,6 +73,20 @@ function lent(it){ return it ? activeLoans(it.id).reduce((s,l)=>s+_num(l.qty),0)
 // Gesamtbestand = an Orten + gerade verliehen (Leihmaterial gehört weiter zum Bestand)
 function total(it){ return inPlaces(it)+lent(it); }
 const _overdue=l=>l.status==='aktiv' && l.due && l.due<_todayIso();   // ohne due = Dauerleihe → nie überfällig
+// Zuordnen/Ausleihen gibt es für: Artikel-Mengen (itemId+qty) · ein einzelnes Stück (itemId+unitId, qty 1,
+// Stück liegt dann an keinem Ort) · einen beweglichen ORT selbst (placeId; Bus, Boot, Anhänger – der Inhalt
+// fährt mit und bleibt am Ort gebucht). Ohne Rückgabedatum = Dauerzuordnung.
+const MOVABLE=['bus','boot','anhaenger'];
+function isMovable(p){ return !!(p && MOVABLE.includes(p.typ)); }
+function placeLoan(pid){ return pid ? loans().find(l=>l.status==='aktiv' && l.placeId===pid)||null : null; }
+function unitLoan(uid){ return uid ? loans().find(l=>l.status==='aktiv' && l.unitId===uid)||null : null; }
+function loanIcon(l){ return l.placeId ? '🚩' : (l.unitId ? '🏷️' : '🔁'); }
+// Was ist mir (als Ausleiher/Zugeordneter) gerade zugeordnet? → bekomme die Mitteilungen dazu (User-Vorgabe)
+function myHeld(){ const me=_me(); const ls=activeLoans().filter(l=>me.id && l.borrowerId===me.id);
+  return { places:new Set(ls.filter(l=>l.placeId).map(l=>l.placeId)), units:new Set(ls.filter(l=>l.unitId).map(l=>l.unitId)) }; }
+function dueHeld(d, h){ h=h||myHeld(); return (d.placeId && h.places.has(d.placeId)) || (d.kind==='unit' && h.units.has(d.unitId)); }
+function _logPlace(p, type, note){ const cu=_me();
+  return saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:null, itemName:placeLabel(p.id), type, qty:1, from:p.id, to:null, note:note||'', orderId:null }); }
 // ── Ausleihende: Mitarbeiter (borrowerId) · CRM-Eintrag/Verein (borrowerRef {tree,eid}) · freier Name
 function _crmEntities(){
   const out=[];
@@ -157,9 +171,9 @@ function itemLabel(it){ return it ? (it.name+(it.variante?' · '+it.variante:'')
 // verbrauch = bestellbar, wird verbraucht · leihe = wird verliehen, kommt zurück ·
 // ausstattung = gehört fest an einen Ort (Boots-Equipment, Erste-Hilfe …), wird nur verbraucht + nachgefüllt
 const ARTEN={
-  verbrauch:  {i:"📦", l:"Verbrauchsmaterial", d:"wird verbraucht und bestellt (Flyer, Visitenkarten, Branding …)"},
+  verbrauch:  {i:"📦", l:"Verbrauchsmaterial", d:"wird verbraucht und bestellt (Flyer, Visitenkarten, Erste Hilfe …) – mit Soll an einem Ort ist es dort zusätzlich fester Bestand"},
   leihe:      {i:"🔁", l:"Leihmaterial", d:"wird verliehen und kommt zurück (Werkzeug, Beachflags, Aufsteller …)"},
-  ausstattung:{i:"🧰", l:"Ausstattung (fest am Ort)", d:"gehört an einen Ort, wird nur verbraucht und nachgefüllt – nicht bestellbar, nicht leihbar (Erste-Hilfe, Boots-Equipment …)"},
+  ausstattung:{i:"🧰", l:"Ausstattung (fest am Ort)", d:"gehört NUR an einen Ort, wird nie bestellt oder verliehen, nur verbraucht und nachgefüllt (Anker, Paddel, Boots-Equipment …)"},
 };
 function itemArt(it){ return it && ARTEN[it.art] ? it.art : (it && it.leihbar ? "leihe" : "verbrauch"); }
 function sollAt(it,pid){ return _num(((it&&it.soll)||{})[pid]); }
@@ -168,6 +182,16 @@ function shortages(it){
   return Object.keys((it&&it.soll)||{}).filter(pid=>placeOf(pid) && sollAt(it,pid)>0 && _num((it.stock||{})[pid])<sollAt(it,pid))
     .map(pid=>{ const ist=_num((it.stock||{})[pid]), soll=sollAt(it,pid); return {pid, ist, soll, fehlt:soll-ist}; });
 }
+// Fester Bestand: Ein Ort mit Soll-Bestand gilt für diesen Artikel als „fest ausgestattet" (z. B. Erste Hilfe
+// auf Boot Rot). Dort kann jeder Verbrauch melden; beim Ausgeben/Verschicken wird nur der Überschuss über
+// dem Soll angeboten, Orte ohne Soll (Büro) zuerst. So bleibt derselbe Artikel im Büro normal bestellbar.
+function freeAt(it,pid){ return Math.max(0, _num(((it&&it.stock)||{})[pid])-sollAt(it,pid)); }
+function freeTotal(it){ return Object.keys((it&&it.stock)||{}).reduce((s,p)=>s+freeAt(it,p),0); }
+function srcPlaces(it, excl){ return Object.keys((it&&it.stock)||{}).filter(p=>p!==excl && freeAt(it,p)>0)
+  .sort((a,b)=>((sollAt(it,a)>0)-(sollAt(it,b)>0)) || (freeAt(it,b)-freeAt(it,a))); }
+function srcLabel(it,p){ const s=sollAt(it,p); return placeLabel(p)+(s?` (${freeAt(it,p)} frei · Soll ${s})`:` (${_num(it.stock[p])})`); }
+// Wo darf „➖ Verbrauch" gemeldet werden? Ausstattung: überall · sonst: Orte mit Soll
+function usePlaces(it){ const all=itemArt(it)==='ausstattung'; return Object.keys((it&&it.stock)||{}).filter(p=>_num(it.stock[p])>0 && (all || sollAt(it,p)>0)); }
 // ── Teams (aus der Zeiterfassung: Akademie, Verwaltung …) ──
 // Artikel und Orte können einem Team gehören. Angezeigt wird weiter alles für alle; Mitteilungen
 // und Zähler an den Reitern gelten aber nur für Mitglieder dieses Teams (User-Vorgabe, gilt auch für
@@ -185,7 +209,7 @@ function orderTeams(o){ return _pos(o).map(p=>_teamOfItemAt(p.itemId?getShop('sh
 function itemTeams(it){ if(it.team) return [it.team];
   const pids=[...new Set([...Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0), ...Object.keys(it.soll||{}).filter(pid=>sollAt(it,pid)>0)])];
   const ts=pids.map(placeTeam); return ts.length?ts:['']; }
-function loanTeams(l){ return [_teamOfItemAt(getShop('shopItems',l.itemId), l.fromPlace)]; }
+function loanTeams(l){ if(l.placeId) return [placeTeam(l.placeId)]; return [_teamOfItemAt(getShop('shopItems',l.itemId), l.fromPlace)]; }
 function forMe(teams){ const mine=myTeams(); if(!mine.length) return true; const ts=(teams||[]); if(!ts.length||ts.some(t=>!t)) return true; return ts.some(t=>mine.includes(t)); }
 // Anzeige-Filter (Bestand, Bestellungen, Fällig): '' = alle, 'mine' = mein Team, sonst Teamname
 let fTeam='';
@@ -308,13 +332,15 @@ export function renderShop(){
     if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
     if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
-    const myDue = allDue().filter(d=>forMe(dueTeams(d)));   // Zähler nur fürs eigene Team
+    const held=myHeld();
+    const myDue = allDue().filter(d=>forMe(dueTeams(d)) || dueHeld(d,held));   // Zähler nur fürs eigene Team + was mir zugeordnet ist
     const nDue = myDue.filter(d=>d.t.datum<=_soonIso(30)).length;
     const nOverDue = myDue.filter(d=>d.t.datum<_todayIso()).length;
     _autoReorder();   // Orte unter Soll → automatische Bestellung (statt Nachfüll-Liste)
     if(TAB==='nachfuellen') TAB='bestellungen';
     const os=orders();
-    const nOpen = mgr ? os.filter(o=>o.status==='offen' && forMe(orderTeams(o))).length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
+    const nOpen = mgr ? os.filter(o=>o.status==='offen' && (forMe(orderTeams(o)) || held.places.has(o.ortId))).length
+      : os.filter(o=>(o.byId===me.id || held.places.has(o.ortId)) && (o.status==='offen'||o.status==='inarbeit')).length;
     const myLoans=activeLoans().filter(l=>mgr ? (l.borrowerId===me.id || forMe(loanTeams(l))) : l.borrowerId===me.id);
     const nLate=myLoans.filter(_overdue).length;
     const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
@@ -394,7 +420,8 @@ function _itemsGrid(mgr){
         return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:#c0392b">(${nOver} überfällig)</b>`:''}</div>`; })():''}
       <div class="shop-act">
         ${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} ＋</button>`:''}
-        ${art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
+        ${!isEinzeln(it)&&usePlaces(it).length||isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
+        ${mgr&&art==='ausstattung'&&!isEinzeln(it)&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="Einem Mitarbeiter / Verein zuordnen">🔁 Zuordnen</button>`:''}
         ${mgr&&isEinzeln(it)?`<button class="shop-btn sm" onclick="shopUnits(${jsq(it.id)})">🏷️ Stücke (${unitsOf(it).length})</button>`:''}
         ${mgr&&!isEinzeln(it)?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
         <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>`:''}
@@ -442,7 +469,7 @@ function shopItemEdit(id){
         <input type="radio" name="si-art" value="${k}" ${itemArt(v)===k?'checked':''} style="width:auto;margin-top:2px"><span><b>${ARTEN[k].i} ${ARTEN[k].l}</b> – ${ARTEN[k].d}</span></label>`).join('')}</div>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="si-einzeln" ${v.einzeln?'checked':''} style="width:auto;margin-top:2px">
       <span><b>🏷️ Einzeln erfassen</b> – jedes Stück mit eigener Bezeichnung, Ort und eigenen Terminen (Ablaufdatum, Prüfung …), z. B. Rettungswesten, Erste-Hilfe-Päckchen. Vorhandener Bestand wird dabei automatisch in Stücke umgewandelt.</span></label>
-    ${pls.length?`<div class="shop-f"><label>Soll-Bestand je Ort <span style="font-weight:400;color:var(--muted)">(optional – darunter erscheint der Ort unter „⚠ Nachfüllen")</span></label>
+    ${pls.length?`<div class="shop-f"><label>Soll-Bestand je Ort <span style="font-weight:400;color:var(--muted)">(optional – fester Bestand dort: jeder kann Verbrauch melden, darunter wird automatisch nachbestellt; ausgegeben wird nur, was darüber liegt)</span></label>
       <div class="shop-f2">${pls.map(p=>`<div><span style="font-size:12px">${esc(placeLabel(p.id))}</span><input type="number" min="0" step="1" class="shop-soll" data-pl="${esc(p.id)}" placeholder="–" value="${_num((v.soll||{})[p.id])||''}"></div>`).join('')}</div></div>`:''}
     ${initStock}
     <div class="modal-btns">
@@ -571,8 +598,8 @@ function shopUse(id){
 { const _it=getShop('shopItems',id); if(isEinzeln(_it)) return _unitUse(_it); }
   if(!canUse()) return;
   const it=getShop('shopItems',id); if(!it) return;
-  const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
-  if(!from.length){ toast('Kein Bestand vorhanden.','err'); return; }
+  const from=usePlaces(it);
+  if(!from.length){ toast('Kein fester Bestand an einem Ort vorhanden.','err'); return; }
   const def=from.includes(fPlace)?fPlace:from[0];
   openModal(`<h3>➖ Verbrauch melden</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b></p>
     <div class="shop-f2"><div class="shop-f"><label>Wo?</label><select id="su-pl">${from.map(p=>`<option value="${esc(p)}"${p===def?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
@@ -712,9 +739,9 @@ function _cartPaint(){
 let _posMode='';
 function _posEditorHtml(mode){
   _posMode=mode;
-  const its=items().filter(i=>itemArt(i)!=='ausstattung' && !isEinzeln(i) && (mode!=='send'||inPlaces(i)>0));
+  const its=items().filter(i=>itemArt(i)!=='ausstattung' && !isEinzeln(i) && (mode!=='send'||freeTotal(i)>0));
   return `<div class="shop-f"><label>Positionen *</label><div id="shop-pos" class="shop-pos"></div>
-    <div class="shop-posadd"><select id="pos-item"><option value="">＋ Artikel hinzufügen …</option>${its.map(i=>`<option value="${esc(i.id)}">${i.leihbar?'🔁 ':''}${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}${mode==='send'?` (${inPlaces(i)} verfügbar)`:''}</option>`).join('')}</select>
+    <div class="shop-posadd"><select id="pos-item"><option value="">＋ Artikel hinzufügen …</option>${its.map(i=>`<option value="${esc(i.id)}">${i.leihbar?'🔁 ':''}${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}${mode==='send'?` (${freeTotal(i)} verfügbar)`:''}</option>`).join('')}</select>
       <input id="pos-qty" type="number" min="1" step="1" value="1" style="width:70px"><button type="button" class="shop-btn sm" onclick="shopPosAddSel()">＋</button></div>
     ${mode==='order'?`<div class="shop-posadd"><input id="pos-free" placeholder="Freier Wunsch (nicht im Katalog), z. B. 200 Visitenkarten für mich" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('pos-free');}"><button type="button" class="shop-btn sm" onclick="shopCartAddFree('pos-free')">＋</button></div>`:''}</div>`;
 }
@@ -724,9 +751,10 @@ function _posPaint(){
   if(!a.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">Noch keine Position – unten hinzufügen.</div>'; }
   else box.innerHTML=a.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
     let src='';
-    if(_posMode==='send' && it){ const fr=Object.keys(it.stock||{}).filter(x=>_num(it.stock[x])>0);
+    if(_posMode==='send' && it){ const fr=srcPlaces(it);
       if(!p.from||!fr.includes(p.from)) p.from=fr[0]||'';
-      src=`<select onchange="shopCartFrom(${jsq(p.key)},this.value)" title="Aus Ort">${fr.map(x=>`<option value="${esc(x)}"${x===p.from?' selected':''}>${esc(placeLabel(x))} (${_num(it.stock[x])})</option>`).join('')}</select>`; }
+      src=fr.length?`<select onchange="shopCartFrom(${jsq(p.key)},this.value)" title="Aus Ort">${fr.map(x=>`<option value="${esc(x)}"${x===p.from?' selected':''}>${esc(srcLabel(it,x))}</option>`).join('')}</select>`
+        :`<span style="font-size:12px;color:#c0392b">kein freier Bestand</span>`; }
     return `<div class="shop-pos-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>${src}
       <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
       <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="shopCartDel(${jsq(p.key)})">✕</button></div>`; }).join('');
@@ -873,7 +901,7 @@ function _orderRecipient(o){
 function _ordersHtml(mgr){
   const me=_me();
   if(mgr) _backfillDirectOrders();   // frühere Direkt-Versendungen einmalig nachtragen
-  let os=orders(); if(!mgr) os=os.filter(o=>o.byId===me.id);
+  let os=orders(); if(!mgr){ const hp=myHeld().places; os=os.filter(o=>o.byId===me.id || (o.ortId && hp.has(o.ortId))); }   // + Bestellungen für den Ort, der mir zugeordnet ist
   if(mgr && fTeam) os=os.filter(o=>_teamMatch(orderTeams(o)));
   const act=o=>o.status==='offen'||o.status==='inarbeit';
   if(fOrd==='aktiv') os=os.filter(act); else if(fOrd==='fertig') os=os.filter(o=>!act(o));
@@ -969,14 +997,14 @@ function shopOrderIssue(id){
     const it=p.itemId?getShop('shopItems',p.itemId):null;
     if(it && isEinzeln(it)) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:var(--muted)">einzeln erfasst – über „🏷️ Stücke" ausgeben</span></div>`;
     if(!it) return `<div class="shop-pos-row"><span class="nm">✏️ ${esc(p.itemName||p.freitext||'?')} · ${_num(p.menge)}</span><span style="font-size:12px;color:var(--muted)">${p.itemId?'Artikel gelöscht':'freier Wunsch – manuell erledigen'}</span></div>`;
-    const from=Object.keys(it.stock||{}).filter(x=>_num(it.stock[x])>0 && (!canMoveTo || x!==o.ortId));
-    if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:#c0392b">kein Bestand</span></div>`;
+    const from=srcPlaces(it, canMoveTo?o.ortId:null);
+    if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:#c0392b">${inPlaces(it)?'kein freier Bestand (nur fester Bestand an Orten)':'kein Bestand'}</span></div>`;
     anyRow=true;
     // Vorwahl nach Ziel: Ort → umlagern · Person/Verein → Leihmaterial verleihen, sonst verschicken
     const def = canMoveTo ? 'move' : (it.leihbar ? 'leihe' : 'versand');
     const opt=(v,l)=>`<option value="${v}"${def===v?' selected':''}>${l}</option>`;
     return `<div class="shop-pos-row" data-i="${i}"><span class="nm">${it.leihbar?'🔁 ':''}${esc(itemLabel(it))}</span>
-      <select class="si-from" title="Aus Ort">${from.map(x=>`<option value="${esc(x)}">${esc(placeLabel(x))} (${_num(it.stock[x])})</option>`).join('')}</select>
+      <select class="si-from" title="Aus Ort">${from.map(x=>`<option value="${esc(x)}">${esc(srcLabel(it,x))}</option>`).join('')}</select>
       <input class="si-qty" type="number" min="1" step="1" value="${_num(p.menge)||1}" title="Menge">
       <select class="si-mode" onchange="shopIssueModeChg()" title="Was passiert?">
         ${canMoveTo?opt('move',`⇄ nach ${esc(placeLabel(o.ortId))}`):''}
@@ -1011,7 +1039,7 @@ function shopOrderIssueSave(id){
   const need={};
   for(const r of rows){ const it=getShop('shopItems',ps[r.i].itemId); if(!it){ toast('Ein Artikel existiert nicht mehr.','err'); return; }
     const k=it.id+'|'+r.from; need[k]=(need[k]||0)+r.q;
-    if(need[k]>_num((it.stock||{})[r.from])){ toast(`${itemLabel(it)}: am Ort ${placeLabel(r.from)} sind nur ${_num((it.stock||{})[r.from])} vorhanden.`,'err'); return; } }
+    if(need[k]>freeAt(it,r.from)){ toast(`${itemLabel(it)}: am Ort ${placeLabel(r.from)} sind nur ${freeAt(it,r.from)} frei${sollAt(it,r.from)?' (Rest ist fester Bestand)':''}.`,'err'); return; } }
   const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
   const rc=_orderRecipient(o); const cu=_me(); const issued=[];
   rows.forEach(r=>{
@@ -1100,20 +1128,68 @@ function _whoRead(px){
 function shopLend(itemId){
   if(!canManage()) return;
   const it=getShop('shopItems',itemId); if(!it) return;
-  if(isEinzeln(it)){ toast('Einzeln erfasste Artikel werden über „🏷️ Stücke" verwaltet.','err'); return; }
-  if(!it.leihbar){ toast('Verbrauchsmaterial wird nicht verliehen – bitte „📤 Verschicken" nutzen (oder den Artikel als Leihmaterial markieren).','err'); return; }
+  if(isEinzeln(it)){ shopUnits(itemId); toast('Einzelne Stücke über „🔁" in der Stückliste zuordnen.','ok'); return; }
+  if(!it.leihbar && itemArt(it)!=='ausstattung'){ toast('Verbrauchsmaterial wird nicht verliehen – bitte „📤 Verschicken" nutzen (oder den Artikel als Leihmaterial markieren).','err'); return; }
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Gerade nichts verfügbar – alles verliehen oder kein Bestand.','err'); return; }
-  openModal(`<h3>🔁 Verleihen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar · kommt zurück</p>
+  const aus=itemArt(it)==='ausstattung';
+  openModal(_lendModalHtml(aus?'🔁 Zuordnen / Ausleihen':'🔁 Verleihen', `<b>${esc(itemLabel(it))}</b> · ${inPlaces(it)} verfügbar`,
+    `<div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="sl-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
+      <div class="shop-f"><label>Menge</label><input id="sl-qty" type="number" min="1" step="1" value="1"></div></div>`,
+    `shopLendSave(${jsq(itemId)})`, aus));
+}
+// Gemeinsames Fenster für Verleihen / Zuordnen (Artikel, Stück, beweglicher Ort)
+function _lendModalHtml(title, sub, middle, saveCall, permDefault){
+  return `<h3>${title}</h3><p style="font-size:13px;margin:0 0 10px">${sub}</p>
     ${_whoPickerHtml('sl')}
-    <div class="shop-f2"><div class="shop-f"><label>Aus Ort</label><select id="sl-from">${from.map(p=>`<option value="${esc(p)}"${fPlace===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
-      <div class="shop-f"><label>Menge</label><input id="sl-qty" type="number" min="1" step="1" value="1"></div></div>
-    <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis <span id="sl-due-req">*</span></label><input id="sl-due" type="date" min="${_todayIso()}">
-        <label style="display:flex;gap:6px;align-items:center;font-weight:400;margin-top:5px;cursor:pointer"><input type="checkbox" id="sl-perm" style="width:auto" onchange="const d=document.getElementById('sl-due');d.disabled=this.checked;if(this.checked)d.value='';document.getElementById('sl-due-req').style.display=this.checked?'none':''"> Dauerleihe (ohne Rückgabedatum)</label></div>
+    ${middle||''}
+    <div class="shop-f2"><div class="shop-f"><label>Rückgabe bis <span id="sl-due-req"${permDefault?' style="display:none"':''}>*</span></label><input id="sl-due" type="date" min="${_todayIso()}"${permDefault?' disabled':''}>
+        <label style="display:flex;gap:6px;align-items:center;font-weight:400;margin-top:5px;cursor:pointer"><input type="checkbox" id="sl-perm" style="width:auto"${permDefault?' checked':''} onchange="const d=document.getElementById('sl-due');d.disabled=this.checked;if(this.checked)d.value='';document.getElementById('sl-due-req').style.display=this.checked?'none':''"> Dauerhaft zugeordnet (ohne Rückgabedatum)</label></div>
       <div class="shop-f"><label>Wofür / Anlass</label><input id="sl-anlass" placeholder="z. B. Regatta, Messe, fester Standort"></div></div>
-    <div class="shop-f"><label>Notiz</label><input id="sl-note" placeholder="z. B. Zustand bei Ausgabe, Zubehör"></div>
+    <div class="shop-f"><label>Notiz</label><input id="sl-note" placeholder="z. B. Zustand bei Ausgabe, Zubehör, Kilometerstand"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-    <button class="btn btn-primary" onclick="shopLendSave(${jsq(itemId)})">Verleihen</button></div>`);
+    <button class="btn btn-primary" onclick="${saveCall}">Zuordnen</button></div>`;
+}
+function _lendCommon(){
+  const w=_whoRead('sl'); if(!w) return null;
+  const perm=!!(document.getElementById('sl-perm')||{}).checked, due=perm?'':_val('sl-due');
+  if(!due && !perm){ toast('Bitte ein Rückgabedatum angeben – oder „Dauerhaft zugeordnet" anhaken.','err'); return null; }
+  return Object.assign(w,{ due, anlass:_val('sl-anlass'), note:_val('sl-note') });
+}
+function _newLoan(extra, c){
+  const cu=_me();
+  const l=Object.assign({ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', qty:1, fromPlace:null,
+    borrowerId:c.bId||null, borrowerRef:c.bRef||null, borrowerName:c.bName||'?', due:c.due||'', anlass:c.anlass||'', note:c.note||'',
+    orderId:null, status:'aktiv', returns:[], ackBorrower: !c.bId || c.bId===cu.id }, extra);
+  saveShop('shopLoans', l); return l;
+}
+const _lendTxt=c=>'an '+c.bName+(c.due?' bis '+_fmtDate(c.due):' (dauerhaft)')+(c.anlass?' · '+c.anlass:'');
+// Beweglichen Ort (Bus, Boot, Anhänger) zuordnen – Inhalt bleibt am Ort gebucht und „fährt mit"
+function shopLendPlace(pid){
+  if(!canManage()) return;
+  const p=placeOf(pid); if(!p) return;
+  if(placeLoan(pid)){ toast(`${p.name} ist schon zugeordnet – erst zurückgeben.`,'err'); return; }
+  const n=items().reduce((s,i)=>s+_num((i.stock||{})[pid]),0);
+  openModal(_lendModalHtml(`🚩 ${esc(placeLabel(pid))} zuordnen / ausleihen`, `Der Inhalt (${n} Teile) fährt mit und bleibt am Ort gebucht.`, '', `shopLendPlaceSave(${jsq(pid)})`, false));
+}
+function shopLendPlaceSave(pid){
+  const p=placeOf(pid); if(!p||!canManage()) return; const c=_lendCommon(); if(!c) return;
+  _newLoan({ placeId:pid, itemId:null, itemName:placeLabel(pid) }, c); _logPlace(p,'verleih',_lendTxt(c));
+  closeModal(); toast(`${p.name} → ${c.bName} ✓`,'ok'); renderShop();
+}
+// Einzelnes Stück (z. B. Rettungsweste „Anna") zuordnen – liegt dann an keinem Ort, behält seine Termine
+function shopLendUnit(itemId, unitId){
+  if(!canManage()) return;
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
+  if(unitLoan(unitId)){ toast('Dieses Stück ist schon zugeordnet.','err'); return; }
+  openModal(_lendModalHtml('🏷️ Stück zuordnen / ausleihen', `<b>${esc(_unitTitle(it,u))}</b> · liegt ${esc(placeLabel(u.placeId))}`, '', `shopLendUnitSave(${jsq(itemId)},${jsq(unitId)})`, true));
+}
+function shopLendUnitSave(itemId, unitId){
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u||!canManage()) return;
+  const c=_lendCommon(); if(!c) return;
+  const from=u.placeId||null; u.placeId=''; _syncStock(it); saveShop('shopItems', it);
+  _newLoan({ itemId, unitId, itemName:_unitTitle(it,u), fromPlace:from }, c); _log(it,'verleih',1,from,null,u.nr+' '+_lendTxt(c));
+  closeModal(); toast(`${u.nr} → ${c.bName} ✓`,'ok'); renderShop();
 }
 function shopLendSave(itemId){
   const it=getShop('shopItems',itemId); if(!it) return;
@@ -1131,14 +1207,32 @@ function shopLendSave(itemId){
 function shopPickItem(mode){
   if(!canManage()) return;
   const lend=mode==='lend';
-  const list=items().filter(i=>inPlaces(i)>0 && (!lend || i.leihbar));
-  if(!list.length){ toast(lend?'Kein Leihmaterial mit verfügbarem Bestand.':'Kein Artikel mit Bestand.','err'); return; }
-  openModal(`<h3>${lend?'🔁 Verleihen':'📤 Direkt verschicken'} – welcher Artikel?</h3>
+  if(lend){
+    // Zuordnen/Verleihen: Leihmaterial + Ausstattung (Mengen) · bewegliche Orte · einzelne Stücke
+    const its=items().filter(i=>!isEinzeln(i) && inPlaces(i)>0 && (i.leihbar || itemArt(i)==='ausstattung'));
+    const pls=places().filter(p=>isMovable(p) && !placeLoan(p.id));
+    const us=items().filter(isEinzeln).flatMap(it=>unitsOf(it).filter(u=>u.placeId && !unitLoan(u.id)).map(u=>({it,u})));
+    if(!its.length && !pls.length && !us.length){ toast('Nichts zum Zuordnen verfügbar.','err'); return; }
+    openModal(`<h3>🔁 Zuordnen / Verleihen – was?</h3>
+      <div class="shop-f"><label>Was?</label><select id="spi-item">
+        ${pls.length?`<optgroup label="🚩 Fahrzeuge, Boote, Anhänger (mit Inhalt)">${pls.map(p=>`<option value="${esc('p|'+p.id)}">${esc(placeLabel(p.id))}</option>`).join('')}</optgroup>`:''}
+        ${its.length?`<optgroup label="🔁 Leihmaterial & 🧰 Ausstattung">${its.map(i=>`<option value="${esc('i|'+i.id)}">${esc(itemLabel(i))} (${inPlaces(i)} verfügbar)</option>`).join('')}</optgroup>`:''}
+        ${us.length?`<optgroup label="🏷️ Einzelne Stücke">${us.map(x=>`<option value="${esc('u|'+x.it.id+'|'+x.u.id)}">${esc(_unitTitle(x.it,x.u))} – ${esc(placeLabel(x.u.placeId))}</option>`).join('')}</optgroup>`:''}
+      </select></div>
+      <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="shopPickLendGo(document.getElementById('spi-item').value)">Weiter</button></div>`);
+    return;
+  }
+  const list=items().filter(i=>inPlaces(i)>0);
+  if(!list.length){ toast('Kein Artikel mit Bestand.','err'); return; }
+  openModal(`<h3>📤 Direkt verschicken – welcher Artikel?</h3>
     <div class="shop-f"><label>Artikel</label><select id="spi-item">${list.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''} (${inPlaces(i)} verfügbar)</option>`).join('')}</select></div>
-    ${lend?'':'<p style="font-size:12px;color:var(--muted);margin:0">Leihmaterial, das zurückkommen soll, besser über „🔁 Ausleihen" → „Verleihen".</p>'}
+    <p style="font-size:12px;color:var(--muted);margin:0">Leihmaterial, das zurückkommen soll, besser über „🔁 Ausleihen" → „Verleihen".</p>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-    <button class="btn btn-primary" onclick="${lend?'shopLend':'shopSend'}(document.getElementById('spi-item').value)">Weiter</button></div>`);
+    <button class="btn btn-primary" onclick="shopSend(document.getElementById('spi-item').value)">Weiter</button></div>`);
 }
+function shopPickLendGo(v){ const [k,a,b]=String(v||'').split('|');
+  if(k==='p') shopLendPlace(a); else if(k==='u') shopLendUnit(a,b); else if(k==='i') shopLend(a); }
 // ── Direkt verschicken – MEHRERE Artikel aus dem Korb an EIN Ziel (Verwalter) ──
 function shopCartSend(){
   if(!canManage()) return;
@@ -1159,12 +1253,12 @@ function shopCartSendSave(){
   const pos=cartGet().filter(p=>p.itemId && !isEinzeln(getShop('shopItems',p.itemId)));
   if(!pos.length){ toast('Bitte mindestens einen Artikel hinzufügen.','err'); return; }
   // Quell-Orte aus dem Fenster übernehmen + alles prüfen, bevor gebucht wird
-  const rows=pos.map(p=>{ const it=getShop('shopItems',p.itemId); const fr=Object.keys((it&&it.stock)||{}).filter(x=>_num(it.stock[x])>0);
+  const rows=pos.map(p=>{ const it=getShop('shopItems',p.itemId); const fr=it?srcPlaces(it):[];
     return { it, from:(p.from&&fr.includes(p.from))?p.from:fr[0], q:Math.max(1,Math.round(_num(p.menge))||1) }; });
   const need={};
-  for(const r of rows){ if(!r.it||!r.from){ toast(`${r.it?itemLabel(r.it):'Artikel'}: kein Bestand.`,'err'); return; }
+  for(const r of rows){ if(!r.it||!r.from){ toast(`${r.it?itemLabel(r.it):'Artikel'}: kein freier Bestand.`,'err'); return; }
     const k=r.it.id+'|'+r.from; need[k]=(need[k]||0)+r.q;
-    if(need[k]>_num(r.it.stock[r.from])){ toast(`${itemLabel(r.it)}: am Ort ${placeLabel(r.from)} sind nur ${_num(r.it.stock[r.from])} vorhanden.`,'err'); return; } }
+    if(need[k]>freeAt(r.it,r.from)){ toast(`${itemLabel(r.it)}: am Ort ${placeLabel(r.from)} sind nur ${freeAt(r.it,r.from)} frei${sollAt(r.it,r.from)?' (Rest ist fester Bestand)':''}.`,'err'); return; } }
   const cu=_me(), anlass=_val('ss-anlass'), note=_val('ss-note'), how=_val('ss-how');
   const adr=w.bRef?_crmAddress(w.bRef):(w.bId?userAddress(w.bId):'');
   const ts=Date.now(); const oid=newId();
@@ -1247,6 +1341,13 @@ function _recipLabel(l){ if(!l.recipientName) return ''; return bLabel({borrower
 function shopReturn(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
   const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
+  if(l.placeId){   // beweglicher Ort: einfach zurück (Inhalt war ja die ganze Zeit am Ort gebucht)
+    openModal(`<h3>↩ Zurückgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(placeLabel(l.placeId))}</b> · bei ${esc(bLabel(l))}${l.due?' · bis '+_fmtDate(l.due):''}</p>
+      <div class="shop-f"><label>Zustand / Notiz</label><input id="sr-note" placeholder="z. B. alles ok, Kilometerstand, Schaden am Rücklicht"></div>
+      <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="shopReturnSave(${jsq(loanId)})">Zurückgeben</button></div>`);
+    return;
+  }
   const pls=places(); if(!pls.length){ toast('Es gibt keinen Ort für die Rückgabe.','err'); return; }
   const def=placeOf(l.fromPlace)?l.fromPlace:pls[0].id;
   openModal(`<h3>↩ Zurückgeben</h3><p style="font-size:13px;margin:0 0 10px"><b>${_num(l.qty)}× ${esc(l.itemName||'')}</b> · ausgeliehen von ${esc(bLabel(l))}${l.due?' · bis '+_fmtDate(l.due):''}</p>
@@ -1258,11 +1359,19 @@ function shopReturn(loanId){
 }
 function shopReturnSave(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
+  const cu=_me();
+  if(l.placeId){ const note=_val('sr-note'); const p=placeOf(l.placeId);
+    if(p) _logPlace(p,'rueckgabe','von '+bName(l)+(note?' · '+note:''));
+    if(!Array.isArray(l.returns)) l.returns=[];
+    l.returns.push({ ts:Date.now(), qty:1, to:l.placeId, note, byId:cu.id||'', byName:cu.name||'' });
+    l.qty=0; l.status='zurueck'; l.returnedTs=Date.now(); saveShop('shopLoans', l);
+    closeModal(); toast('Zurückgegeben ✓','ok'); renderShop(); return; }
   const to=_val('sr-to'), q=Math.round(_num(_val('sr-qty'))), note=_val('sr-note'), open=_num(l.qty);
   if(q<=0||q>open){ toast(`Bitte eine Menge zwischen 1 und ${open} eingeben.`,'err'); return; }
   const it=getShop('shopItems',l.itemId);
-  if(it){ _applyDelta(it, to, q); saveShop('shopItems', it); _log(it,'rueckgabe',q,null,to,'von '+bName(l)+(note?' · '+note:'')); }
-  const cu=_me();
+  if(it && l.unitId){ const u=it.units&&it.units[l.unitId];
+    if(u){ u.placeId=to; _syncStock(it); saveShop('shopItems', it); _log(it,'rueckgabe',1,null,to,u.nr+' von '+bName(l)+(note?' · '+note:'')); } }
+  else if(it){ _applyDelta(it, to, q); saveShop('shopItems', it); _log(it,'rueckgabe',q,null,to,'von '+bName(l)+(note?' · '+note:'')); }
   if(!Array.isArray(l.returns)) l.returns=[];
   l.returns.push({ ts:Date.now(), qty:q, to, note, byId:cu.id||'', byName:cu.name||'' });
   l.qty=open-q;
@@ -1296,19 +1405,19 @@ function _loansHtml(mgr){
     const late=_overdue(l); const ret=Array.isArray(l.returns)?l.returns:[];
     const canRet=l.status==='aktiv' && (mgr || l.borrowerId===me.id);
     return `<div class="shop-row"${late?' style="border-color:#e5484d"':''}><div class="main">
-      <div class="t">🔁 ${_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0)}× ${esc(l.itemName||'?')}
+      <div class="t">${loanIcon(l)} ${(l.placeId||l.unitId)?'':(_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0))+'× '}${esc(l.placeId?placeLabel(l.placeId):(l.itemName||'?'))}${l.placeId?' <span style="font-weight:400;font-size:12px;color:var(--muted)">mit Inhalt</span>':''}
         ${l.status==='aktiv'?(late?'<span class="shop-st" style="background:#c0392b">Überfällig</span>':'<span class="shop-st" style="background:#2563eb">Ausgeliehen</span>'):'<span class="shop-st" style="background:#16a34a">Zurück</span>'}</div>
-      <div class="m">${(mgr||l.borrowerId!==me.id)?`an <b>${esc(bLabel(l))}</b> · `:'an <b>dich</b> · '}seit ${_fmtTs(l.ts)} aus ${esc(placeLabel(l.fromPlace))}
-        ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:(l.status==='aktiv'?' · Dauerleihe':'')}${l.anlass?` · ${esc(l.anlass)}`:''}
+      <div class="m">${(mgr||l.borrowerId!==me.id)?`an <b>${esc(bLabel(l))}</b> · `:'an <b>dich</b> · '}seit ${_fmtTs(l.ts)}${l.fromPlace?' aus '+esc(placeLabel(l.fromPlace)):''}
+        ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:(l.status==='aktiv'?' · dauerhaft zugeordnet':'')}${l.anlass?` · ${esc(l.anlass)}`:''}
         ${l.note?`<br>📝 ${esc(l.note)}`:''}
-        ${ret.map(r=>`<br>↩ ${_num(r.qty)} zurück nach ${esc(placeLabel(r.to))} · ${_fmtTs(r.ts)} (${esc(r.byName||'')})${r.note?' – '+esc(r.note):''}`).join('')}</div></div>
+        ${ret.map(r=>`<br>↩ ${l.placeId?'zurück':`${_num(r.qty)} zurück nach ${esc(placeLabel(r.to))}`} · ${_fmtTs(r.ts)} (${esc(r.byName||'')})${r.note?' – '+esc(r.note):''}`).join('')}</div></div>
       ${canRet?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>
         ${mgr?`<button class="shop-btn sm" onclick="shopLoanDue(${jsq(l.id)})">📅 ${l.due?'Verlängern':'Datum setzen'}</button>`:''}</div>`:''}</div>`;
   }).join('');
   const nMine=loans().filter(l=>l.status==='aktiv'&&l.borrowerId===me.id).length;
   const seg=[['aktiv','Gerade ausgeliehen (alle)']].concat(mgr?[]:[['meine','Meine'+(nMine?` (${nMine})`:'')]]).concat([['zurueck','Zurückgegeben']]);
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fLoan===s[0]?'on':''}" onclick="shopSetLoan(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
-      <span class="shop-sp"></span>${mgr?`<button class="shop-btn pri" onclick="shopPickItem('lend')">🔁 Verleihen</button>`
+      <span class="shop-sp"></span>${mgr?`<button class="shop-btn pri" onclick="shopPickItem('lend')" title="Leihmaterial, Ausstattung, einzelne Stücke oder Fahrzeuge/Boote/Anhänger">🔁 Zuordnen / Verleihen</button>`
         :`<button class="shop-btn pri" onclick="shopOrderNew('')" title="Leihmaterial anfragen – mit Rückgabedatum">🔁 Ausleihen anfragen</button>`}</div>
     <div class="shop-list">${rows||`<div class="shop-empty">${fLoan==='aktiv'?'Gerade ist nichts ausgeliehen.':fLoan==='meine'?'Du hast gerade nichts ausgeliehen.':'Noch keine Rückgaben.'}</div>`}</div>`;
 }
@@ -1348,8 +1457,8 @@ function nextTermin(termine){ return (termine||[]).filter(t=>t&&t.datum).sort((a
 function allDue(){
   const out=[];
   items().filter(isEinzeln).forEach(it=>unitsOf(it).forEach(u=>(u.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'u|'+it.id+'|'+u.id+'|'+t.id, kind:'unit', itemId:it.id, unitId:u.id, placeId:u.placeId, t,
-    title:_unitTitle(it,u), where:placeLabel(u.placeId)+(u.marke?' · '+u.marke:'') }); })));
-  places().forEach(p=>(p.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:'' }); }));
+    title:_unitTitle(it,u), where:(u.placeId?placeLabel(u.placeId):(()=>{ const ul=unitLoan(u.id); return ul?'🏷️ bei '+bName(ul):'–'; })())+(u.marke?' · '+u.marke:'') }); })));
+  places().forEach(p=>(p.termine||[]).forEach(t=>{ if(t&&t.datum){ const pl=placeLoan(p.id); out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:pl?'🚩 bei '+bName(pl):'' }); } }));
   return out.sort((a,b)=>a.t.datum.localeCompare(b.t.datum));
 }
 
@@ -1403,11 +1512,12 @@ function shopUnits(itemId){
   const brandBar=brands.length?`<div class="shop-posadd" style="margin:0 0 6px"><span style="font-size:12px">Marke / Modell:</span>
       <select onchange="shopUnitBrand(${jsq(it.id)},this.value)"><option value="">Alle (${all.length})</option>${brands.map(b=>`<option value="${esc(b)}"${f===b?' selected':''}>${esc(b)} (${all.filter(u=>u.marke===b).length})</option>`).join('')}${all.some(u=>!u.marke)?`<option value="—"${f==='—'?' selected':''}>ohne Angabe (${all.filter(u=>!u.marke).length})</option>`:''}</select>
       <label style="font-size:12px;display:flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer"><input type="checkbox" style="width:auto" ${us.length&&us.every(u=>_unitSel.has(u.id))?'checked':''} onchange="shopUnitSelAll(${jsq(it.id)},this.checked)"> alle angezeigten markieren</label></div>`:'';
-  const rows=us.map(u=>{ const nt=nextTermin(u.termine);
-    return `<div class="shop-pos-row"><input type="checkbox" style="width:auto" ${_unitSel.has(u.id)?'checked':''} onchange="shopUnitSel(${jsq(u.id)},this.checked)">
+  const rows=us.map(u=>{ const nt=nextTermin(u.termine); const ul=unitLoan(u.id);
+    return `<div class="shop-pos-row"><input type="checkbox" style="width:auto" ${_unitSel.has(u.id)?'checked':''} ${ul?'disabled title="zugeordnet – erst zurückgeben"':''} onchange="shopUnitSel(${jsq(u.id)},this.checked)">
       <span class="nm"><b>${esc(u.nr||'?')}</b>${_brandChip(u)}${u.serial?` <span style="color:var(--muted);font-size:11px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:11px">· ${esc(u.note)}</span>`:''}</span>
-      <span style="font-size:12px;white-space:nowrap">${esc(placeLabel(u.placeId))}</span>
+      <span style="font-size:12px;white-space:nowrap">${ul?`<b style="color:${_overdue(ul)?'#c0392b':'#2563eb'}">🏷️ bei ${esc(bName(ul))}</b>`:esc(placeLabel(u.placeId))}</span>
       ${nt?dueBadge(nt):'<span style="font-size:11px;color:var(--muted)">kein Termin</span>'}
+      ${ul?`<button type="button" class="shop-btn sm ok" title="Zurückgeben" onclick="shopReturn(${jsq(ul.id)})">↩</button>`:`<button type="button" class="shop-btn sm" title="Einer Person / einem Verein zuordnen" onclick="shopLendUnit(${jsq(it.id)},${jsq(u.id)})">🔁</button>`}
       <button type="button" class="shop-btn sm" onclick="shopUnitEdit(${jsq(it.id)},${jsq(u.id)})">✎</button>
       <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');
   openModal(`<h3>🏷️ Stücke – ${esc(itemLabel(it))}</h3>
@@ -1421,7 +1531,7 @@ function shopUnits(itemId){
 function shopUnitSel(uid,on){ if(on) _unitSel.add(uid); else _unitSel.delete(uid); const s=document.getElementById('su-selcount'); if(s) s.textContent=`Markierte (${_unitSel.size}) verschieben nach`; }
 function shopUnitsMove(itemId){
   const it=getShop('shopItems',itemId); if(!it) return;
-  const to=_val('su-moveto'); const ids=[..._unitSel].filter(id=>(it.units||{})[id] && it.units[id].placeId!==to);
+  const to=_val('su-moveto'); const ids=[..._unitSel].filter(id=>(it.units||{})[id] && it.units[id].placeId!==to && !unitLoan(id));
   if(!ids.length){ toast('Bitte Stücke anhaken (die nicht schon dort liegen).','err'); return; }
   const byFrom={}; ids.forEach(id=>{ const u=it.units[id]; (byFrom[u.placeId]=byFrom[u.placeId]||[]).push(u.nr); u.placeId=to; });
   _syncStock(it); saveShop('shopItems', it);
@@ -1460,7 +1570,7 @@ function shopUnitEdit(itemId, unitId){
     <div class="shop-f2"><div class="shop-f"><label>Bezeichnung * <span style="font-weight:400;color:var(--muted)">(z. B. eingestickter Name)</span></label><input id="ue-nr" value="${esc(u.nr||'')}"></div>
       <div class="shop-f"><label>Marke / Modell</label><input id="ue-marke" list="ue-brands" value="${esc(u.marke||'')}" placeholder="z. B. Secumar 275" autocomplete="off">${_brandDatalist('ue-brands')}</div></div>
     <div class="shop-f"><label>Seriennummer</label><input id="ue-serial" value="${esc(u.serial||'')}" placeholder="optional"></div>
-    <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('ue-pl', u.placeId, false)}</div>
+    <div class="shop-f2"><div class="shop-f"><label>Ort</label>${unitLoan(u.id)?`<div style="font-size:13px;padding:6px 0">🏷️ bei <b>${esc(bName(unitLoan(u.id)))}</b> – Rückgabe über „↩"</div>`:_placeSelect('ue-pl', u.placeId, false)}</div>
       <div class="shop-f"><label>Notiz</label><input id="ue-note" value="${esc(u.note||'')}" placeholder="z. B. Größe L, Farbe"></div></div>
     ${_termEditorHtml('ue', u.termine)}
     <div class="modal-btns"><button class="btn btn-outline" onclick="shopUnits(${jsq(itemId)})">Zurück</button>
@@ -1469,7 +1579,7 @@ function shopUnitEdit(itemId, unitId){
 function shopUnitSave(itemId, unitId){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   const nr=_val('ue-nr'); if(!nr){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
-  const to=_val('ue-pl'), from=u.placeId;
+  const from=u.placeId, to=unitLoan(unitId)?from:_val('ue-pl');   // zugeordnet → Ort bleibt leer bis zur Rückgabe
   Object.assign(u,{ nr, marke:_val('ue-marke'), serial:_val('ue-serial'), note:_val('ue-note'), placeId:to, termine:_termRead('ue', u.termine) });
   _syncStock(it); saveShop('shopItems', it);
   if(to!==from) _log(it,'umlagern',1,from,to,'Stück: '+nr);
@@ -1479,7 +1589,9 @@ function shopUnitSave(itemId, unitId){
 function shopUnitRetire(itemId, unitId, fromUse){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   const why=prompt(`„${u.nr}" ausmustern / als verbraucht melden?\nGrund (optional):`, fromUse?'verbraucht':''); if(why===null) return;
-  const pl=u.placeId; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
+  const ul=unitLoan(unitId);   // war zugeordnet → Zuordnung mit beenden
+  if(ul){ ul.status='zurueck'; ul.qty=0; ul.returnedTs=Date.now(); ul.note=(ul.note?ul.note+' · ':'')+'ausgemustert'; saveShop('shopLoans', ul); }
+  const pl=u.placeId||(ul&&ul.fromPlace)||''; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
   _log(it,'verbrauch',1,pl,null,'Stück: '+u.nr+(why?' · '+why:''));
   const s=sollAt(it,pl), ist=_num((it.stock||{})[pl]);
   toast(s&&ist<s?`${u.nr} ausgebucht ✓ – ${placeLabel(pl)} jetzt unter Soll (${ist}/${s}), Nachschub automatisch bestellt.`:`${u.nr} ausgebucht ✓`,'ok');
@@ -1557,9 +1669,12 @@ function _orteHtml(){
   const rows=places().map(p=>{
     const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
     const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
-    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}</div>
+    const pl=placeLoan(p.id);
+    return `<div class="shop-row"${pl&&_overdue(pl)?' style="border-color:#e5484d"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
+        ${pl?`<span class="shop-st" style="background:${_overdue(pl)?'#c0392b':'#2563eb'}">🚩 bei ${esc(bName(pl))}${pl.due?' bis '+_fmtDate(pl.due):''}</span>`:''}</div>
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
-      <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${isMovable(p)?(pl?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(pl.id)})">↩ Zurück</button>`:`<button class="shop-btn sm" onclick="shopLendPlace(${jsq(p.id)})">🚩 Zuordnen</button>`):''}
+      <button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
       <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
   }).join('');
   const bws=_borrowers();
@@ -1585,7 +1700,7 @@ function _orgSettingHtml(){
 // Alle, die gerade etwas ausgeliehen haben – gruppiert (Mitarbeiter, CRM-Einträge, freie Namen)
 function _borrowers(){
   const m={};
-  activeLoans().forEach(l=>{ const k=bKey(l); (m[k]=m[k]||{key:k, label:bLabel(l), loans:[]}).loans.push(l); });
+  activeLoans().filter(l=>!l.placeId).forEach(l=>{ const k=bKey(l); (m[k]=m[k]||{key:k, label:bLabel(l), loans:[]}).loans.push(l); });
   return Object.values(m).sort((a,b)=>a.label.localeCompare(b.label,'de',{sensitivity:'base'}));
 }
 // Für die CRM-Detailseite eines Vereins/Eintrags: laufende Leihgaben (HTML, leer wenn keine)
@@ -1631,6 +1746,7 @@ function shopPlaceSave(id){
 }
 function shopPlaceDelete(id){
   const p=getShop('shopPlaces',id); if(!p) return;
+  if(placeLoan(id)){ toast(`„${p.name}" ist gerade zugeordnet – erst zurückgeben.`,'err'); return; }
   const used=items().filter(i=>_num((i.stock||{})[id])>0);
   if(used.length){ toast(`An „${p.name}" liegt noch Bestand (${used.length} Artikel) – erst umlagern.`,'err'); return; }
   if(!confirm(`Ort „${p.name}" löschen?`)) return;
@@ -1659,10 +1775,11 @@ function shopSetLogItem(v){ fLogItem=v; renderShop(); }
 function shopNotices(){
   const cu=window.cu; if(!cu||!canUse()) return [];
   _autoReorder();   // auch ohne geöffneten Shop: Unterschreitungen sofort als Bestellung anlegen (idempotent)
-  const mgr=canManage(); const out=[];
+  const mgr=canManage(); const out=[]; const held=myHeld();
   orders().forEach(o=>{
-    if(mgr && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id]) && forMe(orderTeams(o))){
-      out.push({ ts:o.ts, html:`🛒 Neue Bestellung von <b>${esc(o.byName||'?')}</b>: ${_orderWhat(o)}${o.termin?` (bis ${_fmtDate(o.termin)})`:''}${o.anlass?' – '+esc(o.anlass):''}`,
+    const heldPl=!!(o.ortId && held.places.has(o.ortId));   // für „meinen" Ort (Bus/Boot/Anhänger mir zugeordnet)
+    if(o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id]) && ((mgr && forMe(orderTeams(o))) || heldPl)){
+      out.push({ ts:o.ts, html:`🛒 Neue Bestellung von <b>${esc(o.byName||'?')}</b>${heldPl?` für ${esc(placeLabel(o.ortId))} (dir zugeordnet)`:''}: ${_orderWhat(o)}${o.termin?` (bis ${_fmtDate(o.termin)})`:''}${o.anlass?' – '+esc(o.anlass):''}`,
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeSeen(${JSON.stringify(o.id)})` });
     }
     if(o.byId===cu.id && !o.ackOrderer && (o.status==='ausgegeben'||o.status==='erledigt'||o.status==='abgelehnt')){
@@ -1675,9 +1792,10 @@ function shopNotices(){
   const today=_todayIso();
   activeLoans().forEach(l=>{
     if(l.borrowerId!==cu.id) return;
-    if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Der Shop')}</b> hat dir ${_num(l.qty)}× ${esc(l.itemName||'')} ausgeliehen${l.due?' – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':''}.`,
+    const what=(l.placeId||l.unitId)?`${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>`:`${_num(l.qty)}× ${esc(l.itemName||'')}`;
+    if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Der Shop')}</b> hat dir ${what} ${l.due?'ausgeliehen – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':'dauerhaft zugeordnet'}${l.placeId?' (mit Inhalt – du bekommst jetzt auch dessen Termine &amp; Bestellungen)':''}.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanAck(${JSON.stringify(l.id)})` });
-    else if(_overdue(l) && l.ackOverdue!==today) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${_num(l.qty)}× ${esc(l.itemName||'')} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
+    else if(_overdue(l) && l.ackOverdue!==today) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });
   });
   if(mgr){
@@ -1686,13 +1804,14 @@ function shopNotices(){
     if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
     // (Orte unter Soll-Bestand melden sich jetzt als automatische Bestellung → „Neue Bestellung"-Mitteilung oben)
-    // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag
-    const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && forMe(dueTeams(d)));
-    let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
-    if(due.length && ackD!==today){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
-      out.push({ ts:Date.now(), html:`⏰ ${due.length} Termin${due.length===1?'':'e'} fällig${over?` (${over} überfällig)`:''}: `+due.slice(0,3).map(d=>`${esc(d.title)} – ${esc(d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)} ${_fmtDate(d.t.datum)}`).join(' · ')+(due.length>3?' …':''),
-        open:'shopDueNoticeOpen()', ack:'shopDueAck()' }); }
   }
+  // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag.
+  // Verwalter: fürs eigene Team · ALLE zusätzlich für das, was ihnen zugeordnet ist (Trailer, Weste …)
+  const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && ((mgr && forMe(dueTeams(d))) || dueHeld(d,held)));
+  let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
+  if(due.length && ackD!==today){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
+    out.push({ ts:Date.now(), html:`⏰ ${due.length} Termin${due.length===1?'':'e'} fällig${over?` (${over} überfällig)`:''}: `+due.slice(0,3).map(d=>`${esc(d.title)} – ${esc(d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)} ${_fmtDate(d.t.datum)}`).join(' · ')+(due.length>3?' …':''),
+      open:'shopDueNoticeOpen()', ack:'shopDueAck()' }); }
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 function shopRefillNoticeOpen(){ TAB='nachfuellen'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
@@ -1704,7 +1823,7 @@ function shopLoanSnooze(id){ const l=getShop('shopLoans',id); if(!l) return; l.a
 function shopLoanMgrAck(){ try{ localStorage.setItem('tps_shop_od_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
 function shopNoticeOpen(id){
   const o=getShop('shopOrders',id);
-  if(o){ const cu=_me(); if(o.byId===cu.id && o.status!=='offen' && o.status!=='inarbeit') shopNoticeAck(id); else if(canManage()) shopNoticeSeen(id); }
+  if(o){ const cu=_me(); if(o.byId===cu.id && o.status!=='offen' && o.status!=='inarbeit') shopNoticeAck(id); else if(o.byId!==cu.id) shopNoticeSeen(id); }
   TAB='bestellungen'; fOrd='alle';
   try{ window.switchModule && window.switchModule('shop'); }catch(e){}
 }
@@ -1727,7 +1846,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopOrderIssue, shopOrderIssueSave, shopOrderCancel,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
   shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck, shopTermAdd, shopUnits, shopUnitSel, shopUnitBrand, shopUnitSelAll, shopUnitsMove, shopUnitsAdd, shopUnitsAddSave, shopUnitEdit, shopUnitSave, shopUnitRetire, shopSetDue, shopDueDone, shopDueDoneSave, shopAddMonths, shopDueNoticeOpen, shopDueAck,
-  shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
+  shopLend, shopLendSave, shopLendPlace, shopLendPlaceSave, shopLendUnit, shopLendUnitSave, shopPickLendGo, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
   shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck, shopSetTeam,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
 
