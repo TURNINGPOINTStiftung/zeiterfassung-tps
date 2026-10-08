@@ -69,6 +69,7 @@ import './crm/auswertung.js';
 import './crm/ki.js';
 import './crm/kalender.js';
 import './crm/shop.js';
+import './nav.js';   // Zurück-Taste innerhalb der App (Verlauf je Ansicht, Fenster schließen)
 
 // ── Sicherheits-Setup (Cutover-Provisionierung: loginDir + allowed) ──
 import './admin-setup.js';

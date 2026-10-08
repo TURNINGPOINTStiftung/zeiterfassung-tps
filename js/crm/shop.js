@@ -371,6 +371,8 @@ export function renderShop(){
   }catch(e){ console.error('renderShop Fehler:',e); }
 }
 function shopTab(t){ TAB=t; renderShop(); }
+// Zurück-Taste (js/nav.js): Reiter gehört zum „Ort" in der App
+try{ (window._navRegs=window._navRegs||{}).shop={ get:()=>({t:TAB}), set:s=>{ if(s&&s.t) TAB=s.t; } }; }catch(e){}
 
 // ── Tab: Bestand ───────────────────────────────────────────────────
 function _bestandHtml(mgr){
