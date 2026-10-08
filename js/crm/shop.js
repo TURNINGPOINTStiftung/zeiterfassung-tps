@@ -279,9 +279,9 @@ export function renderShop(){
     const root=document.getElementById('shop-root'); if(!root) return;
     if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
-    if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen'||TAB==='faellig')) TAB='bestand';
-    const nDue = mgr ? allDue().filter(d=>d.t.datum<=_soonIso(30)).length : 0;
-    const nOverDue = mgr ? allDue().filter(d=>d.t.datum<_todayIso()).length : 0;
+    if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
+    const nDue = allDue().filter(d=>d.t.datum<=_soonIso(30)).length;
+    const nOverDue = allDue().filter(d=>d.t.datum<_todayIso()).length;
     _autoReorder();   // Orte unter Soll → automatische Bestellung (statt Nachfüll-Liste)
     if(TAB==='nachfuellen') TAB='bestellungen';
     const os=orders();
@@ -290,12 +290,13 @@ export function renderShop(){
     const nLate=myLoans.filter(_overdue).length;
     const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
       ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
-      .concat(mgr?[['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')],['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
+      .concat([['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')]])
+      .concat(mgr?[['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
     else if(TAB==='ausleihen') body=_loansHtml(mgr);
-    else if(TAB==='faellig') body=_dueHtml();
+    else if(TAB==='faellig') body=_dueHtml(mgr);
     else if(TAB==='orte') body=_orteHtml();
     else body=_verlaufHtml();
     root.innerHTML=`<div class="shop-wrap">
@@ -322,8 +323,7 @@ function _bestandHtml(mgr){
       <select onchange="shopSetCat(this.value)">${catOpts}</select>
       <select onchange="shopSetPlace(this.value)">${plOpts}</select>
       <span class="shop-sp"></span>
-      <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button>
-      ${mgr?`<button class="shop-btn" onclick="shopItemEdit('')">＋ Artikel</button>`:''}
+      <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
 }
@@ -378,7 +378,8 @@ function shopSetPlace(v){ fPlace=v; renderShop(); }
 
 // ── Artikel anlegen / bearbeiten ───────────────────────────────────
 function shopItemEdit(id){
-  if(!canManage()) return;
+  // Neu anlegen dürfen alle mit Shop-Zugang, Bearbeiten/Löschen nur Verwalter
+  if(id ? !canManage() : !canUse()) return;
   const it=id?getShop('shopItems',id):null;
   const v=it||{name:'',kategorie:'',variante:'',einheit:'Stück',min:'',note:'',foto:''};
   window._shopPhoto=v.foto||'';
@@ -433,6 +434,7 @@ function shopPhotoPick(inp){
 function shopPhotoClear(){ window._shopPhoto=''; const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=''; ph.textContent='kein Foto'; } }
 function _val(id){ const el=document.getElementById(id); return el?String(el.value||'').trim():''; }
 function shopItemSave(id){
+  if(id ? !canManage() : !canUse()) return;
   const name=_val('si-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const ex=id?getShop('shopItems',id):null; const cu=_me();
   const it=Object.assign({}, ex||{ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'' }, {
@@ -461,6 +463,7 @@ function shopItemSave(id){
   if(wantEinzeln && made) shopUnits(it.id); else renderShop();
 }
 function shopItemDelete(id){
+  if(!canManage()) return;
   const it=getShop('shopItems',id); if(!it) return;
   const tot=total(it);
   if(activeLoans(id).length){ toast('Dieser Artikel ist noch verliehen – erst zurückgeben lassen.','err'); return; }
@@ -1458,9 +1461,9 @@ function _unitUse(it){
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button></div>`);
 }
 
-// ── Tab „⏰ Fällig" (Verwalter) ──
+// ── Tab „⏰ Fällig" (alle sehen; Erledigt/✎ nur Verwalter) ──
 let fDue='soon';
-function _dueHtml(){
+function _dueHtml(mgr){
   const all=allDue();
   const lim={ over:_todayIso(), soon:_soonIso(30), q:_soonIso(90), all:'9999' }[fDue]||_soonIso(30);
   const list=all.filter(d=>fDue==='over' ? d.t.datum<_todayIso() : d.t.datum<=lim);
@@ -1468,11 +1471,11 @@ function _dueHtml(){
   const rows=list.map(d=>`<div class="shop-row"${dueState(d.t.datum)==='over'?' style="border-color:#e5484d"':''}><div class="main">
       <div class="t">${d.kind==='place'?'📍 ':'🏷️ '}${esc(d.title)} ${dueBadge(d.t)}</div>
       <div class="m">${esc((TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)}${d.t.intervall?` · alle ${_num(d.t.intervall)} Monate`:' · einmalig'}${d.where?' · '+esc(d.where):''}${(d.t.verlauf||[]).length?` · zuletzt erledigt ${_fmtDate(d.t.verlauf[d.t.verlauf.length-1].am)}`:''}</div></div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopDueDone(${jsq(d.key)})">✓ Erledigt</button>
-        ${d.kind==='unit'?`<button class="shop-btn sm" onclick="shopUnitEdit(${jsq(d.itemId)},${jsq(d.unitId)})">✎</button>`:`<button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(d.placeId)})">✎</button>`}</div></div>`).join('');
+      ${mgr?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopDueDone(${jsq(d.key)})">✓ Erledigt</button>
+        ${d.kind==='unit'?`<button class="shop-btn sm" onclick="shopUnitEdit(${jsq(d.itemId)},${jsq(d.unitId)})">✎</button>`:`<button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(d.placeId)})">✎</button>`}</div>`:''}</div>`).join('');
   const nOver=all.filter(d=>d.t.datum<_todayIso()).length;
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fDue===s[0]?'on':''}" onclick="shopSetDue(${jsq(s[0])})">${s[1]}${s[0]==='over'&&nOver?` (${nOver})`:''}</button>`).join('')}</span>
-      <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">Termine an Stücken (✎ Artikel → „Einzeln erfassen") und an Orten (📍 Orte → ✎)</span></div>
+      <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">${mgr?'Termine an Stücken (✎ Artikel → „Einzeln erfassen") und an Orten (📍 Orte → ✎)':'Nur Ansicht – erledigt melden die Verwalter.'}</span></div>
     <div class="shop-list">${rows||`<div class="shop-empty">${all.length?'Nichts fällig in diesem Zeitraum. ✓':'Noch keine Termine erfasst.'}</div>`}</div>`;
 }
 function shopSetDue(v){ fDue=v; renderShop(); }
