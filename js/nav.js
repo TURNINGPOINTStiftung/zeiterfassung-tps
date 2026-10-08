@@ -18,6 +18,7 @@
 //  Alles best effort: ein Fehler hier darf die App nie stören.
 // ══════════════════════════════════════════════════════════════════
 import * as CD from './crm/crm-data.js';
+import * as CC from './crm/crm-config.js';
 
 const CRM_KEYS=['_crmMode','_crmTree','_crmSelId','_crmDetailTab','_crmProjSel','_crmTeamProjSel','_crmTeamSel','_crmVaSel'];
 const CRM_MODS=['crm','kanban','verteiler'];
@@ -207,13 +208,67 @@ function start(){
       if(target && !_allowed(target)) setTimeout(()=>{ try{ window.toast && window.toast('Für diesen Link fehlt dir der Zugriff.','err'); }catch(e){} }, 800); }
     if(_isModalOpen()) _pushModal();
     window.addEventListener('popstate', onPop);
-    _watchModal();
+    _watchModal(); _watchCrumbs(); renderCrumbs();
     const after=()=>{ if(_restoring) return; setTimeout(()=>{ if(!_restoring) _pushView(); }, 80); };
     document.addEventListener('click', after, true);
     document.addEventListener('change', after, true);
     // Namen (CRM) laden evtl. erst später → Adresse einmal nachziehen
     setTimeout(()=>{ try{ const cur=history.state; if(cur&&cur.nav&&!cur.modal) history.replaceState(cur,'',_url(cur)); }catch(e){} }, 3000);
   }catch(e){ console.warn('[Nav] Start fehlgeschlagen:', e); }
+}
+
+// ── Brotkrumen-Leiste im CRM-Rahmen (CRM, Projektmanagement, Verteiler) ──
+// „CRM › 🏛️ Vereine › TSV Kronshagen › Aufgaben & Termine" – jede Ebene außer der letzten ist anklickbar.
+// Erscheint erst ab der dritten Ebene (in Listen reicht die normale Ansicht). Aktualisiert sich bei jedem
+// Neuzeichnen von #crm-root (MutationObserver) – auch wenn nicht per Klick navigiert wurde.
+const MODE_L={ teams:'👥 Teams', meine:'🗂️ Meine Projekte', veranstaltungen:'📅 Veranstaltungen', verteiler:'✉️ Verteiler' };
+let _crumbs=[];
+function _modLabel(mod){ const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]'); return (b&&b.textContent.trim())||mod; }
+function _crumbList(){
+  const s=snap(); if(!CRM_MODS.includes(s.mod)||!s.c) return [];
+  const c=s.c, mode=c._crmMode||'kontakte';
+  const base=extra=>{ const o={}; CRM_KEYS.forEach(k=>o[k]=null); return { nav:1, mod:s.mod, c:Object.assign(o,extra) }; };
+  const out=[{ l:_modLabel(s.mod), t:base({}) }];
+  if(mode==='kontakte'){
+    if(!c._crmTree) return out;
+    let tl=c._crmTree; try{ const tr=(CC.getTrees?CC.getTrees():[]).find(x=>x.key===c._crmTree); if(tr) tl=(tr.icon?tr.icon+' ':'')+tr.label; }catch(e){}
+    out.push({ l:tl, t:base({_crmMode:'kontakte',_crmTree:c._crmTree}) });
+    if(c._crmSelId){ out.push({ l:_entName(c._crmTree,c._crmSelId)||'Eintrag', t:base({_crmMode:'kontakte',_crmTree:c._crmTree,_crmSelId:c._crmSelId,_crmDetailTab:'allgemeines'}) });
+      const at=document.querySelector('#crm-root .crm-subtab.active'); const al=at?at.textContent.replace(/\s*\(\d+\)\s*$/,'').trim():'';
+      if(at && at.getAttribute('onclick') && !/allgemeines/.test(at.getAttribute('onclick'))) out.push({ l:al, t:null }); }
+    return out;
+  }
+  out.push({ l:MODE_L[mode]||(mode.charAt(0).toUpperCase()+mode.slice(1)), t:base({_crmMode:mode}) });
+  if(mode==='teams' && c._crmTeamSel) out.push({ l:String(c._crmTeamSel), t:base({_crmMode:'teams',_crmTeamSel:c._crmTeamSel}) });
+  if((mode==='teams'||mode==='meine') && c._crmTeamProjSel) out.push({ l:_qName('_crmTeamProjSel',c._crmTeamProjSel)||'Projekt', t:null });
+  if(mode==='veranstaltungen' && c._crmVaSel) out.push({ l:_qName('_crmVaSel',c._crmVaSel)||'Veranstaltung', t:null });
+  return out;
+}
+function renderCrumbs(){
+  try{
+    const frame=document.getElementById('mod-crm'), root=document.getElementById('crm-root'); if(!frame||!root) return;
+    let bar=document.getElementById('nav-crumbs');
+    if(!bar){ bar=document.createElement('div'); bar.id='nav-crumbs';
+      bar.style.cssText='display:none;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 18px 0;font-size:13px;color:var(--muted,#6b7280)';
+      frame.insertBefore(bar, root); }
+    _crumbs=_crumbList();
+    if(_crumbs.length<3){ bar.style.display='none'; bar.innerHTML=''; return; }
+    const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    bar.innerHTML=_crumbs.map((x,i)=>{ const last=i===_crumbs.length-1;
+      return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
+        ? `<span style="color:var(--text,#1f2937);font-weight:600">${esc(x.l)}</span>`
+        : `<a href="#" onclick="navCrumb(${i});return false" style="color:var(--primary,#203869);text-decoration:none">${esc(x.l)}</a>`); }).join(' ');
+    bar.style.display='flex';
+  }catch(e){}
+}
+function navCrumb(i){
+  const x=_crumbs[i]; if(!x||!x.t) return;
+  apply(x.t); setTimeout(()=>{ _pushView(); renderCrumbs(); }, 120);
+}
+let _crumbT=null;
+function _watchCrumbs(){
+  const root=document.getElementById('crm-root'); if(!root) return;
+  new MutationObserver(()=>{ clearTimeout(_crumbT); _crumbT=setTimeout(renderCrumbs, 60); }).observe(root,{childList:true});
 }
 
 // 🔗 Link zur aktuellen Ansicht teilen/kopieren
@@ -233,4 +288,4 @@ async function navCopyLink(){
   setTimeout(wait, 400);
 })();
 
-try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; }catch(e){}
+try{ window.navSnapshot=snap; window.navCopyLink=navCopyLink; window.navToHash=toHash; window.navFromHash=fromHash; window.navCrumb=navCrumb; }catch(e){}
