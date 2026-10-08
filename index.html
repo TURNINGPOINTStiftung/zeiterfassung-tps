@@ -83,6 +83,7 @@
     <div class="mb-menu-wrap">
       <button class="mb-menu" id="mb-menu-btn" onclick="toggleModuleMenu()" aria-label="Modul wechseln" title="Modul wechseln">☰</button>
       <div class="mb-dropdown" id="mb-dropdown" style="display:none">
+        <button class="mb-mod" data-mod="start" onclick="switchModule('start')" style="display:none">🏠 Start</button>
         <button class="mb-mod active" data-mod="zeiterfassung" onclick="switchModule('zeiterfassung')">Zeiterfassung</button>
         <button class="mb-mod" data-mod="website" onclick="switchModule('website')">Website</button>
         <button class="mb-mod" data-mod="forum" onclick="switchModule('forum')">Forum</button>
@@ -97,7 +98,7 @@
         <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
       </div>
     </div>
-    <img class="mb-logo" id="mb-logo" src="" alt="TURNING POINT Stiftung">
+    <img class="mb-logo" id="mb-logo" src="" alt="TURNING POINT Stiftung" onclick="window.homeGo&&homeGo()" title="Zur Startseite">
     <div class="mb-spacer"></div>
     <div class="header-right">
       <div id="mb-crm-tools"></div>
@@ -388,6 +389,10 @@
     </div>
   </div>
 
+  <div id="mod-start" class="mod-frame" style="display:none">
+    <div id="home-root"></div>
+  </div>
+
   <div id="mod-crm" class="mod-frame" style="display:none">
     <div id="crm-root"></div>
   </div>
@@ -480,6 +485,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=276"></script>
+<script type="module" src="js/main.js?v=277"></script>
 </body>
 </html>

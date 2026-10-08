@@ -768,6 +768,9 @@ function userForm(u={}){
         ${modBlock('messe','🎪','Messemodus')}
         ${modBlock('auswertung','📊','Auswertung')}
         ${modBlock('kalender','📅','Kalender','<div style="font-size:12px;color:var(--muted)">Darf den Kalender ansehen.</div>')}
+        ${(()=>{ const hp=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'startseite'))?!!u.perms.startseite:(u.role==='admin');
+          const o=(v,l,on)=>`<label class="uf-seg-opt${on?' on':''}"><input type="radio" name="ufmod-start" value="${v}"${on?' checked':''} onchange="ufSetMod('start')" style="display:none">${l}</label>`;
+          return `<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🏠 Startseite</span><div class="uf-seg">${o('aus','Aus',!hp)}${o('ein','Ein',hp)}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Startet mit der Übersicht (Wetter, Stempeln, Was ansteht, Mitteilungen, Kacheln) statt mit dem zuletzt benutzten Modul.</div></div>`; })()}
         ${modBlock('shop','🛒','Shop (Lager &amp; Bestellungen)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}
@@ -883,6 +886,8 @@ function collectUserForm(){
   if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;
   // 4) System-Verwaltung (voller Admin)
   const _sys=_mod('system'); if(_sys!==null) perms['zugriff_verwaltung']=(_sys==='ja');
+  // 5) Startseite (Ein/Aus) – Standard: nur Admin
+  const _stp=_mod('start'); if(_stp!==null) perms['startseite']=(_stp==='ein');
   // „Nur CRM / keine Zeiterfassung" wird jetzt ALLEIN über ZE=Kein ausgedrückt (eine Quelle der
   // Wahrheit). crmOnly bleibt als daraus ABGELEITETES Legacy-Feld erhalten – viele Stellen lesen
   // noch cu.crmOnly (app.js, uebersicht.js, crm.js _defaultPathAccess). So bleibt beides konsistent.

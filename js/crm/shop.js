@@ -1873,6 +1873,21 @@ function shopNotices(){
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 function shopRefillNoticeOpen(){ TAB='nachfuellen'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
+// Für die Startseite (js/home.js): was im Shop für MICH ansteht – gleiche Regeln wie Mitteilungen/Zähler
+// (Team bzw. mir zugeordnet). → { due:[{title,label,datum,over}], orders:n }
+function shopHomeItems(){
+  try{
+    if(!window.cu || !canUse()) return { due:[], orders:0 };
+    const mgr=canManage(), me=_me(), held=myHeld();
+    const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && (forMe(dueTeams(d)) || dueHeld(d,held)))
+      .map(d=>({ title:d.title, label:d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l, datum:d.t.datum, over:d.t.datum<_todayIso() }));
+    const os=orders().filter(o=>mgr ? (o.status==='offen' && (forMe(orderTeams(o)) || held.places.has(o.ortId)))
+      : ((o.byId===me.id || held.places.has(o.ortId)) && (o.status==='offen'||o.status==='inarbeit')));
+    return { due, orders:os.length, mgr };
+  }catch(e){ return { due:[], orders:0 }; }
+}
+function shopOpenTab(t){ TAB=t||'bestand'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
+try{ window.shopHomeItems=shopHomeItems; window.shopOpenTab=shopOpenTab; }catch(e){}
 function shopRefillAck(){ try{ localStorage.setItem('tps_shop_soll_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
 function shopLoanNoticeOpen(){ TAB='ausleihen'; fLoan='aktiv'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 function _noticesRefresh(){ try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){} }

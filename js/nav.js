@@ -253,6 +253,8 @@ function renderCrumbs(){
       frame.insertBefore(bar, root); }
     _crumbs=_crumbList();
     if(_crumbs.length<3){ bar.style.display='none'; bar.innerHTML=''; return; }
+    // Mit Startseite beginnt der Pfad immer bei „🏠 Start"
+    try{ if(window.homeEnabled && window.homeEnabled()) _crumbs.unshift({ l:'🏠 Start', t:{ nav:1, mod:'start' } }); }catch(e){}
     const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     bar.innerHTML=_crumbs.map((x,i)=>{ const last=i===_crumbs.length-1;
       return (i?'<span style="opacity:.5">›</span>':'')+(last||!x.t
