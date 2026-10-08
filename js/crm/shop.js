@@ -168,6 +168,34 @@ function shortages(it){
   return Object.keys((it&&it.soll)||{}).filter(pid=>placeOf(pid) && sollAt(it,pid)>0 && _num((it.stock||{})[pid])<sollAt(it,pid))
     .map(pid=>{ const ist=_num((it.stock||{})[pid]), soll=sollAt(it,pid); return {pid, ist, soll, fehlt:soll-ist}; });
 }
+// ── Teams (aus der Zeiterfassung: Akademie, Verwaltung …) ──
+// Artikel und Orte können einem Team gehören. Angezeigt wird weiter alles für alle; Mitteilungen
+// und Zähler an den Reitern gelten aber nur für Mitglieder dieses Teams (User-Vorgabe, gilt auch für
+// Verwalter). Ohne Team = für alle. Wer selbst keinem Team angehört, bekommt weiter alles.
+function teamList(){ let t=[]; try{ t=(getData().teams||[]).slice(); }catch(e){}
+  items().forEach(i=>{ if(i.team && !t.includes(i.team)) t.push(i.team); }); places().forEach(p=>{ if(p.team && !t.includes(p.team)) t.push(p.team); });
+  return t.filter(Boolean); }
+function myTeams(){ const cu=_me(); const t=Array.isArray(cu.teams)&&cu.teams.length?cu.teams:(cu.team?[cu.team]:[]); return t.filter(Boolean); }
+function placeTeam(pid){ const p=pid&&placeOf(pid); return (p&&p.team)||''; }
+function _teamOfItemAt(it,pid){ return (it&&it.team)||placeTeam(pid); }
+// Teams einer Sache: [] bzw. '' darin = betrifft alle
+function dueTeams(d){ if(d.kind==='place') return [placeTeam(d.placeId)]; return [_teamOfItemAt(getShop('shopItems',d.itemId), d.placeId)]; }
+function orderTeams(o){ return _pos(o).map(p=>_teamOfItemAt(p.itemId?getShop('shopItems',p.itemId):null, o.ortId)); }
+// Artikel: eigenes Team, sonst Teams der Orte, wo er liegt oder ein Soll hat ('' = für alle)
+function itemTeams(it){ if(it.team) return [it.team];
+  const pids=[...new Set([...Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0), ...Object.keys(it.soll||{}).filter(pid=>sollAt(it,pid)>0)])];
+  const ts=pids.map(placeTeam); return ts.length?ts:['']; }
+function loanTeams(l){ return [_teamOfItemAt(getShop('shopItems',l.itemId), l.fromPlace)]; }
+function forMe(teams){ const mine=myTeams(); if(!mine.length) return true; const ts=(teams||[]); if(!ts.length||ts.some(t=>!t)) return true; return ts.some(t=>mine.includes(t)); }
+// Anzeige-Filter (Bestand, Bestellungen, Fällig): '' = alle, 'mine' = mein Team, sonst Teamname
+let fTeam='';
+function _teamMatch(teams){ if(!fTeam) return true; if(fTeam==='mine') return forMe(teams); return (teams||[]).includes(fTeam); }
+function _teamFilterHtml(){ const ts=teamList(); if(!ts.length) return '';
+  return `<select onchange="shopSetTeam(this.value)" title="Nach Team filtern"><option value="">Alle Teams</option>${myTeams().length?`<option value="mine"${fTeam==='mine'?' selected':''}>👥 Mein Team</option>`:''}${ts.map(t=>`<option${fTeam===t?' selected':''}>${esc(t)}</option>`).join('')}</select>`; }
+function shopSetTeam(v){ fTeam=v; renderShop(); }
+function _teamChip(t){ return t?`<span class="shop-cat" style="background:#ede9fe;color:#5b21b6">👥 ${esc(t)}</span>`:''; }
+function _teamSelectHtml(id, cur, hint){ return `<div class="shop-f"><label>Team <span style="font-weight:400;color:var(--muted)">(${hint})</span></label>
+  <select id="${id}"><option value="">– für alle –</option>${teamList().map(t=>`<option${cur===t?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`; }
 function cats(){ const s=new Set(CATS_DEFAULT); items().forEach(i=>{ if(i.kategorie) s.add(i.kategorie); }); return [...s]; }
 const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
 const _fmtTs=ts=>{ if(!ts) return ''; const d=new Date(ts); return d.toLocaleDateString('de-DE')+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); };
@@ -280,13 +308,14 @@ export function renderShop(){
     if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
     if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
-    const nDue = allDue().filter(d=>d.t.datum<=_soonIso(30)).length;
-    const nOverDue = allDue().filter(d=>d.t.datum<_todayIso()).length;
+    const myDue = allDue().filter(d=>forMe(dueTeams(d)));   // Zähler nur fürs eigene Team
+    const nDue = myDue.filter(d=>d.t.datum<=_soonIso(30)).length;
+    const nOverDue = myDue.filter(d=>d.t.datum<_todayIso()).length;
     _autoReorder();   // Orte unter Soll → automatische Bestellung (statt Nachfüll-Liste)
     if(TAB==='nachfuellen') TAB='bestellungen';
     const os=orders();
-    const nOpen = mgr ? os.filter(o=>o.status==='offen').length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
-    const myLoans=activeLoans().filter(l=>mgr||l.borrowerId===me.id);
+    const nOpen = mgr ? os.filter(o=>o.status==='offen' && forMe(orderTeams(o))).length : os.filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit')).length;
+    const myLoans=activeLoans().filter(l=>mgr ? (l.borrowerId===me.id || forMe(loanTeams(l))) : l.borrowerId===me.id);
     const nLate=myLoans.filter(_overdue).length;
     const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
       ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
@@ -322,6 +351,7 @@ function _bestandHtml(mgr){
       <input type="search" id="shop-q" placeholder="Suchen …" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
       <select onchange="shopSetCat(this.value)">${catOpts}</select>
       <select onchange="shopSetPlace(this.value)">${plOpts}</select>
+      ${_teamFilterHtml()}
       <span class="shop-sp"></span>
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
@@ -331,6 +361,7 @@ function _itemsGrid(mgr){
   const q=fQ.trim().toLowerCase();
   const list=items().filter(it=>{
     if(fCat && it.kategorie!==fCat) return false;
+    if(fTeam && !_teamMatch(itemTeams(it))) return false;
     if(fPlace.startsWith('loan:')){ if(!activeLoans(it.id).some(l=>'loan:'+bKey(l)===fPlace)) return false; }
     else if(fPlace && !_num((it.stock||{})[fPlace]) && !sollAt(it,fPlace)) return false;   // auch Orte mit Soll, wo gerade 0 liegt
     if(q && !(`${it.name} ${it.variante||''} ${it.kategorie||''} ${it.note||''}`.toLowerCase().includes(q))) return false;
@@ -350,7 +381,7 @@ function _itemsGrid(mgr){
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
     return `<div class="shop-card${(low||short.length)?' low':''}">${img}<div class="shop-cb">
-      <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:#dbe6fb;color:#1e40af">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:#dbe6fb;color:#1e40af">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}${_teamChip(it.team)}</div>
       <div class="shop-name">${esc(it.name)}</div>
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
       <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
@@ -405,6 +436,7 @@ function shopItemEdit(id){
       <div class="shop-f"><label>Mindestbestand <span style="font-weight:400;color:var(--muted)">(Warnung darunter)</span></label><input id="si-min" type="number" min="0" step="1" value="${esc(v.min)}"></div>
     </div>
     <div class="shop-f"><label>Notiz</label><input id="si-note" value="${esc(v.note)}" placeholder="z. B. Druckerei, Bestellnummer, Hinweise"></div>
+    ${_teamSelectHtml('si-team', v.team||'', 'nur dieses Team bekommt Mitteilungen & Zähler – leer = Team des Orts bzw. alle')}
     <div class="shop-f"><label>Artikelart</label>
       ${Object.keys(ARTEN).map(k=>`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:3px 0;cursor:pointer;font-weight:400">
         <input type="radio" name="si-art" value="${k}" ${itemArt(v)===k?'checked':''} style="width:auto;margin-top:2px"><span><b>${ARTEN[k].i} ${ARTEN[k].l}</b> – ${ARTEN[k].d}</span></label>`).join('')}</div>
@@ -439,7 +471,7 @@ function shopItemSave(id){
   const ex=id?getShop('shopItems',id):null; const cu=_me();
   const it=Object.assign({}, ex||{ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'' }, {
     name, kategorie:_val('si-cat'), variante:_val('si-var'), einheit:_val('si-unit')||'Stück',
-    min:_val('si-min')===''?'':_num(_val('si-min')), note:_val('si-note'), foto:window._shopPhoto||'' });
+    min:_val('si-min')===''?'':_num(_val('si-min')), note:_val('si-note'), team:_val('si-team'), foto:window._shopPhoto||'' });
   // Artikelart (leihbar bleibt als abgeleitetes Feld für ältere Stellen erhalten) + Soll-Bestand je Ort
   const artEl=document.querySelector('input[name="si-art"]:checked'); it.art=artEl?artEl.value:itemArt(it); it.leihbar=(it.art==='leihe');
   const soll={}; document.querySelectorAll('.shop-soll').forEach(inp=>{ const n=Math.round(_num(inp.value)); if(n>0) soll[inp.dataset.pl]=n; });
@@ -842,6 +874,7 @@ function _ordersHtml(mgr){
   const me=_me();
   if(mgr) _backfillDirectOrders();   // frühere Direkt-Versendungen einmalig nachtragen
   let os=orders(); if(!mgr) os=os.filter(o=>o.byId===me.id);
+  if(mgr && fTeam) os=os.filter(o=>_teamMatch(orderTeams(o)));
   const act=o=>o.status==='offen'||o.status==='inarbeit';
   if(fOrd==='aktiv') os=os.filter(act); else if(fOrd==='fertig') os=os.filter(o=>!act(o));
   const seg=[['aktiv','Offen & in Arbeit'],['fertig','Abgeschlossen'],['alle','Alle']];
@@ -861,7 +894,8 @@ function _ordersHtml(mgr){
     const ps=_pos(o);
     const head = ps.length===1 ? _orderWhat(o) : `🧾 ${ps.length} Positionen`;
     const posList = ps.length>1 ? `<div class="m" style="margin:2px 0 3px">${ps.map(p=>`• ${_posTxt(p)}${p.leihe?' 🔁':''}`).join('<br>')}</div>` : '';
-    const badges=`<span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8">🤖 automatisch</span>':''}`;
+    const oTeams=[...new Set(orderTeams(o).filter(Boolean))]; const tChips=oTeams.map(_teamChip).join(' ');
+    const badges=`${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8">🤖 automatisch</span>':''}`;
     // Abgeschlossen → kompakt: EINE Zeile je Bestellung, Positionen + Details zum Aufklappen
     if(!act(o)){
       const det=[o.anlass?`Anlass: ${esc(o.anlass)}`:'', o.adresse?`📮 ${esc(o.adresse).replace(/\n/g,', ')}`:'', o.note?`📝 ${esc(o.note)}`:'',
@@ -876,7 +910,7 @@ function _ordersHtml(mgr){
         ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
     }
     return `<div class="shop-row"><div class="main">
-      <div class="t">${head} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8" title="Automatisch, weil der Ort unter seinen Soll-Bestand gefallen ist">🤖 automatisch</span>':''}</div>${posList}
+      <div class="t">${head} ${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8" title="Automatisch, weil der Ort unter seinen Soll-Bestand gefallen ist">🤖 automatisch</span>':''}</div>${posList}
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
@@ -886,6 +920,7 @@ function _ordersHtml(mgr){
       ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
   }).join('');
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fOrd===s[0]?'on':''}" onclick="shopSetOrd(${jsq(s[0])})">${s[1]}</button>`).join('')}</span>
+      ${mgr?_teamFilterHtml():''}
       <span class="shop-sp"></span>
       ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken – mehrere Artikel möglich">📤 Direkt verschicken</button>`:''}
       <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button></div>
@@ -1464,17 +1499,18 @@ function _unitUse(it){
 // ── Tab „⏰ Fällig" (alle sehen; Erledigt/✎ nur Verwalter) ──
 let fDue='soon';
 function _dueHtml(mgr){
-  const all=allDue();
+  const all=allDue().filter(d=>_teamMatch(dueTeams(d)));
   const lim={ over:_todayIso(), soon:_soonIso(30), q:_soonIso(90), all:'9999' }[fDue]||_soonIso(30);
   const list=all.filter(d=>fDue==='over' ? d.t.datum<_todayIso() : d.t.datum<=lim);
   const seg=[['over','Überfällig'],['soon','≤ 30 Tage'],['q','≤ 90 Tage'],['all','Alle']];
   const rows=list.map(d=>`<div class="shop-row"${dueState(d.t.datum)==='over'?' style="border-color:#e5484d"':''}><div class="main">
-      <div class="t">${d.kind==='place'?'📍 ':'🏷️ '}${esc(d.title)} ${dueBadge(d.t)}</div>
+      <div class="t">${d.kind==='place'?'📍 ':'🏷️ '}${esc(d.title)} ${dueBadge(d.t)} ${_teamChip(dueTeams(d)[0])}</div>
       <div class="m">${esc((TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)}${d.t.intervall?` · alle ${_num(d.t.intervall)} Monate`:' · einmalig'}${d.where?' · '+esc(d.where):''}${(d.t.verlauf||[]).length?` · zuletzt erledigt ${_fmtDate(d.t.verlauf[d.t.verlauf.length-1].am)}`:''}</div></div>
       ${mgr?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopDueDone(${jsq(d.key)})">✓ Erledigt</button>
         ${d.kind==='unit'?`<button class="shop-btn sm" onclick="shopUnitEdit(${jsq(d.itemId)},${jsq(d.unitId)})">✎</button>`:`<button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(d.placeId)})">✎</button>`}</div>`:''}</div>`).join('');
   const nOver=all.filter(d=>d.t.datum<_todayIso()).length;
   return `<div class="shop-bar"><span class="shop-seg">${seg.map(s=>`<button class="${fDue===s[0]?'on':''}" onclick="shopSetDue(${jsq(s[0])})">${s[1]}${s[0]==='over'&&nOver?` (${nOver})`:''}</button>`).join('')}</span>
+      ${_teamFilterHtml()}
       <span class="shop-sp"></span><span style="font-size:12px;color:var(--muted)">${mgr?'Termine an Stücken (✎ Artikel → „Einzeln erfassen") und an Orten (📍 Orte → ✎)':'Nur Ansicht – erledigt melden die Verwalter.'}</span></div>
     <div class="shop-list">${rows||`<div class="shop-empty">${all.length?'Nichts fällig in diesem Zeitraum. ✓':'Noch keine Termine erfasst.'}</div>`}</div>`;
 }
@@ -1521,7 +1557,7 @@ function _orteHtml(){
   const rows=places().map(p=>{
     const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
     const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
-    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}</div>
+    return `<div class="shop-row"><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}</div>
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
       <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
       <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
@@ -1580,6 +1616,7 @@ function shopPlaceEdit(id){
     <div class="shop-f2"><div class="shop-f"><label>Name *</label><input id="sp-name" value="${esc(v.name)}" placeholder="z. B. Boot 1, Bus, Büro Kiel"></div>
       <div class="shop-f"><label>Art</label><select id="sp-typ">${Object.keys(PLACE_TYPES).map(k=>`<option value="${k}"${v.typ===k?' selected':''}>${PLACE_TYPES[k].i} ${PLACE_TYPES[k].l}</option>`).join('')}</select></div></div>
     <div class="shop-f"><label>Notiz</label><input id="sp-note" value="${esc(v.note||'')}" placeholder="z. B. Liegeplatz, Schlüssel bei …"></div>
+    ${_teamSelectHtml('sp-team', v.team||'', 'z. B. Trailer → Akademie: TÜV & Nachbestellungen melden sich nur dort')}
     ${_termEditorHtml('sp', v.termine)}
     <div class="modal-btns">${p?`<button class="btn btn-outline" style="margin-right:auto;color:var(--danger);border-color:var(--danger)" onclick="shopPlaceDelete(${jsq(p.id)})">🗑 Löschen</button>`:''}
     <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -1589,7 +1626,7 @@ function shopPlaceSave(id){
   const name=_val('sp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const ex=id?getShop('shopPlaces',id):null;
   if(places().some(p=>p.id!==id && String(p.name).toLowerCase()===name.toLowerCase())){ toast('Einen Ort mit diesem Namen gibt es schon.','err'); return; }
-  saveShop('shopPlaces', Object.assign({}, ex||{id:newId(), createdAt:Date.now()}, {name, typ:_val('sp-typ')||'sonst', note:_val('sp-note'), termine:_termRead('sp', ex&&ex.termine)}));
+  saveShop('shopPlaces', Object.assign({}, ex||{id:newId(), createdAt:Date.now()}, {name, typ:_val('sp-typ')||'sonst', note:_val('sp-note'), team:_val('sp-team'), termine:_termRead('sp', ex&&ex.termine)}));
   closeModal(); toast('Ort gespeichert ✓','ok'); renderShop();
 }
 function shopPlaceDelete(id){
@@ -1624,7 +1661,7 @@ function shopNotices(){
   _autoReorder();   // auch ohne geöffneten Shop: Unterschreitungen sofort als Bestellung anlegen (idempotent)
   const mgr=canManage(); const out=[];
   orders().forEach(o=>{
-    if(mgr && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id])){
+    if(mgr && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id]) && forMe(orderTeams(o))){
       out.push({ ts:o.ts, html:`🛒 Neue Bestellung von <b>${esc(o.byName||'?')}</b>: ${_orderWhat(o)}${o.termin?` (bis ${_fmtDate(o.termin)})`:''}${o.anlass?' – '+esc(o.anlass):''}`,
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeSeen(${JSON.stringify(o.id)})` });
     }
@@ -1644,13 +1681,13 @@ function shopNotices(){
       open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });
   });
   if(mgr){
-    const late=activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id);
+    const late=activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id && forMe(loanTeams(l)));
     let acked=''; try{ acked=localStorage.getItem('tps_shop_od_ack_'+cu.id)||''; }catch(e){}
     if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
     // (Orte unter Soll-Bestand melden sich jetzt als automatische Bestellung → „Neue Bestellung"-Mitteilung oben)
     // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag
-    const due=allDue().filter(d=>d.t.datum<=_soonIso(14));
+    const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && forMe(dueTeams(d)));
     let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
     if(due.length && ackD!==today){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
       out.push({ ts:Date.now(), html:`⏰ ${due.length} Termin${due.length===1?'':'e'} fällig${over?` (${over} überfällig)`:''}: `+due.slice(0,3).map(d=>`${esc(d.title)} – ${esc(d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)} ${_fmtDate(d.t.datum)}`).join(' · ')+(due.length>3?' …':''),
@@ -1691,7 +1728,7 @@ Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace,
   shopPlaceEdit, shopPlaceSave, shopPlaceDelete,
   shopLoansForEntity, shopOpenBorrower, shopSend, shopSendSave, shopGetAddr, shopSaveAddr, shopOrderNameChg, shopSetOrg, shopPickItem, shopCartAdd, shopCartAddFree, shopPosAddSel, shopCartQty, shopCartFrom, shopCartDel, shopCartClear, shopCartToggle, shopCartSend, shopCartSendSave, shopIssueModeChg, shopUse, shopUseSave, shopRefillNoticeOpen, shopRefillAck, shopTermAdd, shopUnits, shopUnitSel, shopUnitBrand, shopUnitSelAll, shopUnitsMove, shopUnitsAdd, shopUnitsAddSave, shopUnitEdit, shopUnitSave, shopUnitRetire, shopSetDue, shopDueDone, shopDueDoneSave, shopAddMonths, shopDueNoticeOpen, shopDueAck,
   shopLend, shopLendSave, shopReturn, shopReturnSave, shopLoanDue, shopLoanDueSave, shopSetLoan,
-  shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck,
+  shopNotices, shopNoticeOpen, shopNoticeSeen, shopNoticeAck, shopSetTeam,
   shopLoanNoticeOpen, shopLoanAck, shopLoanSnooze, shopLoanMgrAck });
 
 // ── Backup-Anbindung (Verwaltung → Daten & Backup) – über window, Laufzeit-Prüfung statt
