@@ -119,6 +119,10 @@ export function renderSettings(){
   // ── Berechtigungs-Matrix ──
   const permEl=document.getElementById('permissions-section');
   if(permEl) renderPermissionsMatrix(permEl);
+  // ── Startseite: Karten pro Rolle (js/home.js) – direkt unter der Rechte-Matrix ──
+  try{ if(permEl && window.renderHomeCardsConfig){ let hc=document.getElementById('home-cards-section');
+      if(!hc){ hc=document.createElement('div'); hc.id='home-cards-section'; permEl.insertAdjacentElement('afterend', hc); }
+      window.renderHomeCardsConfig(hc); } }catch(e){}
 
   // Mitarbeiter-Tabelle in der Verwaltungs-Ebene mit aktualisieren (falls offen)
   try{ window._refreshVerwUsers && window._refreshVerwUsers(); }catch(e){}

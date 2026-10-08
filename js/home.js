@@ -28,6 +28,67 @@ export function homeEnabled(u){
 }
 function homeGo(){ if(homeEnabled() && window.switchModule) window.switchModule('start'); }
 
+// ── Karten pro Rolle (Verwaltung → Organisation) ───────────────────
+// Gespeichert im bestehenden Config-Knoten rolePermissions (nur der Admin-Account schreibt ihn):
+//   rolePermissions['home_<karte>'] = [rollen…]   (fehlt → Standard unten)
+//   rolePermissions['home__order']  = [karten…]   (Reihenfolge für alle)
+// Kein echtes Recht – hasPermission() fragt diese Schlüssel nie ab; die Rechte-Matrix zeigt nur PERM_DEFS.
+const CARDS=[
+  { k:'wx',     l:'🌤️ Wetter & Wind' },
+  { k:'stamp',  l:'⏱️ Stempeln', hint:'nur wer die Zeiterfassung nutzt und stempeln darf' },
+  { k:'sys',    l:'🛠️ System', hint:'nur Admin bzw. System-Verwaltung' },
+  { k:'todo',   l:'📌 Was ansteht' },
+  { k:'notes',  l:'🔔 Mitteilungen' },
+  { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf' },
+  { k:'recent', l:'⭐ Favoriten & zuletzt geöffnet' },
+  { k:'tiles',  l:'🧩 Kacheln (Module, Website, Forum)' },
+];
+const HOME_ROLES=[['admin','Admin'],['mitarbeiter','Mitarbeiter'],['berater','Berater'],['freiberuflich','Freiberuflich'],['leitung','Leitung'],['geschaeftsfuehrer','GF']];
+const ALL_R=HOME_ROLES.map(r=>r[0]);
+const CARD_DEF={ wx:ALL_R, stamp:ALL_R.filter(r=>r!=='admin'), sys:['admin'], todo:ALL_R, notes:ALL_R, team:['leitung','geschaeftsfuehrer'], recent:ALL_R, tiles:ALL_R };
+function _rp(){ try{ return D.getData().rolePermissions||{}; }catch(e){ return {}; } }
+function cardRoles(k){ const v=_rp()['home_'+k]; return Array.isArray(v)?v:(CARD_DEF[k]||ALL_R); }
+function cardOn(k,u){
+  u=u||window.cu||{}; const v=_rp()['home_'+k];
+  if(Array.isArray(v)) return v.includes(u.role);
+  if(k==='sys') return u.role==='admin' || !!(R.hasPermission && R.hasPermission('zugriff_verwaltung',u));   // Standard wie bisher
+  return (CARD_DEF[k]||ALL_R).includes(u.role);
+}
+function cardOrder(){
+  const keys=CARDS.map(c=>c.k); const o=_rp()['home__order'];
+  const base=Array.isArray(o)?o.filter(k=>keys.includes(k)):[];
+  return base.concat(keys.filter(k=>!base.includes(k)));   // neue Karten hinten anhängen
+}
+function _cfgSave(fn){
+  if(!(window.cu && window.cu.role==='admin')){ try{ window.toast&&window.toast('Nur der Administrator-Account kann das ändern.','err'); }catch(e){} return; }
+  try{ D.mutate(d=>{ if(!d.rolePermissions) d.rolePermissions={}; fn(d.rolePermissions); }); }catch(e){ console.error('Startseite-Karten speichern:',e); }
+  const el=document.getElementById('home-cards-section'); if(el) renderHomeCardsConfig(el);
+  if(window._activeModule==='start') renderHome();
+}
+function homeCfgSet(k,role,on){ _cfgSave(rp=>{ const cur=new Set(cardRoles(k)); if(on) cur.add(role); else cur.delete(role); rp['home_'+k]=ALL_R.filter(r=>cur.has(r)); }); }
+function homeCfgMove(k,dir){ _cfgSave(rp=>{ const o=cardOrder(); const i=o.indexOf(k), j=i+dir; if(i<0||j<0||j>=o.length) return; [o[i],o[j]]=[o[j],o[i]]; rp['home__order']=o; }); }
+function homeCfgReset(){ if(!confirm('Karten der Startseite auf den Standard zurücksetzen?')) return;
+  _cfgSave(rp=>{ CARDS.forEach(c=>{ delete rp['home_'+c.k]; }); delete rp['home__order']; }); }
+function renderHomeCardsConfig(el){
+  try{
+    const adm=!!(window.cu && window.cu.role==='admin');
+    const order=cardOrder();
+    const rows=order.map((k,i)=>{ const c=CARDS.find(x=>x.k===k); if(!c) return ''; const rs=cardRoles(k);
+      return `<tr><td style="padding:5px 8px;white-space:nowrap">
+          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i>0?'':'disabled'} onclick="homeCfgMove('${k}',-1)" title="nach oben">↑</button>
+          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i<order.length-1?'':'disabled'} onclick="homeCfgMove('${k}',1)" title="nach unten">↓</button></td>
+        <td style="padding:5px 8px"><b>${esc(c.l)}</b>${c.hint?`<div style="font-size:11px;color:var(--muted)">${esc(c.hint)}</div>`:''}</td>
+        ${HOME_ROLES.map(([r])=>`<td style="text-align:center;padding:5px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${rs.includes(r)?'checked':''} ${adm?'':'disabled'} onchange="homeCfgSet('${k}','${r}',this.checked)"></td>`).join('')}</tr>`; }).join('');
+    el.innerHTML=`<div style="margin-top:22px">
+      <h3 style="margin:0 0 4px;color:var(--primary)">🏠 Startseite – Karten pro Rolle</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Welche Karten jede Rolle auf der Startseite sieht und in welcher Reihenfolge (gilt für alle mit eingeschalteter Startseite).${adm?'':' Ändern kann nur der Administrator-Account.'}</p>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:13px;min-width:620px">
+        <thead><tr><th></th><th style="text-align:left;padding:6px 8px">Karte</th>${HOME_ROLES.map(([,l])=>`<th style="font-size:11px;padding:6px 8px;text-align:center">${esc(l)}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${adm?'<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="homeCfgReset()">↺ Standard wiederherstellen</button>':''}</div>`;
+  }catch(e){ console.error('renderHomeCardsConfig:',e); }
+}
+
 // ── Styles ─────────────────────────────────────────────────────────
 let _css=false;
 function _styles(){
@@ -89,24 +150,27 @@ export function renderHome(){
     const gruss=h<11?'Guten Morgen':(h<17?'Hallo':'Guten Abend');
     const first=String(cu.name||'').trim().split(/\s+/)[0]||'';
     const datum=new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    const leitung=(cu.role==='leitung'||cu.role==='geschaeftsfuehrer');
+    // Welche Karten in welcher Reihenfolge: Verwaltung → Organisation → „Startseite – Karten pro Rolle"
+    // (cardOn) – UND die Karte muss für die Person überhaupt Sinn ergeben (Stempeln nur mit ZE, System nur Verwaltung).
+    const BOX={
+      wx:   ()=>'<div class="home-card" id="home-wx"><p class="home-h">🌤️ Wetter &amp; Wind</p><div class="home-empty">Lädt …</div></div>',
+      stamp:()=>_stampAllowed(cu)?'<div class="home-card" id="home-stamp"></div>':'',
+      sys:  ()=>_sysAllowed(cu)?'<div class="home-card" id="home-sys"><p class="home-h">🛠️ System</p><div class="home-empty">Lädt …</div></div>':'',
+      todo: ()=>'<div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>',
+      notes:()=>'<div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>',
+      team: ()=>'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>',
+      recent:()=>'<div class="home-card wide" id="home-recent" style="display:none"></div>',
+      tiles:()=>'<div class="home-tiles" id="home-tiles" style="grid-column:1/-1;margin-top:0"></div>',
+    };
+    const grid=cardOrder().filter(k=>cardOn(k,cu)).map(k=>BOX[k]?BOX[k]():'').join('');
     root.innerHTML=`<div class="home-wrap">
       <img class="home-bgl" src="icons/tps-logo-segel.svg" alt="" aria-hidden="true">
       <div class="home-in">
         <p class="home-hi">${esc(gruss)}${first?', '+esc(first):''}</p>
         <p class="home-date">${esc(datum)}</p>
-        <div class="home-grid">
-          <div class="home-card" id="home-wx"><p class="home-h">🌤️ Wetter &amp; Wind</p><div class="home-empty">Lädt …</div></div>
-          ${_stampAllowed(cu)?'<div class="home-card" id="home-stamp"></div>':''}
-          ${_sysAllowed(cu)?'<div class="home-card" id="home-sys"><p class="home-h">🛠️ System</p><div class="home-empty">Lädt …</div></div>':''}
-          <div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>
-          <div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>
-          ${leitung?'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>':''}
-          <div class="home-card wide" id="home-recent" style="display:none"></div>
-        </div>
-        <div class="home-tiles" id="home-tiles"></div>
+        <div class="home-grid">${grid}</div>
       </div></div>`;
-    _fillStamp(); _fillNotes(); _fillTiles(); if(leitung) _fillTeam(); _fillRecent(); _fillSys();
+    _fillStamp(); _fillNotes(); _fillTiles(); _fillTeam(); _fillRecent(); _fillSys();
     _fillTodo(); _fillWeather();
     clearInterval(_tick);
     _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; return; } _fillStamp(); _fillNotes(); }, 5000);
@@ -411,4 +475,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
+try{ Object.assign(window,{ renderHome, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
