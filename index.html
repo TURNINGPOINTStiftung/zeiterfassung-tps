@@ -17,6 +17,9 @@
 <meta name="apple-mobile-web-app-title" content="Zeiterfassung">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<script>/* Darstellung (Hell/Dunkel) vor dem ersten Zeichnen setzen – siehe utils.js themePref */
+try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')document.documentElement.setAttribute('data-theme',_t);}catch(e){}</script>
+<meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="css/styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>

@@ -750,15 +750,15 @@ html .nav-tab:hover{color:var(--primary)}
 html .nav-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
 
 /* Monatstabelle */
-html .zt thead th{background:var(--brand);color:#fff}
-html .zt thead th.block-head{background:#2b4a85}
-html .zt tbody tr{background:var(--surface)}
-html .zt tbody tr:nth-child(even){background:var(--row-alt)}
-html .zt tbody tr.weekend{background:var(--weekend)}
-html .zt td{border-color:var(--border)}
-html .zt td input.t-inp,html .zt td select.zuord,html .zt td input.bem,html .zt td input.kt-min{border-radius:var(--radius-xs)}
-html .zt tfoot td{background:var(--surface-3);color:var(--text)}
-html .zt td.sep-c,html .zt thead th.sep-head,html .zt thead th.sep-col2{background:var(--border-strong)}
+@media (min-width:641px){ html .zt thead th{background:var(--brand);color:#fff} }
+@media (min-width:641px){ html .zt thead th.block-head{background:#2b4a85} }
+@media (min-width:641px){ html .zt tbody tr{background:var(--surface)} }
+@media (min-width:641px){ html .zt tbody tr:nth-child(even){background:var(--row-alt)} }
+@media (min-width:641px){ html .zt tbody tr.weekend{background:var(--weekend)} }
+@media (min-width:641px){ html .zt td{border-color:var(--border)} }
+@media (min-width:641px){ html .zt td input.t-inp,html .zt td select.zuord,html .zt td input.bem,html .zt td input.kt-min{border-radius:var(--radius-xs)} }
+@media (min-width:641px){ html .zt tfoot td{background:var(--surface-3);color:var(--text)} }
+@media (min-width:641px){ html .zt td.sep-c,html .zt thead th.sep-head,html .zt thead th.sep-col2{background:var(--border-strong)} }
 html .wstd-over td,html .over10h td{background:var(--danger-bg)}
 html .plausi-warn td{background:var(--warn-bg)}
 
@@ -787,3 +787,53 @@ html .home-card{backdrop-filter:none}
 
 /* Druck immer hell */
 @media print{:root,:root[data-theme="dark"]{--bg:#fff;--surface:#fff;--surface-2:#f7f9fc;--surface-3:#eef2f7;--border:#d0d7e2;--text:#111;--muted:#555;--primary:#203869;--row-alt:#f9fbfd;--weekend:#fff7ec;color-scheme:light}}
+
+/* ── Design 2026 · Auffrischung (sichtbar moderner, CI bleibt) ─────────────────────── */
+html .module-bar,html .app-header{min-height:60px;padding-top:6px;padding-bottom:6px;border-bottom-width:2px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 4px 14px rgba(16,24,40,.10)}
+html .module-bar .mb-logo{height:40px}
+html .user-badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18)}
+html .user-badge:hover{background:rgba(255,255,255,.24)}
+html .app-content{padding:24px}
+@media (max-width:640px){ html .app-content{padding:14px} }
+
+/* Reiter: klare Markierung, mehr Luft */
+@media (min-width:641px){ html .app-nav{padding:0 24px;gap:6px} html .nav-tab{padding:13px 14px;font-size:14px;border-bottom-width:2px} }
+
+/* Monatstabelle: heller, ruhiger Kopf statt schwerer Navy-Blöcke */
+@media (min-width:641px){ html .tbl-wrap{border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-1);overflow:auto;background:var(--surface)} }
+@media (min-width:641px){ html .zt thead th{background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:700;letter-spacing:0;border-bottom:1px solid var(--border)} }
+@media (min-width:641px){ html .zt thead th.block-head{background:var(--primary-soft);color:var(--primary);font-size:11.5px;letter-spacing:.02em} }
+@media (min-width:641px){ html .zt td.sep-c,html .zt thead th.sep-head,html .zt thead th.sep-col2{background:var(--border)} }
+@media (min-width:641px){ html .zt tbody tr:hover{background:var(--surface-2)} }
+@media (min-width:641px){ html .zt td.date-c{font-weight:600;color:var(--text)} }
+@media (min-width:641px){ html .zt td.total-c{color:var(--text);font-weight:700} }
+@media (min-width:641px){ html .zt td input.t-inp,html .zt td select.zuord,html .zt td input.bem,html .zt td input.kt-min{background-color:var(--surface-2);border-color:transparent} }
+@media (min-width:641px){ html .zt td input.t-inp:hover,html .zt td select.zuord:hover,html .zt td input.bem:hover,html .zt td input.kt-min:hover{border-color:var(--border-strong)} }
+@media (min-width:641px){ html .zt td input.t-inp:focus,html .zt td select.zuord:focus,html .zt td input.bem:focus,html .zt td input.kt-min:focus{background-color:var(--surface);border-color:var(--primary)} }
+@media (min-width:641px){ html .zt tr.weekend td input,html .zt tr.weekend td select{background-color:transparent} }
+
+/* Kennzahlen-Leiste & Kacheln */
+html .info-panel{padding:16px 20px;gap:24px}
+html .info-item .val{font-size:16px}
+html .s-card{padding:16px 18px}
+html .s-card .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+
+/* Startseite: Modul-Kacheln mit Symbol im Farbkreis */
+html .home-tile,html .home-mod{border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-1);transition:transform .12s,box-shadow .15s,border-color .15s}
+html .home-tile:hover,html .home-mod:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:var(--primary-l)}
+
+/* Monatsnavigation */
+html .month-nav h2{font-size:22px;font-weight:700;letter-spacing:-.02em}
+html .home-tile .ic{display:flex;align-items:center;justify-content:center;width:46px;height:46px;margin:2px auto 8px;border-radius:50%;background:var(--primary-soft);font-size:24px}
+html .home-tile{padding:16px 8px}
+
+/* Handy-Karten der Monatstabelle: Kopf im CI-Navy (auch im Dunkelmodus), Flächen über Variablen */
+@media (max-width:640px){ html .zt td.date-c{background:var(--brand)} html .zt tbody tr{background:var(--surface)} html .zt tbody tr.weekend{background:var(--weekend)} }
+/* Handy-Karten: einheitliche Kartenfläche (keine weißen Flecken), Datum nicht abschneiden */
+@media (max-width:640px){
+  html .zt tbody td:not(.date-c):not(.day-c):not(.kw-c){background:transparent!important}
+  html .zt td.date-c{font-size:14px;padding:10px 8px}
+  html .zt tbody tr{border-radius:var(--radius);box-shadow:var(--shadow-1)}
+}
+/* Handy: Felder einer Block-Zeile auf gleiche Höhe (Platzhalter für das „Block 1/2“-Label) */
+@media (max-width:640px){ html .zt tbody td:nth-child(5)::before,html .zt tbody td:nth-child(6)::before,html .zt tbody td:nth-child(11)::before,html .zt tbody td:nth-child(12)::before{content:"\00a0";display:block;font-size:9px;margin-bottom:3px;line-height:1} }

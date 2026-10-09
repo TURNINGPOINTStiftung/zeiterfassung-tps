@@ -184,3 +184,14 @@ export function wsCollectPeriods(idPrefix, count){
   }catch(e){}
   return out;
 }
+
+// ── Darstellung (Hell/Dunkel) ────────────────────────────────────
+// Pro Gerät in localStorage 'tps_theme' = 'light' | 'dark' | (leer = automatisch nach Gerät).
+// index.html setzt das Attribut schon vor dem ersten Zeichnen (kein Aufblitzen).
+export function themePref(){ try{ const t=localStorage.getItem('tps_theme'); return (t==='light'||t==='dark')?t:'auto'; }catch(e){ return 'auto'; } }
+export function setThemePref(v){
+  try{ if(v==='light'||v==='dark') localStorage.setItem('tps_theme',v); else localStorage.removeItem('tps_theme'); }catch(e){}
+  const r=document.documentElement;
+  if(v==='light'||v==='dark') r.setAttribute('data-theme',v); else r.removeAttribute('data-theme');
+}
+if(typeof window!=='undefined'){ window.setThemePref=setThemePref; window.themePref=themePref; }
