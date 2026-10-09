@@ -11,17 +11,19 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 ## Inhalt
 
 1. [Anmelden & Passwort](#1-anmelden--passwort)
-2. [Rollen – wer darf was](#2-rollen--wer-darf-was)
-3. [Aufbau & Navigation](#3-aufbau--navigation)
+2. [Rollen & Zugriffe – wer darf was](#2-rollen--zugriffe--wer-darf-was)
+3. [Startseite & Navigation](#3-startseite--navigation)
 4. [Zeiten erfassen](#4-zeiten-erfassen)
-5. [Pausen, Nachtschicht & Rundung](#5-pausen-nachtschicht--rundung)
+5. [Pausen, Nachtschicht, Zeitumstellung & Rundung](#5-pausen-nachtschicht-zeitumstellung--rundung)
 6. [Die Kennzahlen oben](#6-die-kennzahlen-oben)
 7. [Monat einreichen](#7-monat-einreichen)
 8. [Abwesenheiten (Urlaub, Krank …)](#8-abwesenheiten-urlaub-krank-)
-9. [Für Leitung & Geschäftsführung](#9-für-leitung--geschäftsführung)
-10. [Für Administratoren](#10-für-administratoren)
-11. [App installieren (Handy/Tablet)](#11-app-installieren-handytablet)
-12. [Häufige Fragen](#12-häufige-fragen)
+9. [Weitere Bereiche: CRM, Projekte, Kalender, Shop](#9-weitere-bereiche-crm-projekte-kalender-shop)
+10. [Für Leitung & Geschäftsführung](#10-für-leitung--geschäftsführung)
+11. [Für Administratoren & System-Verwaltung](#11-für-administratoren--system-verwaltung)
+12. [Mein Profil: Darstellung, Startseite, Sicherungen](#12-mein-profil-darstellung-startseite-sicherungen)
+13. [App installieren (Handy/Tablet)](#13-app-installieren-handytablet)
+14. [Häufige Fragen](#14-häufige-fragen)
 
 ---
 
@@ -36,20 +38,24 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 **Tastatur-Bedienung:** Du kannst dich komplett mit **Tab / Pfeiltasten / Enter** durch die
 Anmeldung bewegen – die Maus ist nicht nötig.
 
-**„Angemeldet bleiben":** Auf Wunsch werden Name und Passwort auf dem Gerät gespeichert,
-damit du dich nicht jedes Mal neu anmelden musst. **Nur auf eigenen, privaten Geräten nutzen.**
+**„Angemeldet bleiben":** Merkt sich auf diesem Gerät deinen **Namen** und hält dich angemeldet.
+**Nur auf eigenen, privaten Geräten nutzen.** Beim **Abmelden** werden alle gespeicherten Daten vom
+Gerät gelöscht – wichtig auf geteilten Geräten.
 
 ### Passwort vergessen
-1. In der Anmeldemaske auf **„Passwort vergessen?"** klicken.
-2. Die hinterlegte **E-Mail-Adresse** eingeben.
-3. Du bekommst eine **E-Mail mit einem Link**, über den du ein neues Passwort vergeben kannst.
+1. In der Anmeldemaske auf **„Passwort vergessen?"** klicken und deinen **Namen** eingeben.
+2. Die Anfrage landet beim **Administrator**. Er vergibt dir ein **Einmal-Passwort** und gibt es dir
+   persönlich oder telefonisch weiter.
+3. Mit **Name + Einmal-Passwort** anmelden und danach im **Profil** ein eigenes Passwort festlegen
+   (mindestens 8 Zeichen).
 
-> Voraussetzung: Bei dir ist eine E-Mail-Adresse hinterlegt (macht die Leitung/der Admin in den
-> Einstellungen). Kommt keine Mail an, bitte auch den **Spam-Ordner** prüfen.
+### Passwort ändern
+**Profil** (Klick auf deinen Namen oben rechts) → **„🔒 Passwort ändern"**: aktuelles und neues Passwort
+eingeben, **Speichern**. Das neue Passwort gilt sofort auf allen Geräten.
 
 ---
 
-## 2. Rollen – wer darf was
+## 2. Rollen & Zugriffe – wer darf was
 
 | Rolle | Sieht / darf … |
 |---|---|
@@ -60,24 +66,41 @@ damit du dich nicht jedes Mal neu anmelden musst. **Nur auf eigenen, privaten Ge
 | **Geschäftsführung** | Eingegangene Berichte aller Mitarbeitenden, Jahresberichte. |
 | **Administrator** | Vollzugriff: Benutzer & Teams verwalten, Berechtigungen, alle Module. |
 
+**Zugriffe pro Bereich:** Für jede Person legt der Administrator je Bereich (Zeiterfassung, CRM,
+Projektmanagement, Kalender, Shop …) fest:
+- **Kein** – Bereich ist nicht sichtbar.
+- **Nutzen** – Bereich ansehen und normal damit arbeiten.
+- **Verwaltend** – zusätzlich die Einstellungen des Bereichs ändern (z. B. im Kalender Termine
+  anlegen, im Shop Artikel und Orte pflegen, im CRM Felder und Kategorien).
+- **System-Verwaltung** – Stammdaten anderer Mitarbeitender pflegen, archivieren/wiederherstellen,
+  Daten exportieren. **Rechte vergeben kann nur das Administrator-Konto.**
+
 > Eine Person kann **mehreren Teams** zugeordnet sein. Die Leitung sieht standardmäßig **ihr(e) Team(s)**;
 > eine Leitung **ohne Team** sieht alle (Admin-ähnlich).
 
 ---
 
-## 3. Aufbau & Navigation
+## 3. Startseite & Navigation
 
-**Reiter (oben, je nach Rolle sichtbar):**
+**Startseite:** Nach dem Anmelden landest du auf deiner Startseite (sofern freigeschaltet) mit
+Karten wie **Wetter & Wind**, **Stempeln**, **Was ansteht**, **Mitteilungen**, **Team** (Leitung/GF)
+und **Kacheln** zu allen Bereichen. Mit **„Anordnen"** verschiebst oder versteckst du Karten;
+⭐ merkt sich Favoriten. Welche Karten erscheinen, stellst du im **Profil** unter „Meine Startseite" ein.
+
+**Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, Projektmanagement,
+Kalender, Shop …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
+
+**Zurück-Taste & Links:** Die Zurück-Taste des Browsers/Handys springt zur vorherigen Ansicht in der App.
+Jede Ansicht hat eine eigene Adresse – Neu laden behält den Ort, Links lassen sich teilen.
+
+**Reiter in der Zeiterfassung (je nach Rolle sichtbar):**
 
 - **Zeiterfassung** – dein Monatsblatt (Standardansicht).
 - **Stempeln** – Ein-/Ausstempeln (am Handy eigener Reiter; am PC der Button **⏱ Stempeln** oben rechts).
 - **Mitarbeiterübersicht** – nur Leitung/GF/Admin.
 - **Eingegangene Berichte** – nur GF.
 - **Abwesenheiten** – Urlaub/Krank beantragen & verwalten.
-- **Einstellungen** – nur Admin (Benutzer, Teams, Rechte).
-
-Über dem Programm gibt es (aktuell nur für den Admin) eine **Modul-Leiste**:
-**Zeiterfassung · Website · Forum · CRM**. Diese Bereiche werden nach und nach ausgebaut.
+- **Vertretungen** – Vertretungsregelung bei Ausfall einer Team-Leitung (GF/Admin).
 
 **Monat wechseln:** Mit den Pfeilen **◀ ▶** in der Zeiterfassung blätterst du durch die Monate.
 
@@ -120,7 +143,7 @@ Telefonate, Veranstaltung* …). Welche Kategorien angeboten werden, hängt vom 
 
 ---
 
-## 5. Pausen, Nachtschicht & Rundung
+## 5. Pausen, Nachtschicht, Zeitumstellung & Rundung
 
 **Pausen werden automatisch berücksichtigt** – du musst nichts manuell abziehen:
 
@@ -141,6 +164,11 @@ wird diese angerechnet.
 Vortag (… – 23:59) und den Folgetag (00:00 – …) automatisch als **eine** Schicht und ordnet die
 Pause korrekt zu. Du musst dafür nichts Besonderes tun.
 
+**Sommer-/Winterzeit:** In der Nacht der Zeitumstellung (letzter Sonntag im **März** bzw. **Oktober**)
+rechnet das System automatisch richtig: Ein Zeitblock, der die Zeit **2–3 Uhr** ganz überspannt, zählt im
+Oktober **1 Std. mehr** (die Stunde gibt es doppelt) und im März **1 Std. weniger**. In der Zeile steht
+dann der Hinweis „+1 h" bzw. „−1 h Zeitumstellung".
+
 ---
 
 ## 6. Die Kennzahlen oben
@@ -152,6 +180,9 @@ Pause korrekt zu. Du musst dafür nichts Besonderes tun.
 - **Urlaub genutzt** – Urlaubstage **in diesem Monat**.
 - **Resturlaub** – verbleibende Tage, z. B. *„6 von 30"* (genommen bis einschließlich aktuellem Monat;
   zukünftig genehmigter Urlaub zählt erst in seinem Monat).
+  **Im Januar** wird nicht genommener Urlaub des Vorjahres mitgezählt (z. B. *„31 T – 30 T 2027 +
+  1 T aus 2026"*). Urlaub im Januar wird **zuerst vom Vorjahresrest** abgezogen; was Ende Januar übrig ist,
+  verfällt. (Gilt ab dem Jahreswechsel 2026/2027.)
 - **Übertrag → nächster Monat** – Plus-/Minusstunden, die mitgenommen werden.
 - Bei Rollen mit **Monatslimit** (z. B. Werkstudierende/Honorarkräfte): **„Abgerechnet (Limit …)"**
   und der Übertrag des überschüssigen Anteils.
@@ -197,8 +228,10 @@ Die **Zeiterfassung wird automatisch befüllt**:
 
 - **Festangestellte:** Urlaub und AU/Krank erzeugen **Stunden + Zuordnung** (anteilig nach
   Wochenarbeitszeit/Arbeitstagen).
-- **Freiberufler/innen** sowie **Sonstiges / Arbeitszeitausgleich:** **nur eine Bemerkung**,
-  keine Zeitgutschrift.
+- **Freiberufler/innen** sowie **Arbeitszeitausgleich:** **nur eine Bemerkung**, keine Zeitgutschrift.
+- **Sonstiges:** normalerweise **nur eine Bemerkung**. Mit dem Häkchen **„Arbeitszeit gutschreiben"**
+  (z. B. **Bildungsurlaub**) wird die **reine Tagesarbeitszeit** eingetragen – ohne Pausenabzug und ohne
+  Rundung, wie bei Krankheit. Solche Anträge muss immer die **Leitung oder Geschäftsführung** genehmigen.
 
 ### Urlaub direkt in der Zeiterfassung
 Trägst du Urlaub bzw. AU/Krank **direkt im Monatsblatt** ein, erscheint das **automatisch unter
@@ -212,7 +245,24 @@ erkannt.
 
 ---
 
-## 9. Für Leitung & Geschäftsführung
+## 9. Weitere Bereiche: CRM, Projekte, Kalender, Shop
+
+Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
+
+- **CRM (Kontakte):** Vereine, Sozialakteure, Förderer usw. mit Kontaktpersonen, Notizen, Aufgaben und
+  Terminen. Suche oben in der Leiste, 🔔 zeigt Änderungen anderer.
+- **Projektmanagement:** Team-Boards mit Aufgaben (offen / in Arbeit / erledigt) und Veranstaltungen.
+- **Kalender:** Veranstaltungen und Termine neben den Abwesenheiten aller Mitarbeitenden – Konflikte
+  auf einen Blick. **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.
+- **Shop:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
+  **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
+  „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
+- **Verteiler:** gespeicherte E-Mail- und Adresslisten (z. B. für Serienbriefe).
+- **Messemodus:** Kontakte auf Messen offline am Tablet erfassen und später ins CRM übertragen.
+
+---
+
+## 10. Für Leitung & Geschäftsführung
 
 ### Mitarbeiterübersicht (Leitung & Admin)
 - Karten je Mitarbeiter/in mit IST-Stunden, Resturlaub usw.
@@ -236,9 +286,9 @@ der Buchhaltungsversion enthalten.
 
 ---
 
-## 10. Für Administratoren
+## 11. Für Administratoren & System-Verwaltung
 
-Reiter **Einstellungen**:
+Menü ☰ → **Verwaltung**:
 
 - **Benutzer anlegen/bearbeiten:** Name, Rolle(n), Team(s), E-Mail, **Wochenarbeitszeit**,
   **Jahresurlaub**, **Stunden pro Urlaubstag**, Vortrag (Plus/Minus) usw.
@@ -249,16 +299,42 @@ Reiter **Einstellungen**:
   **richtigen Team** zugeordnet. Admin kann die Historie einsehen und ändern.
 - **Berechtigungen:** je Rolle steuern, wer welche Buttons/Funktionen sieht
   (z. B. „An GF senden", „Erinnerungen senden", Abwesenheiten genehmigen, Zeitstempel nutzen).
+- **Zugriffe pro Person** (Kein / Nutzen / Verwaltend je Bereich) – nur das Administrator-Konto.
+- **🔑 Einmal-Passwort:** bei vergessenem Passwort; offene Anfragen erscheinen unter „Mitarbeiter".
+- **Archivieren (✕):** Person verlässt die Stiftung → Zugang wird sofort gesperrt, die Zeitdaten bleiben
+  erhalten. Unter „Archivierte Mitarbeiter" wiederherstellbar.
+- **Daten & Backup:** automatische Tages-Backups, Export/Import.
+
+**System-Verwaltung** (vom Administrator vergebenes Recht): Reiter **Mitarbeiter**, **CRM** und
+**💾 Export**. Stammdaten anderer Personen pflegen (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt …),
+archivieren/wiederherstellen und Daten exportieren (ohne Passwörter). Name, Login, Rolle und Zugriffe
+ändert nur der Administrator; die eigenen Stammdaten ebenfalls.
 
 ### E-Mail-Versand (EmailJS)
-Passwort-Reset und Erinnerungen laufen über **EmailJS**. Die Schlüssel sind in `js/config.js`
+Erinnerungen laufen über **EmailJS**. Die Schlüssel sind in `js/config.js`
 hinterlegt. Vorlagen verwalten: **https://dashboard.emailjs.com/admin/templates**.
 Verwendete Platzhalter in den Vorlagen: `{{to_name}}`, `{{to_email}}`, `{{monat}}`, `{{app_url}}`
 (beim Reset zusätzlich der Reset-Link).
 
 ---
 
-## 11. App installieren (Handy/Tablet)
+## 12. Mein Profil: Darstellung, Startseite, Sicherungen
+
+Klick auf deinen **Namen** oben rechts öffnet dein Profil:
+
+- **Kontaktdaten:** E-Mail, Wohnort (für die Wetter-Karte), Bundesland (Feiertage).
+- **Meine Startseite:** welche Karten du sehen möchtest.
+- **🌓 Darstellung:** **Automatisch** (folgt Hell/Dunkel des Geräts), **Hell** oder **Dunkel**.
+  Gilt für das jeweilige Gerät.
+- **🔒 Passwort ändern.**
+- **Eigene Sicherung:** **„⬇ Backup herunterladen"** sichert deine Zeiterfassung als Datei,
+  **„⬆ Backup wiederherstellen"** spielt sie wieder ein (fehlende Tage werden ergänzt, nichts geht
+  verloren). Optional legt die App **am 10. jeden Monats** automatisch einen Schnappschuss in der Cloud ab.
+- **🔄 App aktualisieren:** holt sofort die neueste Version.
+
+---
+
+## 13. App installieren (Handy/Tablet)
 
 Die Zeiterfassung ist eine **PWA** und lässt sich wie eine App installieren:
 
@@ -271,7 +347,7 @@ Beim Tippen in Felder zoomt Safari nicht mehr ungewollt hinein.
 
 ---
 
-## 12. Häufige Fragen
+## 14. Häufige Fragen
 
 **Die Seite lädt nicht / zeigt alte Inhalte.**
 Einmal **vollständig neu laden** (am PC: `Strg`+`Umschalt`+`R`). Die App holt sich beim Laden immer
@@ -288,8 +364,20 @@ Urlaub wird erst **in seinem Monat** abgezogen.
 **Ich kann den Monat nicht mehr ändern.**
 Er ist vermutlich **eingereicht**. Mit **„↩ Zurückziehen"** wieder öffnen (solange nicht geprüft).
 
-**Keine Reset-/Erinnerungs-Mail erhalten.**
+**Ich habe mein Passwort vergessen.**
+Auf der Anmeldeseite **„Passwort vergessen?"** – der Administrator gibt dir ein Einmal-Passwort.
+
+**Keine Erinnerungs-Mail erhalten.**
 Ist eine **E-Mail-Adresse** hinterlegt? **Spam-Ordner** prüfen. Sonst Admin informieren.
+
+**Die App ist plötzlich dunkel bzw. hell.**
+Unter **Profil → Darstellung** auf **Hell**, **Dunkel** oder **Automatisch** stellen.
+
+**Im Januar steht beim Resturlaub „+ X T aus dem Vorjahr".**
+Das ist nicht genommener Urlaub des Vorjahres – nur im Januar nutzbar, danach verfällt er.
+
+**In der Nacht der Zeitumstellung stimmt meine Stundenzahl nicht?**
+Doch – das System rechnet die doppelte bzw. ausgefallene Stunde automatisch ein (siehe Abschnitt 5).
 
 **Ich habe über Mitternacht gearbeitet.**
 Einfach normal erfassen/stempeln – das System erkennt die **Nachtschicht** und rechnet die Pause
