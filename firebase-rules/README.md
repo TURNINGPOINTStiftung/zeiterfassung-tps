@@ -117,3 +117,15 @@ läuft über die Cloud Function tpsPw (offboard archive:true / reboard restore:t
 Zusätzlich: Recht „Abwesenheiten genehmigen" (grants/genehmigung_abwesenheit) darf wie managers fremde
 entries/$k und ze_audit schreiben (Urlaubs-/Gutschrift-Sync beim Freigeben); Status-Freigabe bleibt managers.
 Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut) + Abwesenheits-Fälle.
+
+## CANDIDATE-v6.json – bereit (noch NICHT live)
+Rückfall: CANDIDATE-v5.json. Neu gegenüber v5: Shop-Daten (`crm/shop*`) nur für Shop-Berechtigte.
+- Freigabelisten `grants/shop_nutzen` (Shop „Nutzen": persönliche Freischaltung `path_shop` oder
+  Zugriffs-Matrix `crm/pathAccess/shop`) und `grants/verw_shop` (Shop „Verwaltend"), App ≥ v428.
+- `shopConfig`, `shopPlaces`: nur Verwaltend. `shopItems`: Nutzen anlegen/ändern, löschen nur Verwaltend.
+- `shopOrders`: Nutzen anlegen/ändern, löschen nur eigene (byId); Verwaltend alles.
+- `shopLoans`: Nutzen anlegen/ändern; Ausleihende ohne Shop-Zugang dürfen ihre eigene Ausleihe
+  bestätigen; löschen nur Verwaltend. `shopLog`: nur anhängbar (Verwaltend darf korrigieren).
+- `crm/$coll` schließt `shop*` aus (neue Shop-Sammlungen brauchen eine eigene Regel).
+Getestet: 20 Fälle im Projekt zeiterfassung-test (ruletest/ruletest_crm, danach zurückgebaut).
+Reihenfolge: App v428 live → Admin einmal anmelden (schreibt grants/shop_*) → v6 veröffentlichen.
