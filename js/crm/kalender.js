@@ -159,34 +159,34 @@ function empTeamById(id){ const d=getData()||{}; const u=(d.users||[]).find(x=>x
 function _styles(){ if(document.getElementById('kal-styles')) return;
   const el=document.createElement('style'); el.id='kal-styles';
   el.textContent=`
-  #kalender-root{flex:1;min-height:0;overflow:auto;background:var(--bg,#eef2f7);padding:18px 18px 60px}
+  #kalender-root{flex:1;min-height:0;overflow:auto;background:var(--surface-2,#eef2f7);padding:18px 18px 60px}
   .kal-wrap{max-width:none;margin:0;width:100%}
-  .kal-h{font-family:var(--ci-serif,Georgia,serif);font-size:1.75rem;font-weight:800;color:var(--text,#15263a);margin:0 0 3px}
+  .kal-h{font-family:var(--ci-serif,Georgia,serif);font-size:1.75rem;font-weight:800;color:var(--primary-d,#15263a);margin:0 0 3px}
   .kal-sub{color:var(--muted,#5d7086);font-size:1rem;margin:0 0 16px;max-width:70ch;line-height:1.5}
   .kal-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
   .kal-seg{display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden}
-  .kal-seg button{appearance:none;border:none;background:var(--white,#fff);color:var(--muted,#5d7086);font:inherit;font-weight:600;font-size:.98rem;padding:9px 16px;cursor:pointer;border-left:1.5px solid var(--border,#c3cedb)}
+  .kal-seg button{appearance:none;border:none;background:var(--surface,#fff);color:var(--muted,#5d7086);font:inherit;font-weight:600;font-size:.98rem;padding:9px 16px;cursor:pointer;border-left:1.5px solid var(--border,#c3cedb)}
   .kal-seg button:first-child{border-left:none} .kal-seg button.on{background:var(--primary,#1a3a5c);color:#fff}
-  .kal-nav{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:var(--text,#15263a);min-width:210px}
-  .kal-nav button{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border,#c3cedb);background:var(--white,#fff);color:var(--text,#15263a);cursor:pointer;font-size:1rem}
-  .kal-today{padding:9px 14px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--white,#fff);color:var(--text,#15263a);font:inherit;font-weight:600;font-size:.94rem;cursor:pointer}
+  .kal-nav{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:var(--primary-d,#15263a);min-width:210px}
+  .kal-nav button{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border,#c3cedb);background:var(--surface,#fff);color:var(--primary-d,#15263a);cursor:pointer;font-size:1rem}
+  .kal-today{padding:9px 14px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--surface,#fff);color:var(--primary-d,#15263a);font:inherit;font-weight:600;font-size:.94rem;cursor:pointer}
   .kal-new{padding:9px 14px;border:none;border-radius:9px;background:var(--primary,#1a3a5c);color:#fff;font:inherit;font-weight:700;font-size:.94rem;cursor:pointer} .kal-new:hover{filter:brightness(1.1)}
-  .kal-sel{font:inherit;font-size:.98rem;padding:9px 12px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--white,#fff);color:var(--text,#15263a)}
+  .kal-sel{font:inherit;font-size:.98rem;padding:9px 12px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--surface,#fff);color:var(--primary-d,#15263a)}
   .kal-spacer{flex:1}
   .kal-legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:.9rem;color:var(--muted,#5d7086);margin:0 0 14px}
   .kal-lg{display:inline-flex;align-items:center;gap:6px} .kal-sw{width:15px;height:15px;border-radius:3px;display:inline-block}
-  .kal-board{background:var(--white,#fff);border:1px solid var(--border,#dce3ec);border-radius:12px;box-shadow:0 1px 3px rgba(32,56,105,.06);overflow:hidden}
+  .kal-board{background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:12px;box-shadow:0 1px 3px rgba(32,56,105,.06);overflow:hidden}
   .kal-scroll{overflow-x:auto}
   .kal-grid{display:block}
   .kal-row{display:grid;align-items:stretch;border-bottom:1px solid var(--border,#dce3ec)}
-  .kal-name{position:sticky;left:0;z-index:3;background:var(--white,#fff);border-right:2px solid var(--border,#c3cedb);padding:0 12px;display:flex;align-items:center;font-weight:600;font-size:.96rem;grid-column:1;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kal-name{position:sticky;left:0;z-index:3;background:var(--surface,#fff);border-right:2px solid var(--border,#c3cedb);padding:0 12px;display:flex;align-items:center;font-weight:600;font-size:.96rem;grid-column:1;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .kal-head{position:sticky;top:0;z-index:5;background:var(--primary,#1a3a5c);color:#fff}
   .kal-head .kal-name{background:var(--primary,#1a3a5c);color:#fff;border-right-color:rgba(255,255,255,.25);z-index:6}
   .kal-dh{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 0;border-right:1px solid rgba(255,255,255,.14);font-size:.82rem;line-height:1.18}
   .kal-dh .dow{opacity:.75;font-size:.72rem;text-transform:uppercase} .kal-dh .dn{font-weight:700;font-size:.98rem}
   .kal-dh.we{background:rgba(0,0,0,.16)} .kal-mh{grid-row:1;display:flex;align-items:center;justify-content:center;padding:8px 0;border-right:1px solid rgba(255,255,255,.16);font-size:.88rem;font-weight:700}
-  .kal-teamrow{background:var(--row-alt,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:7px 14px;font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#5d7086);position:sticky;left:0;z-index:2}
-  .kal-cell{grid-row:1;border-right:1px solid var(--border,#e6ebf2);min-height:42px;position:relative} .kal-cell.we{background:#eef1f5} .kal-cell.today{background:#fff3e0}
+  .kal-teamrow{background:var(--surface-2,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:7px 14px;font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#5d7086);position:sticky;left:0;z-index:2}
+  .kal-cell{grid-row:1;border-right:1px solid var(--border,#e6ebf2);min-height:42px;position:relative} .kal-cell.we{background:var(--surface-2,#eef1f5)} .kal-cell.today{background:var(--warn-bg,#fff3e0)}
   .kal-cell.cf{background:rgba(240,169,46,.14)}
   .kal-cell.mon{border-left:2px solid rgba(120,140,170,.32)}
   .kal-dh.mon{border-left:2px solid rgba(255,255,255,.32)}
@@ -197,24 +197,24 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-ev{align-self:stretch;margin:2px 3px;border-radius:5px;display:flex;align-items:center;gap:4px;padding:0 9px;font-size:.88rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.2)}
   .kal-evband .kal-cell{min-height:0}
   .kal-ev-mark{position:absolute;top:4px;height:20px;border-radius:4px;min-width:5px;display:flex;align-items:center;gap:4px;padding:0 7px;font-size:.82rem;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;z-index:2}
-  .kal-ev.cf,.kal-ev-mark.cf{outline:2px solid #f0a92e;outline-offset:1px}
+  .kal-ev.cf,.kal-ev-mark.cf{outline:2px solid var(--warn,#f0a92e);outline-offset:1px}
   .kal-wline{position:absolute;top:0;bottom:0;width:1px;background:rgba(120,140,170,.18);z-index:0}
-  .kal-today-line{position:absolute;top:0;bottom:0;width:2px;background:#e8892b;z-index:4}
-  .kal-kwrow{position:sticky;top:38px;z-index:4;background:var(--row-alt,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec)}
-  .kal-kwrow .kal-name{background:var(--row-alt,#f4f7fb);font-size:.76rem;color:var(--muted,#5d7086)}
+  .kal-today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--warn,#e8892b);z-index:4}
+  .kal-kwrow{position:sticky;top:38px;z-index:4;background:var(--surface-2,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec)}
+  .kal-kwrow .kal-name{background:var(--surface-2,#f4f7fb);font-size:.76rem;color:var(--muted,#5d7086)}
   .kal-kwtrack{grid-column:2 / -1;grid-row:1;position:relative;min-height:22px}
   .kal-kwlab{position:absolute;top:4px;font-size:10px;font-weight:600;color:#8598ab;padding-left:2px}
   .kal-empty{padding:26px;text-align:center;color:var(--muted,#5d7086);font-size:.92rem}
-  .kal-tip{position:fixed;z-index:99999;background:#15263a;color:#fff;font-size:15.5px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
+  .kal-tip{position:fixed;z-index:99999;background:var(--primary-d,#15263a);color:#fff;font-size:15.5px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
   .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
   .kal-termin{border:1.5px dashed rgba(255,255,255,.65)}
   .kal-asg{margin:2px;border-radius:4px;min-width:4px;z-index:1}
-  .kal-asg.cf{outline:2px solid #f0a92e;outline-offset:-2px}
+  .kal-asg.cf{outline:2px solid var(--warn,#f0a92e);outline-offset:-2px}
   .kal-yasg{position:absolute;border-radius:4px;min-width:3px;z-index:1}
-  .kal-yasg.cf{outline:2px solid #f0a92e;outline-offset:-2px}
+  .kal-yasg.cf{outline:2px solid var(--warn,#f0a92e);outline-offset:-2px}
   .kal-row.kal-me{position:relative;z-index:1}
   .kal-row.kal-me::after{content:'';position:absolute;inset:0;box-shadow:inset 0 0 0 2px rgba(18,179,71,.8);pointer-events:none;z-index:7}
-  .kal-name.kal-me{background:#eafbef;box-shadow:inset 3px 0 0 #12b347;font-weight:700}
+  .kal-name.kal-me{background:#eafbef;box-shadow:inset 3px 0 0 var(--ok,#12b347);font-weight:700}
   .kal-cf{padding:2px 0}
   .kal-cfitem{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--border,#dce3ec)} .kal-cfitem:last-child{border-bottom:none}
   .kal-cfdate{font-weight:700;font-size:.92rem;color:var(--primary,#1a3a5c);min-width:135px;padding-top:2px}
@@ -229,10 +229,10 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pm-hc:first-child{border-left:none} .kal-pm-hc.we{background:rgba(0,0,0,.16)}
   .kal-pm-kw-h{text-align:center;padding:9px 0;opacity:.85}
   .kal-pm-grid{display:grid;grid-template-columns:50px repeat(7,1fr);border:1px solid var(--border,#dce3ec);border-top:none}
-  .kal-pm-kw{display:flex;align-items:center;justify-content:center;font-size:.84rem;font-weight:700;color:var(--muted,#5d7086);background:var(--row-alt,#f4f7fb);border-right:1px solid var(--border,#c3cedb);border-bottom:1px solid var(--border,#e6ebf2)}
+  .kal-pm-kw{display:flex;align-items:center;justify-content:center;font-size:.84rem;font-weight:700;color:var(--muted,#5d7086);background:var(--surface-2,#f4f7fb);border-right:1px solid var(--border,#c3cedb);border-bottom:1px solid var(--border,#e6ebf2)}
   .kal-pm-cell{min-height:108px;border-right:1px solid var(--border,#e6ebf2);border-bottom:1px solid var(--border,#e6ebf2);padding:5px 6px;overflow:hidden}
-  .kal-pm-cell.we{background:#f7f9fc} .kal-pm-cell.out{background:#fafbfd} .kal-pm-cell.today{background:#fff3e0}
-  .kal-pm-dn{font-size:.92rem;font-weight:700;color:var(--muted,#5d7086);margin-bottom:4px} .kal-pm-cell.out .kal-pm-dn{color:#c2ccd8} .kal-pm-cell.today .kal-pm-dn{color:#e8892b}
+  .kal-pm-cell.we{background:var(--surface-2,#f7f9fc)} .kal-pm-cell.out{background:#fafbfd} .kal-pm-cell.today{background:var(--warn-bg,#fff3e0)}
+  .kal-pm-dn{font-size:.92rem;font-weight:700;color:var(--muted,#5d7086);margin-bottom:4px} .kal-pm-cell.out .kal-pm-dn{color:#c2ccd8} .kal-pm-cell.today .kal-pm-dn{color:var(--warn,#e8892b)}
   .kal-pm-items{display:flex;flex-direction:column;gap:4px}
   .kal-pchip{font-size:.82rem;font-weight:600;padding:3px 7px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 1px rgba(0,0,0,.08)}
   .kal-pchip.kal-clickable{cursor:pointer} .kal-pchip.kal-clickable:hover{filter:brightness(1.07)}
@@ -240,18 +240,18 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pw{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden}
   .kal-pw-corner{background:var(--primary,#1a3a5c);border-radius:8px 0 0 0}
   .kal-pw-dh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;font-size:.86rem;padding:8px 6px;text-align:center;border-left:1px solid rgba(255,255,255,.14)}
-  .kal-pw-dh.we{background:rgba(0,0,0,.16)} .kal-pw-dh.today{box-shadow:inset 0 -3px 0 #e8892b}
-  .kal-pw-tl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-size:.78rem;font-weight:700;padding:4px 8px;border-top:1px solid var(--border,#e6ebf2);display:flex;align-items:center;justify-content:flex-end}
+  .kal-pw-dh.we{background:rgba(0,0,0,.16)} .kal-pw-dh.today{box-shadow:inset 0 -3px 0 var(--warn,#e8892b)}
+  .kal-pw-tl{background:var(--surface-2,#f4f7fb);color:var(--muted,#5d7086);font-size:.78rem;font-weight:700;padding:4px 8px;border-top:1px solid var(--border,#e6ebf2);display:flex;align-items:center;justify-content:flex-end}
   .kal-pw-ad{border-left:1px solid var(--border,#e6ebf2);border-top:1px solid var(--border,#e6ebf2);min-height:34px;padding:4px;display:flex;flex-direction:column;gap:4px}
-  .kal-pw-ad.we{background:#f7f9fc} .kal-pw-ad.today{background:#fff8ef}
+  .kal-pw-ad.we{background:var(--surface-2,#f7f9fc)} .kal-pw-ad.today{background:var(--warn-bg,#fff8ef)}
   .kal-pw-hc{border-left:1px solid var(--border,#e6ebf2);border-top:1px solid var(--border,#e6ebf2);min-height:34px;padding:3px;display:flex;flex-direction:column;gap:3px}
-  .kal-pw-hc.we{background:#f7f9fc} .kal-pw-hc.today{background:#fff8ef}
+  .kal-pw-hc.we{background:var(--surface-2,#f7f9fc)} .kal-pw-hc.today{background:var(--warn-bg,#fff8ef)}
   .kal-py{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;font-size:12px}
   .kal-py-corner{background:var(--primary,#1a3a5c)}
   .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:7px 0;font-size:.84rem;border-left:1px solid rgba(255,255,255,.14)}
-  .kal-py-dl{background:var(--row-alt,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;font-size:.8rem;border-top:1px solid var(--border,#eef2f7)}
+  .kal-py-dl{background:var(--surface-2,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;font-size:.8rem;border-top:1px solid var(--border,#eef2f7)}
   .kal-py-cell{min-height:36px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;padding:0;position:relative;overflow:hidden}
-  .kal-py-cell.empty{background:repeating-linear-gradient(45deg,#d3dae4,#d3dae4 3px,#e7ecf2 3px,#e7ecf2 7px)} .kal-py-cell.we{background:#f2f5f9} .kal-py-cell.today{outline:2px solid #e8892b;outline-offset:-2px;z-index:1}
+  .kal-py-cell.empty{background:repeating-linear-gradient(45deg,#d3dae4,#d3dae4 3px,#e7ecf2 3px,#e7ecf2 7px)} .kal-py-cell.we{background:#f2f5f9} .kal-py-cell.today{outline:2px solid var(--warn,#e8892b);outline-offset:-2px;z-index:1}
   .kal-py-segs{flex:1;display:grid;gap:1px;grid-auto-rows:minmax(32px,1fr)}
   .kal-py-seg{min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .kal-py-seg.kal-clickable{cursor:pointer} .kal-py-seg.kal-clickable:hover{filter:brightness(1.08)}
@@ -297,7 +297,7 @@ function _dayGrid(days){
   if(items.length){
     const laneN=Math.max(1,_laneAssign(items));
     const laneH=laneN===1?42:(laneN===2?34:28);
-    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:#dc2626;grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
+    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:var(--danger,#dc2626);grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
     days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
     items.forEach(it=>{ h+=namedBar(it); });
     h+='</div>';
@@ -370,7 +370,7 @@ function _yearGrid(months, title){
   const yItems=items.filter(it=>inYear(it.von,it.bis));
   if(yItems.length){
     const bN=Math.max(1,_laneAssign(yItems));
-    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:#dc2626">Veranstaltungen</div>'+mcells();
+    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:var(--danger,#dc2626)">Veranstaltungen</div>'+mcells();
     h+='<div class="kal-track" style="min-height:'+(bN*mH+6)+'px">'+wlines+todayLine;
     yItems.forEach(it=>{ h+=namedMark(it); });
     h+='</div></div>';
@@ -422,7 +422,7 @@ function _conflictList(from,to){
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+sub+'</div>';
     if(cnt) h+='<div class="kal-chips">'+absentList.map(a=>{const m=KMETA[a.type];return '<span class="kal-chip" style="background:'+m.c+'">'+esc(empName(a.emp))+' · '+m.lbl+'</span>';}).join('')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#16a34a')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
   });
   return h+'</div>';
 }
@@ -528,7 +528,7 @@ function _persConflict(from,to){
     const dl=e.von===e.bis?_deDate(e.von):(_deDate(e.von)+' – '+_deDate(e.bis));
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:#16a34a')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
   });
   return h+'</div>';
 }
@@ -570,11 +570,11 @@ export function renderKalender(){
         <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend">
-        <span class="kal-lg"><span class="kal-sw" style="background:#dc2626"></span>Veranstaltung</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#d97706;border:1.5px dashed #fff"></span>Termin</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:#2563eb"></span>Abwesend (Urlaub/AZA)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:var(--danger,#dc2626)"></span>Veranstaltung</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:var(--warn,#d97706);border:1.5px dashed #fff"></span>Termin</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:var(--info,#2563eb)"></span>Abwesend (Urlaub/AZA)</span>
         ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (heller Balken auf der Zeile)</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid #f0a92e"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
+        <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid var(--warn,#f0a92e)"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
       ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll">${_boardHtml()}</div></div>`}
     </div>`;

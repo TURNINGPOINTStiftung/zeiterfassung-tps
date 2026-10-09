@@ -171,7 +171,7 @@ function _previewRestore(blob, inputEl){
   openModal('<h3 style="margin-bottom:8px">↩ Zeiterfassung wiederherstellen</h3>'
     + '<p style="font-size:13px;color:var(--muted);margin-bottom:10px">Folgende <b>' + restore.length + ' Monate</b> werden aus dem Backup in deine Zeiterfassung eingespielt:</p>'
     + '<div style="margin-bottom:12px;line-height:1.9">' + list + '</div>'
-    + '<div style="background:#f0f4f8;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text);margin-bottom:6px">'
+    + '<div style="background:var(--surface-2,#f0f4f8);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text);margin-bottom:6px">'
     + '↳ Fehlende Tage werden <b>ergänzt</b>, abweichende aus dem Backup <b>übernommen</b>. Bereits vorhandene Daten gehen dabei <b>nicht verloren</b>.'
     + (approved.length ? '<br>🔒 ' + approved.length + ' <b>genehmigte</b> Monat(e) werden übersprungen (geschützt).' : '')
     + (foreign ? '<br>ℹ ' + foreign + ' Monat(e) aus der Datei gehören nicht zu deinem Konto und werden übersprungen.' : '')

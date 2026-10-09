@@ -390,7 +390,7 @@ initFirebase().then(async function(){
   try{ populateLoginDropdown(); }
   catch(e){
     const el=document.getElementById('login-user-list');
-    if(el) el.innerHTML='<div style="background:#fdd;border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: '+e.message+'</div>';
+    if(el) el.innerHTML='<div style="background:var(--danger-bg,#fdd);border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: '+e.message+'</div>';
     console.error('Boot-Fehler:',e);
   }
 }).catch(function(e){

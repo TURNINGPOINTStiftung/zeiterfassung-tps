@@ -47,7 +47,7 @@ export function renderVertretungen(){
     const zeit=_vtDate(v.von)+(v.bis?' – '+_vtDate(v.bis):' – offen');
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap">
       <span>🔄 <strong>${esc(v.team)}</strong> → ${esc(v.deputyName||'')} <span style="color:var(--muted);font-size:12px">(${esc(zeit)})</span> · ${state}</span>
-      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung('${v.id}')">Beenden</button>`:''}<button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung('${v.id}')">🗑</button></span>
+      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung('${v.id}')">Beenden</button>`:''}<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung('${v.id}')">🗑</button></span>
     </div>`;
   }).join(''):'<div style="color:var(--muted);font-size:13px;padding:6px 0">Noch keine Vertretungen angelegt.</div>';
 
@@ -57,7 +57,7 @@ export function renderVertretungen(){
 
   content.innerHTML=`
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px;max-width:760px">Fällt eine Team-Leitung aus, kann sie hier zeitweise vertreten werden – auch durch die Geschäftsführung selbst. Die Vertretung sieht, prüft und leitet die Zeiten des Teams in der Mitarbeiterübersicht weiter, bis der Zeitraum endet oder du sie beendest. Die eigentliche Leitung behält ihr Team dabei.</div>
-    <div style="background:var(--card,#fff);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:22px">
+    <div style="background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:22px">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         <label style="font-size:12px;color:var(--muted)">Team<br><select id="vt-team" style="min-width:160px">${teamOpts}</select></label>
         <label style="font-size:12px;color:var(--muted)">Vertreter:in<br><select id="vt-deputy" style="min-width:180px">${depOpts}</select></label>

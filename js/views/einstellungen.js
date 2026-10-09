@@ -58,7 +58,7 @@ export function renderSettings(){
         :'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:#e8f4fd;color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
         <div class="details">${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -103,7 +103,7 @@ export function renderSettings(){
         </div>
       </div>`;
     };
-    let csHtml='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:#f5f7fa;border-radius:6px">Mit ‹ › die Reihenfolge ändern. Urlaub &amp; AU/Krank erscheinen in der Zeiterfassung immer ganz unten.</div>';
+    let csHtml='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--surface-2,#f5f7fa);border-radius:6px">Mit ‹ › die Reihenfolge ändern. Urlaub &amp; AU/Krank erscheinen in der Zeiterfassung immer ganz unten.</div>';
     csHtml+=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
     tms.forEach((t,i)=>{
       const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[_fk(t)]);
@@ -243,7 +243,7 @@ function renderPermissionsMatrix(el){
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:20px">🔐 Berechtigungen</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Admin hat immer alle Rechte. Änderungen gelten sofort.</p>
     <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
       <thead><tr style="background:var(--primary);color:#fff">
         <th style="text-align:left;padding:8px 10px;font-size:12px">Berechtigung</th>
         ${hdrs}
@@ -609,7 +609,7 @@ function userForm(u={}){
     </div>
     <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
     ${isAdminUser
-      ? `<div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
+      ? `<div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
       : `<div style="font-size:12px;color:var(--muted);margin:-2px 0 12px;padding:8px 10px;background:rgba(0,0,0,.03);border-radius:6px">🕒 <b>Systemrolle &amp; Team</b> legst du unten im Zeiterfassung-Block fest — sie erscheinen, sobald die Zeiterfassung auf „Nutzen" oder „Verwalten" steht.</div>`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
@@ -689,7 +689,7 @@ function userForm(u={}){
     </div>
     ${(()=>{
       if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>
-        <div style="padding:8px 12px;background:#fee2e2;border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:#991b1b;font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`;
+        <div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`;
       const acc=(window.crmModuleAccess&&window.crmModuleAccess(u))||{};
       // NULL-START beim Anlegen: ein NEUER Nutzer (noch keine u.id) startet auf „nichts freigeschaltet"
       // (alle Module „Kein"), unabhängig von der Rolle. Zugänge werden bewusst einzeln vergeben.

@@ -245,7 +245,7 @@ function _renderStampBanner(uid){
   const txt=forgottenStampText(uid);
   if(!txt){ if(b) b.remove(); return; }
   if(!b){ b=document.createElement('div'); b.id='zt-stamp-banner'; b.className='no-print';
-    b.style.cssText='background:#fff3cd;border:1.5px solid #e0a800;color:#856404;border-radius:8px;padding:9px 12px;margin:0 0 10px;font-size:13px;font-weight:600';
+    b.style.cssText='background:var(--warn-bg,#fff3cd);border:1.5px solid var(--warn,#e0a800);color:var(--warn-text,#856404);border-radius:8px;padding:9px 12px;margin:0 0 10px;font-size:13px;font-weight:600';
     host.insertBefore(b,tbl); }
   b.textContent='⏰ '+txt+(window.cu&&window.cu.id===uid?' Bitte über „Ausstempeln" mit der richtigen Endzeit beenden.':'');
 }

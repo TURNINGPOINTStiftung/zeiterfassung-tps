@@ -175,7 +175,7 @@ function _zsShowStart(){
       <div style="font-size:38px;font-weight:700;color:var(--primary)">${tStr}</div>
       <div style="font-size:13px;color:var(--muted);margin-top:6px">${dStr}</div>
     </div>
-    <div style="background:#f0fff4;border:1.5px solid var(--ok);border-radius:8px;padding:14px;text-align:center;margin-bottom:18px">
+    <div style="background:var(--ok-bg,#f0fff4);border:1.5px solid var(--ok);border-radius:8px;padding:14px;text-align:center;margin-bottom:18px">
       <div style="font-size:13px;color:var(--ok);font-weight:600">Noch nicht eingestempelt</div>
     </div>
     <div class="modal-btns">
@@ -195,7 +195,7 @@ function _zsShowStop(stamp){
   const cats=getCatsForTeam((cu.team||''));
   const catOpts=cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   openModal(`<h3>⏱ Ausstempeln</h3>
-    <div style="background:#e8f0fe;border:1.5px solid var(--primary-l);border-radius:8px;padding:14px;margin-bottom:16px">
+    <div style="background:var(--info-bg,#e8f0fe);border:1.5px solid var(--primary-l);border-radius:8px;padding:14px;margin-bottom:16px">
       <div style="font-size:12px;color:var(--muted)">Eingestempelt seit <strong>${von}</strong></div>
       <div style="font-size:22px;font-weight:700;color:var(--primary);margin-top:4px">${elapsed} &nbsp;·&nbsp; ${von} – ${bis}</div>
     </div>

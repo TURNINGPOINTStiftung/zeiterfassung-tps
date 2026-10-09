@@ -297,7 +297,7 @@ export async function requestPwReset(){
   try{
     // Unbekannte Namen werden gar nicht erst gesendet – die Antwort ist trotzdem dieselbe.
     if(u){ await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'request',id:u.id})}); }
-    btnsEl.innerHTML='<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">✅ Anfrage gesendet. Der Administrator meldet sich mit einem neuen Startpasswort bei dir.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
+    btnsEl.innerHTML='<div style="background:var(--ok-bg,#d4edda);border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:var(--ok-text,#155724)">✅ Anfrage gesendet. Der Administrator meldet sich mit einem neuen Startpasswort bei dir.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
   }catch(e){
     btnsEl.innerHTML='<div style="color:var(--danger);font-size:13px">Anfrage konnte nicht gesendet werden (keine Verbindung?). Bitte wende dich direkt an den Administrator.</div><div class="modal-btns" style="margin-top:8px"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
   }
@@ -316,7 +316,7 @@ export function showForgotPasswordLegacy(){
       : '<div style="font-size:13px;color:var(--muted)">Bitte wende dich an den Administrator.</div>';
     openModal(`<h3>Passwort vergessen?</h3>
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Bitte wende dich an:</p>
-      <div style="background:#f0f4f8;border-radius:8px;padding:12px 14px;margin-bottom:16px">${contactHtml}</div>
+      <div style="background:var(--surface-2,#f0f4f8);border-radius:8px;padding:12px 14px;margin-bottom:16px">${contactHtml}</div>
       <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>`);
     return;
   }
@@ -354,7 +354,7 @@ export async function sendPasswordReset(){
 
   const showSuccess=()=>{
     msgEl.innerHTML='';
-    btnsEl.innerHTML='<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">✅ Falls diese E-Mail hinterlegt ist, erhältst du gleich einen Reset-Link.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
+    btnsEl.innerHTML='<div style="background:var(--ok-bg,#d4edda);border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:var(--ok-text,#155724)">✅ Falls diese E-Mail hinterlegt ist, erhältst du gleich einen Reset-Link.</div><div class="modal-btns" style="margin-top:12px"><button class="btn btn-primary" onclick="closeModal()">Schließen</button></div>';
   };
 
   // Always show success (don't reveal if email exists – security)
@@ -446,10 +446,10 @@ export function emergencyReset(){
   // Kept for admin use only – called from Einstellungen
   openModal(`<h3>⚠ Notfall-Reset</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Diese Funktion ist nur für Administratoren.</p>
-    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#e67e22;cursor:pointer">Passwörter auf Standard zurücksetzen</summary>
+    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:var(--warn,#e67e22);cursor:pointer">Passwörter auf Standard zurücksetzen</summary>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">Zeitdaten bleiben erhalten!</p>
     <button class="btn btn-warn btn-sm" onclick="resetPasswordsOnly()">Passwörter zurücksetzen</button></details>
-    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:#c0392b;cursor:pointer">Alle Daten löschen</summary>
+    <details style="margin-bottom:12px"><summary style="font-size:13px;font-weight:700;color:var(--danger,#c0392b);cursor:pointer">Alle Daten löschen</summary>
     <p style="font-size:12px;color:var(--muted);margin:8px 0">Löscht alle Zeitdaten unwiderruflich!</p>
     <button class="btn btn-danger btn-sm" onclick="doEmergencyReset()">Alles löschen &amp; neu starten</button></details>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button></div>`);

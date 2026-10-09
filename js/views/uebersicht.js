@@ -327,7 +327,7 @@ export function buildZuordSummary(employees,oy,om,d){
     if(!empRows) return '';
     const catTots=visCats.map(cat=>maps.reduce((s,{map})=>s+(map[cat]||0),0));
     const grandTot=catTots.reduce((s,v)=>s+v,0);
-    const gesamtRow=`<tr style="background:#1a3a5c;color:#fff;font-weight:700">
+    const gesamtRow=`<tr style="background:var(--primary,#1a3a5c);color:#fff;font-weight:700">
       <td style="padding:6px 10px;font-size:12px">Gesamt</td>
       ${catTots.map(t=>`<td style="padding:6px 8px;text-align:right;font-size:12px">${t?hFmt(t):'–'}</td>`).join('')}
       <td style="padding:6px 8px;text-align:right;font-size:12px;border-left:2px solid rgba(255,255,255,0.3)">${grandTot?hFmt(grandTot):'–'}</td>
@@ -460,7 +460,7 @@ export function openJahresübersicht(uid,y){
           <th style="padding:5px 8px;text-align:right;font-size:10px">Gesamt</th>
         </tr></thead>
         <tbody>${catRows}</tbody>
-        <tfoot><tr style="background:#1a3a5c;color:#fff">
+        <tfoot><tr style="background:var(--primary,#1a3a5c);color:#fff">
           <td style="padding:5px 8px;font-size:11px;font-weight:700">Gesamt</td>
           ${totalCells}
           <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700">${minFmt(grand)}</td>
@@ -597,18 +597,18 @@ export function printJahresübersicht(uid,y){
 
   const style=(window._teamReportStyle?.()??'')
     +'.cover-page{max-width:940px;margin:0 auto;padding:20px 0 40px}'
-    +'.cover-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:14px;border-bottom:4px solid #1a3a5c;margin-bottom:20px}'
-    +'.org{font-size:22px;font-weight:700;color:#1a3a5c}'
-    +'.org-sub{font-size:12px;color:#7f8c8d;margin-top:3px}'
-    +'.cover-right .year-big{font-size:48px;font-weight:700;color:#1a3a5c;opacity:.15;line-height:1}'
-    +'.emp-info{margin-bottom:24px;padding:14px 18px;background:#f4f7fb;border:1px solid #dde1e7;border-radius:6px}'
-    +'.emp-name{font-size:18px;font-weight:700;color:#1a3a5c;margin-bottom:4px}'
-    +'.emp-meta{font-size:11px;color:#7f8c8d}'
+    +'.cover-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:14px;border-bottom:4px solid var(--primary,#1a3a5c);margin-bottom:20px}'
+    +'.org{font-size:22px;font-weight:700;color:var(--primary,#1a3a5c)}'
+    +'.org-sub{font-size:12px;color:var(--muted,#7f8c8d);margin-top:3px}'
+    +'.cover-right .year-big{font-size:48px;font-weight:700;color:var(--primary,#1a3a5c);opacity:.15;line-height:1}'
+    +'.emp-info{margin-bottom:24px;padding:14px 18px;background:var(--surface-2,#f4f7fb);border:1px solid var(--border,#dde1e7);border-radius:6px}'
+    +'.emp-name{font-size:18px;font-weight:700;color:var(--primary,#1a3a5c);margin-bottom:4px}'
+    +'.emp-meta{font-size:11px;color:var(--muted,#7f8c8d)}'
     +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
     +'th.r,td.r{text-align:right}th.c,td.c{text-align:center}'
     +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
-    +'tfoot td{background:#1a3a5c;color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
-    +'.cover-section-title{font-size:13px;font-weight:700;color:#1a3a5c;margin:20px 0 8px;padding-top:16px;border-top:2px solid #dde1e7}'
+    +'tfoot td{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
+    +'.cover-section-title{font-size:13px;font-weight:700;color:var(--primary,#1a3a5c);margin:20px 0 8px;padding-top:16px;border-top:2px solid var(--border,#dde1e7)}'
     +'.month-page{max-width:940px;margin:0 auto}'
     +'.month-page .bh-page{padding-bottom:0}'
     +'.month-page .bh-hdr{padding-bottom:6px;margin-bottom:6px}'
@@ -746,7 +746,7 @@ export function sendTimesheetReminders(){
   const buildPreview=(y,m)=>{
     const {withMail,noMail}=getPending(y,m);
     if(!withMail.length&&!noMail.length)
-      return `<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724">
+      return `<div style="background:var(--ok-bg,#d4edda);border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:var(--ok-text,#155724)">
         ✅ Alle Mitarbeiter haben für ${MONTHS[m-1]} ${y} bereits eingereicht.
       </div>`;
     const rows=withMail.map(u=>`
@@ -756,7 +756,7 @@ export function sendTimesheetReminders(){
         <span style="font-size:12px;color:var(--muted)">${esc(u.email)}</span>
       </label>`).join('');
     const noMailNote=noMail.length
-      ?`<div style="margin-top:8px;padding:8px 10px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
+      ?`<div style="margin-top:8px;padding:8px 10px;background:var(--warn-bg,#fff3cd);border-radius:6px;font-size:12px;color:var(--warn-text,#856404)">
           ⚠ Keine E-Mail hinterlegt (werden übersprungen): ${noMail.map(u=>esc(u.name)).join(', ')}
         </div>`:'';
     const head=withMail.length
@@ -798,7 +798,7 @@ export function sendTimesheetReminders(){
       }catch(e){ console.error('Reminder failed:',u.name,e); failed++; }
     }
     document.getElementById('rem-btns').innerHTML=
-      `<div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:#155724;width:100%">
+      `<div style="background:var(--ok-bg,#d4edda);border:1px solid #c3e6cb;border-radius:8px;padding:12px;font-size:13px;color:var(--ok-text,#155724);width:100%">
         ✅ ${sent} Erinnerung${sent!==1?'en':''} gesendet${failed?` · ⚠ ${failed} fehlgeschlagen`:''}
       </div>
       <div class="modal-btns" style="margin-top:12px">

@@ -678,7 +678,7 @@ function _pendingBadge(q){
     let b=document.getElementById('sync-badge');
     if(!n){ if(b) b.remove(); return; }
     if(!b){ b=document.createElement('div'); b.id='sync-badge';
-      b.style.cssText='position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:300;background:#fff3cd;color:#856404;border:1.5px solid #e0a800;border-radius:18px;padding:6px 12px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer';
+      b.style.cssText='position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:300;background:var(--warn-bg,#fff3cd);color:var(--warn-text,#856404);border:1.5px solid var(--warn,#e0a800);border-radius:18px;padding:6px 12px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer';
       b.title='Diese Änderungen sind nur auf diesem Gerät gespeichert und werden übertragen, sobald wieder eine Verbindung besteht. Klicken = jetzt versuchen.';
       b.onclick=()=>flushPendingWrites();
       document.body.appendChild(b); }

@@ -93,7 +93,7 @@ export function showVacRequestForm(editId){
         <option value="Veranstaltung"${type==='Veranstaltung'?' selected':''}>Veranstaltung Krank / AU (mit Uhrzeiten)</option>
         <option value="Sonstiges"${type==='Sonstiges'?' selected':''}>Sonstiges</option>
       </select></div>
-    <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:#fff5f5;border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:#721c24">
+    <div id="vr-krank-hint" style="display:none;margin:-4px 0 10px;padding:8px 12px;background:var(--danger-bg,#fff5f5);border:1.5px solid var(--danger);border-radius:6px;font-size:12px;color:var(--danger-text,#721c24)">
       🤒 Krankmeldung – wird sofort als aktiv eingetragen (kein Genehmigungsschritt).
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -101,7 +101,7 @@ export function showVacRequestForm(editId){
       <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${to}" oninput="calcVrDays()"></div>
     </div>
     <div id="vr-va-wrap" style="display:none">
-      <div style="background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <div style="background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--primary);margin-bottom:8px">Uhrzeiten pro Tag</div>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;margin-bottom:8px">
           <span style="color:var(--muted)">Für alle Tage:</span>
@@ -120,14 +120,14 @@ export function showVacRequestForm(editId){
         <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
       </label>
     </div>
-    <div id="vr-sonstiges-wrap" style="display:none;margin:-4px 0 10px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
+    <div id="vr-sonstiges-wrap" style="display:none;margin:-4px 0 10px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
         <input type="checkbox" id="vr-credit-work" ${editing?.creditWork?'checked':''} onchange="calcVrDays()" style="width:16px;height:16px">
         <span>Arbeitszeit gutschreiben <span style="color:var(--muted);font-size:11px">(nach Wochenarbeitszeit – z.B. Bildungsurlaub)</span></span>
       </label>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Wird als Arbeitszeit eingetragen und <b>muss</b> von Leitung/GF freigegeben werden.</div>
     </div>
-    <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:#f8f9fb;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
+    <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
         <span style="font-weight:600;color:var(--primary)">Urlaubstage:</span>
         <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${editing?editing.workDays:1}"
@@ -137,7 +137,7 @@ export function showVacRequestForm(editId){
       </label>
     </div>
     <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
-    <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:#fffbf5;border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:#856404">
+    <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--warn-bg,#fffbf5);border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:var(--warn-text,#856404)">
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
     </div>
     <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:11px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
@@ -636,7 +636,7 @@ export function renderAbwesenheiten(){
     const canEdit=r.userId===cu.id||cu.role==='admin';
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
-      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:#fff;border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button>`:''}</div>`
+      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button>`:''}</div>`
       :canEdit?`<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button></div>`
       :'';
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
@@ -649,7 +649,7 @@ export function renderAbwesenheiten(){
             <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(_typeLabel(r.type))}</span>
             ${statusBadge(r.status)}
           </div>
-          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:#e8f4fd;color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
+          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:var(--info-bg,#e8f4fd);color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
           ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
           ${extra}${rnBtns}${delBtn}
         </div>
@@ -810,7 +810,7 @@ export function renderAbCalendarWeek(){
     const isHol=hols.has(ds);
     const abs=dayMap[ds]||[];
     const isToday=ds===todayStr;
-    html+=`<div style="background:#fff;border:${isToday?'2px solid var(--primary)':'1.5px solid var(--border)'};border-radius:8px;overflow:hidden">
+    html+=`<div style="background:var(--surface,#fff);border:${isToday?'2px solid var(--primary)':'1.5px solid var(--border)'};border-radius:8px;overflow:hidden">
       <div style="background:${isWE||isHol?'#f3f4f6':'var(--primary)'};color:${isWE||isHol?'var(--muted)':'#fff'};font-size:12px;font-weight:700;padding:5px 8px;text-align:center">
         ${GER[i]}<br><span style="font-size:11px;font-weight:400">${fmtShort(ds)}</span>${isHol?'<br><span style="font-size:9px;color:var(--danger)">Feiertag</span>':''}
       </div>
@@ -862,7 +862,7 @@ export function renderAbCalendarYear(){
       const dot=abs.length>1?'<span style="position:absolute;top:0;right:0;width:4px;height:4px;border-radius:50%;background:var(--danger)"></span>':'';
       return '<div title="'+esc(tip)+'" style="position:relative;text-align:center;font-size:9px;padding:2px 0;border-radius:2px;background:'+bg+';border:'+bdr+'">'+dd+dot+'</div>';
     }).join('');
-    html+='<div style="background:#fff;border:1.5px solid var(--border);border-radius:8px;overflow:hidden">'
+    html+='<div style="background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;overflow:hidden">'
       +'<div style="background:var(--primary);color:#fff;font-size:12px;font-weight:700;padding:5px 8px">'+MONTHS[m-1]+'</div>'
       +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;padding:4px;font-size:9px">'
       +dowHeaders+empties+days

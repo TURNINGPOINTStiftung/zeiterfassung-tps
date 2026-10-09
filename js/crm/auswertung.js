@@ -104,7 +104,7 @@ function _injectStyles(){
   #aus-root{flex:1;min-height:0;overflow:auto;background:var(--bg);padding:18px 22px}
   .aus-h1{font-size:20px;font-weight:800;color:var(--primary);margin:0 0 4px}
   .aus-sub{font-size:13px;color:var(--muted);margin:0 0 16px}
-  .aus-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(32,56,105,.05)}
+  .aus-card{background:var(--surface,#fff);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(32,56,105,.05)}
   .aus-card h3{font-size:15px;color:var(--primary);margin:0 0 10px}
   .aus-filter{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
   .aus-ent{max-height:190px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;min-width:260px;flex:1}
@@ -114,10 +114,10 @@ function _injectStyles(){
   table.aus-t th,table.aus-t td{border:1px solid var(--border);padding:6px 9px;font-size:13px;text-align:right}
   table.aus-t th:first-child,table.aus-t td:first-child{text-align:left}
   table.aus-t thead th{background:var(--primary);color:#fff;font-size:12px}
-  table.aus-t tr.total td{font-weight:800;background:#eef2f8}
+  table.aus-t tr.total td{font-weight:800;background:var(--surface-2,#eef2f8)}
   .aus-badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700}
   .aus-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer}
-  .aus-btn.sec{background:#fff;color:var(--primary);border:1.5px solid var(--border)}
+  .aus-btn.sec{background:var(--surface,#fff);color:var(--primary);border:1.5px solid var(--border)}
   .aus-scroll{overflow-x:auto}`;
   const st=document.createElement('style'); st.id='aus-styles'; st.textContent=css; document.head.appendChild(st);
 }

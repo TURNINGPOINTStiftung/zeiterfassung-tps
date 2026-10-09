@@ -47,9 +47,9 @@ function _ensureOverlay(){
     st.textContent=`
       #messe-overlay *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
       .me-wrap{max-width:580px;margin:0 auto;padding:22px 18px 60px}
-      .me-card{background:#fff;border-radius:16px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
-      .me-h{font-size:22px;font-weight:800;color:#1a3a5c;margin:0 0 4px}
-      .me-sub{font-size:13px;color:#5b6b7d;margin:0 0 18px}
+      .me-card{background:var(--surface,#fff);border-radius:16px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+      .me-h{font-size:22px;font-weight:800;color:var(--primary,#1a3a5c);margin:0 0 4px}
+      .me-sub{font-size:13px;color:var(--muted,#5b6b7d);margin:0 0 18px}
       .me-field{margin-bottom:13px}
       .me-field label{display:block;font-size:13px;font-weight:600;color:#33475b;margin-bottom:4px}
       /* Feld-Paare (Vorname/Nachname, Mail/Telefon): auf breiten Screens 2-spaltig → weniger Scrollen im Querformat */
@@ -65,30 +65,30 @@ function _ensureOverlay(){
         .me-sub{margin-bottom:12px}
         .me-btn{padding:12px}
       }
-      .me-field input,.me-field textarea{width:100%;padding:12px 13px;border:1.5px solid #cdd7e2;border-radius:10px;font-size:16px;background:#fff;color:#12283f}
+      .me-field input,.me-field textarea{width:100%;padding:12px 13px;border:1.5px solid var(--border,#cdd7e2);border-radius:10px;font-size:16px;background:var(--surface,#fff);color:var(--primary-d,#12283f)}
       .me-field textarea{min-height:66px;resize:vertical}
-      .me-req{color:#c0392b}
-      .me-btn{display:block;width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:#2d8a4e;color:#fff;margin-top:6px}
-      .me-btn.sec{background:#eef2f7;color:#1a3a5c;font-weight:700;font-size:15px;padding:12px}
-      .me-btn.warn{background:#c0392b}
+      .me-req{color:var(--danger,#c0392b)}
+      .me-btn{display:block;width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:var(--ok,#2d8a4e);color:#fff;margin-top:6px}
+      .me-btn.sec{background:var(--surface-2,#eef2f7);color:var(--primary,#1a3a5c);font-weight:700;font-size:15px;padding:12px}
+      .me-btn.warn{background:var(--danger,#c0392b)}
       .me-btn:active{transform:scale(.99)}
       .me-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;color:#fff;gap:10px}
       .me-top .cnt{font-size:13px;opacity:.9}
       .me-lock{background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:20px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
-      .me-ok{margin-top:12px;text-align:center;color:#2d8a4e;font-weight:700;font-size:15px;min-height:20px}
-      .me-catrow label{display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:15px;color:#12283f;border-bottom:1px solid #eef2f7;cursor:pointer}
+      .me-ok{margin-top:12px;text-align:center;color:var(--ok,#2d8a4e);font-weight:700;font-size:15px;min-height:20px}
+      .me-catrow label{display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:15px;color:var(--primary-d,#12283f);border-bottom:1px solid #eef2f7;cursor:pointer}
       .me-catrow input{width:auto;transform:scale(1.3);margin:0}
-      .me-ev{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f6f8fb;border:1px solid #e3e9f0;border-radius:12px;padding:12px 14px;margin-bottom:10px}
-      .me-ev .nm{font-weight:800;color:#12283f;font-size:16px}
-      .me-ev .mt{font-size:12px;color:#5b6b7d}
+      .me-ev{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--surface-2,#f6f8fb);border:1px solid #e3e9f0;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+      .me-ev .nm{font-weight:800;color:var(--primary-d,#12283f);font-size:16px}
+      .me-ev .mt{font-size:12px;color:var(--muted,#5b6b7d)}
       .me-ev-btns{display:flex;gap:6px;flex-wrap:wrap}
-      .me-mini{border:1.5px solid #cdd7e2;background:#fff;color:#1a3a5c;border-radius:8px;padding:7px 11px;font-size:14px;font-weight:700;cursor:pointer}
-      .me-mini.go{background:#2d8a4e;color:#fff;border-color:#2d8a4e}
-      .me-mini.del{border-color:#c0392b;color:#c0392b}
-      .me-list-item{background:#fff;border:1px solid #eef2f7;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
-      .me-list-item .nm{font-weight:700;color:#12283f}
-      .me-list-item .dt{font-size:12px;color:#5b6b7d}
-      .me-x{background:#fff;border:1.5px solid #c0392b;color:#c0392b;border-radius:8px;padding:4px 9px;font-size:13px;cursor:pointer}
+      .me-mini{border:1.5px solid var(--border,#cdd7e2);background:var(--surface,#fff);color:var(--primary,#1a3a5c);border-radius:8px;padding:7px 11px;font-size:14px;font-weight:700;cursor:pointer}
+      .me-mini.go{background:var(--ok,#2d8a4e);color:#fff;border-color:var(--ok,#2d8a4e)}
+      .me-mini.del{border-color:var(--danger,#c0392b);color:var(--danger,#c0392b)}
+      .me-list-item{background:var(--surface,#fff);border:1px solid #eef2f7;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+      .me-list-item .nm{font-weight:700;color:var(--primary-d,#12283f)}
+      .me-list-item .dt{font-size:12px;color:var(--muted,#5b6b7d)}
+      .me-x{background:var(--surface,#fff);border:1.5px solid var(--danger,#c0392b);color:var(--danger,#c0392b);border-radius:8px;padding:4px 9px;font-size:13px;cursor:pointer}
     `;
     document.head.appendChild(st);
   }
@@ -112,7 +112,7 @@ function _renderPicker(){
         <button class="me-mini" onclick="messeEditEvent('${ev.id}')">✎</button>
         <button class="me-mini del" onclick="messeDeleteEvent('${ev.id}')">🗑</button>
       </div></div>`;
-  }).join('') : '<div style="color:#5b6b7d;font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung. Lege eine an (z. B. „Messe 26").</div>';
+  }).join('') : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung. Lege eine an (z. B. „Messe 26").</div>';
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
     <div class="me-h">Veranstaltungen</div>
     <div class="me-sub">Wähle eine Veranstaltung zum Erfassen – oder lege eine neue an. Mehrere parallel möglich.</div>
@@ -129,13 +129,13 @@ function messeEditEvent(id){
   const sel = ev ? (ev.cats||[]) : [];
   const rows = cats.length
     ? cats.map(c=>`<label><input type="checkbox" class="me-cat" value="${_esc(c.key)}" data-label="${_esc(c.label)}" ${sel.includes(c.key)?'checked':''}> ${_esc(c.label)}</label>`).join('')
-    : '<div style="color:#5b6b7d;font-size:14px">Keine Kategorien gefunden. Bitte (online) vorher in der Verwaltung anlegen – z. B. „Messe 26", „Erstkontakt".</div>';
+    : '<div style="color:var(--muted,#5b6b7d);font-size:14px">Keine Kategorien gefunden. Bitte (online) vorher in der Verwaltung anlegen – z. B. „Messe 26", „Erstkontakt".</div>';
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
     <div class="me-h">${ev?'Veranstaltung bearbeiten':'Neue Veranstaltung'}</div>
     <div class="me-sub">Name + Kategorien, die jeder erfasste Kontakt automatisch bekommt.</div>
     <div class="me-field"><label>Name der Veranstaltung <span class="me-req">*</span></label><input id="me-evname" placeholder="z. B. Messe 26" value="${_esc(ev?ev.name:'')}"></div>
-    <div class="me-field"><label>PIN fürs Personal <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(schützt Liste &amp; Übertragen dieser Veranstaltung)</span></label><input id="me-evpin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="mind. 3 Zeichen" value="${_esc(ev?(ev.pin||''):'')}"></div>
-    <div class="me-field"><label>Kategorien</label><div class="me-catrow" style="max-height:210px;overflow:auto;border:1.5px solid #cdd7e2;border-radius:10px;padding:2px 10px">${rows}</div></div>
+    <div class="me-field"><label>PIN fürs Personal <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(schützt Liste &amp; Übertragen dieser Veranstaltung)</span></label><input id="me-evpin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="mind. 3 Zeichen" value="${_esc(ev?(ev.pin||''):'')}"></div>
+    <div class="me-field"><label>Kategorien</label><div class="me-catrow" style="max-height:210px;overflow:auto;border:1.5px solid var(--border,#cdd7e2);border-radius:10px;padding:2px 10px">${rows}</div></div>
     <button class="me-btn" onclick="messeSaveEvent('${ev?ev.id:''}')">Speichern</button>
     <button class="me-btn sec" onclick="messeManage()">Abbrechen</button>
   </div></div>`;
@@ -182,8 +182,8 @@ function _renderForm(msg){
       </div>
       <div class="me-field"><label>Organisation / Verein</label><input id="me-org" autocomplete="off" placeholder="optional, z. B. Segelclub Pitz"></div>
       <div class="me-row2">
-        <div class="me-field"><label>E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder Telefon)</span></label><input id="me-email" type="email" autocomplete="off"></div>
-        <div class="me-field"><label>Telefon <span class="me-req">*</span> <span style="font-weight:400;color:#5b6b7d">(oder E-Mail)</span></label><input id="me-tel" type="tel" autocomplete="off"></div>
+        <div class="me-field"><label>E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder Telefon)</span></label><input id="me-email" type="email" autocomplete="off"></div>
+        <div class="me-field"><label>Telefon <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder E-Mail)</span></label><input id="me-tel" type="tel" autocomplete="off"></div>
       </div>
       <div class="me-field"><label>Adresse</label><input id="me-adresse" autocomplete="off"></div>
       <div class="me-field"><label>Notiz / Interesse</label><textarea id="me-note" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
@@ -235,7 +235,7 @@ function _renderStaff(){
         <div><div class="nm">${_esc(_pName(e))}${e.org?` · ${_esc(e.org)}`:''}</div>
           <div class="dt">${new Date(e.ts).toLocaleString('de-DE')}${e.uploaded?' · ✓ übertragen':''}${e.email?' · '+_esc(e.email):(e.tel?' · '+_esc(e.tel):'')}</div></div>
         <button class="me-x" onclick="messeDeleteEntry('${e.id}')">Löschen</button></div>`).join('')
-    : '<div style="color:#5b6b7d;font-size:14px;padding:8px 0">Noch keine Kontakte erfasst.</div>';
+    : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:8px 0">Noch keine Kontakte erfasst.</div>';
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
     <div class="me-h">🔒 ${_esc(ev.name)}</div>
     <div class="me-sub">${ev.entries.length} Kontakt(e), ${pend} noch nicht übertragen · Kategorien: ${_esc((ev.cats||[]).map(k=>ev.catLabels[k]||k).join(', ')||'–')}</div>

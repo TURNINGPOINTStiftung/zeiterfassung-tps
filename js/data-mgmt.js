@@ -146,7 +146,7 @@ export function resetData(){
 export function showCarryoverCleanup(){
   openModal(`<h3 style="margin-bottom:14px">🧹 Übertrag-Korrekturen bereinigen</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Entfernt alle automatisch angelegten „Übertrag 10h Korrektur"-Einträge. Echte Arbeitszeiten bleiben erhalten.</p>
-    <div style="background:#fff3cd;border:1.5px solid var(--warn);border-radius:8px;padding:12px 14px;font-size:13px;color:#856404;margin-bottom:16px">
+    <div style="background:var(--warn-bg,#fff3cd);border:1.5px solid var(--warn);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--warn-text,#856404);margin-bottom:16px">
       ⚠ Bereinigt <strong>alle Mitarbeiter, alle Monate</strong> auf einmal. Diese Aktion kann nicht rückgängig gemacht werden.
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">

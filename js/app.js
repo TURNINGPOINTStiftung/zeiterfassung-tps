@@ -39,9 +39,9 @@ function _showNoAccessScreen(){
   let box=document.getElementById('no-access-screen');
   if(!box){
     box=document.createElement('div'); box.id='no-access-screen';
-    box.style.cssText='position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:#f5f7fa;z-index:40';
+    box.style.cssText='position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:var(--surface-2,#f5f7fa);z-index:40';
     box.innerHTML='<div style="font-size:44px">👋</div>'
-      +'<h2 style="margin:0;color:#203869">Willkommen, <span id="na-name"></span>!</h2>'
+      +'<h2 style="margin:0;color:var(--primary,#203869)">Willkommen, <span id="na-name"></span>!</h2>'
       +'<p style="max-width:440px;color:#5a6572;font-size:15px;margin:0;line-height:1.5">Für dich ist aktuell noch <b>kein Bereich freigeschaltet</b>. Bitte wende dich an die Administration, damit deine Zugänge eingerichtet werden.</p>'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px">'
       +'<button class="btn btn-outline" onclick="openProfileModal()">👤 Mein Profil</button>'

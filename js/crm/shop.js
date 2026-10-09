@@ -258,37 +258,37 @@ function _styles(){
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
   .shop-tabs button{border:none;background:none;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
   .shop-tabs button.on{color:var(--primary,#203869);border-bottom-color:var(--primary,#203869)}
-  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#d97706;color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn,#d97706);color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
   .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-  .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--card,#fff);color:var(--text)}
+  .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:var(--text)}
   .shop-bar input[type=search]{flex:1;min-width:160px}
   .shop-sp{flex:1}
-  .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--card,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
+  .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
   .shop-btn.pri{background:var(--primary,#203869);border-color:var(--primary,#203869);color:#fff}
-  .shop-btn.ok{background:#16a34a;border-color:#16a34a;color:#fff}
-  .shop-btn.warn{border-color:#c0392b;color:#c0392b}
+  .shop-btn.ok{background:var(--ok,#16a34a);border-color:var(--ok,#16a34a);color:#fff}
+  .shop-btn.warn{border-color:var(--danger,#c0392b);color:var(--danger,#c0392b)}
   .shop-btn.sm{padding:3px 8px;font-size:12px}
   .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-  .shop-card{background:var(--card,#fff);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
-  .shop-card.low{border-color:#e5484d}
-  .shop-img{height:130px;background:#f1f4f8 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:42px;color:#b6c0cc}
+  .shop-card{background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .shop-card.low{border-color:var(--danger,#e5484d)}
+  .shop-img{height:130px;background:var(--surface-2,#f1f4f8) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:42px;color:#b6c0cc}
   .shop-cb{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
   .shop-name{font-weight:700;font-size:15px;color:var(--text)}
   .shop-var{font-size:12px;color:var(--muted)}
-  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#eef2f7;color:#4a5a6e;align-self:flex-start}
+  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--surface-2,#eef2f7);color:#4a5a6e;align-self:flex-start}
   .shop-tot{font-size:22px;font-weight:700;color:var(--primary,#203869)}
   .shop-tot small{font-size:12px;font-weight:600;color:var(--muted)}
-  .shop-low{font-size:12px;font-weight:700;color:#e5484d}
+  .shop-low{font-size:12px;font-weight:700;color:var(--danger,#e5484d)}
   .shop-pl{display:flex;flex-wrap:wrap;gap:4px}
-  .shop-pl span{font-size:12px;padding:2px 7px;border-radius:6px;background:#f1f4f8;color:#2c3e50}
-  .shop-pl span.hl{background:#dbe6fb;font-weight:700}
-  .shop-pl span.short{background:#fdecea;color:#c0392b}
-  .shop-pl span.lent{background:#eef2ff;color:#1e40af}
-  .shop-pl span.lent.late{background:#fdecea;color:#c0392b;font-weight:700}
+  .shop-pl span{font-size:12px;padding:2px 7px;border-radius:6px;background:var(--surface-2,#f1f4f8);color:var(--text,#2c3e50)}
+  .shop-pl span.hl{background:var(--info-bg,#dbe6fb);font-weight:700}
+  .shop-pl span.short{background:var(--danger-bg,#fdecea);color:var(--danger,#c0392b)}
+  .shop-pl span.lent{background:#eef2ff;color:var(--info-text,#1e40af)}
+  .shop-pl span.lent.late{background:var(--danger-bg,#fdecea);color:var(--danger,#c0392b);font-weight:700}
   .shop-act{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
   .shop-empty{color:var(--muted);font-size:14px;padding:24px 0;text-align:center}
   .shop-list{display:flex;flex-direction:column;gap:8px}
-  .shop-row{background:var(--card,#fff);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .shop-row{background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
   .shop-row .main{flex:1;min-width:220px}
   .shop-row .t{font-weight:700;font-size:14px;color:var(--text)}
   .shop-row .m{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
@@ -296,9 +296,9 @@ function _styles(){
   .shop-det summary{cursor:pointer;font-size:12px;color:var(--primary,#203869);margin-top:3px}
   .shop-det[open] summary{margin-bottom:2px}
   .shop-st{display:inline-block;font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:9px}
-  .shop-late{color:#c0392b;font-weight:700}
+  .shop-late{color:var(--danger,#c0392b);font-weight:700}
   .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
-  .shop-seg button{border:none;background:var(--card,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
+  .shop-seg button{border:none;background:var(--surface,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
   .shop-seg button.on{background:var(--primary,#203869);color:#fff}
   .shop-f{margin-bottom:10px}
   .shop-f label{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
@@ -306,7 +306,7 @@ function _styles(){
   .shop-f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .shop-ph{width:110px;height:110px;border-radius:8px;border:1.5px dashed var(--border);background:#f6f8fa center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center}
   .shop-log td,.shop-log th{padding:5px 8px;font-size:12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
-  .shop-log{width:100%;border-collapse:collapse;background:var(--card,#fff)}
+  .shop-log{width:100%;border-collapse:collapse;background:var(--surface,#fff)}
   .shop-pos{display:flex;flex-direction:column;gap:4px;border:1.5px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px;max-height:40vh;overflow-y:auto}
   .shop-pos-row,.shop-cart-row{display:flex;gap:6px;align-items:center}
   .shop-pos-row .nm,.shop-cart-row .nm{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
@@ -315,7 +315,7 @@ function _styles(){
   .shop-posadd{display:flex;gap:6px;align-items:center;margin-top:4px}
   .shop-posadd select,.shop-posadd input:not([type=number]){flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
   .shop-posadd input[type=number]{padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
-  .shop-cart{position:fixed;left:18px;bottom:18px;width:340px;max-width:calc(100vw - 24px);max-height:70vh;display:flex;flex-direction:column;background:var(--card,#fff);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);z-index:55}
+  .shop-cart{position:fixed;left:18px;bottom:18px;width:340px;max-width:calc(100vw - 24px);max-height:70vh;display:flex;flex-direction:column;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);z-index:55}
   .shop-cart.min{width:auto;background:none;border:none;box-shadow:none}
   .shop-cart-pill{background:var(--primary,#203869);color:#fff;border:none;border-radius:22px;padding:10px 16px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.2)}
   .shop-cart-h{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
@@ -416,7 +416,7 @@ function _itemsGrid(mgr){
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
     return `<div class="shop-card${(low||short.length)?' low':''}">${img}<div class="shop-cb">
-      <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:#dbe6fb;color:#1e40af">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}${_teamChip(it.team)}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:var(--info-bg,#dbe6fb);color:var(--info-text,#1e40af)">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}${_teamChip(it.team)}</div>
       <div class="shop-name">${esc(it.name)}</div>
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
       <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
@@ -426,7 +426,7 @@ function _itemsGrid(mgr){
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
         const nOver=ts.filter(t=>t.datum&&t.datum<_todayIso()).length;
-        return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:#c0392b">(${nOver} überfällig)</b>`:''}</div>`; })():''}
+        return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:var(--danger,#c0392b)">(${nOver} überfällig)</b>`:''}</div>`; })():''}
       <div class="shop-act">
         ${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} ＋</button>`:''}
         ${!isEinzeln(it)&&usePlaces(it).length||isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
@@ -739,7 +739,7 @@ function _cartPaint(){
     <div class="shop-cart-list">${a.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
       return `<div class="shop-cart-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>
         <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
-        <button class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="shopCartDel(${jsq(p.key)})" title="Entfernen">✕</button></div>`; }).join('')}</div>
+        <button class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" onclick="shopCartDel(${jsq(p.key)})" title="Entfernen">✕</button></div>`; }).join('')}</div>
     <div class="shop-cart-free"><input id="cart-free" placeholder="＋ Freier Wunsch (nicht im Katalog) …" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('cart-free');}"></div>
     <div class="shop-cart-act"><button class="shop-btn pri" onclick="shopOrderNew()">🛒 Bestellen …</button>
       ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken">📤 Direkt verschicken …</button>`:''}</div>`;
@@ -763,10 +763,10 @@ function _posPaint(){
     if(_posMode==='send' && it){ const fr=srcPlaces(it);
       if(!p.from||!fr.includes(p.from)) p.from=fr[0]||'';
       src=fr.length?`<select onchange="shopCartFrom(${jsq(p.key)},this.value)" title="Aus Ort">${fr.map(x=>`<option value="${esc(x)}"${x===p.from?' selected':''}>${esc(srcLabel(it,x))}</option>`).join('')}</select>`
-        :`<span style="font-size:12px;color:#c0392b">kein freier Bestand</span>`; }
+        :`<span style="font-size:12px;color:var(--danger,#c0392b)">kein freier Bestand</span>`; }
     return `<div class="shop-pos-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>${src}
       <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
-      <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="shopCartDel(${jsq(p.key)})">✕</button></div>`; }).join('');
+      <button type="button" class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" onclick="shopCartDel(${jsq(p.key)})">✕</button></div>`; }).join('');
   if(_posMode==='send'){ try{ localStorage.setItem(_cartKey(), JSON.stringify(cartGet().map(p=>{ const q=a.find(x=>x.key===p.key); return q?Object.assign(p,{from:q.from}):p; }))); }catch(e){} }
   // Bestellen: Leihmaterial im Korb → „Rückgabe bis" einblenden
   const leih=a.some(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null; return it&&it.leihbar; });
@@ -932,7 +932,7 @@ function _ordersHtml(mgr){
     const head = ps.length===1 ? _orderWhat(o) : `🧾 ${ps.length} Positionen`;
     const posList = ps.length>1 ? `<div class="m" style="margin:2px 0 3px">${ps.map(p=>`• ${_posTxt(p)}${p.leihe?' 🔁':''}`).join('<br>')}</div>` : '';
     const oTeams=[...new Set(orderTeams(o).filter(Boolean))]; const tChips=oTeams.map(_teamChip).join(' ');
-    const badges=`${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8">🤖 automatisch</span>':''}`;
+    const badges=`${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:var(--muted,#6b7280)">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8">🤖 automatisch</span>':''}`;
     // Abgeschlossen → kompakt: EINE Zeile je Bestellung, Positionen + Details zum Aufklappen
     if(!act(o)){
       const det=[o.anlass?`Anlass: ${esc(o.anlass)}`:'', o.adresse?`📮 ${esc(o.adresse).replace(/\n/g,', ')}`:'', o.note?`📝 ${esc(o.note)}`:'',
@@ -947,7 +947,7 @@ function _ordersHtml(mgr){
         ${btns.length?`<div style="display:flex;gap:5px;flex-wrap:wrap">${btns.join('')}</div>`:''}</div>`;
     }
     return `<div class="shop-row"><div class="main">
-      <div class="t">${head} ${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:#6b7280" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8" title="Automatisch, weil der Ort unter seinen Soll-Bestand gefallen ist">🤖 automatisch</span>':''}</div>${posList}
+      <div class="t">${head} ${tChips} <span class="shop-st" style="background:${st.c}">${st.l}</span>${o.direkt?' <span class="shop-st" style="background:var(--muted,#6b7280)" title="Ohne Bestellung direkt verschickt">📤 direkt</span>':''}${o.auto?' <span class="shop-st" style="background:#6b21a8" title="Automatisch, weil der Ort unter seinen Soll-Bestand gefallen ist">🤖 automatisch</span>':''}</div>${posList}
       <div class="m">${mgr?`von <b>${esc(o.byName||'?')}</b> · `:''}${_fmtTs(o.ts)}${o.anlass?` · Anlass: ${esc(o.anlass)}`:''}
         ${o.termin?` · <span class="${late?'shop-late':''}">${o.leihe?'ab':'bis'} ${_fmtDate(o.termin)}${late?' (überfällig)':''}</span>`:''}${o.rueckgabe?` · 🔁 Rückgabe bis ${_fmtDate(o.rueckgabe)}`:''}${where?` · nach: ${where}`:''}
         ${o.adresse?`<br>📮 ${esc(o.adresse).replace(/\n/g,', ')}`:''}
@@ -961,7 +961,7 @@ function _ordersHtml(mgr){
       <span class="shop-sp"></span>
       ${mgr?`<button class="shop-btn" onclick="shopCartSend()" title="Ohne Bestellung direkt an Mitarbeiter, Verein oder andere schicken – mehrere Artikel möglich">📤 Direkt verschicken</button>`:''}
       <button class="shop-btn pri" onclick="shopOrderNew()">＋ Bestellen</button></div>
-    ${mgr?(()=>{ const low=_refillData().lowTotal; return low.length?`<div class="shop-row" style="border-color:#d97706;background:#fff8e1;margin-bottom:8px"><div class="main"><div class="t">🛍️ Nachkaufen – insgesamt unter Mindestbestand</div>
+    ${mgr?(()=>{ const low=_refillData().lowTotal; return low.length?`<div class="shop-row" style="border-color:var(--warn,#d97706);background:var(--warn-bg,#fff8e1);margin-bottom:8px"><div class="main"><div class="t">🛍️ Nachkaufen – insgesamt unter Mindestbestand</div>
       <div class="m">${low.map(it=>`${esc(itemLabel(it))}: <b>${total(it)} / ${_num(it.min)}</b> <button class="shop-btn sm" style="margin:2px 4px" onclick="shopBook(${jsq(it.id)},'zugang','',${_num(it.min)-total(it)})">➕ Zugang buchen</button>`).join('<br>')}</div></div></div>`:''; })():''}
     <div class="shop-list">${rows||`<div class="shop-empty">${mgr?'Keine Bestellungen in dieser Ansicht.':'Du hast hier keine Bestellungen.'}</div>`}</div>`;
 }
@@ -1007,7 +1007,7 @@ function shopOrderIssue(id){
     if(it && isEinzeln(it)) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:var(--muted)">einzeln erfasst – über „🏷️ Stücke" ausgeben</span></div>`;
     if(!it) return `<div class="shop-pos-row"><span class="nm">✏️ ${esc(p.itemName||p.freitext||'?')} · ${_num(p.menge)}</span><span style="font-size:12px;color:var(--muted)">${p.itemId?'Artikel gelöscht':'freier Wunsch – manuell erledigen'}</span></div>`;
     const from=srcPlaces(it, canMoveTo?o.ortId:null);
-    if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:#c0392b">${inPlaces(it)?'kein freier Bestand (nur fester Bestand an Orten)':'kein Bestand'}</span></div>`;
+    if(!from.length) return `<div class="shop-pos-row"><span class="nm">${_posTxt(p)}</span><span style="font-size:12px;color:var(--danger,#c0392b)">${inPlaces(it)?'kein freier Bestand (nur fester Bestand an Orten)':'kein Bestand'}</span></div>`;
     anyRow=true;
     // Vorwahl nach Ziel: Ort → umlagern · Person/Verein → Leihmaterial verleihen, sonst verschicken
     const def = canMoveTo ? 'move' : (it.leihbar ? 'leihe' : 'versand');
@@ -1024,7 +1024,7 @@ function shopOrderIssue(id){
   }).join('');
   if(!anyRow){ toast('Für keine Position ist Bestand vorhanden – erst „± Buchen" (Zugang) oder „Erledigt".','err'); return; }
   openModal(`<h3>📦 Ausgeben / Verschicken</h3><p style="font-size:13px;margin:0 0 6px">bestellt von <b>${esc(o.byName||'')}</b> · ${_fmtTs(o.ts)}</p>
-    <div style="font-size:13px;background:#f1f4f8;border-radius:8px;padding:8px 10px;margin:0 0 10px">Ziel: <b>${_orderWhere(o)||'–'}</b>${o.ziel!=='place'?` · Empfänger: <b>${esc(rc.bName)}</b>`:''}${o.adresse?`<div style="white-space:pre-line;margin-top:3px">📮 ${esc(o.adresse)}</div>`:''}</div>
+    <div style="font-size:13px;background:var(--surface-2,#f1f4f8);border-radius:8px;padding:8px 10px;margin:0 0 10px">Ziel: <b>${_orderWhere(o)||'–'}</b>${o.ziel!=='place'?` · Empfänger: <b>${esc(rc.bName)}</b>`:''}${o.adresse?`<div style="white-space:pre-line;margin-top:3px">📮 ${esc(o.adresse)}</div>`:''}</div>
     <div class="shop-f"><label>Positionen <span style="font-weight:400;color:var(--muted)">(Aus Ort · Menge · was passiert)</span></label><div class="shop-pos" id="si-rows">${rows}</div></div>
     <div class="shop-f" id="si-due-w" style="display:none"><label>🔁 Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="si-due" type="date" value="${esc(o.rueckgabe||'')}"></div>
     <div class="shop-f"><label>Nachricht an ${esc(o.byName||'Besteller')} (optional)</label><input id="si-ans" placeholder="z. B. liegt im Bus, Fach links"></div>
@@ -1453,10 +1453,10 @@ function _loansHtml(mgr){
   const rows=ls.map(l=>{
     const late=_overdue(l); const ret=Array.isArray(l.returns)?l.returns:[]; const zu=isZuord(l);
     const canRet=l.status==='aktiv' && (mgr || (l.borrowerId===me.id && !zu));
-    const st=l.status!=='aktiv'?`<span class="shop-st" style="background:#16a34a">${zu?'Beendet':'Zurück'}</span>`
+    const st=l.status!=='aktiv'?`<span class="shop-st" style="background:var(--ok,#16a34a)">${zu?'Beendet':'Zurück'}</span>`
       : zu?`<span class="shop-st" style="background:${_ZUORD_C}">Zugeordnet</span>`
-      : late?'<span class="shop-st" style="background:#c0392b">Überfällig</span>':`<span class="shop-st" style="background:#2563eb">${l.due?'Ausgeliehen':'Dauerleihe'}</span>`;
-    return `<div class="shop-row"${late?' style="border-color:#e5484d"':''}><div class="main">
+      : late?'<span class="shop-st" style="background:var(--danger,#c0392b)">Überfällig</span>':`<span class="shop-st" style="background:var(--info,#2563eb)">${l.due?'Ausgeliehen':'Dauerleihe'}</span>`;
+    return `<div class="shop-row"${late?' style="border-color:var(--danger,#e5484d)"':''}><div class="main">
       <div class="t">${loanIcon(l)} ${(l.placeId||l.unitId)?'':(_num(l.qty)||ret.reduce((s,r)=>s+_num(r.qty),0))+'× '}${esc(l.placeId?placeLabel(l.placeId):(l.itemName||'?'))}${l.placeId?' <span style="font-weight:400;font-size:12px;color:var(--muted)">mit Inhalt</span>':''} ${st}</div>
       <div class="m">${(mgr||l.borrowerId!==me.id)?`${zu?'bei':'an'} <b>${esc(bLabel(l))}</b> · `:`${zu?'bei':'an'} <b>dir</b> · `}seit ${_fmtTs(l.ts)}${l.fromPlace&&placeOf(l.fromPlace)?' aus '+esc(placeLabel(l.fromPlace)):''}
         ${l.due?` · <span class="${late?'shop-late':''}">zurück bis ${_fmtDate(l.due)}</span>`:''}${l.anlass?` · ${esc(l.anlass)}`:''}
@@ -1525,7 +1525,7 @@ function _termRowHtml(px,t){
     <input class="tr-label" placeholder="z. B. TÜV, Prüfung" value="${esc(t.label||'')}" style="flex:1;min-width:90px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
     <input class="tr-datum" type="date" value="${esc(t.datum||'')}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
     <input class="tr-int" type="number" min="0" step="1" placeholder="alle … Mon." title="Intervall in Monaten (leer = einmalig)" value="${t.intervall?_num(t.intervall):''}" style="width:92px">
-    <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" onclick="this.closest('.shop-pos-row').remove()">✕</button></div>`;
+    <button type="button" class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" onclick="this.closest('.shop-pos-row').remove()">✕</button></div>`;
 }
 function _termEditorHtml(px, termine){
   return `<div class="shop-f"><label>⏰ Termine <span style="font-weight:400;color:var(--muted)">(Ablauf, Prüfung, TÜV … · Intervall in Monaten → „Erledigt" setzt den nächsten Termin)</span></label>
@@ -1574,7 +1574,7 @@ function shopUnits(itemId){
       ${nt?dueBadge(nt):'<span style="font-size:11px;color:var(--muted)">kein Termin</span>'}
       ${ul?`${isZuord(ul)?`<button type="button" class="shop-btn sm" title="An anderen Mitarbeiter übergeben" onclick="shopReassign(${jsq(ul.id)})">👤</button>`:''}<button type="button" class="shop-btn sm ok" title="${isZuord(ul)?'Zuordnung aufheben':'Zurückgeben'}" onclick="shopReturn(${jsq(ul.id)})">↩</button>`:`<button type="button" class="shop-btn sm" title="Zuordnen / ausleihen" onclick="shopLendUnit(${jsq(it.id)},${jsq(u.id)})">🔁</button>`}
       <button type="button" class="shop-btn sm" onclick="shopUnitEdit(${jsq(it.id)},${jsq(u.id)})">✎</button>
-      <button type="button" class="crm-x" style="border:none;background:none;color:#c0392b;cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');
+      <button type="button" class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');
   openModal(`<h3>🏷️ Stücke – ${esc(itemLabel(it))}</h3>
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${all.length} Stück${all.length===1?'':'e'}${f?` · angezeigt: ${us.length}`:''} · jedes mit eigenem Ort und eigenen Terminen. Die Menge je Ort ergibt sich daraus.</p>
     ${brandBar}
@@ -1670,7 +1670,7 @@ function _dueHtml(mgr){
   const lim={ over:_todayIso(), soon:_soonIso(30), q:_soonIso(90), all:'9999' }[fDue]||_soonIso(30);
   const list=all.filter(d=>fDue==='over' ? d.t.datum<_todayIso() : d.t.datum<=lim);
   const seg=[['over','Überfällig'],['soon','≤ 30 Tage'],['q','≤ 90 Tage'],['all','Alle']];
-  const rows=list.map(d=>`<div class="shop-row"${dueState(d.t.datum)==='over'?' style="border-color:#e5484d"':''}><div class="main">
+  const rows=list.map(d=>`<div class="shop-row"${dueState(d.t.datum)==='over'?' style="border-color:var(--danger,#e5484d)"':''}><div class="main">
       <div class="t">${d.kind==='place'?'📍 ':'🏷️ '}${esc(d.title)} ${dueBadge(d.t)} ${_teamChip(dueTeams(d)[0])}</div>
       <div class="m">${esc((TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)}${d.t.intervall?` · alle ${_num(d.t.intervall)} Monate`:' · einmalig'}${d.where?' · '+esc(d.where):''}${(d.t.verlauf||[]).length?` · zuletzt erledigt ${_fmtDate(d.t.verlauf[d.t.verlauf.length-1].am)}`:''}</div></div>
       ${mgr?`<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="shop-btn sm ok" onclick="shopDueDone(${jsq(d.key)})">✓ Erledigt</button>
@@ -1725,7 +1725,7 @@ function _orteHtml(){
     const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
     const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
     const z=placeZuord(p.id), le=placeLeihe(p.id);
-    return `<div class="shop-row"${le&&_overdue(le)?' style="border-color:#e5484d"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
+    return `<div class="shop-row"${le&&_overdue(le)?' style="border-color:var(--danger,#e5484d)"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
         ${z?`<span class="shop-st" style="background:${_ZUORD_C}">👤 ${esc(bName(z))}</span>`:''}
         ${le?`<span class="shop-st" style="background:${_overdue(le)?'#c0392b':'#2563eb'}">🔁 ausgeliehen an ${esc(bName(le))}${le.due?' bis '+_fmtDate(le.due):' (Dauerleihe)'}</span>`:''}</div>
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
@@ -1775,7 +1775,7 @@ function shopLoansForEntity(tree, eid){
     const pers=ref=>{ if(!ref||!ref.kid) return ''; const {k}=_crmContact(ref); return k&&k.name?' → 👤 '+esc(k.name):''; };
     return `<div class="crm-sec"><h4><span class="ttl">🛒 Aus dem Shop</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop ansehen</button></span>`:''}</h4>
       ${ls.length?`<div class="small" style="font-weight:700;margin:2px 0 4px">🔁 Gerade ausgeliehen</div>`+ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.borrowerRef)}</span>
-        <div class="small">seit ${d(l.ts)}${l.due?` · <span style="${_overdue(l)?'color:#c0392b;font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join(''):''}
+        <div class="small">seit ${d(l.ts)}${l.due?` · <span style="${_overdue(l)?'color:var(--danger,#c0392b);font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join(''):''}
       ${sent.length?`<div class="small" style="font-weight:700;margin:8px 0 4px">📤 Erhalten</div>`+sent.slice(0,15).map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.recipientRef)}</span>
         <div class="small">${d(l.ts)}${l.note?' · '+esc(l.note):''}</div></div></div>`).join('')+(sent.length>15?`<div class="small" style="color:var(--muted)">… und ${sent.length-15} weitere</div>`:''):''}
     </div>`;
