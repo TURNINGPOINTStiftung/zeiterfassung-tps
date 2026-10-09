@@ -2,6 +2,7 @@ import { getUser, getData, setUserFields } from './data.js';
 // (Passwort-Hashes entfallen seit v429 – Passwortwechsel nur über Firebase.)
 import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate, themePref } from './utils.js';
 import { ownBackupSectionHtml } from './user-backup.js';
+import { mfaProfileHtml, mfaResolve, mfaFriendly } from './mfa.js';
 
 // Ist der/die aktuelle Nutzer:in als „Werkstudent" benannt?
 function _cuIsWerkstudent(cu){
@@ -67,6 +68,7 @@ export function openProfileModal(){
       <input type="password" id="prof-pw-new" placeholder="Neues Passwort" autocomplete="new-password"></div>
     <div class="form-group"><label>Neues Passwort bestätigen</label>
       <input type="password" id="prof-pw-confirm" placeholder="Bestätigung" autocomplete="new-password"></div>
+    ${mfaProfileHtml(cu)}
     ${ownBackupSectionHtml(cu)}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🔄 App aktualisieren</div>
@@ -101,9 +103,12 @@ export async function saveProfile(){
     if(!fu||!fu.email){ toast('Keine gültige Anmeldung – bitte ab- und wieder anmelden.','err'); return; }
     try{
       const cred=firebase.auth.EmailAuthProvider.credential(fu.email, pwCur);
-      await fu.reauthenticateWithCredential(cred);
+      try{ await fu.reauthenticateWithCredential(cred); }
+      catch(e1){ if(e1&&e1.code==='auth/multi-factor-auth-required') await mfaResolve(e1); else throw e1; }   // Zwei-Faktor: Code abfragen
     }catch(e){
       const c=(e&&e.code)||'';
+      if(c==='auth/mfa-cancelled'){ toast('Passwortänderung abgebrochen.','err'); return; }
+      if(/invalid-verification|multi-factor|too-many/.test(c)){ toast(mfaFriendly(e),'err'); return; }
       toast(/wrong-password|invalid-credential|invalid-login/.test(c)?'Aktuelles Passwort falsch.':('Prüfung fehlgeschlagen: '+(c||e&&e.message||'')),'err');
       return;
     }

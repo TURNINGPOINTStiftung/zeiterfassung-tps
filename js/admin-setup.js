@@ -186,7 +186,7 @@ export async function checkStableAccounts(opts){
     const u=users[i]; onProgress(i+1,users.length,u.name||u.id);
     let status='sicher', code='';
     try{ await sec.auth().signInWithEmailAndPassword(_accountEmail(u.id), _stableAuthPw(u.id)); status='offen'; }
-    catch(e){ code=(e&&e.code)||''; if(code==='auth/too-many-requests') status='unbekannt'; }
+    catch(e){ code=(e&&e.code)||''; if(code==='auth/too-many-requests') status='unbekannt'; if(code==='auth/multi-factor-auth-required') status='offen'; }
     try{ await sec.auth().signOut(); }catch(_){}
     out.push({id:u.id, name:u.name||u.id, status, code});
     await new Promise(r=>setTimeout(r,350));   // sanft, um keine Anmelde-Drosselung auszulösen

@@ -329,6 +329,10 @@ Klick auf deinen **Namen** oben rechts öffnet dein Profil:
 - **🌓 Darstellung:** **Automatisch** (folgt Hell/Dunkel des Geräts), **Hell** oder **Dunkel**.
   Gilt für das jeweilige Gerät.
 - **🔒 Passwort ändern.**
+- **🔐 Zwei-Faktor-Anmeldung** (nur Administrator und System-Verwaltung): Zusätzlich zum Passwort
+  fragt die App beim Anmelden einen 6-stelligen Code aus einer Authenticator-App ab (z. B. Microsoft
+  oder Google Authenticator). Einrichten: **„Jetzt einrichten"** → QR-Code mit der App scannen → Code
+  eingeben → **Einschalten**. Bei Handy-Wechsel vorher unter **„Verwalten"** entfernen und neu einrichten.
 - **Eigene Sicherung:** **„⬇ Backup herunterladen"** sichert deine Zeiterfassung als Datei,
   **„⬆ Backup wiederherstellen"** spielt sie wieder ein (fehlende Tage werden ergänzt, nichts geht
   verloren). Optional legt die App **am 10. jeden Monats** automatisch einen Schnappschuss in der Cloud ab.

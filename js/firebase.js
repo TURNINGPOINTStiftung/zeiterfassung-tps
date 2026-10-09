@@ -1,6 +1,7 @@
 import { STORAGE_KEY, _STAMP_KEY } from './config.js';
 import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge, mergeIncoming, flushPendingWrites, isAdminAccount } from './data.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
+import { mfaResolve, mfaFriendly } from './mfa.js';
 
 // ── Echte Firebase-Konten (Phase 1) ───────────────────────────────
 // Bevorzugt die hinterlegte echte E-Mail; sonst technische E-Mail je ID
@@ -39,6 +40,11 @@ export async function authenticate(id, email, typedPw, verifyFn){
   try{ await auth.signInWithEmailAndPassword(acct, typedPw); return {ok:true, migrated:false}; }
   catch(e){
     const c=(e&&e.code)||'';
+    // Zwei-Faktor eingerichtet: Code aus der Authenticator-App abfragen (js/mfa.js).
+    if(c==='auth/multi-factor-auth-required'){
+      try{ await mfaResolve(e); return {ok:true, migrated:false}; }
+      catch(e2){ return {ok:false, reason:'error', msg:(e2&&e2.code==='auth/mfa-cancelled')?'abgebrochen':mfaFriendly(e2)}; }
+    }
     if(c==='auth/user-not-found') return {ok:false, reason:'no-account'};
     if(c==='auth/user-disabled') return {ok:false, reason:'no-access'};
     if(c==='auth/too-many-requests') return {ok:false, reason:'error', msg:'zu viele Versuche, bitte kurz warten'};
