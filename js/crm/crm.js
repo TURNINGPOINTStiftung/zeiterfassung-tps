@@ -4745,6 +4745,8 @@ function crmSetPathAccess(pathKey, role, value){
   if(value==='std'){ delete pa[pathKey][role]; if(!Object.keys(pa[pathKey]).length) delete pa[pathKey]; }
   else pa[pathKey][role]=(value==='ja');
   savePathAccess(pa);
+  // Freigabelisten (z. B. Shop „Nutzen") hängen an der Matrix → serverseitig nachziehen.
+  try{ window.refreshPermissionAllowlists?.({log:()=>{}})?.catch(e=>console.warn('Perms-Refresh (Matrix):', e&&e.message)); }catch(e){}
   toast('Zugriff gespeichert ✓','ok');
   try{ window.crmSetupModuleBar&&window.crmSetupModuleBar(); }catch(e){}   // Modulleiste sofort aktualisieren
 }

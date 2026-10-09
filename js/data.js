@@ -299,8 +299,8 @@ export function _migrate(d){
   }
   const adminUser=d.users.find(u=>u.id==='admin');
   if(adminUser){ adminUser.role='admin'; }
-  else{ d.users.unshift({id:'admin',name:'Administrator',role:'admin',pw:'admin123',city:'',wh:0,al:0,team:'',bundesland:'',teams:[]}); }
-  if(!d.users.find(u=>u.id==='jens')) d.users.unshift({id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'jens123',city:'',wh:40,al:30,team:'',bundesland:''});
+  // Notfall-Gerüst OHNE Passwort (pw:'' schlägt in verifyPw immer fehl – kein bekanntes Login im öffentlichen Code).
+  else{ d.users.unshift({id:'admin',name:'Administrator',role:'admin',pw:'',city:'',wh:0,al:0,team:'',bundesland:'',teams:[]}); }
   return d;
 }
 

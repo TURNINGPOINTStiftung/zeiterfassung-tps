@@ -239,6 +239,10 @@ export async function refreshPermissionAllowlists(opts){
   // Freigabelisten pro vergebenem Recht: zeiterfassung/grants/<recht>/<authUid> = true.
   // Die Datenbank-Regeln prüfen dagegen → ein vergebenes Recht wirkt auch serverseitig.
   // Schreiben darf nur das Administrator-Konto (Regel), also auch nur der Admin vergeben.
+  // Shop (Bereich mit Kein/Nutzen/Verwaltend wie crm.js crmModuleAccess): „Nutzen" = persönliche Ausnahme
+  // perms.path_shop, sonst Zugriffs-Matrix crm/pathAccess.shop[rolle], sonst Standard = kein Zugriff.
+  // „Verwaltend" nur zusammen mit Nutzen (System-Verwaltung oder verw_shop).
+  let _paShop=null; try{ _paShop=((await db.ref('crm/pathAccess/shop').once('value')).val())||null; }catch(_){}
   const grants={};
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id]; if(!u || _isAdminUser(u)) continue;
@@ -247,6 +251,10 @@ export async function refreshPermissionAllowlists(opts){
       const on = AREA_ADMIN_KEYS.includes(k) ? (sys || !!hasPermission(k,u)) : !!hasPermission(k,u);
       if(on){ (grants[k]=grants[k]||{})[uid]=true; }
     });
+    const _own=u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_shop');
+    const shopUse=_own ? !!u.perms.path_shop : !!(_paShop&&_paShop[u.role]);
+    if(shopUse){ (grants.shop_nutzen=grants.shop_nutzen||{})[uid]=true;
+      if(sys || hasPermission('verw_shop',u)) (grants.verw_shop=grants.verw_shop||{})[uid]=true; }
   }
   await db.ref('zeiterfassung/grants').set(grants);
   const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length, grants:Object.keys(grants).map(k=>k+':'+Object.keys(grants[k]).length).join(' ') };

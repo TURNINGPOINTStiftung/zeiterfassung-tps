@@ -37,3 +37,13 @@ apk/signing*
 # OneDrive-Konfliktkopien nicht committen
 *# Name clash *
 *(# Name clash*
+
+# Schlüssel/Zugangsdaten nie committen
+.env
+.env.*
+*serviceAccount*.json
+*-adminsdk-*.json
+*.pem
+*.p12
+.firebase/
+functions/node_modules/

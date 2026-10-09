@@ -22,56 +22,6 @@ function _accountEmail(id, email){
 // Zugangskontrolle macht die App über das gehashte u.pw.)
 function _stableAuthPw(id){ return 'tpsfb$'+String(id||'').toLowerCase()+'$'+_PW_SALT; }
 
-// Beim Login: echtes Firebase-Konto verwenden oder (einmalig) anlegen. NON-BLOCKING –
-// schlägt es fehl (z. B. Provider nicht aktiv), bleibt der App-Login unberührt. Das Konto
-// nutzt das STABILE Passwort. Alt-Konten, die noch mit dem Login-Passwort angelegt wurden,
-// werden beim nächsten erfolgreichen Login EINMALIG darauf umgestellt (Selbst-Migration) –
-// danach kann kein Passwortwechsel das Firebase-Login mehr aus dem Tritt bringen.
-export function ensureRealAuth(id, pw, email){
-  try{
-    if(!window.firebase || !firebase.auth || !id) return;
-    const acct=_accountEmail(id, email);
-    const authPw=_stableAuthPw(id);
-    const auth=firebase.auth();
-    const create=()=>auth.createUserWithEmailAndPassword(acct, authPw).catch(e=>{
-      const c=e&&e.code;
-      if(c!=='auth/email-already-in-use' && c!=='auth/operation-not-allowed' && c!=='auth/network-request-failed') console.warn('CRM-Auth anlegen:', e&&e.message);
-    });
-    // 1) Bevorzugt mit dem stabilen Passwort anmelden.
-    auth.signInWithEmailAndPassword(acct, authPw).catch(()=>{
-      // 2) Klappt nicht → evtl. Alt-Konto (mit Login-Passwort angelegt). Damit anmelden und
-      //    danach EINMALIG auf das stabile Passwort umstellen. Sonst: Konto neu anlegen.
-      if(pw){
-        auth.signInWithEmailAndPassword(acct, pw)
-          .then(cred=>{ try{ cred.user.updatePassword(authPw).catch(()=>{}); }catch(_){} })
-          .catch(()=>create());
-      } else {
-        create();
-      }
-    });
-  }catch(e){ console.warn('ensureRealAuth:', e&&e.message); }
-}
-// Admin legt Nutzer an → Konto über eine SEKUNDÄRE App-Instanz anlegen,
-// damit die Admin-Sitzung nicht ersetzt wird. Best effort.
-export function provisionAuthAccount(id, pw, email){
-  try{
-    if(!window.firebase || !id) return;
-    const acct=_accountEmail(id, email);
-    const authPw=_stableAuthPw(id);   // stabiles Passwort (unabhängig vom Login-Passwort)
-    const cfg=firebase.app().options;
-    const sec=(firebase.apps||[]).find(a=>a.name==='admin-prov') || firebase.initializeApp(cfg, 'admin-prov');
-    sec.auth().createUserWithEmailAndPassword(acct, authPw)
-      .then(()=>{ try{ sec.auth().signOut(); }catch(_){} })
-      .catch(e=>{ const c=e&&e.code; if(c!=='auth/email-already-in-use'&&c!=='auth/operation-not-allowed') console.warn('CRM-Auth provisionieren:', e&&e.message); try{ sec.auth().signOut(); }catch(_){} });
-  }catch(e){ console.warn('provisionAuthAccount:', e&&e.message); }
-}
-
-// Festes technisches „Bootstrap"-Konto: erlaubt einem FRISCHEN Gerät (ohne gespeicherte
-// Sitzung), die Daten ZU LESEN, damit die Login-Maske die echten Nutzer zeigt. Nötig, seit
-// die anonyme Anmeldung deaktiviert ist – die Regeln verlangen eine NICHT-anonyme Sitzung,
-// und ohne Lese-Zugriff käme ein neues Gerät gar nicht mehr an die Nutzerliste. Kein
-// zusätzliches Sicherheitsrisiko: Wer den (öffentlichen) Code hat, könnte sich ohnehin ein
-// Firebase-Konto anlegen; die echte Zugangskontrolle macht die App über das gehashte u.pw.
 // ── Login-Verzeichnis (öffentlich lesbar: nur Namen) ──────────────────
 // SICHERHEIT (Umbau 2026-08): Vor dem Login liest der Client NICHT mehr die
 // ganze Datenbank. Die echten Daten sind per Firebase-Regeln auf angemeldete,
@@ -122,8 +72,6 @@ export async function initFirebase(){
   window._fbRef=_fbRef;
   window._offlineMode=false;
   window._pendingSync=false;
-  window.ensureRealAuth = ensureRealAuth;
-  window.provisionAuthAccount = provisionAuthAccount;
   window.loadFullData = loadFullData;
 
   // Persistierten Anmeldestatus abwarten (für Auto-Login auf bekannten Geräten).
