@@ -69,6 +69,7 @@ import './crm/auswertung.js';
 import './crm/ki.js';
 import './crm/kalender.js';
 import './crm/shop.js';
+import './anleitung.js';   // 📖 Anleitung (ANLEITUNG.md als eigener Bereich)
 import './home.js';  // 🏠 Startseite (pro Mitarbeiter schaltbar, Standard nur Admin)
 import './nav.js';   // Zurück-Taste innerhalb der App (Verlauf je Ansicht, Fenster schließen)
 

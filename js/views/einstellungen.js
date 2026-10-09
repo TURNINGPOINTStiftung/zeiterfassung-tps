@@ -25,6 +25,7 @@ const _UF_PATHS=[
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
   {key:'messe',         label:'Messemodus', icon:'🎪'},
   {key:'shop',          label:'Shop', icon:'🛒'},
+  {key:'anleitung',     label:'Anleitung', icon:'📖'},
   {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
 ];
 
@@ -704,7 +705,7 @@ function userForm(u={}){
         : '<span style="font-size:12px;color:var(--muted)">Keine Vereine im CRM angelegt.</span>';
       const TRI=[['kein','Kein'],['nutzen','Nutzen'],['verwaltend','Verwaltend']];
       // KI, Messe, Auswertung haben nichts zu verwalten → nur Kein/Nutzen (Verteiler folgt später).
-      const NOADM=new Set(['ki','messe','auswertung']);
+      const NOADM=new Set(['ki','messe','auswertung','anleitung']);
       const seg=(key,cur)=>{ const opts=NOADM.has(key)?TRI.slice(0,2):TRI; if(NOADM.has(key)&&cur==='verwaltend') cur='nutzen'; return `<div class="uf-seg">${opts.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod(${jsq(key)})" style="display:none">${o[1]}</label>`).join('')}</div>` };
       const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${(key!=='crm'&&!NOADM.has(key))?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${key==='kalender'?'🛠️ Darf Termine und Veranstaltungen anlegen und bearbeiten.':'🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).'}</div>`:''}</div></div>`;
       const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
@@ -773,6 +774,7 @@ function userForm(u={}){
           const o=(v,l,on)=>`<label class="uf-seg-opt${on?' on':''}"><input type="radio" name="ufmod-start" value="${v}"${on?' checked':''} onchange="ufSetMod('start')" style="display:none">${l}</label>`;
           return `<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🏠 Startseite</span><div class="uf-seg">${o('aus','Aus',!hp)}${o('ein','Ein',hp)}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Startet mit der Übersicht (Wetter, Stempeln, Was ansteht, Mitteilungen, Kacheln) statt mit dem zuletzt benutzten Modul.</div></div>`; })()}
         ${modBlock('shop','🛒','Shop (Lager &amp; Bestellungen)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
+        ${modBlock('anleitung','📖','Anleitung','<div style="font-size:12px;color:var(--muted)">Sieht die Bedienungsanleitung im Menü und als Kachel auf der Startseite.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
@@ -881,7 +883,7 @@ function collectUserForm(){
   ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel']
     .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
   // 2) Weitere Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
-  [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung'],['kalender','verw_kalender'],['shop','verw_shop']]
+  [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung'],['kalender','verw_kalender'],['shop','verw_shop'],['anleitung','verw_anleitung']]
     .forEach(([k,vk])=>{ const s=_mod(k); if(s===null) return; perms['path_'+k]=(s!=='kein'); if(s==='verwaltend') perms[vk]=true; });
   // 3) CRM: „Verwaltend" → CRM-Verwalter-Recht (Umfang/Level separat via crmSetUserAccess)
   if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;

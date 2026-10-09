@@ -88,7 +88,9 @@ und **Kacheln** zu allen Bereichen. Mit **„Anordnen"** verschiebst oder verste
 ⭐ merkt sich Favoriten. Welche Karten erscheinen, stellst du im **Profil** unter „Meine Startseite" ein.
 
 **Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, Projektmanagement,
-Kalender, Shop …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
+Kalender, Shop, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
+Diese Anleitung findest du direkt in der App unter **☰ → Anleitung** bzw. als Kachel auf der Startseite
+(mit Suchfeld; der Administrator kann sie pro Rolle oder Person ausblenden).
 
 **Zurück-Taste & Links:** Die Zurück-Taste des Browsers/Handys springt zur vorherigen Ansicht in der App.
 Jede Ansicht hat eine eigene Adresse – Neu laden behält den Ort, Links lassen sich teilen.
