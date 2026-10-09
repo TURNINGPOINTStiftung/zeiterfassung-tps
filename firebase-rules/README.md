@@ -118,7 +118,7 @@ Zusätzlich: Recht „Abwesenheiten genehmigen" (grants/genehmigung_abwesenheit)
 entries/$k und ze_audit schreiben (Urlaubs-/Gutschrift-Sync beim Freigeben); Status-Freigabe bleibt managers.
 Getestet: 16 Fälle im Projekt zeiterfassung-test (ruletest, danach zurückgebaut) + Abwesenheits-Fälle.
 
-## CANDIDATE-v6.json – bereit (noch NICHT live)
+## Stand 2026-10-09: CANDIDATE-v6.json ist LIVE (App v428)
 Rückfall: CANDIDATE-v5.json. Neu gegenüber v5: Shop-Daten (`crm/shop*`) nur für Shop-Berechtigte.
 - Freigabelisten `grants/shop_nutzen` (Shop „Nutzen": persönliche Freischaltung `path_shop` oder
   Zugriffs-Matrix `crm/pathAccess/shop`) und `grants/verw_shop` (Shop „Verwaltend"), App ≥ v428.
