@@ -45,7 +45,7 @@ function _ensureOverlay(){
   if(!document.getElementById('messe-style')){
     const st=document.createElement('style'); st.id='messe-style';
     st.textContent=`
-      #messe-overlay *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+      #messe-overlay *{box-sizing:border-box;font-family:var(--font,Arial,Helvetica,sans-serif)}
       .me-wrap{max-width:580px;margin:0 auto;padding:22px 18px 60px}
       .me-card{background:var(--surface,#fff);border-radius:16px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
       .me-h{font-size:22px;font-weight:800;color:var(--primary,#1a3a5c);margin:0 0 4px}

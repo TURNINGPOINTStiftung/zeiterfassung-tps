@@ -839,7 +839,7 @@ html .home-tile{padding:16px 8px}
 @media (max-width:640px){ html .zt tbody td:nth-child(5)::before,html .zt tbody td:nth-child(6)::before,html .zt tbody td:nth-child(11)::before,html .zt tbody td:nth-child(12)::before{content:"\00a0";display:block;font-size:9px;margin-bottom:3px;line-height:1} }
 
 html .zt td.day-c.we span,html .zt td.day-c span{color:inherit}
-html .warn{color:var(--warn-text)}
+html .crm-chip.warn{color:var(--warn-text)}
 @media (min-width:641px){ html .zt thead th.block-head{color:var(--primary-l)} }
 html .kal-dh.we .dow{color:inherit;opacity:1}
 /* Handy: volle Kopfleiste (CRM mit Suche) entzerren */
