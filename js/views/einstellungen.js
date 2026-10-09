@@ -244,7 +244,7 @@ function renderPermissionsMatrix(el){
     <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Admin hat immer alle Rechte. Änderungen gelten sofort.</p>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
-      <thead><tr style="background:var(--primary);color:#fff">
+      <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
         <th style="text-align:left;padding:8px 10px;font-size:12px">Berechtigung</th>
         ${hdrs}
         <th style="text-align:center;font-size:11px;padding:6px 8px">Admin</th>

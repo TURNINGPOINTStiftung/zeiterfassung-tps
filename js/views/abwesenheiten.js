@@ -465,7 +465,7 @@ export function updateAbBadge(){
 function _syncAbViewButtons(){
   const mode=window.abViewMode||'list';
   const sub=window.abCalSubView||'month';
-  const _btn=(id,active)=>{ const b=document.getElementById(id); if(!b) return; b.style.background=active?'var(--primary)':''; b.style.color=active?'#fff':''; b.style.borderColor=active?'var(--primary)':''; };
+  const _btn=(id,active)=>{ const b=document.getElementById(id); if(!b) return; b.style.background=active?'var(--primary)':''; b.style.color=active?'var(--on-primary)':''; b.style.borderColor=active?'var(--primary)':''; };
   _btn('btn-ab-list',mode==='list');
   _btn('btn-ab-cal',mode==='calendar');
   _btn('btn-ab-week',mode==='calendar'&&sub==='week');
@@ -743,7 +743,7 @@ export function renderAbwesenheiten(){
     </details>`:'';
   html+=`<section>
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Meine Anträge</h3>
-    ${myActive.length?myActive.map(card).join(''):'<p style="color:var(--muted);font-size:13px">Keine aktiven oder geplanten Abwesenheiten.</p>'}
+    ${myActive.length?myActive.map(card).join(''):'<div class="empty-state"><span class="es-icon">🏖️</span><span>Keine aktiven oder geplanten Abwesenheiten.</span></div>'}
     ${pastToggle}
   </section>`;
   document.getElementById('ab-content').innerHTML=html;
@@ -863,7 +863,7 @@ export function renderAbCalendarYear(){
       return '<div title="'+esc(tip)+'" style="position:relative;text-align:center;font-size:9px;padding:2px 0;border-radius:2px;background:'+bg+';border:'+bdr+'">'+dd+dot+'</div>';
     }).join('');
     html+='<div style="background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;overflow:hidden">'
-      +'<div style="background:var(--primary);color:#fff;font-size:12px;font-weight:700;padding:5px 8px">'+MONTHS[m-1]+'</div>'
+      +'<div style="background:var(--primary);color:var(--on-primary,#fff);font-size:12px;font-weight:700;padding:5px 8px">'+MONTHS[m-1]+'</div>'
       +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;padding:4px;font-size:9px">'
       +dowHeaders+empties+days
       +'</div></div>';

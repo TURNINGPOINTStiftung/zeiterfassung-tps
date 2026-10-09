@@ -68,7 +68,7 @@ function _ensureOverlay(){
       .me-field input,.me-field textarea{width:100%;padding:12px 13px;border:1.5px solid var(--border,#cdd7e2);border-radius:10px;font-size:16px;background:var(--surface,#fff);color:var(--primary-d,#12283f)}
       .me-field textarea{min-height:66px;resize:vertical}
       .me-req{color:var(--danger,#c0392b)}
-      .me-btn{display:block;width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:var(--ok,#2d8a4e);color:#fff;margin-top:6px}
+      .me-btn{display:block;width:100%;padding:15px;border:none;border-radius:12px;font-size:17px;font-weight:800;cursor:pointer;background:var(--ok,#2d8a4e);color:var(--on-primary,#fff);margin-top:6px}
       .me-btn.sec{background:var(--surface-2,#eef2f7);color:var(--primary,#1a3a5c);font-weight:700;font-size:15px;padding:12px}
       .me-btn.warn{background:var(--danger,#c0392b)}
       .me-btn:active{transform:scale(.99)}
@@ -83,7 +83,7 @@ function _ensureOverlay(){
       .me-ev .mt{font-size:12px;color:var(--muted,#5b6b7d)}
       .me-ev-btns{display:flex;gap:6px;flex-wrap:wrap}
       .me-mini{border:1.5px solid var(--border,#cdd7e2);background:var(--surface,#fff);color:var(--primary,#1a3a5c);border-radius:8px;padding:7px 11px;font-size:14px;font-weight:700;cursor:pointer}
-      .me-mini.go{background:var(--ok,#2d8a4e);color:#fff;border-color:var(--ok,#2d8a4e)}
+      .me-mini.go{background:var(--ok,#2d8a4e);color:var(--on-primary,#fff);border-color:var(--ok,#2d8a4e)}
       .me-mini.del{border-color:var(--danger,#c0392b);color:var(--danger,#c0392b)}
       .me-list-item{background:var(--surface,#fff);border:1px solid #eef2f7;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
       .me-list-item .nm{font-weight:700;color:var(--primary-d,#12283f)}

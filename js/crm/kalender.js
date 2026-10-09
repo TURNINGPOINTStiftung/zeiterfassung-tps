@@ -166,11 +166,11 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}
   .kal-seg{display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden}
   .kal-seg button{appearance:none;border:none;background:var(--surface,#fff);color:var(--muted,#5d7086);font:inherit;font-weight:600;font-size:.98rem;padding:9px 16px;cursor:pointer;border-left:1.5px solid var(--border,#c3cedb)}
-  .kal-seg button:first-child{border-left:none} .kal-seg button.on{background:var(--primary,#1a3a5c);color:#fff}
+  .kal-seg button:first-child{border-left:none} .kal-seg button.on{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff)}
   .kal-nav{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:var(--primary-d,#15263a);min-width:210px}
   .kal-nav button{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border,#c3cedb);background:var(--surface,#fff);color:var(--primary-d,#15263a);cursor:pointer;font-size:1rem}
   .kal-today{padding:9px 14px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--surface,#fff);color:var(--primary-d,#15263a);font:inherit;font-weight:600;font-size:.94rem;cursor:pointer}
-  .kal-new{padding:9px 14px;border:none;border-radius:9px;background:var(--primary,#1a3a5c);color:#fff;font:inherit;font-weight:700;font-size:.94rem;cursor:pointer} .kal-new:hover{filter:brightness(1.1)}
+  .kal-new{padding:9px 14px;border:none;border-radius:9px;background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font:inherit;font-weight:700;font-size:.94rem;cursor:pointer} .kal-new:hover{filter:brightness(1.1)}
   .kal-sel{font:inherit;font-size:.98rem;padding:9px 12px;border:1.5px solid var(--border,#c3cedb);border-radius:9px;background:var(--surface,#fff);color:var(--primary-d,#15263a)}
   .kal-spacer{flex:1}
   .kal-legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:.9rem;color:var(--muted,#5d7086);margin:0 0 14px}
@@ -180,8 +180,8 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-grid{display:block}
   .kal-row{display:grid;align-items:stretch;border-bottom:1px solid var(--border,#dce3ec)}
   .kal-name{position:sticky;left:0;z-index:3;background:var(--surface,#fff);border-right:2px solid var(--border,#c3cedb);padding:0 12px;display:flex;align-items:center;font-weight:600;font-size:.96rem;grid-column:1;grid-row:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .kal-head{position:sticky;top:0;z-index:5;background:var(--primary,#1a3a5c);color:#fff}
-  .kal-head .kal-name{background:var(--primary,#1a3a5c);color:#fff;border-right-color:rgba(255,255,255,.25);z-index:6}
+  .kal-head{position:sticky;top:0;z-index:5;background:var(--primary,#1a3a5c);color:var(--on-primary,#fff)}
+  .kal-head .kal-name{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);border-right-color:rgba(255,255,255,.25);z-index:6}
   .kal-dh{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 0;border-right:1px solid rgba(255,255,255,.14);font-size:.82rem;line-height:1.18}
   .kal-dh .dow{opacity:.75;font-size:.72rem;text-transform:uppercase} .kal-dh .dn{font-weight:700;font-size:.98rem}
   .kal-dh.we{background:rgba(0,0,0,.16)} .kal-mh{grid-row:1;display:flex;align-items:center;justify-content:center;padding:8px 0;border-right:1px solid rgba(255,255,255,.16);font-size:.88rem;font-weight:700}
@@ -205,7 +205,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-kwtrack{grid-column:2 / -1;grid-row:1;position:relative;min-height:22px}
   .kal-kwlab{position:absolute;top:4px;font-size:10px;font-weight:600;color:#8598ab;padding-left:2px}
   .kal-empty{padding:26px;text-align:center;color:var(--muted,#5d7086);font-size:.92rem}
-  .kal-tip{position:fixed;z-index:99999;background:var(--primary-d,#15263a);color:#fff;font-size:15.5px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
+  .kal-tip{position:fixed;z-index:99999;background:var(--primary-d,#15263a);color:var(--on-primary,#fff);font-size:15.5px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
   .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
   .kal-termin{border:1.5px dashed rgba(255,255,255,.65)}
   .kal-asg{margin:2px;border-radius:4px;min-width:4px;z-index:1}
@@ -224,7 +224,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-badge{font-size:.82rem;font-weight:700;padding:4px 11px;border-radius:999px;white-space:nowrap;align-self:center}
   /* ── Persönliche Ansicht („Nur ich"): klassische Layouts ── */
   .kal-pm{display:flex;flex-direction:column}
-  .kal-pm-head{display:grid;grid-template-columns:50px repeat(7,1fr);background:var(--primary,#1a3a5c);color:#fff;border-radius:8px 8px 0 0;overflow:hidden}
+  .kal-pm-head{display:grid;grid-template-columns:50px repeat(7,1fr);background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);border-radius:8px 8px 0 0;overflow:hidden}
   .kal-pm-hc{padding:9px 10px;font-size:.92rem;font-weight:700;border-left:1px solid rgba(255,255,255,.14)}
   .kal-pm-hc:first-child{border-left:none} .kal-pm-hc.we{background:rgba(0,0,0,.16)}
   .kal-pm-kw-h{text-align:center;padding:9px 0;opacity:.85}
@@ -239,7 +239,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pabs{font-size:.82rem;font-weight:700;color:#fff;padding:3px 7px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .kal-pw{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden}
   .kal-pw-corner{background:var(--primary,#1a3a5c);border-radius:8px 0 0 0}
-  .kal-pw-dh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;font-size:.86rem;padding:8px 6px;text-align:center;border-left:1px solid rgba(255,255,255,.14)}
+  .kal-pw-dh{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-weight:700;font-size:.86rem;padding:8px 6px;text-align:center;border-left:1px solid rgba(255,255,255,.14)}
   .kal-pw-dh.we{background:rgba(0,0,0,.16)} .kal-pw-dh.today{box-shadow:inset 0 -3px 0 var(--warn,#e8892b)}
   .kal-pw-tl{background:var(--surface-2,#f4f7fb);color:var(--muted,#5d7086);font-size:.78rem;font-weight:700;padding:4px 8px;border-top:1px solid var(--border,#e6ebf2);display:flex;align-items:center;justify-content:flex-end}
   .kal-pw-ad{border-left:1px solid var(--border,#e6ebf2);border-top:1px solid var(--border,#e6ebf2);min-height:34px;padding:4px;display:flex;flex-direction:column;gap:4px}
@@ -248,7 +248,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pw-hc.we{background:var(--surface-2,#f7f9fc)} .kal-pw-hc.today{background:var(--warn-bg,#fff8ef)}
   .kal-py{display:grid;border:1px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden;font-size:12px}
   .kal-py-corner{background:var(--primary,#1a3a5c)}
-  .kal-py-mh{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;text-align:center;padding:7px 0;font-size:.84rem;border-left:1px solid rgba(255,255,255,.14)}
+  .kal-py-mh{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-weight:700;text-align:center;padding:7px 0;font-size:.84rem;border-left:1px solid rgba(255,255,255,.14)}
   .kal-py-dl{background:var(--surface-2,#f4f7fb);color:var(--muted,#5d7086);font-weight:700;text-align:center;padding:2px 0;font-size:.8rem;border-top:1px solid var(--border,#eef2f7)}
   .kal-py-cell{min-height:36px;border-left:1px solid var(--border,#eef2f7);border-top:1px solid var(--border,#eef2f7);display:flex;padding:0;position:relative;overflow:hidden}
   .kal-py-cell.empty{background:repeating-linear-gradient(45deg,#d3dae4,#d3dae4 3px,#e7ecf2 3px,#e7ecf2 7px)} .kal-py-cell.we{background:#f2f5f9} .kal-py-cell.today{outline:2px solid var(--warn,#e8892b);outline-offset:-2px;z-index:1}
@@ -567,7 +567,7 @@ export function renderKalender(){
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
-        <select class="kal-sel" onchange="kalSetTeam(this.value)">${teamOpts}</select>
+        <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend">
         <span class="kal-lg"><span class="kal-sw" style="background:var(--danger,#dc2626)"></span>Veranstaltung</span>
@@ -576,7 +576,7 @@ export function renderKalender(){
         ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (heller Balken auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid var(--warn,#f0a92e)"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
-      ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll">${_boardHtml()}</div></div>`}
+      ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll" tabindex="0" aria-label="Kalender (scrollbar)">${_boardHtml()}</div></div>`}
     </div>`;
   }catch(e){ console.error('renderKalender Fehler:',e); }
 }

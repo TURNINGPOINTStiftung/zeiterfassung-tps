@@ -42,12 +42,12 @@ export function openProfileModal(){
   }
   openModal(`<h3>👤 Mein Profil</h3>
     <div class="form-group"><label>Name</label>
-      <input type="text" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
+      <input type="text" aria-label="Name" value="${esc(cu.name)}" disabled style="opacity:.6;cursor:not-allowed"></div>
     <div class="form-group"><label>E-Mail</label>
       <input type="email" id="prof-email" value="${esc(cu.email||'')}" placeholder="vorname@beispiel.de" autocomplete="email"></div>
     <div class="form-group"><label>Wohnort</label>
       <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
-    <div class="form-group"><label>Bundesland</label>
+    <div class="form-group"><label for="prof-bl">Bundesland</label>
       <select id="prof-bl">${blOpts}</select></div>
     ${adrSection}
     ${wstSection}

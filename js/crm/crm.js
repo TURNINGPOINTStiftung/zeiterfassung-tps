@@ -457,14 +457,14 @@ function injectStyles(){
   .crm-tree-tab{background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:999px;padding:7px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .crm-tree-tab:hover{border-color:var(--primary-l);color:var(--primary);background:var(--surface-2,#f5f8fd)}
   .crm-tree-tab:active{transform:translateY(1px)}
-  .crm-tree-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(32,56,105,.25)}
+  .crm-tree-tab.active{background:var(--primary);border-color:var(--primary);color:var(--on-primary,#fff);box-shadow:0 2px 8px rgba(32,56,105,.25)}
   .crm-search{margin-left:auto;padding:8px 14px;border:1.5px solid var(--border);border-radius:999px;font-size:14px;min-width:200px;color:var(--text);background:var(--surface,#fff);transition:border-color .15s,box-shadow .15s}
   .crm-search:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
-  .crm-bell{position:relative;flex:none;font-size:19px;line-height:1;padding:6px 11px;border:1.5px solid var(--primary);border-radius:10px;background:var(--primary);color:#fff;cursor:pointer;transition:filter .15s,box-shadow .15s,transform .05s}
+  .crm-bell{position:relative;flex:none;font-size:19px;line-height:1;padding:6px 11px;border:1.5px solid var(--primary);border-radius:10px;background:var(--primary);color:var(--on-primary,#fff);cursor:pointer;transition:filter .15s,box-shadow .15s,transform .05s}
   .crm-bell:hover{filter:brightness(1.1)}
   .crm-bell:active{transform:translateY(1px)}
   .crm-bell.has-new{box-shadow:0 0 0 3px rgba(229,72,77,.35)}
-  .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:#fff;font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
+  .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
   /* Suche + Glocke in der oberen (blauen) Modulleiste – als sauberes Paar (gleiche Höhe:
      Such-Pille + runder Glocken-Button), helle Varianten auf dunklem Grund. */
   #mb-crm-tools{display:flex;align-items:center;gap:8px}
@@ -493,7 +493,7 @@ function injectStyles(){
   .crm-card .sub{font-size:12px;color:var(--muted);margin-bottom:8px;white-space:pre-line}
   .crm-card .meta{display:flex;gap:8px;flex-wrap:wrap}
   .crm-chip{font-size:11px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
-  .crm-chip.warn{background:var(--warn-bg,#fff4e5);border-color:#ffd9a0;color:#b56a00}
+  .crm-chip.warn{background:var(--warn-bg,#fff4e5);border-color:#ffd9a0;color:var(--warn-text,#b56a00)}
   /* Kontakt-Karten: kompakt, proportional zum Rest (nicht größer als normale Karten) */
   .crm-kontakt{padding:13px 15px}
   .crm-kontakt h3{font-size:14px;margin-bottom:3px}
@@ -518,7 +518,7 @@ function injectStyles(){
   .crm-row:first-of-type{border-top:none}
   .crm-row .grow{flex:1;min-width:140px}
   .crm-row .name{font-weight:600;color:var(--text)}
-  .crm-row .fn{font-size:11px;color:#fff;background:var(--primary-l);border-radius:10px;padding:2px 8px;white-space:nowrap}
+  .crm-row .fn{font-size:11px;color:var(--on-primary,#fff);background:var(--primary-l);border-radius:10px;padding:2px 8px;white-space:nowrap}
   .crm-row .small{font-size:12px;color:var(--muted)}
   .crm-x{background:none;border:none;color:var(--danger,#c0392b);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:5px}
   .crm-x:hover{background:var(--danger-bg,#fdecea)}
@@ -553,14 +553,14 @@ function injectStyles(){
   .crm-type-toggle{display:flex;gap:8px;margin:0 0 8px}
   .crm-tt-btn{flex:1;padding:11px 12px;border:1.5px solid var(--border);border-radius:11px;background:var(--surface,#fff);color:var(--text);font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:all .12s}
   .crm-tt-btn:hover{border-color:var(--primary-l)}
-  .crm-tt-btn.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .crm-tt-btn.on{background:var(--primary);color:var(--on-primary,#fff);border-color:var(--primary)}
   .crm-tt-hint{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.4}
   .crm-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
   .btn-sm-crm{padding:8px 15px;font-size:13px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--primary);font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .btn-sm-crm:hover{border-color:var(--primary-l);background:var(--surface-2,#f5f8fd);box-shadow:0 2px 6px rgba(32,56,105,.08)}
   .btn-sm-crm:active{transform:translateY(1px)}
   .btn-sm-crm:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(32,56,105,.18)}
-  .btn-sm-crm.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-sm-crm.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary,#fff)}
   .btn-sm-crm.primary:hover{background:var(--primary-l);border-color:var(--primary-l);box-shadow:0 4px 12px rgba(32,56,105,.28)}
   .btn-sm-crm.danger{color:var(--danger,#c0392b);border-color:#f0bcb6}
   .btn-sm-crm.danger:hover{background:var(--danger-bg,#fdecea);border-color:#e7a99f}
@@ -572,7 +572,7 @@ function injectStyles(){
   .crm-subs{margin:2px 0 2px 12px;padding-left:10px;border-left:2px solid var(--border)}
   .crm-task.sub{padding:6px 0}
   .crm-task.blocked{opacity:.7}
-  .crm-locked{color:#b56a00;font-weight:600}
+  .crm-locked{color:var(--warn-text,#b56a00);font-weight:600}
   .crm-deps-box{max-height:150px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--surface,#fff)}
   .crm-deps-box label{display:block;font-size:13px;margin:3px 0;cursor:pointer}
   .crm-tnode.top{border:1.5px solid var(--border);border-radius:10px;padding:6px 12px;margin-bottom:10px;background:var(--surface,#fff);box-shadow:0 1px 3px rgba(0,0,0,.05)}
@@ -617,13 +617,13 @@ function injectStyles(){
   .vw-team{display:inline-block;font-size:11px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:2px 9px;margin:1px 3px 1px 0;color:var(--primary-l)}
   .crm-viewtoggle{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
   .crm-viewtoggle button{background:var(--surface,#fff);border:none;padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
-  .crm-viewtoggle button.active{background:var(--primary);color:#fff}
+  .crm-viewtoggle button.active{background:var(--primary);color:var(--on-primary,#fff)}
   .crm-board-title{display:inline-flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;margin-bottom:10px;cursor:pointer}
   .crm-board-title:hover{border-color:var(--primary-l)}
   .crm-projtabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
   .crm-projtab{background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer}
   .crm-projtab:hover{border-color:var(--primary-l)}
-  .crm-projtab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .crm-projtab.active{background:var(--primary);color:var(--on-primary,#fff);border-color:var(--primary)}
   .crm-projtab .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:4px;border-radius:9px;background:rgba(0,0,0,.16);font-size:11px;text-align:center}
   .crm-projhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   .crm-projhead .crm-board-title{margin-bottom:0}
@@ -675,7 +675,7 @@ function injectStyles(){
   .crm-att-row .crm-x{border:none;background:none;color:var(--danger,#c0392b);cursor:pointer;font-size:14px;padding:2px 6px}
   .kb-board{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;align-items:flex-start}
   /* Schwebende Blätter-Knöpfe (links/rechts): Board seitlich verschieben, ohne runterzuscrollen */
-  .kb-nav-btn{position:fixed;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:var(--primary,#1a3a5c);color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:.82;z-index:45;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+  .kb-nav-btn{position:fixed;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:.82;z-index:45;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
   .kb-nav-btn:hover{opacity:1}
   .kb-nav-btn:active{transform:translateY(-50%) scale(.93)}
   .kb-nav-btn[data-dir="-1"]{left:16px}
@@ -785,8 +785,8 @@ function injectStyles(){
   .crm-filterrow{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
   .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:var(--surface,#fff);color:var(--text);font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
   .crm-filter-btn:hover{border-color:var(--primary-l)}
-  .crm-filter-btn.on{border-color:var(--primary);background:var(--primary);color:#fff}
-  .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:#fff;font-size:11px;font-weight:800}
+  .crm-filter-btn.on{border-color:var(--primary);background:var(--primary);color:var(--on-primary,#fff)}
+  .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:11px;font-weight:800}
   .crm-sortsel{margin-left:auto;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface,#fff);color:var(--text);cursor:pointer}
   .crm-filter-count{font-size:12px;color:var(--muted)}
   .crm-filter-pop{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 20px);max-height:74vh;overflow-y:auto;background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:8px}
@@ -1188,7 +1188,7 @@ function paintList(){
   const filterBar = unified ? `<div class="crm-filterrow">
       <button id="crm-filter-btn" class="crm-filter-btn${anyFilter?' on':''}" onclick="crmToggleFilterPop(event)">⚑ Filter${fCount?` <span class="crm-filter-badge">${fCount}</span>`:''}</button>
       ${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ zurücksetzen</button>`:''}
-      <select class="crm-sortsel" onchange="crmSetSort(this.value)"><option value="az"${sort==='az'?' selected':''}>Name A–Z</option><option value="za"${sort==='za'?' selected':''}>Name Z–A</option></select>
+      <select class="crm-sortsel" aria-label="Sortierung" onchange="crmSetSort(this.value)"><option value="az"${sort==='az'?' selected':''}>Name A–Z</option><option value="za"${sort==='za'?' selected':''}>Name Z–A</option></select>
       <span class="crm-filter-count">${items.length} Kontakt${items.length===1?'':'e'}</span>
       ${crmFull()?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
     </div>` : '';
@@ -3550,7 +3550,7 @@ function meineSectionsHtml(){
       <div class="grow"><span class="tx">${esc(t.text)}</span><div class="crm-tmeta">${meta}</div>${t.note?`<div class="crm-tnote">${nl2br(t.note)}</div>`:''}</div>
       <button class="btn-sm-crm" onclick="crmMeineOpen(${jsq(a.kind)},${jsq(idArg)},${jsq(cArg)},${jsq(t.id)})">Öffnen</button>
     </div>`;
-  }).join('') || `<div class="small" style="color:var(--muted)">Dir sind aktuell keine Aufgaben zugewiesen.</div>`;
+  }).join('') || `<div class="empty-state"><span class="es-icon">✅</span><span>Dir sind aktuell keine Aufgaben zugewiesen.</span></div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
   const myProj=listTeamProjekte().filter(p=>p.owner===me);
   const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length; const ln=linkedEntityName(p);
@@ -3562,7 +3562,7 @@ function meineSectionsHtml(){
     </div>
     <div class="crm-sec">
       <h4><span class="ttl">📂 Meine Projekte</span><button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button></h4>
-      ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</div>`}
+      ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="empty-state"><span class="es-icon">🗂️</span><span>Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</span></div>`}
       ${closedMine.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedMine.length})</summary><div class="crm-list" style="margin-top:8px">${closedMine.map(pcard).join('')}</div></details>`:''}
     </div>`;
 }
@@ -3964,7 +3964,7 @@ function paintVerteiler(){
         <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
       </div>
     </div>`;
-  }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Verteiler. Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</div>`;
+  }).join('') || `<div class="empty-state"><span class="es-icon">✉️</span><span class="es-title">Noch keine Verteiler</span><span>Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</span></div>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-sec">
       <h4><span class="ttl">✉️ E-Mail-Verteiler</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button>`:''}</h4>
@@ -4405,7 +4405,7 @@ function crmPvPrint(id){
     .lbl{position:absolute;width:${f.w}mm;height:${f.h}mm;padding:0 5mm;display:flex;flex-direction:column;justify-content:center;
       font-size:${f.fs}pt;line-height:1.25;overflow:hidden;outline:1px dashed #ccc}
     .lbl div{overflow-wrap:anywhere}
-    .bar{position:sticky;top:0;z-index:5;background:var(--primary,#1a3a5c);color:#fff;padding:10px 16px;font-size:13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .bar{position:sticky;top:0;z-index:5;background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);padding:10px 16px;font-size:13px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     .bar button{background:var(--surface,#fff);color:var(--primary,#1a3a5c);border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer}
     @media print{body{background:var(--surface,#fff)}.bar{display:none}.page{margin:0}.lbl{outline:none}}
   </style></head><body>
@@ -4720,7 +4720,7 @@ function paintVerwZugriff(){
     const cells=_ROLE_COLS.map(r=>{
       const row=pa[p.key]||{};
       const cur = Object.prototype.hasOwnProperty.call(row, r.key) ? (row[r.key]?'ja':'nein') : 'std';
-      return `<td style="text-align:center;padding:4px 6px"><select class="crm-sortsel" onchange="crmSetPathAccess(${jsq(p.key)},${jsq(r.key)},this.value)">`
+      return `<td style="text-align:center;padding:4px 6px"><select class="crm-sortsel" aria-label="Zugriff" onchange="crmSetPathAccess(${jsq(p.key)},${jsq(r.key)},this.value)">`
         + `<option value="std"${cur==='std'?' selected':''}>Standard</option>`
         + `<option value="ja"${cur==='ja'?' selected':''}>Ja</option>`
         + `<option value="nein"${cur==='nein'?' selected':''}>Nein</option></select></td>`;

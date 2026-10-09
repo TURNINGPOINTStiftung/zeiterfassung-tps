@@ -327,7 +327,7 @@ export function buildZuordSummary(employees,oy,om,d){
     if(!empRows) return '';
     const catTots=visCats.map(cat=>maps.reduce((s,{map})=>s+(map[cat]||0),0));
     const grandTot=catTots.reduce((s,v)=>s+v,0);
-    const gesamtRow=`<tr style="background:var(--primary,#1a3a5c);color:#fff;font-weight:700">
+    const gesamtRow=`<tr style="background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-weight:700">
       <td style="padding:6px 10px;font-size:12px">Gesamt</td>
       ${catTots.map(t=>`<td style="padding:6px 8px;text-align:right;font-size:12px">${t?hFmt(t):'–'}</td>`).join('')}
       <td style="padding:6px 8px;text-align:right;font-size:12px;border-left:2px solid rgba(255,255,255,0.3)">${grandTot?hFmt(grandTot):'–'}</td>
@@ -336,7 +336,7 @@ export function buildZuordSummary(employees,oy,om,d){
       <div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border)">${label}</div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;min-width:350px">
-          <thead><tr style="background:var(--primary);color:#fff">
+          <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
             <th style="padding:6px 10px;text-align:left;font-size:11px;min-width:120px">Mitarbeiter</th>
             ${visCats.map(cat=>`<th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap">${cat}</th>`).join('')}
             <th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap;border-left:2px solid rgba(255,255,255,0.3)">Gesamt</th>
@@ -454,13 +454,13 @@ export function openJahresübersicht(uid,y){
       <h4 style="margin:22px 0 10px;font-size:13px;font-weight:700;color:var(--primary);border-top:1px solid var(--border);padding-top:16px">Stunden nach Zuordnung</h4>
       <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead><tr style="background:var(--primary);color:#fff">
+        <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
           <th style="padding:5px 8px;text-align:left;font-size:10px;min-width:110px">Kategorie</th>
           ${mHdr}
           <th style="padding:5px 8px;text-align:right;font-size:10px">Gesamt</th>
         </tr></thead>
         <tbody>${catRows}</tbody>
-        <tfoot><tr style="background:var(--primary,#1a3a5c);color:#fff">
+        <tfoot><tr style="background:var(--primary,#1a3a5c);color:var(--on-primary,#fff)">
           <td style="padding:5px 8px;font-size:11px;font-weight:700">Gesamt</td>
           ${totalCells}
           <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700">${minFmt(grand)}</td>
@@ -474,7 +474,7 @@ export function openJahresübersicht(uid,y){
     <div style="font-size:13px;color:var(--muted);margin-bottom:18px">${esc(user.name)} · ${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'}</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="background:var(--primary);color:#fff">
+      <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
         <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--primary)">Monat</th>
         ${headerCols}
         <th style="padding:8px 10px;text-align:center;border-bottom:2px solid var(--primary)">Status</th>
@@ -607,7 +607,7 @@ export function printJahresübersicht(uid,y){
     +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
     +'th.r,td.r{text-align:right}th.c,td.c{text-align:center}'
     +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
-    +'tfoot td{background:var(--primary,#1a3a5c);color:#fff;font-weight:700;padding:8px 10px;font-size:12px}'
+    +'tfoot td{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-weight:700;padding:8px 10px;font-size:12px}'
     +'.cover-section-title{font-size:13px;font-weight:700;color:var(--primary,#1a3a5c);margin:20px 0 8px;padding-top:16px;border-top:2px solid var(--border,#dde1e7)}'
     +'.month-page{max-width:940px;margin:0 auto}'
     +'.month-page .bh-page{padding-bottom:0}'

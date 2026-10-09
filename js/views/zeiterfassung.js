@@ -201,7 +201,7 @@ export function renderZeiterfassung(){
     tr.innerHTML=`
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
-      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn)">WE</span>':''}</td>
+      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn-text)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
       <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
       <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,(dd.halfDay&&(dd.b1zuord==='Urlaub'))?'Urlaub½':(dd.b1zuord||''),true)}</select></td>

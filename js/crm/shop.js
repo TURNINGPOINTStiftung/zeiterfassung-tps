@@ -258,14 +258,14 @@ function _styles(){
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
   .shop-tabs button{border:none;background:none;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
   .shop-tabs button.on{color:var(--primary,#203869);border-bottom-color:var(--primary,#203869)}
-  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn,#d97706);color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn,#d97706);color:var(--on-primary,#fff);font-size:11px;line-height:18px;text-align:center;margin-left:4px}
   .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:var(--text)}
   .shop-bar input[type=search]{flex:1;min-width:160px}
   .shop-sp{flex:1}
   .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
-  .shop-btn.pri{background:var(--primary,#203869);border-color:var(--primary,#203869);color:#fff}
-  .shop-btn.ok{background:var(--ok,#16a34a);border-color:var(--ok,#16a34a);color:#fff}
+  .shop-btn.pri{background:var(--primary,#203869);border-color:var(--primary,#203869);color:var(--on-primary,#fff)}
+  .shop-btn.ok{background:var(--ok,#16a34a);border-color:var(--ok,#16a34a);color:var(--on-primary,#fff)}
   .shop-btn.warn{border-color:var(--danger,#c0392b);color:var(--danger,#c0392b)}
   .shop-btn.sm{padding:3px 8px;font-size:12px}
   .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
@@ -275,7 +275,7 @@ function _styles(){
   .shop-cb{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
   .shop-name{font-weight:700;font-size:15px;color:var(--text)}
   .shop-var{font-size:12px;color:var(--muted)}
-  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--surface-2,#eef2f7);color:#4a5a6e;align-self:flex-start}
+  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--surface-2,#eef2f7);color:var(--muted,#4a5a6e);align-self:flex-start}
   .shop-tot{font-size:22px;font-weight:700;color:var(--primary,#203869)}
   .shop-tot small{font-size:12px;font-weight:600;color:var(--muted)}
   .shop-low{font-size:12px;font-weight:700;color:var(--danger,#e5484d)}
@@ -299,7 +299,7 @@ function _styles(){
   .shop-late{color:var(--danger,#c0392b);font-weight:700}
   .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
   .shop-seg button{border:none;background:var(--surface,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
-  .shop-seg button.on{background:var(--primary,#203869);color:#fff}
+  .shop-seg button.on{background:var(--primary,#203869);color:var(--on-primary,#fff)}
   .shop-f{margin-bottom:10px}
   .shop-f label{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
   .shop-f input,.shop-f select,.shop-f textarea{width:100%;box-sizing:border-box;padding:6px 8px;font-size:14px;border:1.5px solid var(--border);border-radius:6px}
@@ -317,7 +317,7 @@ function _styles(){
   .shop-posadd input[type=number]{padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px}
   .shop-cart{position:fixed;left:18px;bottom:18px;width:340px;max-width:calc(100vw - 24px);max-height:70vh;display:flex;flex-direction:column;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);z-index:55}
   .shop-cart.min{width:auto;background:none;border:none;box-shadow:none}
-  .shop-cart-pill{background:var(--primary,#203869);color:#fff;border:none;border-radius:22px;padding:10px 16px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+  .shop-cart-pill{background:var(--primary,#203869);color:var(--on-primary,#fff);border:none;border-radius:22px;padding:10px 16px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.2)}
   .shop-cart-h{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border)}
   .shop-cart-list{overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px}
   .shop-cart-free{padding:0 12px 8px}
@@ -384,8 +384,8 @@ function _bestandHtml(mgr){
   const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
   return `${hint}<div class="shop-bar">
       <input type="search" id="shop-q" placeholder="Suchen …" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
-      <select onchange="shopSetCat(this.value)">${catOpts}</select>
-      <select onchange="shopSetPlace(this.value)">${plOpts}</select>
+      <select aria-label="Kategorie" onchange="shopSetCat(this.value)">${catOpts}</select>
+      <select aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
       ${_teamFilterHtml()}
       <span class="shop-sp"></span>
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>

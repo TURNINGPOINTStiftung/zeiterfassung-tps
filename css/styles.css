@@ -8,13 +8,13 @@
   --brand:#203869; --brand-d:#172b52;
   --primary:#203869; --primary-l:#34548c; --primary-d:#172b52; --primary-soft:#e9eef8; --on-primary:#fff;
   --ci-green:#48ae4d; --ci-red:#e52521; --accent:#48ae4d;
-  --ok:#2e9b4f; --ok-bg:#e7f6ec; --ok-text:#1e6b37;
-  --warn:#d97706; --warn-bg:#fff4e0; --warn-text:#8a4b06;
+  --ok:#1a7f3c; --ok-bg:#e7f6ec; --ok-text:#1e6b37;
+  --warn:#b45309; --warn-bg:#fff4e0; --warn-text:#8a4b06;
   --danger:#c0392b; --danger-bg:#fdecea; --danger-text:#8f2419;
   --info:#2563eb; --info-bg:#e8f0fe; --info-text:#1e40af;
   --bg:#f3f5f9; --surface:#fff; --surface-2:#f7f9fc; --surface-3:#eef2f7; --white:var(--surface);
   --border:#e2e7ef; --border-strong:#c9d2df;
-  --text:#1d2a3a; --muted:#64748b; --row-alt:#f9fbfd; --weekend:#fff7ec;
+  --text:#1d2a3a; --muted:#566173; --row-alt:#f9fbfd; --weekend:#fff7ec;
   --hdr:66px;
   --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --ci-serif:var(--font);
@@ -26,7 +26,7 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --primary:#5a86dd; --primary-l:#7ea2ea; --primary-d:#3d68c0; --primary-soft:#1f2c48;
+    --primary:#7aa0ea; --primary-l:#9bb8f0; --primary-d:#a9c1f2; --primary-soft:#1f2c48; --on-primary:#0b1220;
     --ok:#4cc27a; --ok-bg:#15301f; --ok-text:#8be3a8;
     --warn:#f0a63a; --warn-bg:#33260f; --warn-text:#f5c77a;
     --danger:#ef6b5e; --danger-bg:#3a1a17; --danger-text:#f4a59c;
@@ -39,7 +39,7 @@
   }
 }
 :root[data-theme="dark"]{
-  --primary:#5a86dd; --primary-l:#7ea2ea; --primary-d:#3d68c0; --primary-soft:#1f2c48;
+  --primary:#7aa0ea; --primary-l:#9bb8f0; --primary-d:#a9c1f2; --primary-soft:#1f2c48; --on-primary:#0b1220;
   --ok:#4cc27a; --ok-bg:#15301f; --ok-text:#8be3a8;
   --warn:#f0a63a; --warn-bg:#33260f; --warn-text:#f5c77a;
   --danger:#ef6b5e; --danger-bg:#3a1a17; --danger-text:#f4a59c;
@@ -708,9 +708,9 @@ html .btn:active:not(:disabled),html .btn-sm-crm:active{transform:translateY(1px
 html .btn:disabled,html .btn-sm-crm:disabled{opacity:.5;cursor:not-allowed}
 html .btn-primary,html .btn-sm-crm.primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
 html .btn-primary:hover:not(:disabled),html .btn-sm-crm.primary:hover{background:var(--primary-l);border-color:var(--primary-l);color:var(--on-primary)}
-html .btn-ok{background:var(--ok);border-color:var(--ok);color:#fff}
-html .btn-danger{background:var(--danger);border-color:var(--danger);color:#fff}
-html .btn-warn{background:var(--warn);border-color:var(--warn);color:#fff}
+html .btn-ok{background:var(--ok);border-color:var(--ok);color:var(--on-primary)}
+html .btn-danger{background:var(--danger);border-color:var(--danger);color:var(--on-primary)}
+html .btn-warn{background:var(--warn);border-color:var(--warn);color:var(--on-primary)}
 html .btn-ok:hover:not(:disabled),html .btn-danger:hover:not(:disabled),html .btn-warn:hover:not(:disabled){filter:brightness(1.07)}
 html .btn-outline,html .btn-sm-crm{background:var(--surface);border-color:var(--border-strong);color:var(--text)}
 html .btn-sm-crm{color:var(--primary)}
@@ -837,3 +837,10 @@ html .home-tile{padding:16px 8px}
 }
 /* Handy: Felder einer Block-Zeile auf gleiche Höhe (Platzhalter für das „Block 1/2“-Label) */
 @media (max-width:640px){ html .zt tbody td:nth-child(5)::before,html .zt tbody td:nth-child(6)::before,html .zt tbody td:nth-child(11)::before,html .zt tbody td:nth-child(12)::before{content:"\00a0";display:block;font-size:9px;margin-bottom:3px;line-height:1} }
+
+html .zt td.day-c.we span,html .zt td.day-c span{color:inherit}
+html .warn{color:var(--warn-text)}
+@media (min-width:641px){ html .zt thead th.block-head{color:var(--primary-l)} }
+html .kal-dh.we .dow{color:inherit;opacity:1}
+/* Handy: volle Kopfleiste (CRM mit Suche) entzerren */
+@media (max-width:640px){ html .module-bar .header-right{gap:6px;min-width:0;flex:1;justify-content:flex-end} html .module-bar .user-badge{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 10px} html .module-bar .header-right .btn{min-height:36px;padding:6px 12px;font-size:13px;flex-shrink:0} html .crm-search{min-width:0!important;width:auto!important;flex:1 1 80px;max-width:170px} }

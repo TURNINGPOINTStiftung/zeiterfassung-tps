@@ -137,7 +137,7 @@ export function renderGFBerichte(){
 
   const reports=Object.values(d.teamReports||{});
   if(!reports.length&&!yearReports.length){
-    content.innerHTML='<p style="color:var(--muted);padding:20px 0">Noch keine Berichte eingegangen.</p>';
+    content.innerHTML='<div class="empty-state"><span class="es-icon">📭</span><span class="es-title">Noch keine Berichte eingegangen</span><span>Eingereichte Team- und Jahresberichte erscheinen hier.</span></div>';
     return;
   }
   if(!reports.length){ content.innerHTML=html; return; }
@@ -442,7 +442,7 @@ function _ensureNoticeCss(){
       +'.ze-notice button.pri{background:#c98a10;color:#fff}'
       +'.gf-emp{white-space:nowrap}'
       +'.gf-ret-btn{margin-left:3px;border:1px solid var(--danger);background:var(--surface,#fff);color:var(--danger);border-radius:5px;font-size:11px;line-height:1;padding:1px 5px;cursor:pointer;vertical-align:middle}'
-      +'.gf-ret-btn:hover{background:var(--danger);color:#fff}';
+      +'.gf-ret-btn:hover{background:var(--danger);color:var(--on-primary,#fff)}';
     document.head.appendChild(st);
   }
 }

@@ -199,7 +199,7 @@ export function renderHome(){
       <div class="home-in">
         <div class="home-top"><div><p class="home-hi">${esc(gruss)}${first?', '+esc(first):''}</p>
           <p class="home-date">${esc(datum)}</p></div>
-          ${_arranging?`<button class="home-arr-btn" onclick="homeArrangeReset()">↺ Standard</button><button class="home-arr-btn" style="margin-left:0;background:var(--primary,#203869);color:#fff;border-color:var(--primary,#203869)" onclick="homeArrange(false)">✓ Fertig</button>`
+          ${_arranging?`<button class="home-arr-btn" onclick="homeArrangeReset()">↺ Standard</button><button class="home-arr-btn" style="margin-left:0;background:var(--primary,#203869);color:var(--on-primary,#fff);border-color:var(--primary,#203869)" onclick="homeArrange(false)">✓ Fertig</button>`
             :`<button class="home-arr-btn" onclick="homeArrange(true)" title="Karten verschieben und ausblenden">✥ Anordnen</button>`}</div>
         ${_arranging?`<div class="home-tray"><b>Karten ziehen</b> – zwischen Spalten und nach oben/unten. ✕ blendet aus.${hiddenAvail.length?' &nbsp;Ausgeblendet: '+hiddenAvail.map(k=>{ const c=CARDS.find(x=>x.k===k); return `<button onclick="homeHideCard('${k}',false)">＋ ${esc(c?c.l:k)}</button>`; }).join(''):''}</div>`:''}
         <div class="home-cols" id="home-cols">${cols.map((c,i)=>`<div class="home-col" data-col="${i}">${c.map(slot).join('')}</div>`).join('')}</div>

@@ -113,10 +113,10 @@ function _injectStyles(){
   table.aus-t{width:100%;border-collapse:collapse;min-width:420px}
   table.aus-t th,table.aus-t td{border:1px solid var(--border);padding:6px 9px;font-size:13px;text-align:right}
   table.aus-t th:first-child,table.aus-t td:first-child{text-align:left}
-  table.aus-t thead th{background:var(--primary);color:#fff;font-size:12px}
+  table.aus-t thead th{background:var(--primary);color:var(--on-primary,#fff);font-size:12px}
   table.aus-t tr.total td{font-weight:800;background:var(--surface-2,#eef2f8)}
   .aus-badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700}
-  .aus-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer}
+  .aus-btn{background:var(--primary);color:var(--on-primary,#fff);border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer}
   .aus-btn.sec{background:var(--surface,#fff);color:var(--primary);border:1.5px solid var(--border)}
   .aus-scroll{overflow-x:auto}`;
   const st=document.createElement('style'); st.id='aus-styles'; st.textContent=css; document.head.appendChild(st);
@@ -185,7 +185,7 @@ function _filterBar(){
     <div class="aus-filter">
       <div style="min-width:170px">
         <label style="font-size:12px;font-weight:700;color:var(--muted)">Zeitraum</label><br>
-        <select onchange="ausSetYear(this.value)" style="margin-top:5px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">${yearOpts}</select>
+        <select aria-label="Zeitraum" onchange="ausSetYear(this.value)" style="margin-top:5px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">${yearOpts}</select>
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="aus-btn sec" onclick="ausAll()">Alle</button>
           <button class="aus-btn sec" onclick="ausNone()">Keine</button>
