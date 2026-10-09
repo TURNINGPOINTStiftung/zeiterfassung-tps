@@ -1,5 +1,5 @@
 import { MONTHS } from './config.js';
-import { getUser, getData } from './data.js';
+import { getUser, getData, mutate } from './data.js';
 import { isManagerRole, hasPermission, roleLabel } from './roles.js';
 import { dailyMinutes, clampToEmployment } from './calc.js';
 
@@ -143,7 +143,15 @@ export function initApp(){
   // Administrator: Freigabelisten (admins/managers/grants) einmal pro Sitzung neu ableiten, damit
   // vergebene Rechte serverseitig immer dem aktuellen Stand entsprechen.
   if(isAdmin && !window._permsRefreshed){ window._permsRefreshed=true;
-    setTimeout(()=>{ try{ window.refreshPermissionAllowlists?.({log:()=>{}})?.catch(e=>console.warn('Perms-Refresh (Start):', e&&e.message)); }catch(e){} }, 8000); }
+    setTimeout(()=>{ try{ window.refreshPermissionAllowlists?.({log:()=>{}})?.catch(e=>console.warn('Perms-Refresh (Start):', e&&e.message)); }catch(e){} }, 8000);
+    // Seit v429 keine App-Passwort-Hashes mehr (waren für alle Freigeschalteten lesbar; angemeldet
+    // wird nur noch über Firebase). Noch vorhandene Hashes einmalig aus Nutzerliste + Archiv löschen.
+    setTimeout(()=>{ try{
+      const d=getData(); const has=a=>(Array.isArray(a)?a:[]).some(u=>u&&u.pw!==undefined);
+      if(!window._cloudUnverified && (has(d.users)||has(d.archivedUsers)))
+        mutate(dd=>{ [dd.users,dd.archivedUsers].forEach(a=>(Array.isArray(a)?a:[]).forEach(u=>{ if(u) delete u.pw; })); })
+          ?.then(()=>console.info('[Sicherheit] Passwort-Hashes entfernt.'))?.catch(e=>console.warn('Hash-Bereinigung:', e&&e.message));
+    }catch(e){} }, 12000); }
   // Automatisches Tages-Backup (erstes Gerät des Tages; best effort, verzögert, stört den Start nicht).
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }

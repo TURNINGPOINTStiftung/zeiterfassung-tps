@@ -2,7 +2,6 @@ import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL }
 import { getData, getUser, mutate, getCustomRoles, _fk, STAMM_FIELDS } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate, jsArg as jsq } from '../utils.js';
-import { makePwRecord } from '../auth.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
 import { vacDailyMin, annualVacDays } from '../calc.js';
 
@@ -393,7 +392,7 @@ function _lockAdminOnlyFields(){
   const h3=box.querySelector('h3'); if(h3) h3.after(h);
 }
 
-// Admin: Einmal-Passwort für einen Mitarbeiter erzeugen (setzt den Datensatz-Hash `u.pw`).
+// Admin: Einmal-Passwort für einen Mitarbeiter erzeugen (setzt das Passwort des Firebase-Kontos über tpsPw).
 // Funktioniert für Konten, die NOCH NICHT auf ein eigenes Firebase-Passwort migriert sind:
 // der Login nutzt dann den Stabil-PW-Fallback + diesen Hash und migriert automatisch.
 // Bereits migrierte Konten (Firebase-PW unbekannt, z. B. Jörg) brauchen einen Reset am
@@ -421,15 +420,15 @@ export async function resetUserPassword(id){
   if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   const u=getUser(id); if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
   if(!confirm('Neues Startpasswort für '+(u.name||id)+' erzeugen?\n\nDas bisherige Passwort wird ungültig. '+(u.name||'Die Person')+' meldet sich mit dem neuen Passwort an und ändert es danach im Profil.')) return;
-  let temp, hash;
-  try{ temp=_genTempPw(); hash=await makePwRecord(temp); }
+  let temp;
+  try{ temp=_genTempPw(); }
   catch(e){ toast('Fehler beim Erzeugen: '+((e&&e.message)||e),'err'); return; }
   // Zuerst das Firebase-Konto (sonst griffe nur der App-Hash und die Anmeldung scheiterte).
   toast('Setze Passwort …','');
   try{ await _adminSetFirebasePw(id,temp); }
   catch(e){ openModal(`<h3>Passwort konnte nicht gesetzt werden</h3><p style="font-size:13px;color:var(--danger)">${esc((e&&e.message)||String(e))}</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">OK</button></div>`); return; }
-  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; if(d.pwResetRequests&&d.pwResetRequests[id]) delete d.pwResetRequests[id]; }); }
-  catch(e){ toast('Firebase-Passwort gesetzt, App-Passwort aber nicht gespeichert: '+((e&&e.message)||e),'err'); return; }
+  // Kein App-Hash mehr (seit v429 prüft nur Firebase das Passwort) – nur die offene Anfrage erledigen.
+  try{ await mutate(d=>{ if(d.pwResetRequests&&d.pwResetRequests[id]) delete d.pwResetRequests[id]; }); }catch(_){}
   try{ window._refreshVerwUsers&&window._refreshVerwUsers(); }catch(_){}
   openModal(`<h3>🔑 Neues Startpasswort</h3>
     <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich oder telefonisch weitergeben – Anmeldung mit <b>Name + diesem Passwort</b>, danach im Profil ändern.</p>
@@ -486,11 +485,9 @@ function _renderAccountCheck(){
 export async function secureAccountUi(id){
   const u=getUser(id); if(!u) return;
   if(!confirm(`Konto von ${u.name||id} absichern?\n\nEs wird ein neues Startpasswort gesetzt. Das bisherige Passwort der Person gilt dann nicht mehr.`)) return;
-  let temp, hash;
-  try{ temp=_genTempPw(); hash=await makePwRecord(temp); await window.secureStableAccount(id,temp); }
+  let temp;
+  try{ temp=_genTempPw(); await window.secureStableAccount(id,temp); }
   catch(e){ toast('Absichern fehlgeschlagen: '+((e&&(e.code||e.message))||e),'err'); return; }
-  try{ await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; }); }
-  catch(e){ toast('Firebase-Konto gesichert, aber App-Passwort nicht gespeichert: '+((e&&e.message)||e),'err'); }
   (window._accCheck||[]).forEach(r=>{ if(r.id===id) r.status='sicher'; });
   openModal(`<h3>🔐 Abgesichert – neues Startpasswort</h3>
     <p style="font-size:13px;color:var(--muted);margin:0 0 12px">Für <b>${esc(u.name||id)}</b>. Bitte persönlich weitergeben – Anmeldung mit Name + diesem Passwort, danach im Profil ändern.</p>
@@ -509,9 +506,9 @@ export async function reprovisionUserFull(id){
   if(!window.reprovisionUser){ toast('Funktion nicht verfügbar.','err'); return; }
   if(!confirm('Zugang für '+(u.name||id)+' NEU aufsetzen?\n\nNur nötig, wenn sich die Person trotz Einmal-Passwort nicht anmelden kann (kaputtes Login-Konto).\n\nWICHTIG: Das alte Login-Konto muss vorher in der Firebase-Konsole (Authentication) gelöscht sein.')) return;
   try{
-    const r=await window.reprovisionUser(id);
-    const temp=_genTempPw(); const hash=await makePwRecord(temp);
-    await mutate(d=>{ const x=(d.users||[]).find(y=>y&&y.id===id); if(x) x.pw=hash; });
+    // Neues Konto direkt mit dem Einmal-Passwort anlegen (kein Stabil-Passwort, kein App-Hash).
+    const temp=_genTempPw();
+    const r=await window.reprovisionUser(id, temp);
     openModal(`<h3>🔧 Zugang neu aufgesetzt</h3>
       <p style="font-size:13px;color:var(--muted);margin:0 0 12px">${esc(r.note||'')} · <b>${esc(u.name||id)}</b>. Einmal-Passwort:</p>
       <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:14px;user-select:all">${esc(temp)}</div>
@@ -959,8 +956,9 @@ export async function saveNewUser(){
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
-  const _plainPw=u.pw;  // Klartext vor dem Hashen für das Firebase-Konto
-  u.pw=await makePwRecord(u.pw);
+  const _plainPw=u.pw;  // Startpasswort für das Firebase-Konto (wird NICHT in der Datenbank gespeichert)
+  if(String(_plainPw).length<8){ toast('Startpasswort: mindestens 8 Zeichen.','err'); return; }
+  delete u.pw;          // seit v429 keine App-Hashes mehr – das Passwort prüft nur Firebase
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
   const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
@@ -985,8 +983,13 @@ export async function saveEditUser(id){
     if(!ex0 || ex0.role==='admin' || id==='admin' || id===cu.id){ toast('Diesen Datensatz kann nur der Administrator ändern.','err'); return; }
     u.role=ex0.role; u.name=ex0.name; u.pw=''; }
   if(id==='admin') u.role='admin';
-  if(u.pw){ u.pw=await makePwRecord(u.pw); }
-  else { const ex=getUser(id); if(ex) u.pw=ex.pw; }
+  // Passwort im Bearbeiten-Dialog: direkt am Firebase-Konto setzen (Cloud Function), nie als Hash speichern.
+  const _newPw=u.pw; delete u.pw;
+  if(_newPw && !_deleg){
+    if(String(_newPw).length<8){ toast('Passwort: mindestens 8 Zeichen.','err'); return; }
+    try{ await _adminSetFirebasePw(id,_newPw); }
+    catch(e){ toast('Passwort konnte nicht gesetzt werden: '+((e&&e.message)||e),'err'); return; }
+  }
   // Team-Verlauf: wenn primäres Team gewechselt hat → History-Eintrag hinzufügen
   const existing=getUser(id);
   const newTeam=u.teams[0]||u.team||'';

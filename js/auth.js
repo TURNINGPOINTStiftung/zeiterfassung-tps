@@ -434,12 +434,11 @@ export async function saveResetPassword(token,uid){
   const msgEl=document.getElementById('new-pw-msg');
   if(pw1.length<8){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 8 Zeichen.</div>'; return; }
   if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
-  const hash=await makePwRecord(pw1);
-  // Nur das eigene pw gezielt schreiben (users/<idx>/pw) – passt zur Owner-Regel.
-  await setUserFields(uid, { pw:hash });
+  // Alter E-Mail-Link-Weg: Seit v429 prüft nur Firebase das Passwort, ein App-Hash würde nichts
+  // bewirken. Der Link wird entwertet und auf den heutigen Weg (Anfrage → Einmal-Passwort) verwiesen.
   await firebase.database().ref('zeiterfassung/pwResetTokens/'+token).remove().catch(()=>{});
   closeModal();
-  toast('✅ Passwort gespeichert. Du kannst dich jetzt einloggen.','ok');
+  toast('Dieser Link ist veraltet. Bitte auf der Anmeldeseite „Passwort vergessen?“ nutzen – du bekommst ein Einmal-Passwort vom Administrator.','err');
   populateLoginDropdown();
 }
 
@@ -464,15 +463,10 @@ export function doEmergencyReset(){
 }
 
 export async function resetPasswordsOnly(){
-  if(!confirm('Passwörter aller Benutzer auf Standard zurücksetzen?\nZeitdaten bleiben erhalten.')) return;
-  const hashMap={};
-  for(const def of DEFAULT_USERS){ hashMap[def.id]=await makePwRecord(def.pw); }
-  mutate(d=>{
-    d.users.forEach(u=>{ if(hashMap[u.id]) u.pw=hashMap[u.id]; });
-  });
+  // Seit v429 gibt es keine App-Passwörter mehr (nur Firebase-Konten) → einzelne Personen über
+  // Verwaltung → Mitarbeiter → „🔑 Einmal-Passwort“ zurücksetzen.
   closeModal();
-  toast('Passwörter zurückgesetzt.','ok');
-  populateLoginDropdown();
+  toast('Nicht mehr nötig: Passwörter einzeln über Verwaltung → Mitarbeiter → „Einmal-Passwort“ zurücksetzen.','err');
 }
 
 export function initAuthEvents(){

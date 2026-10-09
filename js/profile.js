@@ -1,5 +1,5 @@
 import { getUser, getData, setUserFields } from './data.js';
-import { verifyPw, makePwRecord } from './auth.js';
+// (Passwort-Hashes entfallen seit v429 – Passwortwechsel nur über Firebase.)
 import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate } from './utils.js';
 import { ownBackupSectionHtml } from './user-backup.js';
 
@@ -103,7 +103,8 @@ export async function saveProfile(){
     }
     try{ await fu.updatePassword(pwNew); }
     catch(e){ toast('Neues Passwort konnte nicht gesetzt werden: '+((e&&(e.code||e.message))||''),'err'); return; }
-    newPwHash=await makePwRecord(pwNew);
+    // Kein App-Hash mehr (seit v429): eine eigene alte Hash-Kopie wird beim Speichern entfernt.
+    newPwHash=true;
   }
   // Werkstudent: Vorlesungszeiten + Brückentage einsammeln (aktive Slots + im Verlauf mitgeführte),
   // nur wenn die Felder existieren.
@@ -115,7 +116,7 @@ export async function saveProfile(){
   // Nur die eigenen Selbstbedienungs-Felder gezielt schreiben (users/<idx>/<feld>) – passt zur
   // Owner-Regel und rührt den restlichen users-Array (role/teams/… = Admin-only) nicht an.
   const patch={ email, city, bundesland:bl };   // (vorher `bundesland` = undefinierte Variable → Speichern brach immer ab)
-  if(newPwHash) patch.pw=newPwHash;
+  if(newPwHash) patch.pw=null;   // evtl. noch vorhandenen alten Hash löschen (eigenes Feld, Owner-Regel)
   if(lecturePeriods) patch.lecturePeriods=lecturePeriods;
   if(lectureFreeDays) patch.lectureFreeDays=lectureFreeDays;
   await setUserFields(cu.id, patch);

@@ -137,20 +137,21 @@ export async function runSecuritySetup(opts){
 // Stabil-Passwort NEU an und trägt Verzeichnis + Allowlist ein. Existiert das Konto noch
 // mit UNBEKANNTEM Passwort, muss es zuerst in der Firebase-Konsole (Authentication)
 // gelöscht werden – dann liefert diese Funktion eine klare Meldung.
-export async function reprovisionUser(id){
+export async function reprovisionUser(id, tempPw){
   const data=getData();
   const u=(data.users||[]).find(x=>x&&x.id===id);
   if(!u) throw new Error('Nutzer nicht gefunden.');
   if(!firebase.auth().currentUser) throw new Error('Bitte zuerst als Admin anmelden.');
   const sec=_secApp();
-  const em=_accountEmail(id), pw=_stableAuthPw(id);
+  if(!tempPw||String(tempPw).length<8) throw new Error('Einmal-Passwort fehlt.');
+  const em=_accountEmail(id);
   let uid=null, note='';
-  try{ const c=await sec.auth().createUserWithEmailAndPassword(em, pw); uid=c.user.uid; note='Konto neu angelegt'; }
+  // Konto direkt mit dem Einmal-Passwort anlegen (seit v429 kein Stabil-Passwort mehr).
+  try{ const c=await sec.auth().createUserWithEmailAndPassword(em, tempPw); uid=c.user.uid; note='Konto neu angelegt'; }
   catch(e){
     if(e && e.code==='auth/email-already-in-use'){
-      try{ const c=await sec.auth().signInWithEmailAndPassword(em, pw); uid=c.user.uid; note='Konto vorhanden (Stabil-PW ok)'; }
-      catch(e2){ try{ await sec.auth().signOut(); }catch(_){}
-        throw new Error('Das Login-Konto '+em+' existiert noch mit einem unbekannten Passwort. Bitte es zuerst in der Firebase-Konsole unter „Authentication" löschen und dann erneut „Zugang neu aufsetzen".'); }
+      try{ await sec.auth().signOut(); }catch(_){}
+      throw new Error('Das Login-Konto '+em+' existiert bereits. Bitte stattdessen „🔑 Einmal-Passwort“ verwenden (setzt das Passwort des vorhandenen Kontos). Nur wenn das nicht hilft: Konto in der Firebase-Konsole unter „Authentication“ löschen und hier erneut aufsetzen.');
     } else { throw e; }
   }
   try{ await sec.auth().signOut(); }catch(_){}

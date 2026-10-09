@@ -1,6 +1,5 @@
-import { STORAGE_KEY, _STAMP_KEY, _PW_SALT } from './config.js';
+import { STORAGE_KEY, _STAMP_KEY } from './config.js';
 import { freshData, _migrate, getData, setDataCache, mutate, entryKey, noteGoodData, fbWriteMerge, mergeIncoming, flushPendingWrites, isAdminAccount } from './data.js';
-import { makePwRecord, isPwHashed } from './auth.js';
 import { addMin, diffMin, getHolidays } from './utils.js';
 
 // ── Echte Firebase-Konten (Phase 1) ───────────────────────────────
@@ -14,13 +13,6 @@ function _accountEmail(id, email){
   // Kompatibilität in der Signatur, wird aber nicht mehr verwendet.)
   return String(id||'').toLowerCase().replace(/[^a-z0-9._-]/g,'') + '@tps.intern';
 }
-// Stabiles, APP-VERWALTETES Firebase-Passwort je Nutzer – bewusst UNABHÄNGIG vom Login-
-// Passwort des Nutzers. Dadurch bleibt das Firebase-Konto gültig, auch wenn der Nutzer sein
-// (App-)Passwort ändert; genau diese Kopplung hat sonst dazu geführt, dass ein Passwort-
-// wechsel das Firebase-Login auf ein neues Gerät aussperrte. (KEIN Sicherheits-Boundary:
-// die Firebase-Regeln verlangen nur IRGENDEINE nicht-anonyme Anmeldung; die echte
-// Zugangskontrolle macht die App über das gehashte u.pw.)
-function _stableAuthPw(id){ return 'tpsfb$'+String(id||'').toLowerCase()+'$'+_PW_SALT; }
 
 // ── Login-Verzeichnis (öffentlich lesbar: nur Namen) ──────────────────
 // SICHERHEIT (Umbau 2026-08): Vor dem Login liest der Client NICHT mehr die
@@ -35,27 +27,24 @@ function _awaitAuthReady(){
   return new Promise(res=>{ try{ const u=firebase.auth().onAuthStateChanged(()=>{ try{u();}catch(_){}; res(firebase.auth().currentUser||null); }); }catch(e){ res(null); } });
 }
 
-// Login mit sanfter Migration: 1) mit dem echten (getippten) Passwort anmelden;
-// 2) sonst Übergangs-Fallback über das Stabil-Passwort, dann Hash clientseitig
-// prüfen (verifyFn) und das Firebase-Konto-Passwort auf das echte umstellen.
+// Login: Firebase prüft das Passwort (verifyFn bleibt nur der Signatur wegen, ungenutzt).
 // Rückgabe {ok, migrated} bzw. {ok:false, reason}.
 export async function authenticate(id, email, typedPw, verifyFn){
   const auth=firebase.auth();
   const acct=_accountEmail(id, email);
+  // Seit v429: Das Passwort prüft ausschließlich Firebase. App-seitige Hashes (users[].pw) gibt es
+  // nicht mehr (waren für alle Freigeschalteten lesbar), damit entfällt auch der frühere Übergangs-
+  // Fallback über das berechenbare Stabil-Passwort. Konten, die noch auf dem Stabil-Passwort stehen,
+  // zeigt Verwaltung → „Konten prüfen"; sie bekommen ein Einmal-Passwort.
   try{ await auth.signInWithEmailAndPassword(acct, typedPw); return {ok:true, migrated:false}; }
-  catch(e){ /* evtl. noch nicht migriert → Fallback */ }
-  try{ await auth.signInWithEmailAndPassword(acct, _stableAuthPw(id)); }
-  catch(e){ return {ok:false, reason:'no-account'}; }
-  let users;
-  try{ const s=await firebase.database().ref('zeiterfassung/users').once('value'); users=s.val()||[]; }
-  catch(e){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'no-access'}; }
-  const arr=Array.isArray(users)?users:Object.values(users);
-  const u=arr.find(x=>x&&x.id===id);
-  if(!u){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'no-user'}; }
-  const v=await verifyFn(typedPw, u.pw);
-  if(!v||!v.ok){ try{ await auth.signOut(); }catch(_){}; return {ok:false, reason:'bad-pw'}; }
-  try{ await auth.currentUser.updatePassword(typedPw); }catch(e){ /* z.B. requires-recent-login – klappt beim nächsten Login */ }
-  return {ok:true, migrated:true};
+  catch(e){
+    const c=(e&&e.code)||'';
+    if(c==='auth/user-not-found') return {ok:false, reason:'no-account'};
+    if(c==='auth/user-disabled') return {ok:false, reason:'no-access'};
+    if(c==='auth/too-many-requests') return {ok:false, reason:'error', msg:'zu viele Versuche, bitte kurz warten'};
+    if(c==='auth/network-request-failed') return {ok:false, reason:'error', msg:'keine Verbindung'};
+    return {ok:false, reason:'bad-pw'};
+  }
 }
 
 export async function initFirebase(){
@@ -150,9 +139,6 @@ export async function loadFullData(){
     if(!hadPauseMig&&migrated._fixes&&migrated._fixes.pauseMigrationV1) needsSave=true;
     if(!hadB2Mig&&migrated._fixes&&migrated._fixes.b2PauseMigrationV1) needsSave=true;
     if(!hadFreeRb&&migrated._fixes&&migrated._fixes.freelancerPauseRollbackV1) needsSave=true;
-    for(const u of migrated.users){
-      if(!isPwHashed(u.pw)){ u.pw=await makePwRecord(u.pw); needsSave=true; }
-    }
     setDataCache(migrated);
     noteGoodData(migrated); // Datenverlust-Schutz: vertrauenswürdigen Stand merken
     _runAbsMigrations(migrated); // Abwesenheits-Migrationen hier ausführen
@@ -167,7 +153,6 @@ export async function loadFullData(){
     // echten Stand nach und hebt die Sperre (window._cloudUnverified) wieder auf. Eine wirklich
     // leere DB wird bewusst manuell (Firebase-Konsole / Import) befüllt, nicht automatisch.
     const d=freshData();
-    for(const u of d.users){ u.pw=await makePwRecord(u.pw); }
     setDataCache(d);
     window._cloudUnverified=true;
     console.warn('[Datenschutz] Kein Cloud-Stand geladen – Defaults NUR lokal, KEIN automatischer Cloud-Write. Warte auf echten Snapshot.');
