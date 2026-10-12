@@ -7,6 +7,7 @@
 // Anmelde-Token heraus (serverseitig) – das Passwort allein reicht dann nicht mehr.
 // Voraussetzung (einmalig, Projekt-Einstellung): Identity Platform + TOTP-Anbieter aktiv.
 import { esc, jsArg, openModal, closeModal, toast } from './utils.js';
+import { PW_FUNCTION_URL } from './config.js';
 
 const API='https://identitytoolkit.googleapis.com/v2/';
 const ISSUER='TPS Zeiterfassung';
@@ -54,7 +55,7 @@ export function mfaFriendly(e){
   if(c==='auth/invalid-multi-factor-session') return 'Anmeldung abgelaufen – bitte neu anmelden.';
   if(c==='auth/requires-recent-login') return 'Bitte einmal ab- und wieder anmelden und es dann direkt erneut versuchen.';
   if(c==='auth/operation-not-allowed') return 'Zwei-Faktor-Anmeldung ist im Projekt noch nicht freigeschaltet.';
-  if(c==='auth/unverified-email') return 'Das Konto ist noch nicht als „bestätigt" markiert (einmalige Einstellung durch den Administrator).';
+  if(c==='auth/unverified-email') return 'Das Konto konnte nicht vorbereitet werden – bitte kurz später erneut versuchen oder den Administrator fragen.';
   return (e&&e.message)||'Unbekannter Fehler';
 }
 
@@ -116,12 +117,12 @@ function _loadQr(){
 }
 
 export function mfaProfileHtml(cu){
-  if(!cu || !(cu.role==='admin' || (cu.perms&&cu.perms.zugriff_verwaltung))) return '';
+  if(!cu) return '';   // freiwillig für alle
   const on=_factors().length>0;
   return `<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🔐 Zwei-Faktor-Anmeldung</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Zusätzlich zum Passwort fragt die App beim Anmelden einen Code aus einer Authenticator-App ab
-      (z. B. Microsoft Authenticator, Google Authenticator). Schützt Konten mit Verwaltungsrechten.</div>
+      (z. B. Microsoft Authenticator, Google Authenticator). Freiwillig – schützt dein Konto, falls jemand dein Passwort kennt.</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="badge" style="background:var(${on?'--ok-bg':'--warn-bg'});color:var(${on?'--ok-text':'--warn-text'})">${on?'✓ Eingeschaltet':'Aus'}</span>
       <button type="button" class="btn btn-sm ${on?'btn-outline':'btn-primary'}" style="width:auto" onclick="mfaOpenSetup()">${on?'Verwalten':'Jetzt einrichten'}</button>
@@ -150,6 +151,8 @@ export async function mfaStartEnroll(){
   const fu=firebase.auth().currentUser; if(!fu) return;
   openModal('<h3>🔐 Zwei-Faktor einrichten</h3><div class="loading"><span class="spinner"></span> Wird vorbereitet …</div>');
   try{
+    // Server markiert das eigene Konto als „bestätigt" (Voraussetzung von Firebase), danach frisches Token.
+    try{ await _fn({ action:'mfaPrep' }); await fu.getIdToken(true); }catch(e){ console.warn('mfaPrep:',e&&e.message); }
     const [_, r]=await Promise.all([_loadQr(), _api('accounts/mfaEnrollment:start',{ idToken:await fu.getIdToken(), totpEnrollmentInfo:{} })]);
     const t=r.totpSessionInfo||{};
     _enroll={ sessionInfo:t.sessionInfo, secret:t.sharedSecretKey };
@@ -206,4 +209,35 @@ export async function mfaRemove(uid){
   }
 }
 
-try{ Object.assign(window,{ mfaOpenSetup, mfaStartEnroll, mfaFinishEnroll, mfaRemove, mfaResolve }); }catch(e){}
+// ── Cloud Function tpsPw (mfaPrep / mfaReset / mfaStatus) ─────────────
+async function _fn(payload){
+  const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
+  const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+await me.getIdToken()}, body:JSON.stringify(payload) });
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j.ok){ const x=new Error(j.error||('HTTP '+r.status)); x.server=j.error||''; throw x; }
+  return j;
+}
+
+// Admin: zweiten Faktor einer Person entfernen (Handy verloren).
+export async function mfaAdminReset(id, name){
+  if(!(window.cu&&window.cu.role==='admin')){ toast('Nur der Administrator.','err'); return; }
+  if(!confirm('Zwei-Faktor-Anmeldung für '+(name||id)+' zurücksetzen?\n\nDanach meldet sich '+(name||'die Person')+' wieder nur mit dem Passwort an und kann im Profil neu einrichten.')) return;
+  try{ const j=await _fn({ action:'mfaReset', id }); _status=null;
+    toast(j.removed?('Zwei-Faktor für '+(name||id)+' entfernt.'):((name||id)+' hatte keine Zwei-Faktor-Anmeldung eingerichtet.'));
+    try{ mfaFillBadges(true); }catch(_){}
+  }catch(e){ toast(e.server==='action'?'Server-Teil noch nicht aktualisiert (Cloud Function neu veröffentlichen).':('Zurücksetzen fehlgeschlagen: '+e.message),'err'); }
+}
+
+// Admin: Mitarbeiterliste mit 🔐 markieren (wer hat Zwei-Faktor). Leise ohne Server-Teil.
+let _status=null, _statusAt=0;
+export async function mfaFillBadges(force){
+  if(!(window.cu&&window.cu.role==='admin')) return;
+  const els=[...document.querySelectorAll('[data-mfa]')]; if(!els.length) return;
+  try{
+    if(force||!_status||Date.now()-_statusAt>60000){ _status=new Set((await _fn({ action:'mfaStatus' })).on||[]); _statusAt=Date.now(); }
+    els.forEach(el=>{ const k=String(el.dataset.mfa||'').toLowerCase().replace(/[^a-z0-9._-]/g,''); const on=_status.has(k);
+      el.innerHTML=on?'<span class="badge" title="Zwei-Faktor-Anmeldung eingeschaltet" style="background:var(--ok-bg);color:var(--ok-text);font-size:11px">🔐 2FA</span>':''; });
+  }catch(e){ /* Server-Teil fehlt oder offline → keine Anzeige */ }
+}
+
+try{ Object.assign(window,{ mfaOpenSetup, mfaStartEnroll, mfaFinishEnroll, mfaRemove, mfaResolve, mfaAdminReset, mfaFillBadges }); }catch(e){}

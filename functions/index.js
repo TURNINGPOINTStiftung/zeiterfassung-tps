@@ -13,6 +13,8 @@
 //        (zeiterfassung/admins/<uid> === true): setzt das Firebase-Passwort von <id>@tps.intern
 //        und entfernt eine offene Anfrage. Den App-Hash schreibt der Admin-Client selbst.
 //
+//  POST { action:'mfaPrep' | 'mfaReset' | 'mfaStatus' } – Zwei-Faktor-Anmeldung (siehe unten).
+//
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
 const admin = require('firebase-admin');
@@ -146,6 +148,45 @@ exports.tpsPw = async (req, res) => {
       }
       await db.ref().update(upd);
       return res.json({ ok: true, account: !!u });
+    }
+
+    // Zwei-Faktor-Anmeldung (TOTP, freiwillig für alle):
+    //  mfaPrep   – jede freigeschaltete Person für das EIGENE Konto: markiert die (technische) Adresse
+    //              als bestätigt. Firebase erlaubt einen zweiten Faktor nur bei bestätigter Adresse; unsere
+    //              <id>@tps.intern-Adressen lassen sich nicht per Mail bestätigen.
+    //  mfaReset  – nur Administrator: entfernt alle zweiten Faktoren eines Kontos (Handy verloren).
+    //  mfaStatus – nur Administrator: welche Konten (ids) haben einen zweiten Faktor eingerichtet.
+    if (action === 'mfaPrep' || action === 'mfaReset' || action === 'mfaStatus') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
+      if (action === 'mfaPrep') {
+        const allowed = isAdmin || (await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() === true;
+        if (!allowed) return res.status(403).json({ ok: false, error: 'forbidden' });
+        const u = await admin.auth().getUser(tok.uid);
+        if (u.disabled) return res.status(403).json({ ok: false, error: 'forbidden' });
+        if (!u.emailVerified) await admin.auth().updateUser(u.uid, { emailVerified: true });
+        return res.json({ ok: true });
+      }
+      if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (action === 'mfaReset') {
+        if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
+        const u = await admin.auth().getUserByEmail(accountEmail(id));
+        const had = ((u.multiFactor && u.multiFactor.enrolledFactors) || []).length;
+        if (had) await admin.auth().updateUser(u.uid, { multiFactor: { enrolledFactors: null } });
+        return res.json({ ok: true, removed: had });
+      }
+      const on = [];
+      let page;
+      do {
+        page = await admin.auth().listUsers(1000, page && page.pageToken);
+        for (const u of page.users) {
+          if (u.email && u.email.endsWith('@tps.intern') && ((u.multiFactor && u.multiFactor.enrolledFactors) || []).length)
+            on.push(u.email.slice(0, -'@tps.intern'.length));
+        }
+      } while (page.pageToken);
+      return res.json({ ok: true, on });
     }
 
     return res.status(400).json({ ok: false, error: 'action' });

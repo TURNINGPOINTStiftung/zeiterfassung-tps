@@ -60,7 +60,7 @@ export function renderSettings(){
     return `<div class="user-row">
       <div>
         <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
-        <div class="details">${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
+        <div class="details"><span data-mfa="${esc(u.id)}"></span> ${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${zeToggle}
@@ -69,6 +69,7 @@ export function renderSettings(){
       </div>
     </div>`;
   }).join('');
+  try{ window.mfaFillBadges&&window.mfaFillBadges(); }catch(e){}   // 🔐 2FA-Markierung (nur Admin)
 
   const teams=getTeams();
   document.getElementById('team-list').innerHTML=teams.length
@@ -375,7 +376,7 @@ export function showEditUser(id){
   const _tu=getUser(id);
   if(_isDelegated(cu) && (!_tu || _tu.role==='admin' || id==='admin')){ toast('Den Administrator-Account kann nur der Administrator bearbeiten.','err'); return; }
   if(_isDelegated(cu) && id===cu.id){ toast('Eigene Stammdaten ändert der Administrator (eigene Adresse/Ort: über „Profil").','err'); return; }
-  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button><button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
+  openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button>${cu.role==='admin'?`<button class="btn btn-outline btn-sm" onclick="mfaAdminReset(${jsq(id)},${jsq((_tu&&_tu.name)||id)})" title="Handy verloren? Entfernt den zweiten Faktor – Anmeldung dann wieder nur mit Passwort">🔐 2FA zurücksetzen</button>`:''}<button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
   if(_isDelegated(cu)) _lockAdminOnlyFields();
