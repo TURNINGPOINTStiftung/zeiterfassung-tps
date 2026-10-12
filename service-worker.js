@@ -2,7 +2,7 @@
 // Strategie: netzwerk-first für frische Versionen, Antworten werden aber gecacht,
 // damit bei Netzwerk-Aussetzern die letzte gute Version statt "rohem HTML" kommt.
 // KEIN automatisches Neuladen offener Tabs mehr (verursachte stoerendes Aufblitzen).
-const CACHE = 'tps-ze-v436';
+const CACHE = 'tps-ze-v437';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -58,10 +58,15 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
-      }))
+      })).catch(() => Response.error())
     );
     return;
   }
+
+  // Fremde Adressen (Wetter, Speicher-Downloads, CDNs …) NICHT abfangen: Der Browser holt sie
+  // direkt. Gecacht wurden sie ohnehin nie (nur res.type 'basic'); abgefangen erzeugten sie bei
+  // Netzaussetzern nur eine Fehlermeldung im Service Worker.
+  if (new URL(url).origin !== self.location.origin) return;
 
   // Alle App-Dateien (HTML/JS/CSS): STALE-WHILE-REVALIDATE.
   // Sofort aus dem Cache liefern → Neuladen ist quasi instant. Parallel im
@@ -77,7 +82,7 @@ self.addEventListener('fetch', e => {
             if (res && res.status === 200 && res.type === 'basic') cache.put(e.request, res.clone());
             return res;
           })
-          .catch(() => cached);
+          .catch(() => cached || Response.error());   // offline UND nicht im Cache → sauberer Netzfehler
         return cached || network;   // Cache sofort; wenn nicht vorhanden, aufs Netz warten
       })
     )
