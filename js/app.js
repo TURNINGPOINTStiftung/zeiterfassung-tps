@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||cu.name==='Moritz Kriese';
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v434':'';
+  if(_hv) _hv.textContent=_showVer?'v435':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -156,7 +156,7 @@ export function initApp(){
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }
 
-const MODULE_LABELS={start:'Start',zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',shop:'Shop',verwaltung:'Verwaltung'};
+const MODULE_LABELS={start:'Start',zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',shop:'Lager',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }

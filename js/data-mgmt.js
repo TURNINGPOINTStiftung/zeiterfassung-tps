@@ -67,7 +67,7 @@ export function exportAllData(){
   try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
   try{ shop=window.shopExportBlob?window.shopExportBlob():null; }catch(e){}
   _dlJson({ _type:'tps-vollbackup', _v:2, exportedAt:new Date().toISOString(), zeiterfassung:_exportZe(), crm:crm, shop:shop }, 'TPS-Vollbackup');
-  toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM + Shop) ✓':'Nur Zeiterfassung gesichert – CRM/Shop waren nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
+  toast(crm?'Vollbackup erstellt (Zeiterfassung + CRM + Lager) ✓':'Nur Zeiterfassung gesichert – CRM/Lager waren nicht geladen (einmal CRM öffnen).', crm?'ok':'err');
 }
 // Nur CRM (ohne Shop)
 export function exportCrmOnly(){
@@ -75,15 +75,15 @@ export function exportCrmOnly(){
   let crm=null; try{ crm=window.crmExportBlob?window.crmExportBlob():null; }catch(e){}
   if(!crm){ toast('CRM-Daten nicht verfügbar – bitte das CRM einmal öffnen und erneut versuchen.','err'); return; }
   _dlJson({ _type:'tps-crm-backup', _v:2, exportedAt:new Date().toISOString(), crm:crm }, 'CRM-Backup');
-  toast('CRM-Backup erstellt ✓ (ohne Shop)','ok');
+  toast('CRM-Backup erstellt ✓ (ohne Lager)','ok');
 }
 // Nur Shop (Artikel, Orte, Bestellungen, Ausleihen, Verlauf, Einstellung)
 export function exportShopOnly(){
   if(!_mayExport()){ toast('Nur Administrator oder System-Verwaltung darf exportieren.','err'); return; }
   let shop=null; try{ shop=window.shopExportBlob?window.shopExportBlob():null; }catch(e){}
-  if(!shop){ toast('Shop-Daten nicht verfügbar – bitte die App neu laden und erneut versuchen.','err'); return; }
-  _dlJson({ _type:'tps-shop-backup', _v:1, exportedAt:new Date().toISOString(), shop:shop }, 'Shop-Backup');
-  toast('Shop-Backup erstellt ✓','ok');
+  if(!shop){ toast('Lager-Daten nicht verfügbar – bitte die App neu laden und erneut versuchen.','err'); return; }
+  _dlJson({ _type:'tps-shop-backup', _v:1, exportedAt:new Date().toISOString(), shop:shop }, 'Lager-Backup');
+  toast('Lager-Backup erstellt ✓','ok');
 }
 // Direkt hier registrieren (nicht über main.js importieren): eine neue benannte Import-Beziehung
 // würde bei einem Cache-Mischzustand nach dem Update den App-Start blockieren.
@@ -113,9 +113,9 @@ export function importData(e){
       if((crm||isShop||shop) && !window.crmBackupSplitReady){ toast('Die App ist noch nicht vollständig aktualisiert – bitte neu laden (Profil → App aktualisieren) und erneut einspielen.','err'); try{ e.target.value=''; }catch(_){} return; }
       const hasZE = !!(ze && ze.users && ze.entries);
       if(!hasZE && !crm && !shop) throw new Error('unrecognized');
-      const parts=[hasZE&&'Zeiterfassung', crm&&'CRM', shop&&'Shop'].filter(Boolean);
+      const parts=[hasZE&&'Zeiterfassung', crm&&'CRM', shop&&'Lager'].filter(Boolean);
       const what = parts.length>1 ? parts.join(' + ') : 'nur '+parts[0];
-      const keep=['CRM','Shop'].filter(p=>!parts.includes(p));
+      const keep=['CRM','Lager'].filter(p=>!parts.includes(p));
       if(!confirm(`Backup einspielen: ${what}.\n\nDie betroffenen aktuellen Daten werden vollständig ersetzt.`+(keep.length?`\n${keep.join(' und ')} bleib${keep.length>1?'en':'t'} unverändert.`:'')+`\n\nFortfahren?`)){ try{ e.target.value=''; }catch(_){} return; }
       const tasks=[];
       if(hasZE){

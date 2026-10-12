@@ -97,7 +97,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
         <button class="mb-mod" data-mod="messe" onclick="closeModuleMenu();messeStart()" style="display:none">Messemodus</button>
         <button class="mb-mod" data-mod="auswertung" onclick="switchModule('auswertung')" style="display:none">Auswertung</button>
         <button class="mb-mod" data-mod="kalender" onclick="switchModule('kalender')" style="display:none">Kalender</button>
-        <button class="mb-mod" data-mod="shop" onclick="switchModule('shop')" style="display:none">Shop</button>
+        <button class="mb-mod" data-mod="shop" onclick="switchModule('shop')" style="display:none">Lager</button>
         <button class="mb-mod" data-mod="anleitung" onclick="switchModule('anleitung')" style="display:none">Anleitung</button>
         <button class="mb-mod" data-mod="verwaltung" onclick="switchModule('verwaltung')" style="display:none">Verwaltung</button>
       </div>
@@ -341,10 +341,10 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
           <h3>💾 Daten &amp; Backup</h3>
           <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">Sichern &amp; Wiederherstellen</div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn btn-ok btn-sm" onclick="exportAllData()">⬇ Alle Daten sichern (Zeiterfassung + CRM + Shop)</button>
+            <button class="btn btn-ok btn-sm" onclick="exportAllData()">⬇ Alle Daten sichern (Zeiterfassung + CRM + Lager)</button>
             <button class="btn btn-outline btn-sm" onclick="exportData()">⬇ Nur Zeiterfassung</button>
             <button class="btn btn-outline btn-sm" onclick="exportCrmOnly()">⬇ Nur CRM</button>
-            <button class="btn btn-outline btn-sm" onclick="window.exportShopOnly&&exportShopOnly()">⬇ Nur Shop</button>
+            <button class="btn btn-outline btn-sm" onclick="window.exportShopOnly&&exportShopOnly()">⬇ Nur Lager</button>
             <label class="btn btn-outline btn-sm" style="cursor:pointer">⬆ Backup einspielen (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
             <button class="btn btn-outline btn-sm" onclick="showAppBackups()">☁ Automatische App-Backups</button>
             <button class="btn btn-outline btn-sm" onclick="showAccountCheck()">🔐 Konten prüfen (Stabil-Passwort)</button>
@@ -493,6 +493,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=295"></script>
+<script type="module" src="js/main.js?v=296"></script>
 </body>
 </html>

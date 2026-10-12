@@ -24,7 +24,7 @@ const _UF_PATHS=[
   {key:'ki',            label:'KI', icon:'🧠'},
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
   {key:'messe',         label:'Messemodus', icon:'🎪'},
-  {key:'shop',          label:'Shop', icon:'🛒'},
+  {key:'shop',          label:'Lager', icon:'📦'},
   {key:'anleitung',     label:'Anleitung', icon:'📖'},
   {key:'verwaltung',    label:'Verwaltung', icon:'🔑'},
 ];
@@ -632,7 +632,7 @@ function userForm(u={}){
     ${(()=>{ // Postadresse = CRM-Kontakt bei der eigenen Organisation (eine Quelle für Profil, CRM & Shop)
       try{ const ga=window.shopGetAddr ? window.shopGetAddr(u.id||'') : null;
         if(!ga || !ga.ok) return '';
-        return `<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(CRM-Kontakt bei „${esc(ga.orgName)}" – für Shop-Lieferungen)</span></label>
+        return `<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(CRM-Kontakt bei „${esc(ga.orgName)}" – für Lager-Lieferungen)</span></label>
           <textarea id="uf-adr" rows="2" placeholder="Straße Hausnr.&#10;PLZ Ort" data-orig="${esc(ga.adresse)}">${esc(ga.adresse)}</textarea></div>`;
       }catch(e){ return ''; } })()}
     <div id="uf-employed-fields"${(u.crmOnly||!u.id)?' style="display:none"':''}>
@@ -774,7 +774,7 @@ function userForm(u={}){
         ${(()=>{ const hp=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'startseite'))?!!u.perms.startseite:(u.role==='admin');
           const o=(v,l,on)=>`<label class="uf-seg-opt${on?' on':''}"><input type="radio" name="ufmod-start" value="${v}"${on?' checked':''} onchange="ufSetMod('start')" style="display:none">${l}</label>`;
           return `<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🏠 Startseite</span><div class="uf-seg">${o('aus','Aus',!hp)}${o('ein','Ein',hp)}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Startet mit der Übersicht (Wetter, Stempeln, Was ansteht, Mitteilungen, Kacheln) statt mit dem zuletzt benutzten Modul.</div></div>`; })()}
-        ${modBlock('shop','🛒','Shop (Lager &amp; Bestellungen)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
+        ${modBlock('shop','📦','Lager (Bestand, Bestellungen &amp; Ausleihe)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
         ${modBlock('anleitung','📖','Anleitung','<div style="font-size:12px;color:var(--muted)">Sieht die Bedienungsanleitung im Menü und als Kachel auf der Startseite.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
     })()}

@@ -7,7 +7,7 @@
 //    geöffneter Eintrag). Hat er sich geändert, entsteht ein neuer Verlaufs-Schritt.
 //    Filter/Suche gehören bewusst NICHT dazu (sonst müsste man sich durch jeden Filter zurückklicken).
 //  • Jeder Ort hat eine lesbare Adresse, z. B. #/crm/kontakte/vereine/tsv-kronshagen~c1ab2cd
-//    oder #/shop/ausleihen. Neu laden behält den Ort, Links lassen sich teilen (🔗 in der Kopfzeile).
+//    oder #/lager/ausleihen. Neu laden behält den Ort, Links lassen sich teilen (🔗 in der Kopfzeile).
 //    Maßgeblich ist die ID hinter „~"; der Name davor ist nur zum Lesen (Umbenennen schadet nicht).
 //    Rechte gelten weiter: Ein Link in ein Modul ohne Zugriff landet in der normalen Startansicht.
 //  • Offene Fenster (#modal-bg) bekommen einen eigenen Schritt: „Zurück" schließt das Fenster.
@@ -61,7 +61,7 @@ function _qName(k,id){ try{
 
 function toHash(s){
   if(!s||!s.nav) return '';
-  const parts=[s.mod]; const q=[];
+  const parts=[s.mod==='shop'?'lager':s.mod]; const q=[];   // Bereich „Lager" heißt intern shop
   try{
     if(s.mod==='zeiterfassung'){ if(s.v) parts.push(s.v); }
     else if(CRM_MODS.includes(s.mod) && s.c){
@@ -82,7 +82,8 @@ function fromHash(h){
     h=String(h||''); if(!h.startsWith('#/')) return null;
     const [path,query]=h.slice(2).split('?');
     const parts=path.split('/').filter(Boolean); if(!parts.length) return null;
-    const mod=decodeURIComponent(parts[0]); const s={ nav:1, mod }; const rest=parts.slice(1);
+    let mod=decodeURIComponent(parts[0]); if(mod==='lager') mod='shop';   // alte #/shop-Links gehen weiter
+    const s={ nav:1, mod }; const rest=parts.slice(1);
     if(mod==='zeiterfassung'){ if(rest[0]) s.v=decodeURIComponent(rest[0]); }
     else if(CRM_MODS.includes(mod)){
       const c={}; CRM_KEYS.forEach(k=>c[k]=null);

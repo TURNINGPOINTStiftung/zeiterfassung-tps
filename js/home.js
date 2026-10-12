@@ -331,7 +331,7 @@ async function _fillTodo(){
   // Shop (sofort verfügbar)
   try{ const s=window.shopHomeItems?window.shopHomeItems():null;
     if(s){ s.due.slice(0,4).forEach(d=>rows.push({ sort:d.datum, html:`<div class="home-row" onclick="shopDueNoticeOpen()"><span>🔧</span><span class="tx">${esc(d.title)} – ${esc(d.label)}</span><span class="home-pill ${d.over?'red':'amber'}">${d.over?'überfällig':fmtD(d.datum)}</span></div>` }));
-      if(s.orders) rows.push({ sort:'0', html:`<div class="home-row" onclick="shopOpenTab('bestellungen')"><span>🛒</span><span class="tx">${s.orders} ${s.mgr?'neue Bestellung':'offene Bestellung'}${s.orders===1?'':'en'}</span><span class="home-pill">Shop</span></div>` }); }
+      if(s.orders) rows.push({ sort:'0', html:`<div class="home-row" onclick="shopOpenTab('bestellungen')"><span>🛒</span><span class="tx">${s.orders} ${s.mgr?'neue Bestellung':'offene Bestellung'}${s.orders===1?'':'en'}</span><span class="home-pill">Lager</span></div>` }); }
   }catch(e){}
   // CRM (Daten ggf. erst laden)
   try{
@@ -530,7 +530,7 @@ async function _fillSys(){
 function homeVerw(tab){ try{ window.switchModule&&window.switchModule('verwaltung'); [150,900,2500].forEach(ms=>setTimeout(()=>{ try{ window.verwShowTab&&window.verwShowTab(tab); }catch(e){} },ms)); }catch(e){} }
 
 // ── Kacheln: genau die Module, die im ☰-Menü sichtbar sind (= Rechte) ──
-const TILE_IC={ zeiterfassung:'🕒', crm:'📇', kanban:'🗂️', verteiler:'✉️', kalender:'📅', shop:'🛒', verwaltung:'⚙️', auswertung:'📊', ki:'🧠', messe:'🎪', website:'🌐', forum:'💬', anleitung:'📖' };
+const TILE_IC={ zeiterfassung:'🕒', crm:'📇', kanban:'🗂️', verteiler:'✉️', kalender:'📅', shop:'📦', verwaltung:'⚙️', auswertung:'📊', ki:'🧠', messe:'🎪', website:'🌐', forum:'💬', anleitung:'📖' };
 // Externe Links als Kacheln (für ALLE, öffnen in neuem Tab) – ersetzen die Platzhalter-Module Website/Forum.
 // Forum erscheint, sobald eine Adresse eingetragen ist.
 const LINKS=[

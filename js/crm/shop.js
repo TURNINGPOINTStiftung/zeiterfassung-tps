@@ -30,7 +30,7 @@ const deleteShop=(c,id)=>CD.deleteShop?CD.deleteShop(c,id):_stale();
 const newId    =()=>CD.newId();
 const openModal=(h,w)=>U.openModal(h,w), closeModal=()=>U.closeModal(), toast=(m,t)=>U.toast(m,t);
 const getData  =()=>D.getData();
-function _stale(){ try{ U.toast('Shop wird gerade aktualisiert – bitte die App neu laden.','err'); }catch(e){} return Promise.resolve(); }
+function _stale(){ try{ U.toast('Lager wird gerade aktualisiert – bitte die App neu laden.','err'); }catch(e){} return Promise.resolve(); }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const jsq = s => esc(JSON.stringify(String(s==null?'':s)));   // JS-Argument in Inline-Handlern
@@ -336,7 +336,7 @@ export function renderShop(){
   try{
     _styles();
     const root=document.getElementById('shop-root'); if(!root) return;
-    if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für den Shop bist du noch nicht freigeschaltet.</div></div>'; return; }
+    if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für das Lager bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
     if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
     const held=myHeld();
@@ -362,8 +362,8 @@ export function renderShop(){
     else if(TAB==='orte') body=_orteHtml();
     else body=_verlaufHtml();
     root.innerHTML=`<div class="shop-wrap">
-      <div class="shop-h">🛒 Shop</div>
-      <p class="shop-sub">Was liegt wo – und was wird gebraucht? ${mgr?'Du verwaltest den Shop.':'Bestelle hier Material, Werbemittel und Werkzeug.'}</p>
+      <div class="shop-h">📦 Lager</div>
+      <p class="shop-sub">Was liegt wo – und was wird gebraucht? ${mgr?'Du verwaltest das Lager.':'Bestelle hier Material, Werbemittel und Werkzeug.'}</p>
       <div class="shop-tabs">${tabs.map(t=>`<button class="${TAB===t[0]?'on':''}" onclick="shopTab(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
       ${body}
     </div><div id="shop-cart"></div>`;
@@ -402,7 +402,7 @@ function _itemsGrid(mgr){
     if(q && !(`${it.name} ${it.variante||''} ${it.kategorie||''} ${it.note||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
-  if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten mit „＋ Artikel" an.':'Noch keine Artikel im Shop.')}</div>`;
+  if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten mit „＋ Artikel" an.':'Noch keine Artikel im Lager.')}</div>`;
   return `<div class="shop-grid">${list.map(it=>{
     const tot=total(it); const low=_num(it.min)>0 && tot<_num(it.min);
     const art=itemArt(it); const short=shortages(it);
@@ -881,7 +881,7 @@ function shopOrderSave(){
     ziel, zielRef, zielName, zielUserId, adresse,
     leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
   cartOpen=false; cartSet([]);
-  closeModal(); toast('Bestellung abgeschickt ✓ – der Shop-Verwalter bekommt eine Mitteilung.','ok');
+  closeModal(); toast('Bestellung abgeschickt ✓ – die Lager-Verwaltung bekommt eine Mitteilung.','ok');
   TAB='bestellungen'; renderShop();
 }
 
@@ -1773,7 +1773,7 @@ function shopLoansForEntity(tree, eid){
     const d=ts=>_fmtDate(new Date(ts).toISOString().slice(0,10));
     // Ging es an einen bestimmten Kontakt/Mitglied? → „ → Max Muster"
     const pers=ref=>{ if(!ref||!ref.kid) return ''; const {k}=_crmContact(ref); return k&&k.name?' → 👤 '+esc(k.name):''; };
-    return `<div class="crm-sec"><h4><span class="ttl">🛒 Aus dem Shop</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Shop ansehen</button></span>`:''}</h4>
+    return `<div class="crm-sec"><h4><span class="ttl">📦 Aus dem Lager</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Lager ansehen</button></span>`:''}</h4>
       ${ls.length?`<div class="small" style="font-weight:700;margin:2px 0 4px">🔁 Gerade ausgeliehen</div>`+ls.map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.borrowerRef)}</span>
         <div class="small">seit ${d(l.ts)}${l.due?` · <span style="${_overdue(l)?'color:var(--danger,#c0392b);font-weight:700':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:' · Dauerleihe'}${l.anlass?' · '+esc(l.anlass):''}</div></div></div>`).join(''):''}
       ${sent.length?`<div class="small" style="font-weight:700;margin:8px 0 4px">📤 Erhalten</div>`+sent.slice(0,15).map(l=>`<div class="crm-row"><div class="grow"><span class="name">${_num(l.qty)}× ${esc(l.itemName||'')}${pers(l.recipientRef)}</span>
@@ -1851,7 +1851,7 @@ function shopNotices(){
   activeLoans().forEach(l=>{
     if(l.borrowerId!==cu.id) return;
     const what=(l.placeId||l.unitId)?`${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>`:`${_num(l.qty)}× ${esc(l.itemName||'')}`;
-    if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Der Shop')}</b> hat dir ${what} ${isZuord(l)?'dauerhaft zugeordnet':(l.due?'ausgeliehen – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':'als Dauerleihe ausgeliehen')}${l.placeId?' (mit Inhalt – du bekommst jetzt auch dessen Termine &amp; Bestellungen)':''}.`,
+    if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Das Lager')}</b> hat dir ${what} ${isZuord(l)?'dauerhaft zugeordnet':(l.due?'ausgeliehen – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':'als Dauerleihe ausgeliehen')}${l.placeId?' (mit Inhalt – du bekommst jetzt auch dessen Termine &amp; Bestellungen)':''}.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanAck(${JSON.stringify(l.id)})` });
     else if(_overdue(l) && l.ackOverdue!==today) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });

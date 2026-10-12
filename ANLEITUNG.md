@@ -18,7 +18,7 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 6. [Die Kennzahlen oben](#6-die-kennzahlen-oben)
 7. [Monat einreichen](#7-monat-einreichen)
 8. [Abwesenheiten (Urlaub, Krank …)](#8-abwesenheiten-urlaub-krank-)
-9. [Weitere Bereiche: CRM, Projekte, Kalender, Shop](#9-weitere-bereiche-crm-projekte-kalender-shop)
+9. [Weitere Bereiche: CRM, Projekte, Kalender, Lager](#9-weitere-bereiche-crm-projekte-kalender-lager)
 10. [Für Leitung & Geschäftsführung](#10-für-leitung--geschäftsführung)
 11. [Für Administratoren & System-Verwaltung](#11-für-administratoren--system-verwaltung)
 12. [Mein Profil: Darstellung, Startseite, Sicherungen](#12-mein-profil-darstellung-startseite-sicherungen)
@@ -67,11 +67,11 @@ eingeben, **Speichern**. Das neue Passwort gilt sofort auf allen Geräten.
 | **Administrator** | Vollzugriff: Benutzer & Teams verwalten, Berechtigungen, alle Module. |
 
 **Zugriffe pro Bereich:** Für jede Person legt der Administrator je Bereich (Zeiterfassung, CRM,
-Projektmanagement, Kalender, Shop …) fest:
+Projektmanagement, Kalender, Lager …) fest:
 - **Kein** – Bereich ist nicht sichtbar.
 - **Nutzen** – Bereich ansehen und normal damit arbeiten.
 - **Verwaltend** – zusätzlich die Einstellungen des Bereichs ändern (z. B. im Kalender Termine
-  anlegen, im Shop Artikel und Orte pflegen, im CRM Felder und Kategorien).
+  anlegen, im Lager Artikel und Orte pflegen, im CRM Felder und Kategorien).
 - **System-Verwaltung** – Stammdaten anderer Mitarbeitender pflegen, archivieren/wiederherstellen,
   Daten exportieren. **Rechte vergeben kann nur das Administrator-Konto.**
 
@@ -88,7 +88,7 @@ und **Kacheln** zu allen Bereichen. Mit **„Anordnen"** verschiebst oder verste
 ⭐ merkt sich Favoriten. Welche Karten erscheinen, stellst du im **Profil** unter „Meine Startseite" ein.
 
 **Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, Projektmanagement,
-Kalender, Shop, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
+Kalender, Lager, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
 Diese Anleitung findest du direkt in der App unter **☰ → Anleitung** bzw. als Kachel auf der Startseite
 (mit Suchfeld; der Administrator kann sie pro Rolle oder Person ausblenden).
 
@@ -247,7 +247,7 @@ erkannt.
 
 ---
 
-## 9. Weitere Bereiche: CRM, Projekte, Kalender, Shop
+## 9. Weitere Bereiche: CRM, Projekte, Kalender, Lager
 
 Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 
@@ -256,7 +256,7 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 - **Projektmanagement:** Team-Boards mit Aufgaben (offen / in Arbeit / erledigt) und Veranstaltungen.
 - **Kalender:** Veranstaltungen und Termine neben den Abwesenheiten aller Mitarbeitenden – Konflikte
   auf einen Blick. **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.
-- **Shop:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
+- **Lager:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
   **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
   „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
 - **Verteiler:** gespeicherte E-Mail- und Adresslisten (z. B. für Serienbriefe).

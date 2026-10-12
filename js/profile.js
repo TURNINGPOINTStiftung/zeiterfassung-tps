@@ -28,7 +28,7 @@ export function openProfileModal(){
   let adrSection='';
   try{
     const ga=window.shopGetAddr ? window.shopGetAddr(cu.id) : null;
-    if(ga && ga.ok) adrSection=`<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(für Lieferungen aus dem Shop – wird beim CRM-Kontakt bei „${esc(ga.orgName)}" gespeichert)</span></label>
+    if(ga && ga.ok) adrSection=`<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(für Lieferungen aus dem Lager – wird beim CRM-Kontakt bei „${esc(ga.orgName)}" gespeichert)</span></label>
       <textarea id="prof-adr" rows="2" placeholder="Straße Hausnr.&#10;PLZ Ort" data-orig="${esc(ga.adresse)}">${esc(ga.adresse)}</textarea></div>`;
   }catch(e){}
   let wstSection='';
