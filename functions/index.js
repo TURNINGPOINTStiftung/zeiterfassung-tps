@@ -134,7 +134,11 @@ exports.tpsPw = async (req, res) => {
         }
       } else {
         if (!u) return res.status(404).json({ ok: false, error: 'no-account' });
-        const name = String(body.name || (rec && rec.name) || id).slice(0, 80);
+        // Nur echte Mitarbeiter-Datensätze (users/archivedUsers) wiederherstellen – sonst könnte das Recht
+        // „System-Verwaltung" ein beliebiges (z. B. selbst registriertes) @tps.intern-Konto freischalten.
+        // Der Anzeigename kommt aus dem Datensatz, nicht aus der Anfrage.
+        if (!rec) return res.status(404).json({ ok: false, error: 'no-user' });
+        const name = String(rec.name || id).slice(0, 80);
         await admin.auth().updateUser(u.uid, { disabled: false });
         await admin.auth().setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { tps: true }));
         upd['zeiterfassung/allowed/' + u.uid] = true;

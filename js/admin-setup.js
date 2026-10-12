@@ -84,25 +84,26 @@ export async function runSecuritySetup(opts){
     if(!u||!u.id) continue;
     const id=u.id;
     const dk=_dirKey(id);
-    loginDir[dk]={ id, name:u.name||id };   // ASCII-Schlüssel + echte id im Wert (Umlaut-sicher)
     if(existingDir[dk]){ skipped++; log(`${id}: bereits eingerichtet (übersprungen)`); continue; }
     const em=_accountEmail(id);
-    // Neues Konto bekommt direkt das vergebene Startpasswort (opts.initialPw[id]) – NICHT das
-    // Stabil-Passwort, das aus öffentlich sichtbarem Code berechenbar ist. Bestehende Konten
-    // (email-already-in-use) werden weiter über das Stabil-Passwort gefunden.
+    // Neues Konto bekommt direkt das vergebene Startpasswort (opts.initialPw[id]). Ohne Startpasswort
+    // wird KEIN Konto angelegt. SICHERHEIT (Audit 12.10.): Ein schon vorhandenes Konto wird NICHT mehr
+    // über das (aus öffentlichem Code berechenbare) Stabil-Passwort übernommen – sonst könnte jemand
+    // vorab <id>@tps.intern selbst registrieren und würde beim Anlegen der Person freigeschaltet.
+    // Vorhandenes Konto → abbrechen; Admin löscht es in der Firebase-Konsole und nutzt „Zugang neu aufsetzen".
     const initPw=opts.initialPw&&opts.initialPw[id];
-    const pw=_stableAuthPw(id);
     let uid=null;
+    if(!initPw){ failed++; problems.push(id+': kein Startpasswort – Konto nicht angelegt'); log(`${id}: FEHLER`); continue; }
     try{
-      const c=await sec.auth().createUserWithEmailAndPassword(em, initPw||pw);
+      const c=await sec.auth().createUserWithEmailAndPassword(em, initPw);
       uid=c.user.uid; created++;
     }catch(e){
-      if(e && e.code==='auth/email-already-in-use'){
-        try{ const c=await sec.auth().signInWithEmailAndPassword(em, pw); uid=c.user.uid; existing++; }
-        catch(e2){ failed++; problems.push(id+': existiert, aber Stabil-PW greift nicht (evtl. schon migriert) – manuell prüfen'); }
-      } else { failed++; problems.push(id+': '+(e&&e.code||e)); }
+      if(e && e.code==='auth/email-already-in-use') problems.push(id+': Anmeldekonto existiert bereits (nicht von der App angelegt?) – in der Firebase-Konsole löschen, dann „Zugang neu aufsetzen"');
+      else problems.push(id+': '+(e&&e.code||e));
+      failed++;
     }
     if(uid){
+      loginDir[dk]={ id, name:u.name||id };   // nur für erfolgreich angelegte Konten (ASCII-Schlüssel, Umlaut-sicher)
       allowed[uid]=true;
       uidUser[uid]=id;
       if(_isAdminUser(u)) admins[uid]=true;

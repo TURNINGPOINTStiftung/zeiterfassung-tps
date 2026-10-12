@@ -282,6 +282,10 @@ function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l=
 // sehen immer alle. Reine Kanban-Nutzer (Modulpfad 'kanban') sehen nur Team-Projekte, KEINE
 // CRM-Veranstaltungen/Kontakte (das bleibt an crmCanView() gekoppelt).
 function _kanbanAccess(u){ u=u||window.cu; if(!u) return false; try{ return !!canUsePath('kanban', u); }catch(e){ return false; } }
+// Projektmanagement „Verwaltend" (verw_kanban): Team-Projekte anlegen, löschen, einem anderen Team zuordnen.
+// Eigene (persönliche) Projekte (owner = ich) darf jede:r selbst anlegen/löschen. Serverseitig: Regeln v7.
+function _kbManage(){ const u=window.cu; if(!u) return false; if(u.role==='admin') return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+function _kbMayManage(p){ const u=window.cu; return _kbManage() || !!(u && p && p.owner && p.owner===u.id); }
 function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
 function kanbanTeamsFor(u){
   u=u||window.cu; if(!u) return [];
@@ -302,6 +306,10 @@ function visibleKanbanTeams(u){
 function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
 // Teil-Recht: darf NUR die CRM-Einstellungen verwalten (öffnet die Verwaltung, sieht dort nur den CRM-Reiter).
 function _canVerwCrm(){ if(_canVerw()) return true; const cu=window.cu; try{ return !!(cu && window.hasPermission && window.hasPermission('zugriff_verwaltung_crm', cu)); }catch(e){ return false; } }
+// Teil-Recht „Zeiterfassung: Verwaltend" (zugriff_verwaltung_ze, System-Verwaltung schließt es ein):
+// Teams + Zuordnungskategorien pflegen (Verwaltung → Reiter „Zeiterfassung"). Serverseitig: Regeln v7.
+function _canVerwZe(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true;
+  try{ return !!(window.hasPermission && (window.hasPermission('zugriff_verwaltung_ze', cu) || window.hasPermission('zugriff_verwaltung', cu))); }catch(e){ return false; } }
 
 // ── Zugriff pro Pfad (Verwaltung: „Zugriffs-Matrix") ───────────────
 // Pfade der Modulleiste + Rollen-Spalten der Matrix.
@@ -340,7 +348,7 @@ function _defaultPathAccess(key, cu){
     case 'verteiler': return canViewCrm;
     case 'ki': case 'auswertung': return isMgr;
     case 'kalender': return true;   // Standard: ALLE sehen den Kalender (pro Person übersteuerbar)
-    case 'verwaltung': return _canVerwCrm();
+    case 'verwaltung': return _canVerwCrm() || _canVerwZe();
     case 'messe': return (lvl==='admin'||lvl==='full');
     case 'shop': return false;   // Standard: nur Admin – pro Person in der Verwaltung freischalten
     case 'anleitung': return true;   // Standard: ALLE sehen die Anleitung (pro Rolle/Person abschaltbar)
@@ -3355,7 +3363,7 @@ function paintTeamDetail(){
     </div>`; };
   const openP=allProj.filter(p=>!p.closed), closedP=allProj.filter(p=>p.closed);
   const projektSec=`<div class="crm-sec">
-    <h4><span class="ttl">📂 Eigene Projekte</span><button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button></h4>
+    <h4><span class="ttl">📂 Eigene Projekte</span>${_kbManage()?`<button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</h4>
     ${openP.length?`<div class="crm-list">${openP.map(projCardHtml).join('')}</div>`:`<div class="small" style="color:var(--muted)">Noch keine eigenen Projekte.</div>`}
     ${closedP.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedP.length})</summary><div class="crm-list" style="margin-top:8px">${closedP.map(projCardHtml).join('')}</div></details>`:''}
   </div>`;
@@ -3429,7 +3437,7 @@ function paintTeamProjektDetail(){
       <h2>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
       <button class="btn-sm-crm" onclick="${p.closed?'crmReopenProjekt':'crmCloseProjekt'}()">${p.closed?'↺ Wieder öffnen':'✓ Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditTeamProjekt()">✎ Bearbeiten</button>
-      <button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>
+      ${_kbMayManage(p)?`<button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>`:''}
     </div>
     ${(p.createdAt||p.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${p.createdAt?`angelegt ${p.createdByKuerzel?'von '+esc(p.createdByKuerzel)+' ':''}am ${esc(fmtDate(p.createdAt))}`:''}${p.updatedByKuerzel?` · zuletzt von ${esc(p.updatedByKuerzel)}${p.updatedAt?' am '+esc(fmtDateTime(p.updatedAt)):''}`:''}</div>`:''}
     ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity(${jsq(p.linkTree)},${jsq(p.linkEid)})">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
@@ -3477,13 +3485,14 @@ function teamProjektFormHtml(p, isNew){
   const linkSel=(p.linkTree&&p.linkEid)?p.linkTree+'::'+p.linkEid:'';
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Team-Projekt':'✎ Projekt'}</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-tp-name" value="${esc(p.name||'')}"></div>
-   <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team">${teamOpts}</select></div>
+   <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team"${(isNew||_kbMayManage(p))?'':' disabled title="Team ändern: nur mit Projektmanagement „Verwaltend\"'}>${teamOpts}</select></div>
    <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link">${entityLinkOptions(linkSel)}</select></div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-tp-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
 function crmNewTeamProjekt(){
+  if(!_kbManage()){ toast('Team-Projekte anlegen: nur mit Projektmanagement „Verwaltend".','err'); return; }
   crmOpenModalShell();
   const team=window._crmTeamSel==='Ohne Team'?'':(window._crmTeamSel||'');
   openModal(teamProjektFormHtml({ team }, true));
@@ -3506,7 +3515,7 @@ function crmSaveTeamProjekt(isNew){
     crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
   } else {
     const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
-    p.name=name; p.team=team; p.beschreibung=beschreibung; _applyLink(p, link);
+    p.name=name; if(_kbMayManage(p)) p.team=team; p.beschreibung=beschreibung; _applyLink(p, link);
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
     crmCloseModal(); paintTeamProjektDetail(); toast('Gespeichert ✓','ok');
@@ -3514,6 +3523,7 @@ function crmSaveTeamProjekt(isNew){
 }
 function crmDeleteTeamProjekt(){
   const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
+  if(!_kbMayManage(p)){ toast('Löschen: nur mit Projektmanagement „Verwaltend".','err'); return; }
   if(!confirm(`Projekt „${p.name||''}" wirklich löschen?`)) return;
   const ret=window._crmProjReturn;
   deleteTeamProjekt(p.id); window._crmTeamProjSel=null;
@@ -4626,7 +4636,14 @@ function roleLbl(u){
 // Kategorien/Daten) EINMALIG hierher umhängen (gleiche Elemente/IDs →
 // renderSettings füllt sie am neuen Ort). Mitarbeiter rendern wir selbst
 // als breite Tabelle. Idempotent.
-function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','crm','data'].includes(t)) return t; }catch(e){} return 'users'; }
+function _verwTab(){ try{ const t=localStorage.getItem('tp_verw_tab'); if(['users','org','crm','data','ze'].includes(t)) return t; }catch(e){} return 'users'; }
+// Teams- und Kategorien-Bausteine (index.html) in den Reiter „Zeiterfassung" hängen – für Nicht-Admins
+// ohne „Eigene Rollen" (Rollen/Rechte bleiben beim Administrator).
+function _mountZeOrg(){
+  const host=document.getElementById('verw-tab-ze'); if(!host) return;
+  ['set-teamsroles-box','set-cats-box'].forEach(id=>{ const el=document.getElementById(id); if(el) host.appendChild(el); });
+  const roles=document.getElementById('set-roles-part'); if(roles) roles.style.display=(window.cu&&window.cu.role==='admin')?'':'none';
+}
 function verwShowTab(name){
   document.querySelectorAll('#verw-root .verw-panel').forEach(p=>{ p.style.display=(p.id==='verw-tab-'+name)?'':'none'; });
   document.querySelectorAll('#verw-root .verw-tab').forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-vtab')===name); });
@@ -4636,7 +4653,9 @@ function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
   const full=_canVerw();
   const isAdm=!!(window.cu && window.cu.role==='admin');
-  const mode = full ? (isAdm ? 'full' : 'staff') : 'crm';
+  const zeV=_canVerwZe();
+  const crmV=_canVerwCrm();
+  const mode = full ? (isAdm ? 'full' : 'staff') : ('part'+(crmV?'-crm':'')+(zeV?'-ze':''));
   if(root.getAttribute('data-verw-mode')===mode && document.getElementById('verw-crmcfg')) return;  // schon passend gemountet
   if(mode==='staff'){
     // System-Verwaltung (delegiert): Mitarbeiter-Stammdaten + Archiv, CRM-Struktur. Keine
@@ -4645,28 +4664,38 @@ function ensureVerwMounted(){
     root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
      <div class="verw-tabs">
        <button class="verw-tab active" data-vtab="users" onclick="verwShowTab('users')">👥 Mitarbeiter</button>
+       <button class="verw-tab" data-vtab="ze" onclick="verwShowTab('ze')">🕒 Zeiterfassung</button>
        <button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>
        <button class="verw-tab" data-vtab="data" onclick="verwShowTab('data')">💾 Export</button>
      </div>
      <div class="crm-body">
        <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
+       <div class="verw-panel" id="verw-tab-ze" style="display:none"></div>
        <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
        <div class="verw-panel" id="verw-tab-data" style="display:none"><div class="crm-sec"><h4><span class="ttl">💾 Datenexport</span></h4>
          <div class="small" style="color:var(--muted);margin-bottom:10px">Lese-Kopie zum Sichern oder Auswerten. Passwort-Daten sind nicht enthalten. Wiederherstellen (Import) kann nur der Administrator.</div>
          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-sm-crm primary" onclick="exportAllData()">⬇ Vollbackup (Zeiterfassung + CRM + Lager)</button><button class="btn-sm-crm" onclick="exportData()">⬇ Nur Zeiterfassung</button><button class="btn-sm-crm" onclick="exportCrmOnly()">⬇ Nur CRM</button><button class="btn-sm-crm" onclick="window.exportShopOnly&&exportShopOnly()">⬇ Nur Shop</button></div>
        </div></div>
      </div>`;
-    verwShowTab(['crm','data'].includes(_verwTab())?_verwTab():'users');
+    _mountZeOrg();
+    verwShowTab(['crm','data','ze'].includes(_verwTab())?_verwTab():'users');
     return;
   }
   root.setAttribute('data-verw-mode', mode);
   if(!full){
-    // CRM-Verwalter (Teil-Recht zugriff_verwaltung_crm): NUR der CRM-Reiter. Keine sensiblen
-    // Bereiche (Mitarbeiter/Zugriffe/Daten), keine ZE-Umhängung → kein Datenleck.
-    root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung · CRM</span></div></div>
-     <div class="verw-tabs"><button class="verw-tab active" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button></div>
-     <div class="crm-body"><div class="verw-panel" id="verw-tab-crm"><div id="verw-crmcfg"></div></div></div>`;
-    verwShowTab('crm');
+    // Teil-Rechte: CRM-Verwalter (zugriff_verwaltung_crm) → Reiter CRM; Zeiterfassung „Verwaltend"
+    // (zugriff_verwaltung_ze) → Reiter Zeiterfassung (Teams + Kategorien). Keine sensiblen Bereiche
+    // (Mitarbeiter/Zugriffe/Daten) → kein Datenleck.
+    const crmOnlyV = crmV && !!(window.hasPermission && window.hasPermission('zugriff_verwaltung_crm', window.cu));
+    const tabs=[]; const panels=[];
+    if(zeV){ tabs.push(`<button class="verw-tab" data-vtab="ze" onclick="verwShowTab('ze')">🕒 Zeiterfassung</button>`); panels.push(`<div class="verw-panel" id="verw-tab-ze"></div>`); }
+    if(crmOnlyV){ tabs.push(`<button class="verw-tab" data-vtab="crm" onclick="verwShowTab('crm')">📇 CRM</button>`); panels.push(`<div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>`); }
+    root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
+     <div class="verw-tabs">${tabs.join('')}</div>
+     <div class="crm-body">${panels.join('')}</div>`;
+    if(zeV) _mountZeOrg();
+    const want=_verwTab();
+    verwShowTab((want==='crm'&&crmOnlyV)||(want==='ze'&&zeV) ? want : (zeV?'ze':'crm'));
     return;
   }
   root.innerHTML = `<div class="crm-bar"><div class="crm-trees"><span style="font-weight:700;color:var(--primary)">🔑 Verwaltung</span></div></div>
@@ -4689,17 +4718,19 @@ function ensureVerwMounted(){
   ['set-teamsroles-box','set-cats-box','set-perms-box'].forEach(id=>{ const el=document.getElementById(id); if(el&&org) org.appendChild(el); });
   const data=document.getElementById('verw-tab-data');
   const dbox=document.getElementById('set-data-box'); if(dbox&&data) data.insertBefore(dbox, data.firstChild);   // Daten/Backup oben
-  verwShowTab(_verwTab());
+  verwShowTab(_verwTab()==='ze'?'org':_verwTab());   // Admin hat Teams/Kategorien unter „Organisation"
 }
 function renderVerwaltung(){
   try{
     injectStyles();
     const root=document.getElementById('verw-root'); if(!root) return;
-    if(!_canVerwCrm()){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
+    if(!_canVerwCrm() && !_canVerwZe()){ root.innerHTML='<div class="crm-empty">Kein Zugriff.</div>'; return; }
     ensureCrmReady().then(()=>{
       try{
         ensureVerwMounted();
         paintVerwConfig();   // CRM-Einstellungen – für Voll-Admin UND CRM-Verwalter
+        // Teams + Kategorien (Reiter „Zeiterfassung") für Nicht-Admins mit ZE-Verwaltung
+        if(_canVerwZe() && !(window.cu && window.cu.role==='admin')){ try{ window.renderSettings&&window.renderSettings(); }catch(e){ console.error('ZE-Organisation:',e); } }
         if(_canVerw()){
           // Sensible/übergreifende Bereiche nur für Voll-Admins.
           paintVerwUsers();

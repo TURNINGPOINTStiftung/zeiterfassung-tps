@@ -322,6 +322,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
             <input class="tag-input" id="new-team-input" placeholder="Neues Team…" onkeydown="if(event.key==='Enter')addTeam()">
             <button class="btn btn-ok btn-sm" onclick="addTeam()">+</button>
           </div>
+          <div id="set-roles-part">
           <h3 style="margin-top:20px">🎖 Eigene Rollen</h3>
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Anzeigebezeichnungen – Rechte kommen von der Systemrolle.</div>
           <div id="custom-role-list"></div>
@@ -335,6 +336,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
               <option value="geschaeftsfuehrer">Geschäftsführung</option>
             </select>
             <button class="btn btn-ok btn-sm" onclick="addCustomRole()">+</button>
+          </div>
           </div>
         </div>
         <div class="s-box" id="set-data-box">

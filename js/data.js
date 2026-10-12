@@ -47,6 +47,10 @@ export function isAdminAccount(cu){ cu=cu||window.cu; return !!(cu && cu.role===
 function _mayWriteConfig(k){
   const cu=window.cu; if(!cu) return false;
   if(cu.role==='admin') return true;
+  // „Zeiterfassung: Verwaltend" (bzw. System-Verwaltung) pflegt Teams + Zuordnungskategorien (Regeln v7).
+  if(k==='teams'||k==='cats'||k==='teamCats'){
+    try{ return !!(window.hasPermission && (window.hasPermission('zugriff_verwaltung_ze',cu) || window.hasPermission('zugriff_verwaltung',cu))); }catch(e){ return false; }
+  }
   return k==='vertretungen' && cu.role==='geschaeftsfuehrer';
 }
 // Stammdaten, die eine Person mit „System-Verwaltung" bei ANDEREN (Nicht-Admin-)Nutzern pflegen

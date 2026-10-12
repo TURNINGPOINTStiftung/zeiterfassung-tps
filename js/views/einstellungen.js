@@ -73,7 +73,7 @@ export function renderSettings(){
 
   const teams=getTeams();
   document.getElementById('team-list').innerHTML=teams.length
-    ? teams.map((t,i)=>`<span class="team-chip">${t} <button onclick="removeTeam(${i})" title="Entfernen">×</button></span>`).join('')
+    ? teams.map((t,i)=>`<span class="team-chip">${esc(t)} <button onclick="removeTeam(${i})" title="Entfernen" aria-label="Team ${esc(t)} entfernen">×</button></span>`).join('')
     : '<span style="color:var(--muted);font-size:13px">Noch keine Teams angelegt.</span>';
 
   const crs=getCustomRoles();
@@ -87,21 +87,21 @@ export function renderSettings(){
     const dd2=getData();
     const mkChips=(arr,teamArg)=>arr.length
       ? arr.map((c,i)=>{
-          const ta=JSON.stringify(teamArg);
-          const lt=i>0?`<button onclick='moveTeamCat(${ta},${i},-1)' title="nach vorne (höher in der Liste)">‹</button> `:'';
-          const rt=i<arr.length-1?` <button onclick='moveTeamCat(${ta},${i},1)' title="nach hinten (tiefer in der Liste)">›</button>`:'';
-          return `<span class="cat-chip">${lt}${esc(c)} <button onclick='removeTeamCat(${ta},${i})' title="Entfernen">×</button>${rt}</span>`;
+          const ta=jsq(teamArg);   // sicher im Attribut (Team-Namen pflegen jetzt auch Nicht-Admins)
+          const lt=i>0?`<button onclick="moveTeamCat(${ta},${i},-1)" title="nach vorne (höher in der Liste)">‹</button> `:'';
+          const rt=i<arr.length-1?` <button onclick="moveTeamCat(${ta},${i},1)" title="nach hinten (tiefer in der Liste)">›</button>`:'';
+          return `<span class="cat-chip">${lt}${esc(c)} <button onclick="removeTeamCat(${ta},${i})" title="Entfernen">×</button>${rt}</span>`;
         }).join('')
       : '<span style="color:var(--muted);font-size:12px">Keine Kategorien.</span>';
     const mkSection=(label,labelColor,arr,teamArg,idx,note='')=>{
-      const ta=JSON.stringify(teamArg);
+      const ta=jsq(teamArg);
       return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(label)}</div>
         ${note}
         <div style="margin-bottom:6px">${mkChips(arr,teamArg)}</div>
         <div class="flex mt-14">
-          <input class="tag-input" id="nci-${idx}" placeholder="Neue Kategorie…" onkeydown='if(event.key===\"Enter\")addTeamCat(${ta},${idx})'>
-          <button class="btn btn-ok btn-sm" onclick='addTeamCat(${ta},${idx})'>+</button>
+          <input class="tag-input" id="nci-${idx}" placeholder="Neue Kategorie…" maxlength="80" aria-label="Neue Kategorie" onkeydown="if(event.key==='Enter')addTeamCat(${ta},${idx})">
+          <button class="btn btn-ok btn-sm" onclick="addTeamCat(${ta},${idx})">+</button>
         </div>
       </div>`;
     };
@@ -273,7 +273,7 @@ export function savePermission(permKey,role,checked){
 }
 
 export function addTeam(){
-  const inp=document.getElementById('new-team-input'); const val=inp.value.trim();
+  const inp=document.getElementById('new-team-input'); const val=inp.value.trim().slice(0,80);
   if(!val) return;
   mutate(d=>{ if(!d.teams) d.teams=[]; if(!d.teams.includes(val)) d.teams.push(val); });
   inp.value=''; renderSettings(); window.populateUeberTeam?.(); toast('Team hinzugefügt.');
@@ -321,7 +321,7 @@ function _initTeamCats(d,teamName){
 
 export function addTeamCat(teamName,idx){
   const inp=document.getElementById('nci-'+idx);
-  const val=(inp?inp.value.trim():'');
+  const val=(inp?inp.value.trim().slice(0,80):'');
   if(!val) return;
   mutate(d=>{
     if(teamName){
@@ -970,11 +970,14 @@ export async function saveNewUser(){
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
   // Technisches Konto anlegen + im Login-Verzeichnis/Allowlist freischalten
   // (runSecuritySetup ist idempotent: legt nur den neuen Nutzer an, Rest bleibt).
-  try{ await window.runSecuritySetup?.({log:()=>{}, initialPw:{[u.id]:_plainPw}}); }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); }
+  let _setupProblem='';
+  try{ const sr=await window.runSecuritySetup?.({log:()=>{}, initialPw:{[u.id]:_plainPw}}); if(sr&&sr.failed) _setupProblem=(sr.problems||[]).join(' · ')||'Anmeldekonto konnte nicht angelegt werden.'; }catch(e){ console.warn('Security-Setup (neuer Nutzer):', e&&e.message); _setupProblem=(e&&e.message)||'Fehler beim Anlegen des Anmeldekontos.'; }
   // Berechtigungs-Allowlisten (admins/gfAdmins) an die Rolle des neuen Nutzers angleichen.
   // Best effort: no-op/Fehler solange uidUser noch nicht geseedet ist (vor dem Regel-Cutover).
   try{ await window.refreshPermissionAllowlists?.({log:()=>{}}); }catch(e){ console.warn('Perms-Refresh (neuer Nutzer):', e&&e.message); }
-  await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Mitarbeiter hinzugefügt. ✓','ok');
+  await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.();
+  if(_setupProblem) openModal(`<h3>⚠ Mitarbeiter angelegt, Anmeldung noch nicht möglich</h3><p style="font-size:13px">${esc(_setupProblem)}</p><div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
+  else toast('Mitarbeiter hinzugefügt. ✓','ok');
 }
 
 export async function saveEditUser(id){
