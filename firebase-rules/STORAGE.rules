@@ -13,6 +13,10 @@ rules_version = '2';
 //  • Backup-Dateien tragen die UID des Hochladenden im Namen → ein fremdes Konto kann das
 //    echte Tages-Backup weder blockieren noch vortäuschen,
 //  • CRM-Anhänge nur per Einzelabruf (get), kein Auflisten.
+//
+// Stand 2 (Oktober 2026): Zusätzlich muss das Konto FREIGESCHALTET sein – Markierung (Custom Claim)
+// tps:true im Anmelde-Token. Setzt/entfernt nur die Cloud Function tpsPw (claimSelf/claimSync/offboard)
+// nach zeiterfassung/allowed + admins. Gesperrte oder nie freigeschaltete Konten kommen nicht mehr ran.
 service firebase.storage {
   match /b/{bucket}/o {
 
@@ -20,10 +24,11 @@ service firebase.storage {
                            && request.auth.token.email is string
                            && request.auth.token.email.matches('^[a-z0-9._-]+@tps[.]intern$'); }
     function isAdmin() { return request.auth != null && request.auth.token.email == 'admin@tps.intern'; }
+    function freigeschaltet() { return appUser() && request.auth.token.tps == true; }
 
     // ── Automatische App-Backups (js/backup.js): backups/daily/<YYYY-MM-DD>_<uid>.json ──
     match /backups/daily/{name} {
-      allow create: if appUser()
+      allow create: if freigeschaltet()
                     && name.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_' + request.auth.uid + '[.]json$')
                     && request.resource.size < 25 * 1024 * 1024
                     && request.resource.contentType == 'application/json';
@@ -36,11 +41,11 @@ service firebase.storage {
     //    der Admin darf alles lesen (siehe backups/{rest=**}).
     match /backups/user/{uid}/{name} {
       allow create, update:
-        if appUser() && uid == request.auth.uid
+        if freigeschaltet() && uid == request.auth.uid
         && name.matches('^[0-9]{4}-[0-9]{2}_(ze|reports)[.]json$')
         && request.resource.size < 25 * 1024 * 1024
         && request.resource.contentType == 'application/json';
-      allow read, delete: if isAdmin() || (appUser() && uid == request.auth.uid);   // read = get + list des eigenen Ordners
+      allow read, delete: if isAdmin() || (freigeschaltet() && uid == request.auth.uid);   // read = get + list des eigenen Ordners
     }
 
     match /backups/{rest=**} {
@@ -49,9 +54,9 @@ service firebase.storage {
 
     // ── CRM-Dateianhänge (js/crm/crm.js: crm-anlagen/<nodeId>/<zeit>_<name>) ──
     match /crm-anlagen/{nid}/{file} {
-      allow get:    if appUser();
-      allow create: if appUser() && request.resource.size < 15 * 1024 * 1024;
-      allow delete: if appUser();
+      allow get:    if freigeschaltet();
+      allow create: if freigeschaltet() && request.resource.size < 15 * 1024 * 1024;
+      allow delete: if freigeschaltet();
       allow update: if false;
     }
   }

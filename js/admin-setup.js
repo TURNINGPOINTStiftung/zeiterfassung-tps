@@ -258,6 +258,9 @@ export async function refreshPermissionAllowlists(opts){
       if(sys || hasPermission('verw_shop',u)) (grants.verw_shop=grants.verw_shop||{})[uid]=true; }
   }
   await db.ref('zeiterfassung/grants').set(grants);
+  // Freigabe-Markierung (Custom Claim) aller Konten an allowed/admins angleichen – für die Storage-Regeln.
+  // Best-effort im Hintergrund (Cloud Function tpsPw claimSync), blockiert nichts.
+  try{ window.syncAccessClaims&&window.syncAccessClaims().then(r=>{ if(r) log('Freigabe-Markierung: '+r.on+' Konten frei, '+r.changed+' geändert'); }); }catch(_){}
   const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length, grants:Object.keys(grants).map(k=>k+':'+Object.keys(grants[k]).length).join(' ') };
   log('Fertig: '+JSON.stringify(summary));
   return summary;

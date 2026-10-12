@@ -1770,7 +1770,7 @@ function shopLoansForEntity(tree, eid){
       .sort((a,b)=>(b.ts||0)-(a.ts||0));
     if(!ls.length && !sent.length) return '';
     const can=canUse();
-    const d=ts=>_fmtDate(new Date(ts).toISOString().slice(0,10));
+    const d=ts=>_fmtDate(U.localISODate(ts));
     // Ging es an einen bestimmten Kontakt/Mitglied? → „ → Max Muster"
     const pers=ref=>{ if(!ref||!ref.kid) return ''; const {k}=_crmContact(ref); return k&&k.name?' → 👤 '+esc(k.name):''; };
     return `<div class="crm-sec"><h4><span class="ttl">📦 Aus dem Lager</span>${can&&ls.length?`<span class="hbtns"><button class="btn-sm-crm" onclick="shopOpenBorrower(${jsq('loan:c:'+tree+'/'+eid)})">Im Lager ansehen</button></span>`:''}</h4>

@@ -69,6 +69,7 @@ import './crm/auswertung.js';
 import './crm/ki.js';
 import './crm/kalender.js';
 import './crm/shop.js';
+import { initAccessClaims } from './claims.js';   // Freigabe-Markierung (Custom Claim) für Storage
 import './anleitung.js';   // 📖 Anleitung (ANLEITUNG.md als eigener Bereich)
 import './home.js';  // 🏠 Startseite (pro Mitarbeiter schaltbar, Standard nur Admin)
 import './nav.js';   // Zurück-Taste innerhalb der App (Verlauf je Ansicht, Fenster schließen)
@@ -331,6 +332,7 @@ initFirebase().then(async function(){
   // noch lädt. Der Splash bleibt, bis entweder die App gezeigt wird ODER klar ist, dass keine
   // (persistierte) Sitzung existiert.
   initFirebaseEvents();
+  try{ initAccessClaims(); }catch(e){}   // Freigabe-Markierung fürs Speicher-Konto (js/claims.js)
   checkPasswordResetToken();
 
   const _hideSplash=()=>{ try{ document.getElementById('fb-loading').style.display='none'; }catch(_){} };

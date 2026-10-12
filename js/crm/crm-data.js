@@ -52,12 +52,14 @@ function _write(coll, id, val){
   const path = id==null ? coll : coll+'/'+id;
   const tok  = Date.now()+'_'+Math.random().toString(36).slice(2,7);
   const p=_pendLoad(); p[path]={ op: val===null?'del':'set', t: tok }; _pendSave(p);
+  // Verlaufseintrag (von _logHistory vorgemerkt) erst schreiben, wenn die Änderung selbst gespeichert ist.
+  const hist=_histNext[path]; delete _histNext[path];
   if(!_ref) return Promise.resolve();
-  const clear=()=>{ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } };
+  const clear=()=>{ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } if(hist) _pushHistory(hist); };
   let pr;
   try{ const r=_ref.child(path); pr = val===null ? r.remove() : r.set(val); }catch(e){ return Promise.resolve(); }
   return pr.then(clear).catch(e=>{
-    if(_isDenied(e)){ clear(); _denied(path); }
+    if(_isDenied(e)){ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } _denied(path); }   // verweigert → kein Verlaufseintrag
     console.warn('CRM Firebase-Fehler ('+path+'):', e && e.message);
   });
 }
@@ -82,18 +84,25 @@ function _replayPending(local){
 // Zeitstempel als Voll-Schnappschuss nach crm_history/<autoId> geschrieben.
 // Liegt bewusst in einem EIGENEN Ref (nicht crm/), damit der normale Sync
 // klein bleibt. Alles best-effort und in try/catch – darf nie etwas brechen.
+// Reihenfolge: _logHistory merkt den Schnappschuss nur VOR (_histNext[pfad]); _write schreibt ihn erst,
+// wenn die eigentliche Änderung vom Server bestätigt ist. Verweigerte/verlorene Änderungen landen so
+// nicht im Verlauf (früher: Verlauf und Daten unabhängig → Verlauf konnte Nicht-Gespeichertes zeigen).
+const _histNext = {};
 function _logHistory(coll, recId, action, data, name){
   try{
-    if(!_histRef || !data) return;
+    if(!data) return;
     const cu = (typeof window!=='undefined' && window.cu) || {};
-    _histRef.push({
+    _histNext[recId===coll ? coll : coll+'/'+recId] = {
       ts: Date.now(), action, coll, recId,
       byId: cu.id||'', byName: cu.name||'',
       byKuerzel: (data.updatedByKuerzel)||(data.createdByKuerzel)||'',
       name: name||'',
       data: JSON.parse(JSON.stringify(data))
-    }).catch(()=>{});
+    };
   }catch(e){}
+}
+function _pushHistory(entry){
+  try{ if(_histRef) _histRef.push(entry).catch(()=>{}); }catch(e){}
 }
 function pruneHistory(maxAgeMs){
   try{

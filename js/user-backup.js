@@ -236,8 +236,9 @@ function _storageReady(){
   try{ return !!(window.firebase && firebase.storage && firebase.auth && firebase.auth().currentUser
     && window.cu && !window._offlineMode && !window._cloudUnverified); }catch(e){ return false; }
 }
-function _putStorage(path, obj){
+async function _putStorage(path, obj){
   const body = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+  try{ await (window.ensureAccessClaim&&window.ensureAccessClaim()); }catch(_){}   // Freigabe-Markierung (Storage-Regeln)
   return firebase.storage().ref(path).put(body, { contentType: 'application/json' });
 }
 

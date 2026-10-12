@@ -51,6 +51,7 @@ export async function runAutoBackup(){
         // Merker NUR nach erfolgreichem Upload setzen. Wird verweigert (Datei existiert schon, weil
         // ein anderes Gerät gleichzeitig schneller war – oder Regeln noch nicht aktiv), bleibt der
         // Merker unberührt; das erfolgreiche Gerät setzt ihn.
+        try{ await (window.ensureAccessClaim&&window.ensureAccessClaim()); }catch(_){}   // Freigabe-Markierung (Storage-Regeln)
         await firebase.storage().ref('backups/daily/'+today+'_'+firebase.auth().currentUser.uid+'.json').put(body, {contentType:'application/json'});
         await mark.set(today);
         console.info('[Backup] Tages-Backup '+today+' gespeichert.');

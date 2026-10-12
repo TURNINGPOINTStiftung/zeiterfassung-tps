@@ -14,6 +14,7 @@
 //        und entfernt eine offene Anfrage. Den App-Hash schreibt der Admin-Client selbst.
 //
 //  POST { action:'mfaPrep' | 'mfaReset' | 'mfaStatus' } – Zwei-Faktor-Anmeldung (siehe unten).
+//  POST { action:'claimSelf' | 'claimSync' } – Freigabe-Markierung tps:true für Storage (siehe unten).
 //
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
@@ -113,6 +114,8 @@ exports.tpsPw = async (req, res) => {
       if (action === 'offboard') {
         if (u) {
           await admin.auth().updateUser(u.uid, { disabled: true });
+          const cl = Object.assign({}, u.customClaims || {}); delete cl.tps;   // Freigabe-Markierung weg
+          await admin.auth().setCustomUserClaims(u.uid, cl);
           await admin.auth().revokeRefreshTokens(u.uid);
           for (const n of ['allowed', 'uidUser', 'admins', 'gfAdmins', 'managers']) upd['zeiterfassung/' + n + '/' + u.uid] = null;
           const grants = (await db.ref('zeiterfassung/grants').once('value')).val() || {};
@@ -133,6 +136,7 @@ exports.tpsPw = async (req, res) => {
         if (!u) return res.status(404).json({ ok: false, error: 'no-account' });
         const name = String(body.name || (rec && rec.name) || id).slice(0, 80);
         await admin.auth().updateUser(u.uid, { disabled: false });
+        await admin.auth().setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { tps: true }));
         upd['zeiterfassung/allowed/' + u.uid] = true;
         upd['zeiterfassung/uidUser/' + u.uid] = id;
         upd['zeiterfassung/loginDir/' + dirKey(id)] = { id, name };
@@ -187,6 +191,45 @@ exports.tpsPw = async (req, res) => {
         }
       } while (page.pageToken);
       return res.json({ ok: true, on });
+    }
+
+    // Freigabe-Markierung am Konto (Custom Claim tps:true) für die Storage-Regeln:
+    //  Storage-Regeln können die Datenbank (allowed/admins) nicht lesen. Die Markierung spiegelt
+    //  „freigeschaltet" ins Anmelde-Token.
+    //  claimSelf – jede angemeldete Person für das EIGENE Konto: setzt/entfernt nach allowed/admins.
+    //  claimSync – nur Administrator: gleicht ALLE <id>@tps.intern-Konten mit allowed/admins ab
+    //              (gesperrte Konten verlieren die Markierung).
+    if (action === 'claimSelf' || action === 'claimSync') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const allowedMap = (await db.ref('zeiterfassung/allowed').once('value')).val() || {};
+      const adminsMap  = (await db.ref('zeiterfassung/admins').once('value')).val() || {};
+      const want = u => !u.disabled && (allowedMap[u.uid] === true || adminsMap[u.uid] === true);
+      const sync = async u => {
+        const cur = Object.assign({}, u.customClaims || {});
+        const on = want(u);
+        if (!!cur.tps === on) return false;
+        if (on) cur.tps = true; else delete cur.tps;
+        await admin.auth().setCustomUserClaims(u.uid, cur);
+        return true;
+      };
+      if (action === 'claimSelf') {
+        const u = await admin.auth().getUser(tok.uid);
+        const changed = await sync(u);
+        return res.json({ ok: true, tps: want(u), changed });
+      }
+      if (adminsMap[tok.uid] !== true) return res.status(403).json({ ok: false, error: 'forbidden' });
+      let page, on = 0, changed = 0;
+      do {
+        page = await admin.auth().listUsers(1000, page && page.pageToken);
+        for (const u of page.users) {
+          if (!u.email || !u.email.endsWith('@tps.intern')) continue;
+          if (await sync(u)) changed++;
+          if (want(u)) on++;
+        }
+      } while (page.pageToken);
+      return res.json({ ok: true, on, changed });
     }
 
     return res.status(400).json({ ok: false, error: 'action' });

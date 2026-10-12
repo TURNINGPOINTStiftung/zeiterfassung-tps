@@ -5,7 +5,7 @@
 //  Selbst-registrierendes, isoliertes Modul. Alles in try/catch, damit
 //  ein Fehler hier niemals die Zeiterfassung beeinträchtigt.
 
-import { openModal, closeModal, toast } from '../utils.js';
+import { openModal, closeModal, toast, localISODate } from '../utils.js';
 import { getData } from '../data.js';   // NUR Lesen (Teams, Nutzer) – nie schreiben
 import {
   ensureCrmReady, setCrmRenderHook, getCrm, getEntity, listEntities,
@@ -1152,7 +1152,7 @@ function _cardFieldDefs(treeKey){
   return defs;
 }
 function _naechsteVA(tree,eid){
-  const today=new Date().toISOString().slice(0,10);
+  const today=localISODate();
   const up=veranstaltungenForEntity(tree,eid).filter(v=>!v.closed && String(v.start||'')>=today).sort((a,b)=>String(a.start).localeCompare(String(b.start)));
   const v=up[0]; return v ? ((v.titel||'(Veranstaltung)')+' · '+fmtDate(Date.parse(v.start))) : '';
 }
@@ -1607,7 +1607,7 @@ function paintDetail(){
     </div>`).join('');
   const kontakte = kCards ? `<div class="crm-list">${kCards}</div>` : `<div class="small" style="color:var(--muted)">Noch keine Kontakte.</div>`;
 
-  const _today=new Date().toISOString().slice(0,10);
+  const _today=localISODate();
   const terminRow=t=>{
     const start=t.datum||''; const end=t.bis||'';
     const dateStr = (end && end!==start) ? `${fmtDate(Date.parse(start))} – ${fmtDate(Date.parse(end))}`
@@ -2075,7 +2075,7 @@ function _koopList(tree,eid){
 }
 // Eine Kooperation gilt als BEENDET, sobald ein bis-Datum gesetzt ist, das <= heute liegt.
 // (Zukünftiges bis = noch aktiv, läuft nur befristet.) Beendete zählen/teilen NICHT mehr.
-function _koopEnded(k){ const t=new Date().toISOString().slice(0,10); return !!(k&&k.bis&&k.bis<=t); }
+function _koopEnded(k){ const t=localISODate(); return !!(k&&k.bis&&k.bis<=t); }
 function _koopActiveList(tree,eid){ return _koopList(tree,eid).filter(k=>!_koopEnded(k)); }
 function koopCount(e){ return e ? _koopActiveList(e.tree||window._crmTree, e.id).length : 0; }
 // Eindeutige AKTIVE Kooperationspartner eines Eintrags (für „gemeinsam mit …")
@@ -2122,7 +2122,7 @@ function crmKoopAdd(){
    <div class="crm-modal-field"><label>Partner (Verein, Sozialakteur …) *</label><select id="crm-koop-partner">${opts.join('')}</select></div>
    <div class="crm-modal-field"><label>Art der Kooperation</label><input id="crm-koop-art" placeholder="z. B. gemeinsames Training, nur Veranstaltung XY, dauerhaft …"></div>
    <div class="crm-modal-field" style="display:flex;gap:10px">
-     <div style="flex:1"><label>Von</label><input id="crm-koop-von" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+     <div style="flex:1"><label>Von</label><input id="crm-koop-von" type="date" value="${localISODate()}"></div>
      <div style="flex:1"><label>Bis (optional)</label><input id="crm-koop-bis" type="date" value=""></div>
    </div>
    <div class="crm-modal-field"><label>Notiz (optional)</label><textarea id="crm-koop-note" rows="2"></textarea></div>
@@ -2165,7 +2165,7 @@ function crmKoopSave(){
 function crmKoopEnd(ot,oe,id){
   if(!confirm('Kooperation zum heutigen Tag beenden?\nSie bleibt im Verlauf erhalten (anderes Enddatum über ✎ möglich).')) return;
   const o=getEntity(ot,oe); if(!o) return; const k=(o.kooperationen||[]).find(x=>x.id===id); if(!k) return;
-  k.bis=new Date().toISOString().slice(0,10); o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
+  k.bis=localISODate(); o.updatedByKuerzel=curKuerzel(); o.updatedByName=curName(); saveEntity(ot,o);
   paintDetail(); toast('Kooperation beendet ✓','ok');
 }
 function crmKoopReactivate(ot,oe,id){
@@ -2749,7 +2749,7 @@ function crmAttFile(nid){
   toast('Lädt hoch …','');
   try{
     const ref=firebase.storage().ref(path);
-    ref.put(file).then(s=>s.ref.getDownloadURL()).then(url=>{
+    Promise.resolve(window.ensureAccessClaim&&window.ensureAccessClaim()).catch(()=>{}).then(()=>ref.put(file)).then(s=>s.ref.getDownloadURL()).then(url=>{
       mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'file',name:file.name,url,size:file.size,path}); });
       crmAttOpen(nid); toast('Datei hochgeladen ✓','ok');
     }).catch(e=>{ toast('Upload fehlgeschlagen: '+((e&&e.message)||''),'err'); });
@@ -2859,7 +2859,7 @@ function crmStatModal(s){
   const e=curEntity(); if(!e) return;
   const isEdit=!!s; s=s||{};
   crmOpenModalShell();
-  const def=s.date||(e.stamm&&e.stamm.statStart)||new Date().toISOString().slice(0,10);
+  const def=s.date||(e.stamm&&e.stamm.statStart)||localISODate();
   const typOpts=STAT_TYPES.map(([k,l])=>`<option value="${k}"${(s.typ||'training')===k?' selected':''}>${esc(l)}</option>`).join('');
   const f=m=>{ const pre=isEdit?statNum(s,m):0; return `<div class="crm-modal-field" style="flex:1;min-width:150px"><label title="${esc(m.title||m.label)}">${esc(m.label)}</label><input id="crm-stat-${m.key}" type="number" min="0" inputmode="numeric" value="${pre?pre:''}"></div>`; };
   const partners=_koopPartners(window._crmTree, e.id);
@@ -2948,7 +2948,7 @@ function crmFoerderModal(f){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎ Förderung bearbeiten':'＋ Förderung'}</h3>
    <input type="hidden" id="crm-foerder-id" value="${isEdit?esc(f.id):''}">
    <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Wann?</label><input id="crm-foerder-date" type="date" value="${isEdit&&f.date?esc(f.date):new Date().toISOString().slice(0,10)}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Wann?</label><input id="crm-foerder-date" type="date" value="${isEdit&&f.date?esc(f.date):localISODate()}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fördersumme (€)</label><input id="crm-foerder-betrag" type="number" min="0" step="0.01" inputmode="decimal" value="${isEdit&&f.betrag!=null?esc(String(f.betrag)):''}"></div>
    </div>
    <div class="crm-modal-field"><label>Was? (Zweck / Programm)</label><input id="crm-foerder-was" type="text" value="${isEdit?esc(f.was||''):''}" placeholder="z. B. Vereinsheim-Sanierung, Landesprogramm …"></div>
@@ -3604,7 +3604,7 @@ function crmSaveMeinProjekt(){
 // ══════════════════════════════════════════════════════════════════
 //  VERANSTALTUNGEN  (übergreifend; referenzieren 0..n Einträge)
 // ══════════════════════════════════════════════════════════════════
-function _vaTodayISO(){ return new Date().toISOString().slice(0,10); }
+function _vaTodayISO(){ return localISODate(); }
 function vaIsPast(v){ const end=v.ende||v.start||''; return end && end < _vaTodayISO(); }
 function vaDateLabel(v){
   const s=v.start?fmtDate(Date.parse(v.start)):'';

@@ -121,6 +121,16 @@ export function initModalClose(){
     if(e.target===document.getElementById('modal-bg')) closeModal();
   });
 }
+// Doppelklick-Schutz für Haupt-Knöpfe in Dialogen („Anlegen", „Speichern", „Bestellen" …):
+// ein zweiter Klick innerhalb 1 s wird verworfen – sonst legte z. B. das CRM zwei Einträge an.
+// Läuft beim Laden des Moduls, in der Capture-Phase VOR dem Inline-onclick des Knopfes.
+try{ document.addEventListener('click',e=>{
+  const b=e.target&&e.target.closest&&e.target.closest('#modal-body button');
+  if(!b || !b.matches('.primary,.btn-primary,.btn-ok,.pri')) return;
+  const now=Date.now();
+  if(b._tpsClickTs && now-b._tpsClickTs<1000){ e.preventDefault(); e.stopImmediatePropagation(); return; }
+  b._tpsClickTs=now;
+},true); }catch(e){}
 export function toast(msg,type=''){
   const el=document.createElement('div');
   el.className='toast'+(type?' '+type:''); el.textContent=msg;
