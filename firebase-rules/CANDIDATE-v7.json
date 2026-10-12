@@ -179,11 +179,16 @@
         }
       },
       "$coll": {
-        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && $coll !== 'access' && $coll !== 'config' && $coll !== 'pathAccess' && !$coll.beginsWith('shop') && $coll !== 'teamprojekte'"
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && $coll !== 'access' && $coll !== 'config' && $coll !== 'pathAccess' && !$coll.beginsWith('shop') && $coll !== 'teamprojekte' && $coll !== 'userPrefs'"
       },
       "teamprojekte": {
         "$id": {
           ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/verw_kanban').child(auth.uid).val() === true || (!data.exists() && newData.exists() && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && newData.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val()) || (data.exists() && newData.exists() && newData.child('owner').val() === data.child('owner').val() && newData.child('team').val() === data.child('team').val()) || (data.exists() && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && data.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val() && (!newData.exists() || newData.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())))))"
+        }
+      },
+      "userPrefs": {
+        "$uid": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === $uid))"
         }
       }
     },
