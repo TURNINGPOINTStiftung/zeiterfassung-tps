@@ -76,10 +76,10 @@ function renderHomeCardsConfig(el){
     const order=cardOrder();
     const rows=order.map((k,i)=>{ const c=CARDS.find(x=>x.k===k); if(!c) return ''; const rs=cardRoles(k);
       return `<tr><td style="padding:5px 8px;white-space:nowrap">
-          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i>0?'':'disabled'} onclick="homeCfgMove('${k}',-1)" title="nach oben">↑</button>
-          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i<order.length-1?'':'disabled'} onclick="homeCfgMove('${k}',1)" title="nach unten">↓</button></td>
+          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i>0?'':'disabled'} onclick="homeCfgMove(${jsq(k)},-1)" title="nach oben">↑</button>
+          <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i<order.length-1?'':'disabled'} onclick="homeCfgMove(${jsq(k)},1)" title="nach unten">↓</button></td>
         <td style="padding:5px 8px"><b>${esc(c.l)}</b>${c.hint?`<div style="font-size:11px;color:var(--muted)">${esc(c.hint)}</div>`:''}</td>
-        ${HOME_ROLES.map(([r])=>`<td style="text-align:center;padding:5px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${rs.includes(r)?'checked':''} ${adm?'':'disabled'} onchange="homeCfgSet('${k}','${r}',this.checked)"></td>`).join('')}</tr>`; }).join('');
+        ${HOME_ROLES.map(([r])=>`<td style="text-align:center;padding:5px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${rs.includes(r)?'checked':''} ${adm?'':'disabled'} onchange="homeCfgSet(${jsq(k)},${jsq(r)},this.checked)"></td>`).join('')}</tr>`; }).join('');
     el.innerHTML=`<div style="margin-top:22px">
       <h3 style="margin:0 0 4px;color:var(--primary)">🏠 Startseite – Karten pro Rolle</h3>
       <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Welche Karten jede Rolle auf der Startseite sieht und in welcher Reihenfolge (gilt für alle mit eingeschalteter Startseite).${adm?'':' Ändern kann nur der Administrator-Account.'}</p>
@@ -192,7 +192,7 @@ export function renderHome(){
     // Persönliche Einstellungen kommen aus den CRM-Daten – sind die beim ersten Zeichnen noch nicht da,
     // einmal nachzeichnen, sobald geladen (nur wenn sich etwas geändert hat).
     try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule==='start' && !_arranging && JSON.stringify([_hiddenCards(), _prefs()&&_prefs().layouts||null])!==_renderedHidden) renderHome(); }); }catch(e){}
-    const slot=k=>`<div class="home-slot" data-k="${k}"><button class="home-x" title="Karte ausblenden" onpointerdown="event.stopPropagation()" onclick="homeHideCard('${k}',true)">✕</button>${BOX[k]()}</div>`;
+    const slot=k=>`<div class="home-slot" data-k="${k}"><button class="home-x" title="Karte ausblenden" onpointerdown="event.stopPropagation()" onclick="homeHideCard(${jsq(k)},true)">✕</button>${BOX[k]()}</div>`;
     const hiddenAvail=avail.filter(k=>hid.includes(k));
     root.innerHTML=`<div class="home-wrap${_arranging?' home-arrange':''}">
       <img class="home-bgl" src="icons/tps-logo-segel.svg" alt="" aria-hidden="true">
@@ -201,7 +201,7 @@ export function renderHome(){
           <p class="home-date">${esc(datum)}</p></div>
           ${_arranging?`<button class="home-arr-btn" onclick="homeArrangeReset()">↺ Standard</button><button class="home-arr-btn" style="margin-left:0;background:var(--primary,#203869);color:var(--on-primary,#fff);border-color:var(--primary,#203869)" onclick="homeArrange(false)">✓ Fertig</button>`
             :`<button class="home-arr-btn" onclick="homeArrange(true)" title="Karten verschieben und ausblenden">✥ Anordnen</button>`}</div>
-        ${_arranging?`<div class="home-tray"><b>Karten ziehen</b> – zwischen Spalten und nach oben/unten. ✕ blendet aus.${hiddenAvail.length?' &nbsp;Ausgeblendet: '+hiddenAvail.map(k=>{ const c=CARDS.find(x=>x.k===k); return `<button onclick="homeHideCard('${k}',false)">＋ ${esc(c?c.l:k)}</button>`; }).join(''):''}</div>`:''}
+        ${_arranging?`<div class="home-tray"><b>Karten ziehen</b> – zwischen Spalten und nach oben/unten. ✕ blendet aus.${hiddenAvail.length?' &nbsp;Ausgeblendet: '+hiddenAvail.map(k=>{ const c=CARDS.find(x=>x.k===k); return `<button onclick="homeHideCard(${jsq(k)},false)">＋ ${esc(c?c.l:k)}</button>`; }).join(''):''}</div>`:''}
         <div class="home-cols" id="home-cols">${cols.map((c,i)=>`<div class="home-col" data-col="${i}">${c.map(slot).join('')}</div>`).join('')}</div>
         ${cardOn('tiles',cu) && !hid.includes('tiles')?'<div class="home-tiles-wrap"><div class="home-tiles" id="home-tiles"></div></div>':''}
       </div></div>`;
@@ -428,7 +428,7 @@ function homeProfileHtml(){
       <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:4px">🏠 Meine Startseite</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Welche Karten du sehen möchtest – gilt auf allen deinen Geräten, wird sofort gespeichert.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 12px">${ks.map(k=>{ const c=CARDS.find(x=>x.k===k);
-        return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" style="width:auto" ${hid.includes(k)?'':'checked'} onchange="homeHideCard('${k}',!this.checked)"> ${esc(c?c.l:k)}</label>`; }).join('')}</div>`;
+        return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" style="width:auto" ${hid.includes(k)?'':'checked'} onchange="homeHideCard(${jsq(k)},!this.checked)"> ${esc(c?c.l:k)}</label>`; }).join('')}</div>`;
   }catch(e){ return ''; }
 }
 function homeHideCard(k,hide){
@@ -449,7 +449,7 @@ function homeOpenItem(key){
 // ⭐ Favoriten und 🕘 Zuletzt geöffnet sind getrennte Karten (v425, User: „Zuletzt" eher nervig →
 // eigene Karte, Standard aus, per Rolle/Profil schaltbar). Leere Karten bleiben unsichtbar.
 const _chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
-  return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${inf.icon} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
+  return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${esc(inf.icon)} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
 async function _fillRecent(){
   try{ if(CD.ensureCrmReady) await CD.ensureCrmReady(); }catch(e){}
   _migrateFavs();

@@ -16,7 +16,7 @@
 //  eine neue Storage-Regel, die der Administrator veröffentlicht.
 // ══════════════════════════════════════════════════════════════════
 import { getData, getUser, mutate } from './data.js';
-import { openModal, closeModal, toast, esc, localISODate } from './utils.js';
+import { openModal, closeModal, toast, esc, localISODate, jsArg as jsq } from './utils.js';
 
 const BK_TYPE = 'tps-ze-user-backup';
 const _MON = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
@@ -291,7 +291,7 @@ export async function showCloudSnapshots(){
   const _row = (n, isReport) => { const ym = n.slice(0,7);
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'
       + '<span>'+esc(ym)+(isReport?' <span class="chip" style="font-size:10px">Berichte</span>':'')+'</span>'
-      + '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud(\''+esc(n)+'\')">⬇ Laden</button>'
+      + '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud('+jsq(n)+')">⬇ Laden</button>'
       + '</div>'; };
   const body = (zeItems.length || repItems.length)
     ? (zeItems.length ? '<div style="font-size:12px;font-weight:700;color:var(--primary);margin:4px 0">Meine Zeiterfassung</div>'+zeItems.map(n=>_row(n,false)).join('') : '')

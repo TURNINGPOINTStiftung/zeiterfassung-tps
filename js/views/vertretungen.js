@@ -1,5 +1,5 @@
 import { getData, mutate } from '../data.js';
-import { esc, toast, localISODate } from '../utils.js';
+import { esc, toast, localISODate, jsArg as jsq } from '../utils.js';
 
 // Vertretungsregelung (eigener Reiter, nur GF/Admin): Fällt eine Team-Leitung aus, bestimmt die
 // Geschäftsführung/Admin hier befristet eine Vertretung – auch sich selbst. Die Vertretung sieht/
@@ -47,7 +47,7 @@ export function renderVertretungen(){
     const zeit=_vtDate(v.von)+(v.bis?' – '+_vtDate(v.bis):' – offen');
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap">
       <span>🔄 <strong>${esc(v.team)}</strong> → ${esc(v.deputyName||'')} <span style="color:var(--muted);font-size:12px">(${esc(zeit)})</span> · ${state}</span>
-      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung('${v.id}')">Beenden</button>`:''}<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung('${v.id}')">🗑</button></span>
+      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung(${jsq(v.id)})">Beenden</button>`:''}<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung(${jsq(v.id)})">🗑</button></span>
     </div>`;
   }).join(''):'<div style="color:var(--muted);font-size:13px;padding:6px 0">Noch keine Vertretungen angelegt.</div>';
 

@@ -1,7 +1,7 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_REMINDER_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, getEntry, entryKey, mutate, getUser } from '../data.js';
 import { isFreelancer, isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, hasPermission, getTeamForDate, monthStartDate } from '../roles.js';
-import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast } from '../utils.js';
+import { esc, hFmt, sFmt, minFmt, openModal, closeModal, toast, jsArg as jsq } from '../utils.js';
 import { vacStatus, monthIST, monthSOLL, monthSOLLToDate, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, buildZuordPivot, normZuord, effUserAt, annualVacDays, employedRange } from '../calc.js';
 import { getCatsForTeam, currentCatsForUser } from '../cats.js';
 import { notifyGF } from './gfberichte.js';
@@ -156,10 +156,10 @@ export function renderOverview(){
     const curIST=monthIST(curEntry,u);
     const curCarry=getEffectiveCarryH(u.id,u,oy,om);
     const canEditDpw=cu.role==='admin';   // Nutzerdaten ändert nur noch der Administrator-Account
-    const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw('${u.id}')">✏ ${u.dpw||5} Tage/Wo</button>`:'';
+    const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw(${jsq(u.id)})">✏ ${Number(u.dpw)||5} Tage/Wo</button>`:'';
     const curStatus=curEntry.status||'draft';
     const isClickable=curStatus==='submitted'||curStatus==='approved'||curStatus==='rejected'||cu.role==='admin';
-    const cardClick=isClickable?`onclick="openEmpMonth('${u.id}')" title="Zeiterfassung öffnen"`:`style="cursor:default" title="Noch nicht eingereicht"`;
+    const cardClick=isClickable?`onclick="openEmpMonth(${jsq(u.id)})" title="Zeiterfassung öffnen"`:`style="cursor:default" title="Noch nicht eingereicht"`;
     const notSubmitted=!isClickable?`<div class="meta" style="margin-top:4px;font-size:11px;color:var(--muted)">📝 ${MONTHS[om-1]}: noch nicht eingereicht</div>`:'';
     if(isFree){
       const curTotal=curIST+Math.round(curCarry*60);
@@ -188,7 +188,7 @@ export function renderOverview(){
     const diffStr=sFmt(curDiff);
     return `<div class="emp-card${isClickable?'':' emp-card-locked'}" ${cardClick}>
       <h3>${esc(u.name)} ${roleChip}</h3>
-      <div class="meta">${esc(u.city||'–')} · ${eu.wh}h/Woche</div>
+      <div class="meta">${esc(u.city||'–')} · ${esc(eu.wh)}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
         <span>🏖 Resturlaub: <strong>${vacLeft+_vs.carryLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, davon ${_vs.carryLeft} T aus ${oy-1}`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>
@@ -227,10 +227,10 @@ export function renderOverview(){
     if(cu.role==='geschaeftsfuehrer' && approvedUsers.length && notYetSent===0){
       return `<div class="team-send-bar">
         <span style="color:var(--ok);font-weight:600;font-size:13px">✓ ${approved}/${total} genehmigt · automatisch in die Buchhaltungsversion eingereicht</span>
-        ${sent?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:''}
+        ${sent?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:''}
       </div>`;
     }
-    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick='recallTeamReport(${JSON.stringify(team)},${oy},${om})'>↩ Zurückziehen</button>`:'';
+    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:'';
     const approvedIds=JSON.stringify(approvedUsers.map(u=>u.id));
     // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
     // geführten) Teams heißt die Aktion "Bericht einreichen", geht aber genauso
@@ -264,7 +264,7 @@ export function renderOverview(){
     return `<div class="team-send-bar">
         <span style="color:${allApproved?'var(--ok)':'var(--warn)'};font-weight:600;font-size:13px">${statusText}</span>
         ${sentInfo}
-        <button class="btn btn-ok btn-sm" onclick='submitBtn(this,()=>sendTeamReportForTeam(${JSON.stringify(team)},${approvedIds},${oy},${om}))'>
+        <button class="btn btn-ok btn-sm" onclick="submitBtn(this,()=>sendTeamReportForTeam(${jsq(team)},${esc(approvedIds)},${oy},${om}))">
           ${btnLabel}
         </button>
       </div>`;
@@ -281,7 +281,7 @@ export function renderOverview(){
 
   content.innerHTML=Object.entries(teamMap).sort((a,b)=>a[0].localeCompare(b[0])).map(([team,users])=>`
     <div class="team-section">
-      <h3>${team}</h3>
+      <h3>${esc(team)}</h3>
       <div class="emp-grid">${users.map(renderCard).join('')}</div>
       ${renderTeamSendBar(team,users)}
     </div>`).join('');
@@ -319,7 +319,7 @@ export function buildZuordSummary(employees,oy,om,d){
       if(!vals.some(v=>v>0)) return '';
       const rowTot=vals.reduce((s,v)=>s+v,0);
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap">${name}</td>
+        <td style="padding:5px 10px;font-size:12px;font-weight:600;white-space:nowrap">${esc(name)}</td>
         ${vals.map(v=>`<td style="padding:5px 8px;text-align:right;font-size:12px;color:${v?'inherit':'var(--border)'}">${v?hFmt(v):'–'}</td>`).join('')}
         <td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700;border-left:2px solid var(--border)">${rowTot?hFmt(rowTot):'–'}</td>
       </tr>`;
@@ -490,9 +490,9 @@ export function openJahresübersicht(uid,y){
     ${zuordSection}
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
-      ${canSendGF?`<button class="btn btn-ok" onclick="submitBtn(this,()=>sendJahresbericht('${uid}',${y}))" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
-      ${canSendGF&&yrSent?`<button class="btn btn-outline" onclick="recallYearReport('${uid}',${y})" style="width:auto;border-color:var(--danger);color:var(--danger)" title="Jahresbericht von der GF zurückziehen">↩ Zurückziehen</button>`:''}
-      <button class="btn btn-primary" onclick="printJahresübersicht('${uid}',${y})" style="width:auto">⬇ PDF herunterladen</button>
+      ${canSendGF?`<button class="btn btn-ok" onclick="submitBtn(this,()=>sendJahresbericht(${jsq(uid)},${y}))" style="width:auto" title="Jahresmappe an Geschäftsführung senden">📨 An GF senden</button>`:''}
+      ${canSendGF&&yrSent?`<button class="btn btn-outline" onclick="recallYearReport(${jsq(uid)},${y})" style="width:auto;border-color:var(--danger);color:var(--danger)" title="Jahresbericht von der GF zurückziehen">↩ Zurückziehen</button>`:''}
+      <button class="btn btn-primary" onclick="printJahresübersicht(${jsq(uid)},${y})" style="width:auto">⬇ PDF herunterladen</button>
     </div>
   `,true);
 }

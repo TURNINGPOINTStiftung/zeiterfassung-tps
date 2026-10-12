@@ -60,7 +60,7 @@ export function renderSettings(){
     return `<div class="user-row">
       <div>
         <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
-        <div class="details"><span data-mfa="${esc(u.id)}"></span> ${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${u.wh}h/Woche · ${u.al} T Urlaub`}</div>
+        <div class="details"><span data-mfa="${esc(u.id)}"></span> ${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${esc(u.wh)}h/Woche · ${esc(u.al)} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         ${zeToggle}
@@ -532,7 +532,7 @@ export function showEditDpw(id){
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${u.wh||0}&thinsp;h/Woche</p>
     <div class="form-group">
       <label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
-      <input id="edit-dpw-val" type="number" min="1" max="7" value="${u.dpw||5}" style="max-width:90px">
+      <input id="edit-dpw-val" type="number" min="1" max="7" value="${esc(u.dpw||5)}" style="max-width:90px">
     </div>
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -575,7 +575,7 @@ function userForm(u={}){
       const hist=(u.teamHistory||[]).sort((a,b)=>a.fromDate.localeCompare(b.fromDate));
       const histRows=hist.map((h,i)=>`
         <div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
-          <input type="date" value="${h.fromDate}" style="padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;width:130px"
+          <input type="date" value="${esc(h.fromDate)}" style="padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;width:130px"
             onchange="updateTeamHistEntry(${jsq(u.id)},${i},this.value,'team')">
           <select style="flex:1;padding:3px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px"
             onchange="updateTeamHistEntry(${jsq(u.id)},${i},this.value,'date')">
@@ -649,13 +649,13 @@ function userForm(u={}){
         ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:11px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${u.wh||20}" data-orig="${u.wh||20}" oninput="ufAutoAdjust('wh')"></div>
-        <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${u.dpw||5}" data-orig="${u.dpw||5}" oninput="ufAutoAdjust('dpw')"></div>
+        <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${esc(u.wh||20)}" data-orig="${esc(u.wh||20)}" oninput="ufAutoAdjust('wh')"></div>
+        <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${esc(u.dpw||5)}" data-orig="${esc(u.dpw||5)}" oninput="ufAutoAdjust('dpw')"></div>
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Jahresurlaub (Tage) <span style="font-size:11px;color:var(--muted)">(voller Jahreswert)</span></label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${u.al||24}" data-orig="${u.al||24}" oninput="this.dataset.touched='1';ufAutoAdjust()"></div>
+        <div class="form-group"><label>Jahresurlaub (Tage) <span style="font-size:11px;color:var(--muted)">(voller Jahreswert)</span></label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${esc(u.al||24)}" data-orig="${esc(u.al||24)}" oninput="this.dataset.touched='1';ufAutoAdjust()"></div>
         <div class="form-group"><label>Stunden / Urlaubstag <span style="font-size:11px;color:var(--muted)">(Teilzeit i.d.R. 8)</span></label>
-          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}" data-orig="${u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10}" oninput="this.dataset.touched='1'">
+          <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" data-orig="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" oninput="this.dataset.touched='1'">
         </div>
       </div>
       <div class="form-group">
@@ -687,7 +687,7 @@ function userForm(u={}){
       </div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">
-      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${u.maxHours||0}"></div>
+      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${esc(u.maxHours||0)}"></div>
     </div>
     ${(()=>{
       if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>

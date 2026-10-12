@@ -1,7 +1,7 @@
 import { _PW_SALT, DEFAULT_USERS, STORAGE_KEY,
          EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, APP_URL, PW_FUNCTION_URL } from './config.js';
 import { getData, getUser, mutate, setUserFields, setDataCache, pendingCount, flushPendingWrites } from './data.js';
-import { esc, toast, openModal, closeModal } from './utils.js';
+import { esc, toast, openModal, closeModal, jsArg as jsq } from './utils.js';
 import { getLoginDirUsers, authenticate } from './firebase.js';
 
 // Zwischenspeicher für Login-Autocomplete
@@ -413,16 +413,16 @@ export async function checkPasswordResetToken(){
       <div class="form-group">
         <label>Neues Passwort</label>
         <input type="password" id="new-pw-1" placeholder="Mindestens 8 Zeichen" autocomplete="new-password"
-               onkeydown="if(event.key==='Enter') saveResetPassword('${token}','${data.uid}')">
+               onkeydown="if(event.key==='Enter') saveResetPassword(${jsq(token)},${jsq(data.uid)})">
       </div>
       <div class="form-group">
         <label>Passwort bestätigen</label>
         <input type="password" id="new-pw-2" placeholder="Wiederholen" autocomplete="new-password"
-               onkeydown="if(event.key==='Enter') saveResetPassword('${token}','${data.uid}')">
+               onkeydown="if(event.key==='Enter') saveResetPassword(${jsq(token)},${jsq(data.uid)})">
       </div>
       <div id="new-pw-msg" style="margin-top:8px"></div>
       <div class="modal-btns">
-        <button class="btn btn-primary" onclick="saveResetPassword('${token}','${data.uid}')">Passwort speichern</button>
+        <button class="btn btn-primary" onclick="saveResetPassword(${jsq(token)},${jsq(data.uid)})">Passwort speichern</button>
       </div>`);
     setTimeout(()=>document.getElementById('new-pw-1')?.focus(),100);
   }catch(e){ console.error('Reset-Token Fehler:',e); }

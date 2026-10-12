@@ -3,12 +3,13 @@ import { getData } from './data.js';
 import { _fk } from './data.js';
 import { isFreelancer } from './roles.js';
 import { normZuord } from './calc.js';
+import { esc } from './utils.js';
 
 export function getCats(){ return getData().cats||[...DEFAULT_CATS]; }
 export function getTeams(){ return getData().teams||[]; }
 
 export function catOptions(selected=''){
-  return `<option value=""></option>`+getCats().map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`).join('');
+  return `<option value=""></option>`+getCats().map(c=>`<option value="${esc(c)}"${c===selected?' selected':''}>${esc(c)}</option>`).join('');
 }
 
 export function catOptionsFree(selected=''){
@@ -86,7 +87,7 @@ export function catOptionsForUser(user,selected='',allowHalf=false){
     const sel=(c===norm&&!isHalf)?' selected':'';
     const mark=isLeitung&&teamCats.has(c);
     const style=mark?' style="background:#eaf7ea;color:#2e7d32;font-weight:600"':'';
-    let opt=`<option value="${c}"${sel}${style}>${c}</option>`;
+    let opt=`<option value="${esc(c)}"${sel}${style}>${esc(c)}</option>`;
     // Direkt nach „Urlaub" die halbe Variante anbieten (diskret, zählt 0,5 Tage).
     if(c==='Urlaub'&&allowHalfOpt) opt+=`<option value="Urlaub½"${isHalf?' selected':''}>Urlaub ½ Tag</option>`;
     return opt;

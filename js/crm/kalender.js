@@ -129,11 +129,11 @@ function kalNewItem(){ window._crmModalReturn='kalender'; if(window.crmNewItem) 
 function _clk(it){
   const a=_kalAccess();
   if(a.verwaltend){
-    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung(\''+esc(it.id)+'\')"' };
-    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\',\''+esc(it.id)+'\')"' };
+    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung('+jsq(it.id)+')"' };
+    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin('+jsq(it.tree)+','+jsq(it.eid)+','+jsq(it.id)+')"' };
   } else if(a.hasCrm){
-    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalGotoVeranstaltung(\''+esc(it.id)+'\')"' };
-    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalGotoTermin(\''+esc(it.tree)+'\',\''+esc(it.eid)+'\')"' };
+    if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalGotoVeranstaltung('+jsq(it.id)+')"' };
+    if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalGotoTermin('+jsq(it.tree)+','+jsq(it.eid)+')"' };
   }
   return { cls:'', on:'' };
 }

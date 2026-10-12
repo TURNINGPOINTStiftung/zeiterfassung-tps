@@ -1,6 +1,6 @@
 import { getUser, getData, setUserFields } from './data.js';
 // (Passwort-Hashes entfallen seit v429 – Passwortwechsel nur über Firebase.)
-import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate, themePref } from './utils.js';
+import { esc, openModal, closeModal, toast, wsPeriodRows, wsCollectPeriods, localISODate, themePref, jsArg as jsq } from './utils.js';
 import { ownBackupSectionHtml } from './user-backup.js';
 import { mfaProfileHtml, mfaResolve, mfaFriendly } from './mfa.js';
 
@@ -162,7 +162,7 @@ export function shareApp(){
     +'<li><em>Ggf. „Installation aus unbekannten Quellen" erlauben</em></li>'
     +'</ol></div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +'<button class="btn btn-ok" onclick="window.open(\''+appUrl+'\',\'_blank\')">🔗 App-Link öffnen / teilen</button>'
+    +'<button class="btn btn-ok" onclick="window.open('+jsq(appUrl)+',\'_blank\')">🔗 App-Link öffnen / teilen</button>'
     +'<button class="btn btn-outline" onclick="_downloadHtml()">⬇ HTML-Datei herunterladen</button>'
     +'<button class="btn btn-outline" onclick="closeModal()">Schließen</button>'
     +'</div>'

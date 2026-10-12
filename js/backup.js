@@ -11,7 +11,7 @@
 //  • Aufräumen (Aufbewahrung) läuft nur, wenn der Administrator angemeldet ist.
 //  Alles best effort: Fehler landen nur in der Konsole und stören die App nie.
 // ══════════════════════════════════════════════════════════════════
-import { localISODate, openModal, esc, toast } from './utils.js';
+import { localISODate, openModal, esc, toast, jsArg as jsq } from './utils.js';
 import { runAutoUserBackup } from './user-backup.js';   // persönlicher Monats-Schnappschuss (Phase 2)
 
 const KEEP_DAILY_DAYS = 90;
@@ -95,7 +95,7 @@ export async function showAppBackups(){
   try{ names=await listAppBackups(); }
   catch(e){ openModal('<h3>☁ Automatische App-Backups</h3><p style="color:var(--danger)">Konnte nicht geladen werden ('+esc((e&&(e.code||e.message))||'')+').</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
   const rows=names.length
-    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.slice(0,10))+(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup(\''+esc(n)+'\')">⬇ Laden</button></div>').join('')
+    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.slice(0,10))+(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup('+jsq(n)+')">⬇ Laden</button></div>').join('')
     : '<p style="color:var(--muted)">Noch keine App-Backups vorhanden.</p>';
   openModal('<h3 style="margin-bottom:6px">☁ Automatische App-Backups</h3>'
     +'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Täglich automatisch (Server-Stand). Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft. Einspielen über „Backup einspielen (JSON)".</p>'

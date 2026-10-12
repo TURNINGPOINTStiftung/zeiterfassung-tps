@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey, loadAudit } from '../data.js';
 import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
-import { diffMin, addMin, tMin, dstDayAdj, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal } from '../utils.js';
+import { diffMin, addMin, tMin, dstDayAdj, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal, jsArg as jsq } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, vacStatus, isAbsDay as _isAbs, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
 import { fmtTs, localISODate } from '../utils.js';
@@ -74,7 +74,7 @@ export function renderZeiterfassung(){
     if(viewingOther){ const n=document.getElementById('viewing-other-name'); if(n) n.textContent=user.name; }
   }
 
-  document.getElementById('month-title').innerHTML=`${MONTHS[mon-1]} <span onclick="openJahresübersicht('${uid}',${year})" title="Jahresübersicht ${year} öffnen" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${year}</span>`;
+  document.getElementById('month-title').innerHTML=`${MONTHS[mon-1]} <span onclick="openJahresübersicht(${jsq(uid)},${year})" title="Jahresübersicht ${year} öffnen" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px">${year}</span>`;
   document.getElementById('info-name').textContent=user.name;
   document.getElementById('info-team').textContent=user.role==='leitung'?(getLeitungTeams(user).join(', ')||'–'):(user.team||'–');
   document.getElementById('info-city').textContent=user.city||'–';
@@ -202,19 +202,19 @@ export function renderZeiterfassung(){
       <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
       <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn-text)">WE</span>':''}</td>
-      <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b1von',this.value)"></td>
-      <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${dd.b1bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change('${ds}',this.value)"></td>
-      <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord('${ds}','b1zuord',this.value,${user.wh||0},${user.dpw||5})">${catOptionsForUser(user,(dd.halfDay&&(dd.b1zuord==='Urlaub'))?'Urlaub½':(dd.b1zuord||''),true)}</select></td>
-      <td class="bem-col" title="${esc(dd.b1bem||'')}"><input id="bem_${ds}_b1" aria-label="${dateFmt} Bemerkung Block 1" title="${esc(dd.b1bem||'')}" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b1bem',this.value)" placeholder="–"></td>
+      <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b1von||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange(${jsq(ds)},'b1von',this.value)"></td>
+      <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b1bis||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change(${jsq(ds)},this.value)"></td>
+      <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord(${jsq(ds)},'b1zuord',this.value,${Number(user.wh)||0},${Number(user.dpw)||5})">${catOptionsForUser(user,(dd.halfDay&&(dd.b1zuord==='Urlaub'))?'Urlaub½':(dd.b1zuord||''),true)}</select></td>
+      <td class="bem-col" title="${esc(dd.b1bem||'')}"><input id="bem_${ds}_b1" aria-label="${dateFmt} Bemerkung Block 1" title="${esc(dd.b1bem||'')}" class="bem zt-nav" type="text" value="${esc(dd.b1bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change(${jsq(ds)},'b1bem',this.value)" placeholder="–"></td>
       <td class="sum-c sum-col">${b1min>0?minFmt(b1min):''}</td>
       <td class="sep-c sep-col"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" aria-label="${dateFmt} Beginn Block 2" class="t-inp zt-nav" maxlength="5" value="${dd.b2von||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2von',this.value)"></td>
-      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" aria-label="${dateFmt} Ende Block 2" class="t-inp zt-nav" maxlength="5" value="${dd.b2bis||''}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange('${ds}','b2bis',this.value)"></td>
-      <td class="b2-col"><select id="sel_${ds}_b2zuord" aria-label="${dateFmt} Zuordnung Block 2" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
-      <td class="bem-col b2-col" title="${esc(dd.b2bem||'')}"><input id="bem_${ds}_b2" aria-label="${dateFmt} Bemerkung Block 2" title="${esc(dd.b2bem||'')}" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','b2bem',this.value)" placeholder="–"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2von" aria-label="${dateFmt} Beginn Block 2" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b2von||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange(${jsq(ds)},'b2von',this.value)"></td>
+      <td class="b2-col"><input type="text" id="ti_${ds}_b2bis" aria-label="${dateFmt} Ende Block 2" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b2bis||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange(${jsq(ds)},'b2bis',this.value)"></td>
+      <td class="b2-col"><select id="sel_${ds}_b2zuord" aria-label="${dateFmt} Zuordnung Block 2" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change(${jsq(ds)},'b2zuord',this.value)">${catOptionsForUser(user,dd.b2zuord||'')}</select></td>
+      <td class="bem-col b2-col" title="${esc(dd.b2bem||'')}"><input id="bem_${ds}_b2" aria-label="${dateFmt} Bemerkung Block 2" title="${esc(dd.b2bem||'')}" class="bem zt-nav" type="text" value="${esc(dd.b2bem||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change(${jsq(ds)},'b2bem',this.value)" placeholder="–"></td>
       <td class="sum-c b2-col sum-col">${b2min>0?minFmt(b2min):''}</td>
       <td class="sep-c sep-col2"></td>
-      <td class="kt-col"><input id="kt_${ds}" aria-label="${dateFmt} Kleinteilig (Minuten)" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${dd.ktmin||''}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change('${ds}','ktmin',this.value)" placeholder="0"></td>
+      <td class="kt-col"><input id="kt_${ds}" aria-label="${dateFmt} Kleinteilig (Minuten)" class="kt-min zt-nav" type="number" min="0" max="240" step="15" value="${esc(dd.ktmin||'')}" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_change(${jsq(ds)},'ktmin',this.value)" placeholder="0"></td>
       <td class="sum-c kt-col">${ktm>0?minFmt(ktm):''}</td>
       <td class="pause-c pause-col">${pauseMinAuto>0?minFmt(pauseMinAuto):''}</td>
       <td class="total-c">${effDayMin>0?hFmt(effDayMin):''}${dstAdj?`<span class="zt-warn" style="color:var(--muted)" title="Zeitumstellung in dieser Nacht – automatisch berücksichtigt">${dstAdj>0?'+1 h':'−1 h'} Zeitumstellung</span>`:''}${over10h?'<span class="zt-warn">&gt; 10 h/Tag</span>':''}${wsOver?'<span class="zt-warn">&gt; 20 h/Woche</span>':''}${_pwHtml}</td>
@@ -369,7 +369,7 @@ function renderZuordBreakdown(entry){
   if(sorted.length===0){ tbody.innerHTML='<tr><td colspan="3" style="color:var(--muted);text-align:center">Noch keine Einträge</td></tr>'; return; }
   tbody.innerHTML=sorted.map(([cat,min])=>{
     const pct=Math.round(min/total*100);
-    return `<tr><td>${cat}</td><td style="text-align:right;font-weight:600">${hFmt(min)}</td><td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td></tr>`;
+    return `<tr><td>${esc(cat)}</td><td style="text-align:right;font-weight:600">${hFmt(min)}</td><td style="padding:5px 8px"><div class="zuord-bar" style="width:${pct}%"></div></td></tr>`;
   }).join('');
 }
 

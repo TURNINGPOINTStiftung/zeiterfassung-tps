@@ -228,7 +228,9 @@ function _teamChip(t){ return t?`<span class="shop-cat" style="background:#ede9f
 function _teamSelectHtml(id, cur, hint){ return `<div class="shop-f"><label>Team <span style="font-weight:400;color:var(--muted)">(${hint})</span></label>
   <select id="${id}"><option value="">– für alle –</option>${teamList().map(t=>`<option${cur===t?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`; }
 function cats(){ const s=new Set(CATS_DEFAULT); items().forEach(i=>{ if(i.kategorie) s.add(i.kategorie); }); return [...s]; }
-const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
+const _fmtDate=iso=>{ if(!iso) return ''; const p=String(iso).split('-'); return (p.length===3&&p.every(x=>/^\d+$/.test(x)))?(+p[2]+'.'+ +p[1]+'.'+p[0]):esc(iso); };   // Ausgabe immer HTML-sicher
+// Artikelfoto: nur eigene Bilddaten (data:image) oder https-Adresse ohne Sonderzeichen – sonst kein Bild (Schutz im style-Attribut)
+const _imgUrl=u=>{ u=String(u||''); return (/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(u)||/^https:\/\/[^\s'"()<>\\]+$/.test(u))?u:''; };
 const _fmtTs=ts=>{ if(!ts) return ''; const d=new Date(ts); return d.toLocaleDateString('de-DE')+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); };
 const _todayIso=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 
@@ -411,7 +413,7 @@ function _itemsGrid(mgr){
     const pl=pids.sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
       .map(pid=>{ const ist=_num((it.stock||{})[pid]), s=sollAt(it,pid), under=s>0&&ist<s;
         return `<span class="${fPlace===pid?'hl':''}${under?' short':''}" ${under?`title="Soll ${s} – es fehlen ${s-ist}"`:''}>${esc(placeLabel(pid))}: <b>${ist}</b>${s?` / ${s}`:''}${under?' ⚠':''}</span>`; }).join('');
-    const img=it.foto?`<div class="shop-img" style="background-image:url('${it.foto}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+    const img=_imgUrl(it.foto)?`<div class="shop-img" style="background-image:url('${esc(_imgUrl(it.foto))}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
     const ln=activeLoans(it.id);
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
@@ -421,7 +423,7 @@ function _itemsGrid(mgr){
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
       <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
-      ${short.length?`<div class="shop-low">⚠ Unter Soll: ${short.map(s=>`${esc(placeLabel(s.pid))} (${s.ist}/${s.soll})`).join(', ')} · 🤖 automatisch bestellt</div>`:''}
+      ${short.length?`<div class="shop-low">⚠ Unter Soll: ${short.map(s=>`${esc(placeLabel(s.pid))} (${esc(s.ist)}/${esc(s.soll)})`).join(', ')} · 🤖 automatisch bestellt</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
       ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
@@ -456,7 +458,7 @@ function shopItemEdit(id){
       : `<div class="shop-f" style="font-size:12px;color:var(--muted)">Tipp: Lege unter „📍 Orte" Orte an, dann kannst du hier gleich den Bestand eintragen.</div>`);
   openModal(`<h3>${it?'✎ Artikel bearbeiten':'＋ Neuer Artikel'}</h3>
     <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
-      <div><div id="shop-ph" class="shop-ph" style="${v.foto?`background-image:url('${v.foto}')`:''}">${v.foto?'':'kein Foto'}</div>
+      <div><div id="shop-ph" class="shop-ph" style="${_imgUrl(v.foto)?`background-image:url('${esc(_imgUrl(v.foto))}')`:''}">${_imgUrl(v.foto)?'':'kein Foto'}</div>
         <label class="shop-btn sm" style="display:inline-block;margin-top:6px;cursor:pointer">📷 Foto<input type="file" accept="image/*" style="display:none" onchange="shopPhotoPick(this)"></label>
         <button type="button" class="shop-btn sm" style="margin-top:6px" onclick="shopPhotoClear()">✕</button></div>
       <div style="flex:1;min-width:220px">
@@ -495,7 +497,7 @@ function shopPhotoPick(inp){
       const c=document.createElement('canvas'); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
       window._shopPhoto=c.toDataURL('image/jpeg',0.72);
-      const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=`url('${window._shopPhoto}')`; ph.textContent=''; }
+      const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage='url('+JSON.stringify(String(window._shopPhoto||''))+')'; ph.textContent=''; }
     }; img.onerror=()=>toast('Bild konnte nicht gelesen werden.','err'); img.src=rd.result; };
   rd.readAsDataURL(f);
 }
@@ -1097,13 +1099,13 @@ function _whoPickerHtml(px){
   ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
   const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
     return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
-  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="shopWhoChg('${px}')">
+  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="shopWhoChg(${jsq(px)})">
         <option value="">– bitte wählen –</option>
         ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
         ${crmGroups}
         <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
-      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label><input id="${px}-other" list="${px}-people" autocomplete="off" placeholder="z. B. Max Muster, Schule XY" oninput="shopWhoChg('${px}',true)">${_peopleDatalist(px+'-people')}</div>
-      <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" onchange="shopWhoChg('${px}',true)"></select></div></div>
+      <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label><input id="${px}-other" list="${px}-people" autocomplete="off" placeholder="z. B. Max Muster, Schule XY" oninput="shopWhoChg(${jsq(px)},true)">${_peopleDatalist(px+'-people')}</div>
+      <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" onchange="shopWhoChg(${jsq(px)},true)"></select></div></div>
       <div class="shop-f" id="${px}-adr-w" style="display:none;font-size:12px;color:var(--muted);margin-top:-4px"></div>`;
 }
 // Empfänger gewechselt: freies Namensfeld bzw. Kontaktliste des Vereins zeigen + Adresse anzeigen
@@ -1530,7 +1532,7 @@ function _termRowHtml(px,t){
 function _termEditorHtml(px, termine){
   return `<div class="shop-f"><label>⏰ Termine <span style="font-weight:400;color:var(--muted)">(Ablauf, Prüfung, TÜV … · Intervall in Monaten → „Erledigt" setzt den nächsten Termin)</span></label>
     <div class="shop-pos" id="${px}-terms">${(termine||[]).map(t=>_termRowHtml(px,t)).join('')}</div>
-    <button type="button" class="shop-btn sm" onclick="shopTermAdd('${px}')">＋ Termin</button></div>`;
+    <button type="button" class="shop-btn sm" onclick="shopTermAdd(${jsq(px)})">＋ Termin</button></div>`;
 }
 function shopTermAdd(px){ const box=document.getElementById(px+'-terms'); if(box) box.insertAdjacentHTML('beforeend', _termRowHtml(px)); }
 function _termRead(px, old){

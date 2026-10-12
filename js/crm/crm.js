@@ -33,6 +33,8 @@ const esc = s => String(s==null?'':s)
 // Wert als JS-Argument in Inline-Handlern: onclick="fn(${jsq(x)})" – HTML-Maskierung allein reicht
 // dort nicht (der Browser dekodiert &#39; vor dem Ausführen wieder zu ').
 const jsq = s => esc(JSON.stringify(String(s==null?'':s)));
+// Links aus Daten nur mit http(s)/mailto/tel – kein „javascript:" o. Ä. (Schutz bei Anhängen/Links)
+const _safeUrl = u => { const t=String(u||'').trim(); return /^(https?:|mailto:|tel:)/i.test(t)?t:'#'; };
 // Farbwert für style="…": nur echte CSS-Farben zulassen (Hex, Name, rgb/hsl, var(--…)),
 // sonst Standardfarbe – Farben stammen aus der (von vielen beschreibbaren) CRM-Konfiguration.
 const cssColor = (v,def='#5b6b7d') => { const s=String(v==null?'':v).trim();
@@ -1082,7 +1084,7 @@ function _renderNotifPop(){
   const rows = list.length ? list.slice(0,30).map(it=>{
     const t=_notifType(it.coll); const unread=it.ts>seen;
     return `<div class="crm-notif-item${unread?' unread':''}" onclick="crmNotifGo(${jsq(it.coll)},${jsq(it.recId)})">
-      <span class="crm-notif-ic">${t.icon}</span>
+      <span class="crm-notif-ic">${esc(t.icon)}</span>
       <div class="crm-notif-tx"><div class="crm-notif-nm">${esc(it.name||'(ohne Name)')}</div>
       <div class="crm-notif-mt">${esc(it.desc||t.label)} · von ${esc(it.by)} · ${_agoStr(it.ts)}</div></div>
       ${unread?'<span class="crm-notif-dot"></span>':''}
@@ -1462,7 +1464,7 @@ function kbCardHtml(c, n){
   }).join('');
   const cdone=!vo&&n.status==='erledigt';
   const st=vo?null:taskStatusByKey(n.status);
-  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${n.id}" draggable="true" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
+  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${esc(n.id)}" draggable="true" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
     <div class="kb-card-top">
       <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(n.id)})">${collapsed?'▸':'▾'}</button>
       ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
@@ -1479,7 +1481,7 @@ function kbCardHtml(c, n){
          ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
        </div>`:''}
       ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
-      <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${n.id}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step',${jsq(n.id)})">
+      <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${esc(n.id)}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step',${jsq(n.id)})">
       ${attachChips(n)}
       <div class="kb-cardbtns">
         <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen(${jsq(n.id)})">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
@@ -1502,7 +1504,7 @@ function taskBoardHtml(c){
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode(${jsq(top.id)})">✕</button>
       </div>
       ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
-      <input class="kb-qadd" id="kb-qa-card-${top.id}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card',${jsq(top.id)})">
+      <input class="kb-qadd" id="kb-qa-card-${esc(top.id)}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card',${jsq(top.id)})">
       <div class="kb-cards" ondragover="crmDragOver(event)" ondrop="crmDropInCards(event,${jsq(top.id)})">${cards}</div>
       <div class="kb-resize" title="Breite ziehen" onpointerdown="crmKbResizeStart(event,${jsq(top.id)})"></div>
     </div>`;
@@ -1894,18 +1896,18 @@ function crmSearchPanelHtml(q){
   const row=(onclick,icon,name,sub,closed)=>`<div class="crm-sr" onclick="${onclick}"><span class="crm-sr-i">${icon}</span><div class="crm-sr-t"><div class="crm-sr-n">${esc(name)}${closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</div>${sub?`<div class="crm-sr-s">${esc(sub)}</div>`:''}</div></div>`;
   const grp=(title,arr,fn)=> arr.length?`<div class="crm-sr-grp"><div class="crm-sr-h">${title} (${arr.length})</div>${arr.slice(0,20).map(fn).join('')}${arr.length>20?`<div class="crm-sr-more">… ${arr.length-20} weitere – Suche verfeinern</div>`:''}</div>`:'';
   return `<div class="crm-sr-head">${total} Treffer für „${esc(q)}"</div>`
-    + grp('📇 Einträge', r.entries, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'📇',x.name,x.sub))
-    + grp('👤 Kontakte', r.contacts, x=>row(`crmGoEntry('${esc(x.tree)}','${esc(x.eid)}')`,'👤',x.name,x.sub))
-    + grp('🗒 Kontaktnotizen', r.notes, x=>{ const snip=String(x.text||'').replace(/\s+/g,' ').trim().slice(0,90); const sub=[x.entryName, x.by?('von '+x.by):'', x.ts?fmtDate(x.ts):''].filter(Boolean).join(' · '); return row(`crmGoEntryTab('${esc(x.tree)}','${esc(x.eid)}','kommunikation')`,'🗒',snip||'(Notiz)',sub); })
+    + grp('📇 Einträge', r.entries, x=>row(`crmGoEntry(${jsq(x.tree)},${jsq(x.eid)})`,'📇',x.name,x.sub))
+    + grp('👤 Kontakte', r.contacts, x=>row(`crmGoEntry(${jsq(x.tree)},${jsq(x.eid)})`,'👤',x.name,x.sub))
+    + grp('🗒 Kontaktnotizen', r.notes, x=>{ const snip=String(x.text||'').replace(/\s+/g,' ').trim().slice(0,90); const sub=[x.entryName, x.by?('von '+x.by):'', x.ts?fmtDate(x.ts):''].filter(Boolean).join(' · '); return row(`crmGoEntryTab(${jsq(x.tree)},${jsq(x.eid)},'kommunikation')`,'🗒',snip||'(Notiz)',sub); })
     + grp('📂 Projekte', r.projects, x=> x.kind==='entity'
-        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'📂',x.name,x.sub,x.closed)
-        : row(`crmGoTeamProj('${esc(x.id)}')`,'📂',x.name,x.sub,x.closed))
-    + grp('📅 Veranstaltungen', r.events, x=>row(`crmOpenVeranstaltung('${esc(x.id)}')`,'📅',x.name,x.sub))
+        ? row(`crmGoEntityProj(${jsq(x.tree)},${jsq(x.eid)},${jsq(x.pid)})`,'📂',x.name,x.sub,x.closed)
+        : row(`crmGoTeamProj(${jsq(x.id)})`,'📂',x.name,x.sub,x.closed))
+    + grp('📅 Veranstaltungen', r.events, x=>row(`crmOpenVeranstaltung(${jsq(x.id)})`,'📅',x.name,x.sub))
     + grp('✅ Aufgaben', r.tasks, x=> x.kind==='entity'
-        ? row(`crmGoEntityProj('${esc(x.tree)}','${esc(x.eid)}','${esc(x.pid)}')`,'✅',x.name,x.sub)
+        ? row(`crmGoEntityProj(${jsq(x.tree)},${jsq(x.eid)},${jsq(x.pid)})`,'✅',x.name,x.sub)
         : (x.kind==='veranstaltung'
-            ? row(`crmOpenVeranstaltung('${esc(x.id)}')`,'✅',x.name,x.sub)
-            : row(`crmGoTeamProj('${esc(x.id)}')`,'✅',x.name,x.sub)));
+            ? row(`crmOpenVeranstaltung(${jsq(x.id)})`,'✅',x.name,x.sub)
+            : row(`crmGoTeamProj(${jsq(x.id)})`,'✅',x.name,x.sub)));
 }
 function crmSearchInput(v){
   window._crmSearch=v;
@@ -1951,11 +1953,11 @@ function stammFormHtml(s, flbls){
       inp = `<input id="crm-sf-tags" value="${v}" autocomplete="off" placeholder="Tippen für Vorschläge …" oninput="crmTagSuggest(this)" onfocus="crmTagSuggest(this)" onblur="setTimeout(crmTagHide,180)">
         <div id="crm-tag-suggest" class="crm-tag-suggest"></div>`;
     } else if(f.type==='textarea'){
-      inp = `<textarea id="crm-sf-${f.key}" rows="2">${v}</textarea>`;
+      inp = `<textarea id="crm-sf-${esc(f.key)}" rows="2">${v}</textarea>`;
     } else if(f.type==='date'){
-      inp = `<input type="date" id="crm-sf-${f.key}" value="${v}">`;
+      inp = `<input type="date" id="crm-sf-${esc(f.key)}" value="${v}">`;
     } else {
-      inp = `<input id="crm-sf-${f.key}" value="${v}">`;
+      inp = `<input id="crm-sf-${esc(f.key)}" value="${v}">`;
     }
     const flabel=flbls[f.key]||f.label;
     return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
@@ -2115,7 +2117,7 @@ function kooperationenSecHtml(e){
 function crmKoopAdd(){
   const e=curEntity(); if(!e) return;
   const opts=['<option value="">– Partner wählen –</option>'];
-  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{ if(tr.key===window._crmTree&&o.id===e.id) return; const v=tr.key+'::'+o.id; opts.push(`<option value="${v}">${esc(tr.icon||'')} ${esc((o.stamm&&o.stamm.name)||'(ohne Name)')}</option>`); }));
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{ if(tr.key===window._crmTree&&o.id===e.id) return; const v=tr.key+'::'+o.id; opts.push(`<option value="${esc(v)}">${esc(tr.icon||'')} ${esc((o.stamm&&o.stamm.name)||'(ohne Name)')}</option>`); }));
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🤝 Kooperation</h3>
    <input type="hidden" id="crm-koop-id" value=""><input type="hidden" id="crm-koop-ot" value=""><input type="hidden" id="crm-koop-oe" value="">
@@ -2635,7 +2637,7 @@ function crmNewEntityProjekt(){
   crmOpenModalShell();
   const vs=listVorlagen();
   const vorlageOpts=['<option value="">– ohne Vorlage (leeres Board) –</option>']
-    .concat(vs.map(v=>`<option value="${v.id}">${esc(v.name)} (${_vCount(v)})</option>`)).join('');
+    .concat(vs.map(v=>`<option value="${esc(v.id)}">${esc(v.name)} (${_vCount(v)})</option>`)).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Neues Projekt</h3>
    <div class="crm-modal-field"><label>Projektname *</label><input id="crm-np-name" placeholder="z. B. Wendekurs 2026"></div>
    <div class="crm-modal-field"><label>Vorlage</label><select id="crm-np-vorlage">${vorlageOpts}</select>
@@ -2703,7 +2705,7 @@ function _looksLikeFile(url){
 function attachChips(n){
   const a=(n&&n.attachments)||[]; if(!a.length) return '';
   return `<div class="kb-atts" onclick="event.stopPropagation()">${a.map(x=>
-    `<a class="kb-att" href="${esc(x.url)}" target="_blank" rel="noopener" title="${esc(x.title||x.name||x.url)}">${x.type==='file'?'📎':'🔗'} ${esc((x.title||x.name||x.url).slice(0,26))}</a>`
+    `<a class="kb-att" href="${esc(_safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.title||x.name||x.url)}">${x.type==='file'?'📎':'🔗'} ${esc((x.title||x.name||x.url).slice(0,26))}</a>`
   ).join('')}</div>`;
 }
 function crmAttOpen(nid){
@@ -2712,7 +2714,7 @@ function crmAttOpen(nid){
   crmOpenModalShell();
   const a=f.node.attachments||[];
   const rows=a.length ? a.map(x=>`<div class="crm-att-row">
-      <a href="${esc(x.url)}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
+      <a href="${esc(_safeUrl(x.url))}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
       ${x.size?`<span class="small" style="color:var(--muted)">${Math.round(x.size/1024)} KB</span>`:''}
       <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmAttEdit(${jsq(nid)},${jsq(x.id)})">✎</button>
       <button class="crm-x" title="Entfernen" onclick="crmAttDel(${jsq(nid)},${jsq(x.id)})">✕</button>
@@ -2990,7 +2992,7 @@ function crmDeleteFoerderung(id){
 function depsBoxHtml(c, selfId, selected){
   const sel=new Set(selected||[]);
   const rows=flatTasks(c).filter(t=>t.id!==selfId).map(t=>
-    `<label><input type="checkbox" value="${t.id}" ${sel.has(t.id)?'checked':''}> ${'↳ '.repeat(t.depth)}${esc(t.text)}${t.status==='erledigt'?' ✓':''}</label>`
+    `<label><input type="checkbox" value="${esc(t.id)}" ${sel.has(t.id)?'checked':''}> ${'↳ '.repeat(t.depth)}${esc(t.text)}${t.status==='erledigt'?' ✓':''}</label>`
   ).join('');
   return `<div class="crm-deps-box">${rows||'<div class="small" style="color:var(--muted)">Keine anderen Aufgaben vorhanden.</div>'}</div>`;
 }
@@ -3051,14 +3053,14 @@ function crmOpenTask(tid){  // tid='' → neue Hauptaufgabe, sonst Bearbeiten
   const f=findNode(e, tid); if(!f) return;
   const isTop=(f.parent===null);
   nodeModal({ titel:isTop?'✎ Hauptaufgabe':'✎ Unterpunkt', node:f.node, isTop,
-    inheritTeam:isTop?[]:effectiveTeams(e, tid), saveOnclick:`crmSaveTask('${tid}')` });
+    inheritTeam:isTop?[]:effectiveTeams(e, tid), saveOnclick:`crmSaveTask(${jsq(tid)})` });
 }
 function crmAddChild(parentId){
   const e=curContainer(); if(!e) return;
   const f=findNode(e, parentId); if(!f) return;
   nodeModal({ titel:'＋ Unterpunkt zu „'+(f.node.text||'')+'"', node:{}, isTop:false,
     inheritTeam:isEntityCtx()?effectiveTeams(e, parentId):(e.team?[e.team]:[]),
-    saveOnclick:`crmSaveChild('${parentId}')` });
+    saveOnclick:`crmSaveChild(${jsq(parentId)})` });
 }
 function crmTaskTeamChange(){
   const teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);
@@ -3450,7 +3452,7 @@ function entityLinkOptions(selVal){
   getTrees().forEach(tr=>{
     listEntities(tr.key).forEach(e=>{
       const v=tr.key+'::'+e.id;
-      opts.push(`<option value="${v}" ${selVal===v?'selected':''}>${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`);
+      opts.push(`<option value="${esc(v)}" ${selVal===v?'selected':''}>${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`);
     });
   });
   return opts.join('');
@@ -3986,7 +3988,7 @@ function crmEditVerteiler(id){ const v=getVerteiler(id); if(!v) return; if(v.typ
 function _verteilerModal(v){
   crmOpenModalShell();
   const vereinOpts=['<option value="">– Kontakte eines Eintrags übernehmen –</option>']
-    .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${tr.key}::${e.id}">${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
+    .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${esc(tr.key+'::'+e.id)}">${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
   const usersWithMail=zeUsers().filter(u=>u.id!=='admin' && u.email)
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const userOpts=['<option value="">– Person aus dem System hinzufügen –</option>']
@@ -5006,7 +5008,7 @@ function paintVerwConfig(){
   // ── Kategorien ──
   const catRows=work.categories.map((c,i)=>`<tr>
       <td><span class="vw-name">${esc(c.label)}</span>${_catStats(c)?' <span title="Statistik/Weitermach-Quote aktiv">📊</span>':''}<div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
-      <td>${c.color?`<span class="crm-catbadge" style="background:${esc(c.color)}">${esc(c.label)}</span>`:'<span class="small" style="color:var(--muted)">—</span>'}</td>
+      <td>${c.color?`<span class="crm-catbadge" style="background:${cssColor(c.color)}">${esc(c.label)}</span>`:'<span class="small" style="color:var(--muted)">—</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgCatMove(${jsq(c.key)},-1)">↑</button>
         <button class="btn-sm-crm" ${i===work.categories.length-1?'disabled':''} onclick="crmCfgCatMove(${jsq(c.key)},1)">↓</button>

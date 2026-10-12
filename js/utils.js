@@ -167,15 +167,15 @@ export function wsPeriodRows(periods, idPrefix, count, labelWord, maxDate){
     const p=active[i]||{von:'',bis:''};
     rows+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
       <span style="font-size:12px;color:var(--muted);width:78px">${labelWord} ${i+1}</span>
-      <input type="date" id="${idPrefix}-von-${i}" value="${p.von||''}" ${md} style="${inp}">
+      <input type="date" id="${idPrefix}-von-${i}" value="${esc(p.von||'')}" ${md} style="${inp}">
       <span style="font-size:12px;color:var(--muted)">bis</span>
-      <input type="date" id="${idPrefix}-bis-${i}" value="${p.bis||''}" ${md} style="${inp}">
+      <input type="date" id="${idPrefix}-bis-${i}" value="${esc(p.bis||'')}" ${md} style="${inp}">
     </div>`;
   }
   let hist='';
   if(archived.length){
     const items=archived.slice().sort((a,b)=>a.von<b.von?1:-1)  // neueste zuerst
-      .map(p=>`<div style="font-size:12px;color:var(--muted);padding:2px 0 2px 8px">${p.von} – ${p.bis}</div>`).join('');
+      .map(p=>`<div style="font-size:12px;color:var(--muted);padding:2px 0 2px 8px">${esc(p.von)} – ${esc(p.bis)}</div>`).join('');
     hist=`<details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Verlauf – ${archived.length} abgelaufen</summary>${items}</details>`;
   }
   // Abgelaufene in einem Hidden-Feld mitführen, damit sie beim Speichern erhalten bleiben.

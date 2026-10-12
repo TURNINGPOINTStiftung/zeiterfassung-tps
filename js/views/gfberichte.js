@@ -1,6 +1,6 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, APP_URL } from '../config.js';
 import { getData, mutate, entryKey } from '../data.js';
-import { esc, toast, openModal, closeModal } from '../utils.js';
+import { esc, toast, openModal, closeModal, jsArg as jsq } from '../utils.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, getTeamForDate, monthStartDate } from '../roles.js';
 import { employedRange } from '../calc.js';
 import { _openPerEmpPrint } from '../print.js';
@@ -121,14 +121,14 @@ export function renderGFBerichte(){
       const isNew=!r.seenAt;
       html+='<div class="gf-report-card'+(isNew?' gf-report-new':'')+'">'
         +'<div>'
-        +'<div class="gf-report-title">'+r.year+' – '+esc(r.userName)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
+        +'<div class="gf-report-title">'+esc(r.year)+' – '+esc(r.userName)+(isNew?'<span class="gf-new-badge">NEU</span>':'')+'</div>'
         +'<div class="gf-report-meta">'+esc(r.team||'–')+' · Gesendet von <strong>'+esc(r.sentByName||r.sentBy)+'</strong> · '+dtStr+'</div>'
         +(r.seenAt?'<div class="gf-report-meta" style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</div>':'<div class="gf-report-meta" style="color:var(--warn);font-weight:700">Noch nicht geöffnet</div>')
         +'</div>'
         +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-        +'<button class="btn btn-ok btn-sm" onclick="viewYearReport(\''+r.userId+'\','+r.year+',\''+r.id+'\')">📄 PDF / Drucken</button>'
-        +(isNew?'<button class="btn btn-outline btn-sm" onclick="markYearReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
-        +((cu&&(cu.role==='admin'||r.sentBy===cu.id))?'<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'year\',\''+r.id+'\')">🗑 Entfernen</button>':'')
+        +'<button class="btn btn-ok btn-sm" onclick="viewYearReport('+jsq(r.userId)+','+(Number(r.year)||0)+','+jsq(r.id)+')">📄 PDF / Drucken</button>'
+        +(isNew?'<button class="btn btn-outline btn-sm" onclick="markYearReportSeen('+jsq(r.id)+')">✓ Als gesehen markieren</button>':'')
+        +((cu&&(cu.role==='admin'||r.sentBy===cu.id))?'<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'year\','+jsq(r.id)+')">🗑 Entfernen</button>':'')
         +'</div>'
         +'</div>';
     });
@@ -203,7 +203,7 @@ export function renderGFBerichte(){
       +'<div class="gf-report-meta">'+r.employeeIds.length+' Mitarbeiter'
         +(_emps.length?': '+_emps.map(function(u){
             return canReturn
-              ? '<span class="gf-emp">'+esc(u.name)+'<button class="gf-ret-btn" title="Zeiterfassung von '+esc(u.name)+' zur Korrektur zurückgeben" onclick="gfReturnEmp(\''+esc(r.id)+'\',\''+esc(u.id)+'\')">↩</button></span>'
+              ? '<span class="gf-emp">'+esc(u.name)+'<button class="gf-ret-btn" title="Zeiterfassung von '+esc(u.name)+' zur Korrektur zurückgeben" onclick="gfReturnEmp('+jsq(r.id)+','+jsq(u.id)+')">↩</button></span>'
               : esc(u.name); }).join(', '):'')
         +(r.countersignedAt?' &middot; <span style="color:var(--ok)">✍ Gegengezeichnet '+new Date(r.countersignedAt).toLocaleDateString('de-DE')+'</span>':'')
         +(r.seenAt?' &middot; <span style="color:var(--ok)">✓ Gesehen '+new Date(r.seenAt).toLocaleDateString('de-DE')+'</span>':' &middot; <span style="color:var(--warn);font-weight:700">Noch nicht geöffnet</span>')
@@ -211,9 +211,9 @@ export function renderGFBerichte(){
       +_returnedHtml(r)
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport(\''+r.id+'\')">📄 PDF / Drucken</button>'
-      +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen(\''+r.id+'\')">✓ Als gesehen markieren</button>':'')
-      +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\',\''+r.id+'\')">🗑 Entfernen</button>':'')
+      +'<button class="btn btn-ok btn-sm" onclick="viewTeamReport('+jsq(r.id)+')">📄 PDF / Drucken</button>'
+      +(isNew?'<button class="btn btn-outline btn-sm" onclick="markReportSeen('+jsq(r.id)+')">✓ Als gesehen markieren</button>':'')
+      +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\','+jsq(r.id)+')">🗑 Entfernen</button>':'')
       +'</div>'
       +'</div>';
   });
@@ -369,13 +369,13 @@ export function gfReturnEmp(rid,uid){
   const u=(d.users||[]).find(function(x){ return x.id===uid; });
   if(!r||!u){ toast('Bericht oder Mitarbeiter nicht gefunden.','err'); return; }
   openModal('<h3>↩ Zeiterfassung zurückgeben</h3>'
-    +'<p style="font-size:13px;margin:0 0 10px"><strong>'+esc(u.name)+'</strong> · '+MONTHS[r.month-1]+' '+r.year+'</p>'
+    +'<p style="font-size:13px;margin:0 0 10px"><strong>'+esc(u.name)+'</strong> · '+esc(MONTHS[r.month-1]||'')+' '+esc(r.year)+'</p>'
     +'<p style="font-size:12px;color:var(--muted);margin:0 0 8px">Der Monat geht als <b>„abgelehnt"</b> zurück an '+esc(u.name)+' und wird aus diesem Bericht genommen. '
     +esc(u.name)+' und die zuständige Leitung bekommen eine Mitteilung. Nach der Korrektur: erneut einreichen → Leitung genehmigt → nachreichen.</p>'
     +'<label style="font-size:13px;font-weight:600">Was ist zu korrigieren? *</label>'
     +'<textarea id="gf-ret-reason" rows="3" style="width:100%;margin-top:4px" placeholder="z. B. 14.03. fehlt die Pause, Urlaub am 21.03. nicht eingetragen"></textarea>'
     +'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>'
-    +'<button class="btn btn-primary" onclick="gfReturnConfirm(\''+esc(rid)+'\',\''+esc(uid)+'\')">↩ Zurückgeben</button></div>');
+    +'<button class="btn btn-primary" onclick="gfReturnConfirm('+jsq(rid)+','+jsq(uid)+')">↩ Zurückgeben</button></div>');
   setTimeout(function(){ const t=document.getElementById('gf-ret-reason'); if(t) t.focus(); },50);
 }
 
@@ -464,8 +464,8 @@ export function renderZeNotices(){
       ? '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat deine Zeiterfassung <b>'+mon+'</b> zur Korrektur zurückgegeben: „'+esc(g.reason)+'“ – bitte korrigieren und erneut einreichen.'
       : '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat die Zeiterfassung von <b>'+esc(n.empName)+'</b> ('+mon+') zurückgegeben: „'+esc(g.reason)+'“ – nach der Korrektur bitte erneut genehmigen und nachreichen.';
     return '<div class="ze-notice"><span class="tx">'+tx+'</span>'
-      +'<button class="pri" onclick="zeNoticeOpen(\''+esc(n.k)+'\')">Öffnen</button>'
-      +'<button onclick="zeNoticeAck(\''+esc(n.k)+'\')">✓ Gelesen</button></div>';
+      +'<button class="pri" onclick="zeNoticeOpen('+jsq(n.k)+')">Öffnen</button>'
+      +'<button onclick="zeNoticeAck('+jsq(n.k)+')">✓ Gelesen</button></div>';
   }).join('')
   +extra.map(function(n){
     return '<div class="ze-notice"><span class="tx">'+n.html+'</span>'

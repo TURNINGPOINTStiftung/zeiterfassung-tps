@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
-import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate } from '../utils.js';
+import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate, jsArg as jsq } from '../utils.js';
 import { vacDailyMin, dailyMinutes } from '../calc.js';
 
 export function countWorkDays(start,end,user){
@@ -74,7 +74,7 @@ export function showVacRequestForm(editId){
     ? `<div class="form-group"><label>Für wen?</label>
         <select id="vr-emp" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="calcVrDays()">
           <option value=""${(!editing||editing.userId===cu.id)?' selected':''}>– Mich selbst –</option>
-          ${teamEmps.map(u=>`<option value="${u.id}"${editing&&editing.userId===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}
+          ${teamEmps.map(u=>`<option value="${esc(u.id)}"${editing&&editing.userId===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}
         </select></div>`
     : '';
   const from=editing?editing.startDate:today;
@@ -97,8 +97,8 @@ export function showVacRequestForm(editId){
       🤒 Krankmeldung – wird sofort als aktiv eingetragen (kein Genehmigungsschritt).
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${from}" oninput="calcVrDays()"></div>
-      <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${to}" oninput="calcVrDays()"></div>
+      <div class="form-group"><label>Von</label><input type="date" id="vr-from" value="${esc(from)}" oninput="calcVrDays()"></div>
+      <div class="form-group"><label>Bis (inkl.)</label><input type="date" id="vr-to" value="${esc(to)}" oninput="calcVrDays()"></div>
     </div>
     <div id="vr-va-wrap" style="display:none">
       <div style="background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
@@ -130,7 +130,7 @@ export function showVacRequestForm(editId){
     <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
         <span style="font-weight:600;color:var(--primary)">Urlaubstage:</span>
-        <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${editing?editing.workDays:1}"
+        <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${esc(editing?editing.workDays:1)}"
           style="width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
           oninput="onVrManualDaysInput()">
         <span id="vr-mode-manual-hint" style="font-size:11px;color:var(--muted)"></span>
@@ -187,9 +187,9 @@ export function renderVADays(){
     const p=prev[ds]||editTimes[ds]||{von:'',bis:''};
     html+=`<div class="va-day" data-ds="${ds}" style="display:flex;align-items:center;gap:8px">
       <span style="width:120px;font-size:12px;${we?'color:var(--warn)':''}">${DAYS[cur.getDay()]}, ${String(dd).padStart(2,'0')}.${String(m).padStart(2,'0')}.</span>
-      <input type="time" class="va-von" value="${p.von}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <input type="time" class="va-von" value="${esc(p.von)}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
       <span>–</span>
-      <input type="time" class="va-bis" value="${p.bis}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <input type="time" class="va-bis" value="${esc(p.bis)}" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
     </div>`;
     cur.setDate(cur.getDate()+1); n++;
   }
@@ -390,15 +390,15 @@ export async function saveVacRequest(){
 export function showRejectModal(id){
   const r=getData().vacRequests?.[id];
   if(!r) return;
-  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  const fmtD=ds=>{ const[y,m,d]=String(ds||'').split('-'); return esc(`${d}.${m}.${y}`); };
   openModal(`
     <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">Antrag ablehnen</h3>
-    <p style="font-size:13px;margin-bottom:14px;color:var(--muted)">${esc(r.userName)}: ${r.type}, ${fmtD(r.startDate)} – ${fmtD(r.endDate)} (${r.workDays} AT)</p>
+    <p style="font-size:13px;margin-bottom:14px;color:var(--muted)">${esc(r.userName)}: ${esc(r.type)}, ${fmtD(r.startDate)} – ${fmtD(r.endDate)} (${esc(r.workDays)} AT)</p>
     <div class="form-group"><label>Ablehnungsgrund <span style="color:var(--danger)">*</span></label>
       <textarea id="reject-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Veranstaltung kollidiert mit dem Termin am…"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
-      <button class="btn btn-danger" onclick="confirmRejectVac('${id}')">✗ Ablehnen</button>
+      <button class="btn btn-danger" onclick="confirmRejectVac(${jsq(id)})">✗ Ablehnen</button>
     </div>`);
 }
 
@@ -406,7 +406,7 @@ export function approveVacRequest(id){
   const cu=window.cu;
   const r=getData().vacRequests?.[id];
   if(!r) return;
-  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  const fmtD=ds=>{ const[y,m,d]=String(ds||'').split('-'); return esc(`${d}.${m}.${y}`); };
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
@@ -427,7 +427,7 @@ export function deleteVacRequest(id){
                   ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
   if(!cancellable) return;
   const clearsTimesheet=r.status==='approved';
-  const fmtD=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.${y}`; };
+  const fmtD=ds=>{ const[y,m,d]=String(ds||'').split('-'); return esc(`${d}.${m}.${y}`); };
   const label=r.status==='pending'?'Antrag zurückziehen':'Abwesenheit stornieren';
   const extra=clearsTimesheet?'\n\nDie Zeiteinträge für diese Tage werden ebenfalls entfernt.':'';
   if(!confirm(`${label}?\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}${extra}`)) return;
@@ -594,9 +594,9 @@ export function renderAbwesenheiten(){
       return false;
     });
     if(pending2.length){
-      const fmtD2=ds=>{ const[yz,mz,dz]=ds.split('-'); return `${dz}.${mz}.`; };
+      const fmtD2=ds=>{ const[yz,mz,dz]=String(ds||'').split('-'); return esc(`${dz}.${mz}.`); };
       calHtml+=`<section style="margin-top:20px"><h3 style="font-size:14px;font-weight:700;color:var(--warn);margin-bottom:8px">⏳ Offene Anträge (${pending2.length})</h3>`
-        +pending2.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--white);border:1.5px solid var(--warn);border-radius:8px;margin-bottom:6px;flex-wrap:wrap"><strong style="font-size:13px">${esc(r.userName)}</strong><span style="font-size:13px;color:var(--primary)">${esc(r.type)}: ${fmtD2(r.startDate)}–${fmtD2(r.endDate)}</span><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓</button><button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗</button></div></div>`).join('')
+        +pending2.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--white);border:1.5px solid var(--warn);border-radius:8px;margin-bottom:6px;flex-wrap:wrap"><strong style="font-size:13px">${esc(r.userName)}</strong><span style="font-size:13px;color:var(--primary)">${esc(r.type)}: ${fmtD2(r.startDate)}–${fmtD2(r.endDate)}</span><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ok btn-sm" onclick="approveVacRequest(${jsq(r.id)})">✓</button><button class="btn btn-danger btn-sm" onclick="showRejectModal(${jsq(r.id)})">✗</button></div></div>`).join('')
         +'</section>';
     }
     document.getElementById('ab-content').innerHTML=calHtml;
@@ -609,7 +609,7 @@ export function renderAbwesenheiten(){
   const isGF=cu.role==='geschaeftsfuehrer';
   const isMgr=isAdmin||isLeitung||isGF;
   const reqs=Object.values(d.vacRequests||{});
-  const fmtD=ds=>{ if(!ds) return '–'; const[y,m,dd]=ds.split('-'); return `${dd}.${m}.${y}`; };
+  const fmtD=ds=>{ if(!ds) return '–'; const[y,m,dd]=String(ds||'').split('-'); return esc(`${dd}.${m}.${y}`); };
   const statusBadge=s=>({
     pending:'<span class="ab-status pending">⏳ Ausstehend</span>',
     approved:'<span class="ab-status approved">✓ Genehmigt</span>',
@@ -626,8 +626,8 @@ export function renderAbwesenheiten(){
   const card=r=>{
     const showName=r.userId!==cu.id;
     const rnBtns=canReview(r)?`<div style="display:flex;gap:6px;margin-top:10px">
-      <button class="btn btn-ok btn-sm" onclick="approveVacRequest('${r.id}')">✓ Genehmigen</button>
-      <button class="btn btn-danger btn-sm" onclick="showRejectModal('${r.id}')">✗ Ablehnen</button>
+      <button class="btn btn-ok btn-sm" onclick="approveVacRequest(${jsq(r.id)})">✓ Genehmigen</button>
+      <button class="btn btn-danger btn-sm" onclick="showRejectModal(${jsq(r.id)})">✗ Ablehnen</button>
     </div>`:'';
     // Offen: Antragsteller:in oder Genehmiger. Genehmigt: NUR Antragsteller:in oder Admin.
     const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu)))
@@ -636,12 +636,12 @@ export function renderAbwesenheiten(){
     const canEdit=r.userId===cu.id||cu.role==='admin';
     const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
     const delBtn=canDelete
-      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest('${r.id}')">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button>`:''}</div>`
-      :canEdit?`<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm('${r.id}')">✏️ Bearbeiten</button></div>`
+      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest(${jsq(r.id)})">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm(${jsq(r.id)})">✏️ Bearbeiten</button>`:''}</div>`
+      :canEdit?`<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm(${jsq(r.id)})">✏️ Bearbeiten</button></div>`
       :'';
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
                 r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
-    return `<div class="ab-card ab-${r.status}">
+    return `<div class="ab-card ab-${esc(r.status)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
@@ -649,7 +649,7 @@ export function renderAbwesenheiten(){
             <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(_typeLabel(r.type))}</span>
             ${statusBadge(r.status)}
           </div>
-          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${r.workDays} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:var(--info-bg,#e8f4fd);color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
+          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:var(--info-bg,#e8f4fd);color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
           ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
           ${extra}${rnBtns}${delBtn}
         </div>
@@ -684,12 +684,12 @@ export function renderAbwesenheiten(){
         badgeCls='later'; badgeTxt=`in ${daysUntil} Tagen`;
       }
       const showName=r.userId!==cu.id;
-      const fmtShort=ds=>{ const[y,m,d]=ds.split('-'); return `${d}.${m}.`; };
+      const fmtShort=ds=>{ const[y,m,d]=String(ds||'').split('-'); return esc(`${d}.${m}.`); };
       const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Arbeitszeitausgleich'?'📋 ':'📌 ';
       return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
         ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
         <span class="upc-type">${typeIcon}${esc(_typeLabel(r.type))}</span>
-        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${r.workDays} AT${r.halfDay?' ½':''}${r.team?` · ${esc(r.team)}`:''}</span>
+        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}${r.team?` · ${esc(r.team)}`:''}</span>
         <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
       </div>`;
     }).join('');
@@ -792,7 +792,7 @@ export function renderAbCalendarWeek(){
   const reqs=Object.values(d.vacRequests||{});
   const{dayMap,personList,colorFor}=_buildDayMap(reqs,cu);
   const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
-  const fmtShort=ds=>{ const[,m2,d2]=ds.split('-'); return `${d2}.${m2}.`; };
+  const fmtShort=ds=>{ const[,m2,d2]=String(ds||'').split('-'); return esc(`${d2}.${m2}.`); };
   const mondayStr=localISODate(monday);
   const sundayStr=localISODate(sunday);
   const GER=['Mo','Di','Mi','Do','Fr','Sa','So'];
