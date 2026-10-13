@@ -165,3 +165,13 @@ Getestet (Testprojekt): 6 Fälle ohne zweiten Faktor (Playground kann keinen zwe
 vom Compiler akzeptiert. Live bestätigt (13.10.): System-Verwaltung MIT Code speichert Stammdaten anderer → RTDB liest
   auth.token.firebase.sign_in_second_factor korrekt. Rückweg: v7.
 Dazu tpsPw: offboard/reboard auch für System-Verwaltung nur mit zweitem Faktor; App ≥ v442 zeigt Hinweise.
+
+## Kandidat 2026-10-13: CANDIDATE-v10.json (= v9 + keine Selbstgenehmigung von Urlaubsanträgen; App ≥ v444)
+Rückfall: CANDIDATE-v9.json (live). Neu: `vacRequests/$id/{status,startDate,endDate,workDays,type,creditWork}` – wer nicht
+genehmigen darf (kein Admin/managers/grants/genehmigung_abwesenheit), darf den eigenen Antrag nur dann „approved“ setzen,
+wenn die App ihn automatisch genehmigt: AU/Krank · Veranstaltung · Freiberufler (`zeiterfassung/freelancers`, vom Admin-Start
+geschrieben) · workDays < 5 ohne creditWork. Ein genehmigter Antrag darf unverändert bleiben (Eckdaten gleich).
+Prüfung an jedem Feld über newData.parent() (die App speichert feldweise; .validate läuft nur für geschriebene Knoten).
+Grenze: workDays wird nicht gegen den Datumsbereich nachgerechnet (Regelsprache ohne Datumsrechnung).
+Getestet: 13 Fälle im Projekt zeiterfassung-test, vollständige Datei vom Compiler akzeptiert.
+Reihenfolge: App v444 live → Admin einmal anmelden (schreibt `freelancers`) → v10 veröffentlichen.

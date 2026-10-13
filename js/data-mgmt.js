@@ -17,7 +17,7 @@ function _exportZe(){
   const d=JSON.parse(JSON.stringify(getData()||{}));
   if(_isAdmin()) return d;
   ['users','archivedUsers'].forEach(k=>{ if(Array.isArray(d[k])) d[k].forEach(u=>{ if(u) delete u.pw; }); });
-  ['pwResetTokens','pwResetRequests','loginDir','uidUser','allowed','admins','gfAdmins','managers','grants'].forEach(k=>{ delete d[k]; });
+  ['pwResetTokens','pwResetRequests','loginDir','uidUser','allowed','admins','gfAdmins','managers','freelancers','grants'].forEach(k=>{ delete d[k]; });
   d._redacted='ohne Passwort-Hashes (Export durch System-Verwaltung)';
   return d;
 }

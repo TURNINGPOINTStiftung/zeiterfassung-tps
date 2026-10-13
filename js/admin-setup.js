@@ -223,7 +223,7 @@ export async function refreshPermissionAllowlists(opts){
   const uidMap=(await db.ref('zeiterfassung/uidUser').once('value')).val()||{};
   if(!uidMap||!Object.keys(uidMap).length) throw new Error('uidUser ist leer – bitte zuerst das Sicherheits-Setup / Cutover-Seeding ausführen.');
   const byId={}; (data.users||[]).forEach(u=>{ if(u&&u.id) byId[u.id]=u; });
-  const admins={}, gfAdmins={}, managers={};
+  const admins={}, gfAdmins={}, managers={}, freelancers={};
   let mapped=0, orphan=0;
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id];
@@ -231,6 +231,7 @@ export async function refreshPermissionAllowlists(opts){
     if(_isAdminUser(u)) admins[uid]=true;
     if(_isManagerUser(u)) managers[uid]=true;
     if(_isGfUser(u))    gfAdmins[uid]=true;
+    if(u.role==='freiberuflich') freelancers[uid]=true;   // Regeln: Freiberufler-Anträge laufen automatisch durch
     mapped++;
   }
   // Selbstschutz: ausführende:r Admin bleibt Admin.
@@ -238,6 +239,7 @@ export async function refreshPermissionAllowlists(opts){
   await db.ref('zeiterfassung/admins').set(admins);
   await db.ref('zeiterfassung/gfAdmins').set(gfAdmins);
   await db.ref('zeiterfassung/managers').set(managers);
+  await db.ref('zeiterfassung/freelancers').set(freelancers);
   // Freigabelisten pro vergebenem Recht: zeiterfassung/grants/<recht>/<authUid> = true.
   // Die Datenbank-Regeln prüfen dagegen → ein vergebenes Recht wirkt auch serverseitig.
   // Schreiben darf nur das Administrator-Konto (Regel), also auch nur der Admin vergeben.
