@@ -122,7 +122,7 @@ export function mfaProfileHtml(cu){
   return `<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🔐 Zwei-Faktor-Anmeldung</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Zusätzlich zum Passwort fragt die App beim Anmelden einen Code aus einer Authenticator-App ab
-      (z. B. Microsoft Authenticator, Google Authenticator). Freiwillig – schützt dein Konto, falls jemand dein Passwort kennt.</div>
+      (z. B. Microsoft Authenticator, Google Authenticator). Freiwillig – schützt dein Konto, falls jemand dein Passwort kennt.${cu.role==='admin'&&!on?' <b style="color:var(--danger-text)">Für den Administrator Pflicht:</b> Admin-Aktionen (Passwort setzen, Sperren, Zwei-Faktor zurücksetzen …) laufen nur nach Anmeldung mit Code.':''}</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span class="badge" style="background:var(${on?'--ok-bg':'--warn-bg'});color:var(${on?'--ok-text':'--warn-text'})">${on?'✓ Eingeschaltet':'Aus'}</span>
       <button type="button" class="btn btn-sm ${on?'btn-outline':'btn-primary'}" style="width:auto" onclick="mfaOpenSetup()">${on?'Verwalten':'Jetzt einrichten'}</button>
@@ -225,7 +225,7 @@ export async function mfaAdminReset(id, name){
   try{ const j=await _fn({ action:'mfaReset', id }); _status=null;
     toast(j.removed?('Zwei-Faktor für '+(name||id)+' entfernt.'):((name||id)+' hatte keine Zwei-Faktor-Anmeldung eingerichtet.'));
     try{ mfaFillBadges(true); }catch(_){}
-  }catch(e){ toast(e.server==='action'?'Server-Teil noch nicht aktualisiert (Cloud Function neu veröffentlichen).':('Zurücksetzen fehlgeschlagen: '+e.message),'err'); }
+  }catch(e){ toast(e.server==='action'?'Server-Teil noch nicht aktualisiert (Cloud Function neu veröffentlichen).':(e.server==='mfa-required'?'Diese Admin-Aktion braucht eine Anmeldung mit Zwei-Faktor-Code. Bitte ab- und wieder anmelden (mit Code aus der Authenticator-App).':('Zurücksetzen fehlgeschlagen: '+e.message)),'err'); }
 }
 
 // Admin: Mitarbeiterliste mit 🔐 markieren (wer hat Zwei-Faktor). Leise ohne Server-Teil.

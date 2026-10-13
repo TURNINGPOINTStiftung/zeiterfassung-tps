@@ -414,7 +414,7 @@ async function _adminFn(payload){
   const tok=await me.getIdToken();
   const r=await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(payload)});
   let j={}; try{ j=await r.json(); }catch(_){}
-  if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':('Server: '+(j.error||r.status)));
+  if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':(j.error==='mfa-required'?'Diese Admin-Aktion braucht eine Anmeldung mit Zwei-Faktor-Code. Bitte ab- und wieder anmelden (mit Code aus der Authenticator-App).':('Server: '+(j.error||r.status))));
   return j;
 }
 async function _adminSetFirebasePw(id,newPw){ return _adminFn({action:'set',id,newPw}); }
