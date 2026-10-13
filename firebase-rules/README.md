@@ -129,3 +129,15 @@ Rückfall: CANDIDATE-v5.json. Neu gegenüber v5: Shop-Daten (`crm/shop*`) nur f�
 - `crm/$coll` schließt `shop*` aus (neue Shop-Sammlungen brauchen eine eigene Regel).
 Getestet: 20 Fälle im Projekt zeiterfassung-test (ruletest/ruletest_crm, danach zurückgebaut).
 Reihenfolge: App v428 live → Admin einmal anmelden (schreibt grants/shop_*) → v6 veröffentlichen.
+
+## Stand 2026-10-13: CANDIDATE-v7.json ist LIVE (App v439, tpsPw mit claimSelf/claimSync/reboard-Fix)
+Rückfall: CANDIDATE-v6.json. Neu gegenüber v6:
+- `zeiterfassung/teams`, `cats`, `teamCats`: zusätzlich Recht „Zeiterfassung: Verwaltend“ (`grants/zugriff_verwaltung_ze`), nur Texte ≤ 120 Zeichen.
+- `crm/teamprojekte/$id`: anlegen/löschen/Team ändern nur Projektmanagement „Verwaltend“ (`grants/verw_kanban`) oder Admin;
+  eigene Projekte (`owner` = eigene App-ID) frei; Inhalte bearbeiten alle Freigeschalteten (Team und Besitzer bleiben).
+- `crm/userPrefs/$uid`: nur die eigene App-ID (oder Admin).
+- `zeiterfassung/pwResetTokens`: keine eigene Freigabe mehr (nur Admin) – Altlast.
+- `messe/*` (neu, eigener Knoten): lesen/schreiben nur Messemodus „Nutzen“ (`grants/messe_nutzen`) oder Admin; Felder validiert;
+  `transferred` als Übertrag-Marker (nur eigener, nicht überschreibbar).
+Getestet: 31 + 20 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
+Storage: STORAGE.rules Stand 2 (Custom Claim `tps:true`) ebenfalls live seit 2026-10-13.
