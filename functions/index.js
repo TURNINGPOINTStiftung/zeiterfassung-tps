@@ -17,6 +17,7 @@
 //  POST { action:'claimSelf' | 'claimSync' } – Freigabe-Markierung tps:true für Storage (siehe unten).
 //  POST { action:'create', id, newPw } – Anmeldekonto anlegen (nur Admin mit zweitem Faktor; Registrierung ist zu).
 //  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
+//  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams } – Zugriffe bestehender Personen (siehe unten).
 //
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
@@ -166,7 +167,9 @@ exports.tpsPw = async (req, res) => {
       try { authUser = await admin.auth().createUser({ email: accountEmail(uid0), password: newPw }); }
       catch (e) { if (e && e.code === 'auth/email-already-exists') return res.status(409).json({ ok: false, error: 'exists' }); throw e; }
       const tr = await db.ref('zeiterfassung/users').transaction(cur => {
-        const list = Array.isArray(cur) ? cur : (cur ? Object.values(cur) : []);
+        // Erster Durchlauf kommt oft mit null (kein lokaler Cache) → null zurückgeben, Firebase wiederholt dann mit dem echten Wert
+        if (cur === null) return null;
+        const list = Array.isArray(cur) ? cur : Object.values(cur);
         if (list.some(x => x && x.id === uid0)) return;   // abbrechen: ID schon vergeben
         return list.concat([rec]);
       });
@@ -190,6 +193,70 @@ exports.tpsPw = async (req, res) => {
       await db.ref().update(upd);
       try { await admin.auth().setCustomUserClaims(nuid, { tps: true }); } catch (_) {}
       return res.json({ ok: true, uid: nuid });
+    }
+
+    // Zugriffe einer BESTEHENDEN Person ändern durch die System-Verwaltung (seit 13.10.; Admin darf es ebenfalls).
+    //  · Aufrufer: Admin oder System-Verwaltung, jeweils mit zweitem Faktor; nicht die eigene Person
+    //  · Ziel nur Rollen ohne Sonderrechte (mitarbeiter, berater, freiberuflich), nie ein Admin-Konto
+    //  · „System-Verwaltung“ (zugriff_verwaltung) bleibt wie sie ist – weder vergeben noch entziehen
+    //  · Freigabelisten (grants) der Person für die gesetzten Rechte sofort angleichen; CRM-Zugriff setzen
+    if (action === 'staffPerms') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
+      const isStaff = !isAdmin
+        && (await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() === true
+        && (await db.ref('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid).once('value')).val() === true;
+      if (!isAdmin && !isStaff) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(tok)) return mfaRequired(res);
+      if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
+      const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
+      if (callerId === id) return res.status(400).json({ ok: false, error: 'self' });
+      const PERM_OK = k => k !== 'zugriff_verwaltung' && (/^(path|verw)_[a-z_]{1,30}$/.test(k) || ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'startseite',
+        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel'].includes(k));
+      const inPerms = (body.perms && typeof body.perms === 'object') ? body.perms : {};
+      const newPerms = {};
+      Object.keys(inPerms).forEach(k => { if (PERM_OK(k) && typeof inPerms[k] === 'boolean') newPerms[k] = inPerms[k]; });
+      const kanbanTeams = Array.isArray(body.kanbanTeams) ? body.kanbanTeams.filter(x => typeof x === 'string').map(x => x.replace(/[<>"'`]/g, '').slice(0, 120)).slice(0, 50) : null;
+      const crmOnly = body.crmOnly === true;
+      let target = null, reason = '';
+      const tr = await db.ref('zeiterfassung/users').transaction(cur => {
+        // Erster Durchlauf kommt oft mit null (kein lokaler Cache) → null zurückgeben, Firebase wiederholt dann mit dem echten Wert
+        if (cur === null) return null;
+        const list = Array.isArray(cur) ? cur : Object.values(cur);
+        const i = list.findIndex(x => x && x.id === id);
+        if (i < 0) { reason = 'no-user'; return; }
+        const u = list[i];
+        if (u.role === 'admin' || !['mitarbeiter', 'berater', 'freiberuflich'].includes(u.role)) { reason = 'role'; return; }
+        const keepSys = !!(u.perms && u.perms.zugriff_verwaltung);
+        const perms = Object.assign({}, newPerms); if (keepSys) perms.zugriff_verwaltung = true;
+        list[i] = Object.assign({}, u, { perms, crmOnly });
+        if (kanbanTeams) list[i].kanbanTeams = kanbanTeams;
+        target = list[i];
+        return list;
+      });
+      if (!tr.committed || !target) return res.status(reason === 'no-user' ? 404 : 403).json({ ok: false, error: reason || 'conflict' });
+      // Freigabelisten der Person angleichen (Admin-Start rechnet später ohnehin alles autoritativ neu)
+      let au = null; try { au = await admin.auth().getUserByEmail(accountEmail(id)); } catch (_) {}
+      const upd = {};
+      if (au) {
+        const sys = !!target.perms.zugriff_verwaltung;
+        const AREA = ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop'];
+        ['genehmigung_abwesenheit', 'btn_teamberichte', 'btn_jahresbericht', 'tab_gfberichte'].concat(AREA).forEach(k => {
+          const on = target.perms[k] === true || (sys && AREA.includes(k));
+          upd['zeiterfassung/grants/' + k + '/' + au.uid] = on ? true : null;
+        });
+        if ('path_shop' in target.perms) upd['zeiterfassung/grants/shop_nutzen/' + au.uid] = target.perms.path_shop ? true : null;
+        if ('path_messe' in target.perms) upd['zeiterfassung/grants/messe_nutzen/' + au.uid] = target.perms.path_messe ? true : null;
+      }
+      const lvl = String((body.crm && body.crm.level) || 'none');
+      if (['verein', 'readonly', 'full'].includes(lvl)) {
+        const vids = (lvl === 'verein' && Array.isArray(body.crm.vereinIds)) ? body.crm.vereinIds.filter(x => typeof x === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x)).slice(0, 100) : [];
+        upd['crm/access/' + id] = { level: lvl, vereinIds: vids };
+      } else upd['crm/access/' + id] = null;
+      await db.ref().update(upd);
+      return res.json({ ok: true });
     }
 
     // Offboarding / Wiederherstellen eines Mitarbeiters:

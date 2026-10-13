@@ -396,7 +396,7 @@ export function showEditUser(id){
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button>${cu.role==='admin'?`<button class="btn btn-outline btn-sm" onclick="mfaAdminReset(${jsq(id)},${jsq((_tu&&_tu.name)||id)})" title="Handy verloren? Entfernt den zweiten Faktor – Anmeldung dann wieder nur mit Passwort">🔐 2FA zurücksetzen</button>`:''}<button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
-  if(_isDelegated(cu)) _lockAdminOnlyFields();
+  if(_isDelegated(cu)) _lockAdminOnlyFields(_tu);
   // System-Verwaltung ohne Zwei-Faktor-Anmeldung: Speichern sperren (Regeln v9 würden es ablehnen)
   if(_isDelegated(cu) && window._tps2fa===false){
     const box=document.getElementById('modal-body'); const h3=box&&box.querySelector('h3');
@@ -406,14 +406,21 @@ export function showEditUser(id){
 }
 // System-Verwaltung (delegiert): alles, was Identität/Rechte betrifft, nur anzeigen – nicht ändern.
 // Die Server-Regeln verweigern diese Felder ohnehin; so sieht man es schon im Formular.
-function _lockAdminOnlyFields(){
+// Rollen, deren Zugriffe die System-Verwaltung ändern darf (tpsPw staffPerms prüft dasselbe serverseitig)
+const _DELEG_ROLES=['mitarbeiter','berater','freiberuflich'];
+function _lockAdminOnlyFields(target){
   const box=document.getElementById('modal-body'); if(!box) return;
-  const sel='#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet';
+  const permsOk=!!(target && _DELEG_ROLES.includes(target.role));
+  const sel=permsOk
+    ? '#uf-name,#uf-id,#uf-pw,#uf-role,[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
+    : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet';
   box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
   box.querySelectorAll('button').forEach(b=>{ const oc=b.getAttribute('onclick')||''; if(/resetUserPassword|reprovisionUserFull|secureAccountUi/.test(oc)) b.style.display='none'; });
   const h=document.createElement('div');
   h.style.cssText='margin:6px 0 10px;padding:8px 10px;border-radius:6px;background:rgba(59,130,246,.08);font-size:12px;color:var(--muted)';
-  h.textContent='🔑 System-Verwaltung: Stammdaten (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt, Ort …) änderbar. Name, Login, Passwort, Rolle und Zugriffe vergibt nur der Administrator.';
+  h.textContent=permsOk
+    ? '🔑 System-Verwaltung: Stammdaten und Zugriffe änderbar. Name, Login, Passwort, Rolle und „System-Verwaltung“ vergibt nur der Administrator.'
+    : '🔑 System-Verwaltung: Stammdaten (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt, Ort …) änderbar. Bei Leitung/GF vergibt Name, Login, Passwort, Rolle und Zugriffe nur der Administrator.';
   const h3=box.querySelector('h3'); if(h3) h3.after(h);
 }
 
@@ -1080,7 +1087,17 @@ export async function saveEditUser(id){
     const patch={}; STAMM_FIELDS.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(u,k) && u[k]!==undefined) patch[k]=u[k]; });
     try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],patch); }); }
     catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt'),'err'); return; }
-    await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Stammdaten gespeichert. ✓','ok');
+    // Zugriffe (nur Rollen ohne Sonderrechte) serverseitig über tpsPw „staffPerms“
+    const ex1=getUser(id);
+    if(ex1 && _DELEG_ROLES.includes(ex1.role)){
+      const perms=Object.assign({}, u.perms||{}); delete perms.zugriff_verwaltung;
+      const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
+      const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+      const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
+      try{ await _adminFn({ action:'staffPerms', id, perms, crm:{ level, vereinIds }, crmOnly:!!u.crmOnly, kanbanTeams:Array.isArray(u.kanbanTeams)?u.kanbanTeams:[] }); }
+      catch(e){ toast('Stammdaten gespeichert, Zugriffe NICHT: '+((e&&e.message)||e),'err'); return; }
+    }
+    await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Gespeichert. ✓','ok');
     return;
   }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
