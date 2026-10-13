@@ -50,19 +50,19 @@
           },
           "team": {
             ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
-            ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+            ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
           },
           "teams": {
             ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
             "$n": {
-              ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+              ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
             }
           },
           "teamHistory": {
             ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
             "$n": {
               "team": {
-                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
               },
               "fromDate": {
                 ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
@@ -141,13 +141,13 @@
                 ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
               },
               "b1zuord": {
-                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
               },
               "b2zuord": {
-                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
               },
               "ktzuord": {
-                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/))"
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
               }
             }
           }
@@ -168,7 +168,7 @@
             ".validate": "!newData.isString() || newData.val().matches(/^[A-Za-z0-9_.-]{1,64}$/)"
           },
           "type": {
-            ".validate": "!newData.isString() || (newData.val().length <= 60 && !newData.val().matches(/[<>\"'`\\\\]/))"
+            ".validate": "!newData.isString() || (newData.val().length <= 60 && !newData.val().matches(/[<>\"'`]/))"
           },
           "startDate": {
             ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
@@ -212,20 +212,20 @@
       "teams": {
         ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true",
         "$i": {
-          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/)"
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
         }
       },
       "cats": {
         ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true",
         "$i": {
-          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/)"
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
         }
       },
       "teamCats": {
         ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true",
         "$team": {
           "$i": {
-            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`\\\\]/)"
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
           }
         }
       }
@@ -256,7 +256,7 @@
         "$id": {
           ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true || (root.child('zeiterfassung/grants/shop_nutzen').child(auth.uid).val() === true && newData.exists()))",
           "foto": {
-            ".validate": "!newData.isString() || newData.val().matches(/^(data:image\\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\\/=]+|https:\\/\\/[^\\s'\"()<>\\\\]+)?$/)"
+            ".validate": "!newData.isString() || newData.val().matches(/^(data:image\\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\\/=]+|https:\\/\\/[^\\s'\"()<>]+)?$/)"
           },
           "min": {
             ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
