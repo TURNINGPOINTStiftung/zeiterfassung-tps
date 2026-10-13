@@ -142,7 +142,7 @@ Rückfall: CANDIDATE-v6.json. Neu gegenüber v6:
 Getestet: 31 + 20 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
 Storage: STORAGE.rules Stand 2 (Custom Claim `tps:true`) ebenfalls live seit 2026-10-13.
 
-## Kandidat 2026-10-13: CANDIDATE-v8.json (Veröffentlichung durch Moritz, App ≥ v440)
+## Stand 2026-10-13: CANDIDATE-v8.json ist LIVE (App v440)
 Rückfall: CANDIDATE-v7.json. Neu gegenüber v7 – nur Inhaltsprüfungen (.validate), keine Rechteänderung;
 zweite Schutzschicht zur Anzeige-Absicherung (v438):
 - `entries/$k/days/$ds`: Zeiten nur Ziffern/`:`/`.`/Leerzeichen (≤ 8), Kleinteilig Zahl, Zuordnungen ohne `< > " ' ``` (≤ 120).
