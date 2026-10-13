@@ -166,7 +166,7 @@ vom Compiler akzeptiert. Live bestätigt (13.10.): System-Verwaltung MIT Code sp
   auth.token.firebase.sign_in_second_factor korrekt. Rückweg: v7.
 Dazu tpsPw: offboard/reboard auch für System-Verwaltung nur mit zweitem Faktor; App ≥ v442 zeigt Hinweise.
 
-## Kandidat 2026-10-13: CANDIDATE-v10.json (= v9 + keine Selbstgenehmigung von Urlaubsanträgen; App ≥ v444)
+## Stand 2026-10-13: CANDIDATE-v10.json ist LIVE (= v9 + keine Selbstgenehmigung von Urlaubsanträgen; App v444)
 Rückfall: CANDIDATE-v9.json (live). Neu: `vacRequests/$id/{status,startDate,endDate,workDays,type,creditWork}` – wer nicht
 genehmigen darf (kein Admin/managers/grants/genehmigung_abwesenheit), darf den eigenen Antrag nur dann „approved“ setzen,
 wenn die App ihn automatisch genehmigt: AU/Krank · Veranstaltung · Freiberufler (`zeiterfassung/freelancers`, vom Admin-Start
@@ -175,3 +175,11 @@ Prüfung an jedem Feld über newData.parent() (die App speichert feldweise; .val
 Grenze: workDays wird nicht gegen den Datumsbereich nachgerechnet (Regelsprache ohne Datumsrechnung).
 Getestet: 13 Fälle im Projekt zeiterfassung-test, vollständige Datei vom Compiler akzeptiert.
 Reihenfolge: App v444 live → Admin einmal anmelden (schreibt `freelancers`) → v10 veröffentlichen.
+
+## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
+```
+cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
+curl -sfo regeln_neu.json https://raw.githubusercontent.com/TURNINGPOINTStiftung/zeiterfassung-tps/<commit>/firebase-rules/CANDIDATE-vN.json && sha256sum regeln_neu.json
+curl -s -X PUT "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" --data-binary @regeln_neu.json   # → {"status":"ok"}
+```
+Prüfen: GET wie oben und nach einem nur in der neuen Version vorkommenden Wort zählen (grep -o … | wc -l). Rückweg: PUT mit regeln_backup.json.
