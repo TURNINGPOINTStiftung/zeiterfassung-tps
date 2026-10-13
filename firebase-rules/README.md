@@ -141,3 +141,16 @@ Rückfall: CANDIDATE-v6.json. Neu gegenüber v6:
   `transferred` als Übertrag-Marker (nur eigener, nicht überschreibbar).
 Getestet: 31 + 20 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
 Storage: STORAGE.rules Stand 2 (Custom Claim `tps:true`) ebenfalls live seit 2026-10-13.
+
+## Kandidat 2026-10-13: CANDIDATE-v8.json (Veröffentlichung durch Moritz, App ≥ v440)
+Rückfall: CANDIDATE-v7.json. Neu gegenüber v7 – nur Inhaltsprüfungen (.validate), keine Rechteänderung;
+zweite Schutzschicht zur Anzeige-Absicherung (v438):
+- `entries/$k/days/$ds`: Zeiten nur Ziffern/`:`/`.`/Leerzeichen (≤ 8), Kleinteilig Zahl, Zuordnungen ohne `< > " ' ``` (≤ 120).
+- `vacRequests/$id`: `id`/`userId` nur `A–Z a–z 0–9 _ . -`, Art ohne Sonderzeichen, Datum `JJJJ-MM-TT`, Tage Zahl,
+  Status nur pending/approved/rejected, Zeiten je Tag wie oben.
+- `users/$i`: Vorlesungszeiten/Eintritt/Austritt Datum, wh/dpw/al/vacHoursPerDay/maxHours Zahl, Team(s) ohne Sonderzeichen.
+- `teams`, `cats`, `teamCats`: zusätzlich ohne `< > " ' ```.
+- `crm/shopItems/$id/foto`: nur `data:image/…;base64,…` oder https-Adresse ohne Sonderzeichen; `min` Zahl.
+Hinweis: Die Regelsprache kennt keinen Backslash in Zeichenklassen (Compilerfehler) – deshalb ohne `\`.
+Getestet: 27 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
+Nicht in v8 (offen): Selbstgenehmigung eigener Urlaubsanträge serverseitig (braucht Rolle im Server, Freiberufler/Kurz-Abwesenheit autom. genehmigt).

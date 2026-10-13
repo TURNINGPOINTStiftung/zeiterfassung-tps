@@ -272,8 +272,10 @@ export function savePermission(permKey,role,checked){
   window.initApp?.();
 }
 
+// Team-/Kategorie-Namen: Zeichen, die die Datenbank-Regeln (v8) ablehnen, gar nicht erst übernehmen.
+const _cleanName=v=>String(v||'').replace(/[<>"'`]/g,'').replace(/\s+/g,' ').trim().slice(0,80);
 export function addTeam(){
-  const inp=document.getElementById('new-team-input'); const val=inp.value.trim().slice(0,80);
+  const inp=document.getElementById('new-team-input'); const val=_cleanName(inp.value);
   if(!val) return;
   mutate(d=>{ if(!d.teams) d.teams=[]; if(!d.teams.includes(val)) d.teams.push(val); });
   inp.value=''; renderSettings(); window.populateUeberTeam?.(); toast('Team hinzugefügt.');
@@ -303,7 +305,7 @@ export function removeCustomRole(id){
 
 export function addCategory(){
   const inp=document.getElementById('new-cat-input'); if(!inp) return;
-  const val=inp.value.trim();
+  const val=_cleanName(inp.value);
   if(!val) return;
   mutate(d=>{ if(!d.cats.includes(val)) d.cats.push(val); });
   inp.value=''; renderSettings(); toast('Kategorie hinzugefügt.');
@@ -321,7 +323,7 @@ function _initTeamCats(d,teamName){
 
 export function addTeamCat(teamName,idx){
   const inp=document.getElementById('nci-'+idx);
-  const val=(inp?inp.value.trim().slice(0,80):'');
+  const val=(inp?_cleanName(inp.value):'');
   if(!val) return;
   mutate(d=>{
     if(teamName){
