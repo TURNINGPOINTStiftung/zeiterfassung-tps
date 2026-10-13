@@ -1,14 +1,24 @@
 // ══════════════════════════════════════════════════════════════════
 //  Sicherheits-Setup (einmalig beim Cutover, danach für neue Nutzer)
 //  Provisioniert für JEDEN Nutzer ein technisches Firebase-Konto
-//  (id@tps.intern, Stabil-Passwort) und befüllt:
+//  (id@tps.intern, Konto-Anlage über die Cloud Function tpsPw „create“) und befüllt:
 //    - zeiterfassung/loginDir/{id} = { name }   (öffentliches Namensverzeichnis)
 //    - zeiterfassung/allowed/{uid} = true       (Zugriffs-Allowlist)
 //  Muss von einem bereits ANGEMELDETEN, freigeschalteten Admin laufen
 //  (die Schreibzugriffe auf allowed/loginDir verlangen das per Regeln).
 //  Idempotent: bereits vorhandene Konten werden nur angemeldet, nicht doppelt angelegt.
 // ══════════════════════════════════════════════════════════════════
-import { _PW_SALT, STORAGE_KEY } from './config.js';
+import { _PW_SALT, STORAGE_KEY, PW_FUNCTION_URL } from './config.js';
+
+// Anmeldekonto über die Cloud Function anlegen (Selbst-Registrierung im Firebase-Projekt ist geschlossen).
+// Nur Administrator mit Zwei-Faktor-Anmeldung. Fehlercodes: 'exists' (Konto gibt es schon), 'mfa-required', …
+async function _fnCreateAccount(id, pw){
+  const me=firebase.auth().currentUser; if(!me) throw new Error('Bitte zuerst als Admin anmelden.');
+  const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+await me.getIdToken()}, body:JSON.stringify({ action:'create', id, newPw:pw }) });
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j.ok){ const e=new Error(j.error==='mfa-required'?'Anmeldekonto anlegen braucht eine Anmeldung mit Zwei-Faktor-Code (ab- und wieder anmelden).':('Server: '+(j.error||r.status))); e.code=j.error||('http-'+r.status); throw e; }
+  return j.uid;
+}
 import { getData, setDataCache } from './data.js';
 import { hasPermission } from './roles.js';
 
@@ -95,11 +105,10 @@ export async function runSecuritySetup(opts){
     let uid=null;
     if(!initPw){ failed++; problems.push(id+': kein Startpasswort – Konto nicht angelegt'); log(`${id}: FEHLER`); continue; }
     try{
-      const c=await sec.auth().createUserWithEmailAndPassword(em, initPw);
-      uid=c.user.uid; created++;
+      uid=await _fnCreateAccount(id, initPw); created++;
     }catch(e){
-      if(e && e.code==='auth/email-already-in-use') problems.push(id+': Anmeldekonto existiert bereits (nicht von der App angelegt?) – in der Firebase-Konsole löschen, dann „Zugang neu aufsetzen"');
-      else problems.push(id+': '+(e&&e.code||e));
+      if(e && e.code==='exists') problems.push(id+': Anmeldekonto existiert bereits (nicht von der App angelegt?) – in der Firebase-Konsole löschen, dann „Zugang neu aufsetzen"');
+      else problems.push(id+': '+((e&&e.message)||e));
       failed++;
     }
     if(uid){
@@ -148,9 +157,9 @@ export async function reprovisionUser(id, tempPw){
   const em=_accountEmail(id);
   let uid=null, note='';
   // Konto direkt mit dem Einmal-Passwort anlegen (seit v429 kein Stabil-Passwort mehr).
-  try{ const c=await sec.auth().createUserWithEmailAndPassword(em, tempPw); uid=c.user.uid; note='Konto neu angelegt'; }
+  try{ uid=await _fnCreateAccount(id, tempPw); note='Konto neu angelegt'; }
   catch(e){
-    if(e && e.code==='auth/email-already-in-use'){
+    if(e && e.code==='exists'){
       try{ await sec.auth().signOut(); }catch(_){}
       throw new Error('Das Login-Konto '+em+' existiert bereits. Bitte stattdessen „🔑 Einmal-Passwort“ verwenden (setzt das Passwort des vorhandenen Kontos). Nur wenn das nicht hilft: Konto in der Firebase-Konsole unter „Authentication“ löschen und hier erneut aufsetzen.');
     } else { throw e; }

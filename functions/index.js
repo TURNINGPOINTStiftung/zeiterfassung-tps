@@ -15,6 +15,7 @@
 //
 //  POST { action:'mfaPrep' | 'mfaReset' | 'mfaStatus' } – Zwei-Faktor-Anmeldung (siehe unten).
 //  POST { action:'claimSelf' | 'claimSync' } – Freigabe-Markierung tps:true für Storage (siehe unten).
+//  POST { action:'create', id, newPw } – Anmeldekonto anlegen (nur Admin mit zweitem Faktor; Registrierung ist zu).
 //
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
@@ -86,6 +87,28 @@ exports.tpsPw = async (req, res) => {
       await admin.auth().updateUser(u.uid, { password: newPw });
       await db.ref('zeiterfassung/pwResetRequests/' + id).remove();
       return res.json({ ok: true });
+    }
+
+    // Anmeldekonto anlegen (seit 13.10.): Die Selbst-Registrierung im Firebase-Projekt ist geschlossen –
+    // Konten legt nur noch diese Function an (Admin SDK). Nur Administrator, nur mit zweitem Faktor.
+    // Ein schon vorhandenes Konto wird NICHT übernommen (Antwort 409 'exists').
+    if (action === 'create') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
+      if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(tok)) return mfaRequired(res);
+      const newPw = String(body.newPw || '');
+      if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
+      if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      try {
+        const u = await admin.auth().createUser({ email: accountEmail(id), password: newPw });
+        return res.json({ ok: true, uid: u.uid });
+      } catch (e) {
+        if (e && e.code === 'auth/email-already-exists') return res.status(409).json({ ok: false, error: 'exists' });
+        throw e;
+      }
     }
 
     // Offboarding / Wiederherstellen eines Mitarbeiters:

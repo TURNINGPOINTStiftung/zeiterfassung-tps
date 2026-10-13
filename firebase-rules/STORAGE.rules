@@ -7,7 +7,8 @@ rules_version = '2';
 // hängt daher am technischen Anmeldekonto des Administrators: admin@tps.intern
 // (Schema <id>@tps.intern, siehe js/firebase.js).
 //
-// ACHTUNG: In Authentication ist „Enable create (sign-up)" an (die App legt Konten neuer
+// Seit 13.10.2026 ist die Selbst-Registrierung aus (Konten legt die Cloud Function tpsPw „create“ an).
+// Früher: In Authentication war „Enable create (sign-up)" an (die App legte Konten neuer
 // Mitarbeiter clientseitig an). „Angemeldet" heißt daher NICHT „freigeschaltet" – deshalb:
 //  • nur Konten nach App-Schema (@tps.intern),
 //  • Backup-Dateien tragen die UID des Hochladenden im Namen → ein fremdes Konto kann das
