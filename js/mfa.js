@@ -92,14 +92,20 @@ function _askCode(errText){
 // Gibt das UserCredential zurück; wirft bei Abbruch einen Fehler mit code 'auth/mfa-cancelled'.
 export async function mfaResolve(err){
   const rs=err&&err.resolver;
-  const hint=rs && (rs.hints||[]).find(h=>h.factorId==='totp');
-  if(!hint){ const x=new Error('Der eingerichtete zweite Faktor wird hier nicht unterstützt.'); x.code='auth/unsupported-mfa'; throw x; }
+  // Alle eingerichteten Authenticator-Einträge des Kontos (z. B. Handy-App UND Proton Pass): der Code wird
+  // nacheinander gegen jeden geprüft – früher nur gegen den ersten (→ „Code falsch" beim zweiten Eintrag).
+  const hints=rs ? (rs.hints||[]).filter(h=>h.factorId==='totp') : [];
+  if(!hints.length){ const x=new Error('Der eingerichtete zweite Faktor wird hier nicht unterstützt.'); x.code='auth/unsupported-mfa'; throw x; }
   let msg='';
   for(let i=0;i<5;i++){
     const code=await _askCode(msg);
     if(code===null){ const x=new Error('abgebrochen'); x.code='auth/mfa-cancelled'; throw x; }
-    try{ return await rs.resolveSignIn(_assertion(code,{ uid:hint.uid })); }
-    catch(e){ if(e&&e.code==='auth/invalid-verification-code'){ msg='Code falsch oder abgelaufen – bitte neuen Code eingeben.'; continue; } throw e; }
+    let wrong=false;
+    for(const hint of hints){
+      try{ return await rs.resolveSignIn(_assertion(code,{ uid:hint.uid })); }
+      catch(e){ if(e&&e.code==='auth/invalid-verification-code'){ wrong=true; continue; } throw e; }
+    }
+    if(wrong){ msg='Code falsch oder abgelaufen – bitte neuen Code eingeben.'+(hints.length>1?` (Für dieses Konto sind ${hints.length} Authenticator-Einträge eingerichtet – jeder gilt.)`:' Prüfe, ob der Eintrag zu diesem Konto gehört und die Uhrzeit des Geräts stimmt.'); continue; }
   }
   const x=new Error('Zu viele falsche Codes.'); x.code='auth/too-many-requests'; throw x;
 }
