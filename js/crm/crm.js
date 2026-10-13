@@ -4735,6 +4735,10 @@ function renderVerwaltung(){
     ensureCrmReady().then(()=>{
       try{
         ensureVerwMounted();
+        // System-Verwaltung ohne Zwei-Faktor-Anmeldung: Hinweis oben (Änderungen lehnen Regeln v9 / tpsPw ab)
+        try{ const cu=window.cu, body=root.querySelector('.crm-body');
+          if(body && cu && cu.role!=='admin' && window.hasPermission && window.hasPermission('zugriff_verwaltung',cu) && window._tps2fa===false && !body.querySelector('.mfa-hint') && window.mfaSessionHint)
+            body.insertAdjacentHTML('afterbegin', window.mfaSessionHint()); }catch(e){}
         paintVerwConfig();   // CRM-Einstellungen – für Voll-Admin UND CRM-Verwalter
         // Teams + Kategorien (Reiter „Zeiterfassung") für Nicht-Admins mit ZE-Verwaltung
         if(_canVerwZe() && !(window.cu && window.cu.role==='admin')){ try{ window.renderSettings&&window.renderSettings(); }catch(e){ console.error('ZE-Organisation:',e); } }

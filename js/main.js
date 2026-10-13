@@ -333,6 +333,8 @@ initFirebase().then(async function(){
   // (persistierte) Sitzung existiert.
   initFirebaseEvents();
   try{ initAccessClaims(); }catch(e){}   // Freigabe-Markierung fürs Speicher-Konto (js/claims.js)
+  // Zwei-Faktor-Status der Sitzung merken (Hinweise in der Verwaltung, js/mfa.js)
+  try{ firebase.auth().onAuthStateChanged(u=>{ if(u) setTimeout(()=>{ try{ window.mfaCheckSession&&window.mfaCheckSession(); }catch(e){} }, 1500); }); }catch(e){}
   // Messemodus: offline erfasste Kontakte nachschicken, sobald angemeldet und online (js/messe.js)
   try{ firebase.auth().onAuthStateChanged(u=>{ if(u) setTimeout(()=>{ try{ window.messeFlush&&window.messeFlush(); }catch(e){} }, 5000); }); }catch(e){}
   checkPasswordResetToken();

@@ -382,6 +382,12 @@ export function showEditUser(id){
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
   if(_isDelegated(cu)) _lockAdminOnlyFields();
+  // System-Verwaltung ohne Zwei-Faktor-Anmeldung: Speichern sperren (Regeln v9 würden es ablehnen)
+  if(_isDelegated(cu) && window._tps2fa===false){
+    const box=document.getElementById('modal-body'); const h3=box&&box.querySelector('h3');
+    if(h3 && window.mfaSessionHint) h3.insertAdjacentHTML('afterend', window.mfaSessionHint());
+    box&&box.querySelectorAll('button').forEach(b=>{ if(/saveEditUser/.test(b.getAttribute('onclick')||'')){ b.disabled=true; b.title='Erst mit Zwei-Faktor-Code anmelden'; } });
+  }
 }
 // System-Verwaltung (delegiert): alles, was Identität/Rechte betrifft, nur anzeigen – nicht ändern.
 // Die Server-Regeln verweigern diese Felder ohnehin; so sieht man es schon im Formular.

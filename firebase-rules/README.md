@@ -142,7 +142,7 @@ Rückfall: CANDIDATE-v6.json. Neu gegenüber v6:
 Getestet: 31 + 20 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
 Storage: STORAGE.rules Stand 2 (Custom Claim `tps:true`) ebenfalls live seit 2026-10-13.
 
-## Stand 2026-10-13: CANDIDATE-v8.json ist LIVE (App v440)
+## Kandidat 2026-10-13: CANDIDATE-v8.json (NICHT einzeln veröffentlicht – geht in v9 auf)
 Rückfall: CANDIDATE-v7.json. Neu gegenüber v7 – nur Inhaltsprüfungen (.validate), keine Rechteänderung;
 zweite Schutzschicht zur Anzeige-Absicherung (v438):
 - `entries/$k/days/$ds`: Zeiten nur Ziffern/`:`/`.`/Leerzeichen (≤ 8), Kleinteilig Zahl, Zuordnungen ohne `< > " ' ``` (≤ 120).
@@ -154,3 +154,13 @@ zweite Schutzschicht zur Anzeige-Absicherung (v438):
 Hinweis: Die Regelsprache kennt keinen Backslash in Zeichenklassen (Compilerfehler) – deshalb ohne `\`.
 Getestet: 27 Fälle im Projekt zeiterfassung-test (ruletest*, danach zurückgebaut); vollständige Datei vom Compiler akzeptiert.
 Nicht in v8 (offen): Selbstgenehmigung eigener Urlaubsanträge serverseitig (braucht Rolle im Server, Freiberufler/Kurz-Abwesenheit autom. genehmigt).
+
+## Kandidat 2026-10-13: CANDIDATE-v9.json (= v8 + Zwei-Faktor für System-Verwaltung; Veröffentlichung durch Moritz)
+Rückfall: CANDIDATE-v7.json (live). v9 enthält alle Inhaltsprüfungen aus v8 und zusätzlich:
+- Überall, wo `grants/zugriff_verwaltung` (System-Verwaltung) etwas erlaubt (Stammdaten anderer, 21 Felder), nur mit
+  `auth.token.firebase.sign_in_second_factor != null` (Anmeldung mit Zwei-Faktor).
+- Bereichsrechte, die die System-Verwaltung automatisch mitbringt (zugriff_verwaltung_ze/_crm, verw_kanban/_kalender/_shop):
+  wer zusätzlich System-Verwaltung hat, braucht dafür ebenfalls den zweiten Faktor; reine Bereichsrechte unverändert.
+Getestet (Testprojekt): 6 Fälle ohne zweiten Faktor (Playground kann keinen zweiten Faktor simulieren) + vollständige Datei
+vom Compiler akzeptiert. Der Fall „mit Code erlaubt“ wird nach der Veröffentlichung live geprüft (Rückweg v7).
+Dazu tpsPw: offboard/reboard auch für System-Verwaltung nur mit zweitem Faktor; App ≥ v442 zeigt Hinweise.

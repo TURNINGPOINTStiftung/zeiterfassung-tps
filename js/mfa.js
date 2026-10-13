@@ -240,4 +240,15 @@ export async function mfaFillBadges(force){
   }catch(e){ /* Server-Teil fehlt oder offline → keine Anzeige */ }
 }
 
-try{ Object.assign(window,{ mfaOpenSetup, mfaStartEnroll, mfaFinishEnroll, mfaRemove, mfaResolve, mfaAdminReset, mfaFillBadges }); }catch(e){}
+// Ist die aktuelle Sitzung mit zweitem Faktor angemeldet? → window._tps2fa (true/false).
+// System-Verwaltung und Admin brauchen das für Änderungen (Regeln v9 / tpsPw); die Oberfläche warnt vorher.
+export async function mfaCheckSession(){
+  try{ const u=firebase.auth().currentUser; if(!u){ window._tps2fa=undefined; return; }
+    const t=await u.getIdTokenResult(); window._tps2fa=!!t.signInSecondFactor; }catch(e){ window._tps2fa=undefined; }
+  return window._tps2fa;
+}
+export function mfaSessionHint(){
+  return `<div class="mfa-hint" role="alert" style="margin:6px 0 12px;padding:10px 12px;border-radius:10px;background:var(--warn-bg);color:var(--warn-text);font-size:13px">🔐 <b>Zwei-Faktor nötig:</b> Änderungen mit System-Verwaltung (Mitarbeitende, Archiv, Organisation) sind nur nach Anmeldung mit Code möglich. Profil → 🔐 Zwei-Faktor einrichten, dann ab- und wieder anmelden.</div>`;
+}
+
+try{ Object.assign(window,{ mfaCheckSession, mfaSessionHint, mfaOpenSetup, mfaStartEnroll, mfaFinishEnroll, mfaRemove, mfaResolve, mfaAdminReset, mfaFillBadges }); }catch(e){}

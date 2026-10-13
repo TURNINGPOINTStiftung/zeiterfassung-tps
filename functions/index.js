@@ -36,7 +36,8 @@ const dirKey = id => String(id || '')
 
 // Zwei-Faktor-Pflicht für Admin-Aktionen (seit 13.10.): Das ID-Token trägt nach einer Anmeldung mit
 // zweitem Faktor firebase.sign_in_second_factor (z. B. 'totp'). Ohne → Antwort 403 'mfa-required'.
-// Gilt nur für Aktionen, die der Administrator ausführt – nicht für Selbst-Aktionen (Zwei-Faktor einrichten,
+// Gilt für Aktionen des Administrators und der System-Verwaltung (Sperren/Archivieren/Wiederherstellen) –
+// nicht für Selbst-Aktionen (Zwei-Faktor einrichten,
 // eigene Freigabe-Markierung), sonst könnte man sich aussperren.
 const hasMfa = tok => !!(tok && tok.firebase && tok.firebase.sign_in_second_factor);
 const mfaRequired = res => res.status(403).json({ ok: false, error: 'mfa-required' });
@@ -105,7 +106,7 @@ exports.tpsPw = async (req, res) => {
         && (await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() === true
         && (await db.ref('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid).once('value')).val() === true;
       if (!isAdmin && !isStaff) return res.status(403).json({ ok: false, error: 'forbidden' });
-      if (isAdmin && !hasMfa(tok)) return mfaRequired(res);
+      if (!hasMfa(tok)) return mfaRequired(res);   // Admin UND System-Verwaltung nur mit zweitem Faktor
       if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
       const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
       if (callerId === id) return res.status(400).json({ ok: false, error: 'self' });
