@@ -407,7 +407,11 @@ function crmSetupModuleBar(){
     const isAdmin=cu.role==='admin';
     const bar=document.getElementById('module-bar');
     if(bar) bar.style.display='flex';  // einziger Header → nach Login immer sichtbar
-    ensureCrmReady().then(()=>{
+    // Ohne Netz wartet ensureCrmReady() auf den Server – das Menü (u. a. Messemodus) bliebe dann leer.
+    // ensureCrmReady() lädt den lokalen Stand sofort; nach spätestens 3 s wird mit diesem Stand gezeichnet
+    // und nach dem Server-Stand noch einmal (_apply ist wiederholbar).
+    const _ready=ensureCrmReady();
+    const _apply=()=>{
       // Sichtbarkeit pro Pfad kommt jetzt aus der Zugriffs-Matrix (Verwaltung → Zugriffe):
       // canUsePath() = Admin immer · explizite Matrix (Ja/Nein je Rolle) · sonst Standard
       // (= exakt das bisherige Verhalten). So ändert sich ohne Konfiguration nichts.
@@ -436,7 +440,10 @@ function crmSetupModuleBar(){
       }catch(e){}
       // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
       if(_canVerw()){ try{ ensureVerwMounted(); }catch(e){} }
-    }).catch(()=>{});
+    };
+    let _done=false;
+    _ready.then(()=>{ _done=true; _apply(); }).catch(()=>{});
+    setTimeout(()=>{ if(!_done){ try{ _apply(); }catch(e){ console.warn('Modulleiste (lokal):',e); } } }, 3000);
   }catch(e){ console.error('crmSetupModuleBar:',e); }
 }
 

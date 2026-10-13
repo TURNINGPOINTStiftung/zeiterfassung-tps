@@ -245,6 +245,12 @@ export async function refreshPermissionAllowlists(opts){
   // perms.path_shop, sonst Zugriffs-Matrix crm/pathAccess.shop[rolle], sonst Standard = kein Zugriff.
   // „Verwaltend" nur zusammen mit Nutzen (System-Verwaltung oder verw_shop).
   let _paShop=null; try{ _paShop=((await db.ref('crm/pathAccess/shop').once('value')).val())||null; }catch(_){}
+  // Messemodus „Nutzen" (gemeinsame Messe-Ablage messe/*, Regeln v7): persönliche Ausnahme perms.path_messe,
+  // sonst Zugriffs-Matrix crm/pathAccess.messe[rolle], sonst Standard wie crm.js _defaultPathAccess:
+  // CRM-Stufe „Voll" (crm/access/<id>.level === 'full').
+  let _paMesse=null, _crmAcc={};
+  try{ _paMesse=((await db.ref('crm/pathAccess/messe').once('value')).val())||null; }catch(_){}
+  try{ _crmAcc=((await db.ref('crm/access').once('value')).val())||{}; }catch(_){}
   const grants={};
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id]; if(!u || _isAdminUser(u)) continue;
@@ -257,6 +263,11 @@ export async function refreshPermissionAllowlists(opts){
     const shopUse=_own ? !!u.perms.path_shop : !!(_paShop&&_paShop[u.role]);
     if(shopUse){ (grants.shop_nutzen=grants.shop_nutzen||{})[uid]=true;
       if(sys || hasPermission('verw_shop',u)) (grants.verw_shop=grants.verw_shop||{})[uid]=true; }
+    const _ownM=u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_messe');
+    const _rowM=_paMesse&&Object.prototype.hasOwnProperty.call(_paMesse,u.role);
+    const _lvl=(_crmAcc[id]&&_crmAcc[id].level)||'none';
+    const messeUse=_ownM ? !!u.perms.path_messe : (_rowM ? !!_paMesse[u.role] : (_lvl==='full'||_lvl==='admin'));
+    if(messeUse) (grants.messe_nutzen=grants.messe_nutzen||{})[uid]=true;
   }
   await db.ref('zeiterfassung/grants').set(grants);
   // Freigabe-Markierung (Custom Claim) aller Konten an allowed/admins angleichen – für die Storage-Regeln.

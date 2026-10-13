@@ -1,39 +1,137 @@
 // js/messe.js — MESSEMODUS: PIN-gesperrter Vollbild-Erfassungsmodus für Tablets.
-// Auf der Messe Kontakte OFFLINE erfassen, datenschutzkonform (Besucher sehen nur das eigene,
-// leere Formular), danach per Knopf ins normale CRM übertragen.
+// Besucher sehen nur das eigene, leere Formular; Personal (PIN) sieht die Liste und überträgt ins CRM.
 //
-// EVENT-MODELL (v263): mehrere Veranstaltungen ("Messe 26" …) lokal auf dem Tablet — anlegen,
-// umbenennen, Kategorien ändern, löschen; mehrere parallel. Jedes Event hat seine eigene
-// Kontaktliste. Alles im eigenen localStorage `tps_messe_v1` (geräte-lokal, NICHT an den Login
-// gebunden) → beim Personalwechsel (A meldet sich ab, B am SELBEN Tablet an) ist alles noch da.
+// GEMEINSAME ABLAGE (seit v439): Veranstaltungen und erfasste Kontakte liegen in der Datenbank unter
+// messe/ (eigener Knoten, nur für Messe-Berechtigte lesbar – Regeln v7, grants/messe_nutzen):
+//   messe/events/<ev>          { name, cats[], catLabels{}, pinHash, pinSalt, createdAt, createdBy }
+//   messe/entries/<ev>/<id>    { vorname, nachname, org, email, tel, adresse, note, ts, by, dev }
+//   messe/transferred/<ev>/<id>{ by, at, crmId }   ← Marker ohne Personendaten (Zähler + Doppelschutz)
+// Alle Geräte sehen dieselben Veranstaltungen und Listen live.
 //
-// ÜBERTRAGUNG (online, nach der Messe): jeder Eintrag → ECHTER CRM-Kontakt (stamm.name =
-// Organisation ODER Person) mit Kontakt-Person (Vorname Nachname + Mail/Tel/Adresse) und der
-// Notiz als erster Kontaktnotiz — exakt wie „＋ Kontakt anlegen". Idempotent (uploaded-Flag).
+// OFFLINE: Neue Kontakte (und Veranstaltungen) landen zuerst im Ausgang des Geräts (localStorage
+// `tps_messe_v2`.outbox) und werden automatisch nachgeschickt, sobald wieder Netz da ist. Die
+// Veranstaltungen (ohne Personendaten) sind lokal zwischengespeichert, damit der Messemodus auch
+// ohne Netz startet. Die Besucherdaten anderer Geräte werden NICHT auf dem Gerät abgelegt.
+//
+// ÜBERTRAG ins CRM (online): je Kontakt zuerst den Marker anlegen („ich übertrage") → nur ein Gerät
+// gewinnt → CRM-Kontakt anlegen → Besucherdaten unter messe/entries löschen (Datensparsamkeit).
+//
+// PIN: eine je Veranstaltung, für alle Geräte gleich; gespeichert wird nur SHA-256(Salz + PIN).
 
 import { saveEntity, newId, ensureCrmReady } from './crm/crm-data.js';
 import { getCategories, getTrees } from './crm/crm-config.js';
 import { toast } from './utils.js';
 
-const LS = 'tps_messe_v1';
-const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function _loadRaw(){ try{ return JSON.parse(localStorage.getItem(LS)); }catch(e){ return null; } }
-function _persist(s){ try{ localStorage.setItem(LS, JSON.stringify(s)); }catch(e){} }
-function _newEid(){ return 'ev'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
-// Zustand laden + einmalige Migration vom alten flachen v262-Format {cats,catLabels,entries}.
-function _state(){
-  let s=_loadRaw();
-  if(!s || typeof s!=='object') return { events:[], activeId:'' };
-  if(!Array.isArray(s.events)){
-    const ev={ id:_newEid(), name:'Messe', cats:Array.isArray(s.cats)?s.cats:[], catLabels:s.catLabels||{}, entries:Array.isArray(s.entries)?s.entries:[] };
-    s={ events:[ev], activeId:ev.id };
-    _persist(s);
-    return s;
-  }
-  if('pin' in s){ delete s.pin; _persist(s); }   // früher gespeicherte PIN entfernen (PIN wird pro Sitzung neu vergeben)
-  return s;
+const LS_OLD = 'tps_messe_v1';   // alter, rein lokaler Stand (wird einmalig in die Cloud übernommen)
+const LS = 'tps_messe_v2';       // { activeId, events:{id:ev ohne Personendaten}, outbox:[…] }
+const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const _jsq = s => _esc(JSON.stringify(String(s==null?'':s)));
+function _newEid(){ return 'ev'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function _newMid(){ return 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function _me(){ return (window.cu&&window.cu.id)||''; }
+function _dev(){ try{ let d=localStorage.getItem('tps_messe_dev'); if(!d){ d='d'+Math.random().toString(36).slice(2,8); localStorage.setItem('tps_messe_dev',d); } return d; }catch(e){ return 'd?'; } }
+
+// ── Lokaler Zustand ──
+function _load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return { activeId:s.activeId||'', events:s.events||{}, outbox:Array.isArray(s.outbox)?s.outbox:[] }; }catch(e){} return { activeId:'', events:{}, outbox:[] }; }
+function _save(s){ try{ localStorage.setItem(LS, JSON.stringify(s)); }catch(e){} }
+let L=_load();
+
+// ── Cloud (Live) ──
+let _ref=null, _live=null, _connCb=null, _conn=false, _srv={ events:null, entries:{}, transferred:{} }, _flushTimer=null;
+function _fbOk(){ try{ return !!(window.firebase && firebase.apps && firebase.apps.length && firebase.auth().currentUser); }catch(e){ return false; } }
+function _online(){ return navigator.onLine && _conn; }
+function _subscribe(){
+  if(_live || !_fbOk()) return;
+  try{
+    _ref=firebase.database().ref('messe');
+    _connCb=snap=>{ _conn=!!snap.val(); if(_conn) _flush(); _rerender(); };
+    firebase.database().ref('.info/connected').on('value', _connCb);
+    _live=_ref.on('value', snap=>{
+      const v=snap.val()||{};
+      _srv={ events:v.events||{}, entries:v.entries||{}, transferred:v.transferred||{} };
+      // Veranstaltungen (ohne Personendaten) lokal merken → Offline-Start
+      L.events=Object.assign({}, _srv.events); _save(L);
+      _rerender();
+    }, err=>{ console.warn('Messe: kein Lesezugriff', err&&err.code); _srv.events=null; _rerender(); });
+  }catch(e){ console.warn('Messe-Abo:', e); }
+  if(!_flushTimer) _flushTimer=setInterval(_flush, 20000);
 }
-function _active(s){ return (s.events||[]).find(e=>e.id===s.activeId) || null; }
+function _unsubscribe(){
+  try{ if(_ref&&_live) _ref.off('value', _live); if(_connCb) firebase.database().ref('.info/connected').off('value', _connCb); }catch(e){}
+  _connCb=null;
+  _live=null; _ref=null; if(_flushTimer){ clearInterval(_flushTimer); _flushTimer=null; }
+}
+window.addEventListener('online', ()=>{ _flush(); _rerender(); });
+window.addEventListener('offline', ()=>_rerender());
+
+// Ausgang nachschicken (Veranstaltungen zuerst, dann Kontakte)
+let _flushing=false;
+async function _flush(){
+  if(_flushing || !L.outbox.length || !_fbOk() || !navigator.onLine) return;
+  _flushing=true;
+  try{
+    const db=firebase.database();
+    for(const it of L.outbox.slice()){
+      const path = it.t==='ev' ? 'messe/events/'+it.ev : 'messe/entries/'+it.ev+'/'+it.id;
+      try{
+        await Promise.race([ db.ref(path).set(it.data), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000)) ]);
+        L.outbox=L.outbox.filter(x=>!(x.t===it.t && x.ev===it.ev && x.id===it.id)); _save(L);
+      }catch(e){
+        const denied=/permission/i.test(String((e&&e.code)||'')+' '+String(e&&e.message||''));
+        if(denied){ toast('Messe: keine Berechtigung zum Speichern in der gemeinsamen Ablage – bitte Administrator fragen.','err'); }
+        break;   // später erneut versuchen (Reihenfolge erhalten)
+      }
+    }
+  }finally{ _flushing=false; _rerender(); }
+}
+function _queue(item){ L.outbox=L.outbox.filter(x=>!(x.t===item.t && x.ev===item.ev && x.id===item.id)); L.outbox.push(item); _save(L); _flush(); }
+
+// Zusammengeführte Sicht (Cloud + eigener Ausgang)
+function _events(){
+  const m=Object.assign({}, _srv.events||L.events||{});
+  L.outbox.filter(x=>x.t==='ev').forEach(x=>{ m[x.ev]=Object.assign({}, x.data); });
+  return Object.keys(m).map(id=>Object.assign({ id }, m[id])).filter(e=>e&&e.name).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+}
+function _event(id){ return _events().find(e=>e.id===id)||null; }
+function _active(){ const ev=_event(L.activeId); return ev||null; }
+function _entries(evId){
+  const out=[];
+  const srv=(_srv.entries&&_srv.entries[evId])||{};
+  Object.keys(srv).forEach(id=>out.push(Object.assign({ id, pending:false }, srv[id])));
+  L.outbox.filter(x=>x.t==='en'&&x.ev===evId&&!srv[x.id]).forEach(x=>out.push(Object.assign({ id:x.id, pending:true }, x.data)));
+  return out.sort((a,b)=>(a.ts||0)-(b.ts||0));
+}
+function _doneCount(evId){ return Object.keys((_srv.transferred&&_srv.transferred[evId])||{}).length; }
+
+// PIN: nur SHA-256(Salz + PIN) speichern
+async function _hash(salt, pin){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt+'|'+pin));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Einmalige Übernahme des alten, rein lokalen Stands (tps_messe_v1) in die gemeinsame Ablage
+async function _migrateOld(){
+  let old=null; try{ old=JSON.parse(localStorage.getItem(LS_OLD)); }catch(e){}
+  if(!old || !Array.isArray(old.events)) { try{ localStorage.removeItem(LS_OLD); }catch(e){} return; }
+  for(const ev of old.events){
+    if(!ev||!ev.id) continue;
+    if(!_event(ev.id)){
+      const data={ name:String(ev.name||'Messe').slice(0,100), cats:Array.isArray(ev.cats)?ev.cats:[], catLabels:ev.catLabels||{}, createdAt:Date.now(), createdBy:_me() };
+      if(ev.pin){ data.pinSalt=Math.random().toString(36).slice(2,12); data.pinHash=await _hash(data.pinSalt, String(ev.pin)); }
+      _queue({ t:'ev', ev:ev.id, id:'', data });
+    }
+    (ev.entries||[]).filter(e=>e&&!e.uploaded).forEach(e=>{
+      _queue({ t:'en', ev:ev.id, id:e.id||_newMid(), data:_entryData(e) });
+    });
+  }
+  if(!L.activeId && old.activeId) { L.activeId=old.activeId; _save(L); }
+  try{ localStorage.removeItem(LS_OLD); }catch(e){}
+}
+function _entryData(e){
+  const c=(v,n)=>String(v==null?'':v).trim().slice(0,n);
+  return { vorname:c(e.vorname,100), nachname:c(e.nachname,100), org:c(e.org,200), email:c(e.email,200), tel:c(e.tel,60),
+    adresse:c(e.adresse,300), note:c(e.note,2000), ts:Number(e.ts)||Date.now(), by:c(_me(),64), dev:c(_dev(),64) };
+}
 
 function _ov(){ return document.getElementById('messe-overlay'); }
 function _ensureOverlay(){
@@ -94,28 +192,47 @@ function _ensureOverlay(){
   }
   return o;
 }
-function _close(){ const o=_ov(); if(o) o.remove(); }
+function _close(){ const o=_ov(); if(o) o.remove(); _view=''; _unsubscribe(); }
+
+// ── Neuzeichnen bei Live-Änderungen (nicht das Besucherformular – dort wird gerade getippt) ──
+let _view='';
+function _rerender(){
+  if(!_ov()) return;
+  if(_view==='picker') _renderPicker();
+  else if(_view==='staff') _renderStaff();
+  else if(_view==='form') _updateFormTop();
+}
+function _statusLine(){
+  const pend=L.outbox.length;
+  if(_online()) return pend?`<span style="color:#ffd27a">⏳ ${pend} wird gesendet …</span>`:'<span>🟢 verbunden</span>';
+  return `<span style="color:#ffd27a">📴 offline${pend?` · ${pend} wartet auf Netz`:''}</span>`;
+}
 
 // ── Einstiegspunkt (Personal, aus dem ☰-Modulmenü) ──
-function messeStart(){ _ensureOverlay(); _renderPicker(); }   // Personal-Hub; PIN ist PRO Veranstaltung
+function messeStart(){ _ensureOverlay(); _subscribe(); _migrateOld().catch(e=>console.warn('Messe-Übernahme:',e)); _renderPicker(); }
 
 // ── Event-Auswahl / -Verwaltung (Personal) ──
 function _renderPicker(){
-  const o=_ensureOverlay(); const s=_state();
-  const rows = s.events.length ? s.events.map(ev=>{
-    const pend=ev.entries.filter(e=>!e.uploaded).length;
+  _view='picker';
+  const o=_ensureOverlay(); const evs=_events();
+  const rows = evs.length ? evs.map(ev=>{
+    const list=_entries(ev.id); const pend=list.filter(e=>e.pending).length;
     return `<div class="me-ev">
       <div><div class="nm">${_esc(ev.name||'(ohne Name)')}</div>
-        <div class="mt">${ev.entries.length} Kontakt(e)${pend?` · ${pend} offen`:''} · ${_esc((ev.cats||[]).map(k=>ev.catLabels[k]||k).join(', ')||'keine Kategorie')}</div></div>
+        <div class="mt">${list.length} offen · ${_doneCount(ev.id)} übertragen${pend?` · ${pend} wartet auf Netz`:''} · ${_esc((ev.cats||[]).map(k=>(ev.catLabels||{})[k]||k).join(', ')||'keine Kategorie')}</div></div>
       <div class="me-ev-btns">
-        <button class="me-mini go" onclick="messeOpenEvent('${ev.id}')">Öffnen</button>
-        <button class="me-mini" onclick="messeEditEvent('${ev.id}')">✎</button>
-        <button class="me-mini del" onclick="messeDeleteEvent('${ev.id}')">🗑</button>
+        <button class="me-mini go" onclick="messeOpenEvent(${_jsq(ev.id)})">Öffnen</button>
+        <button class="me-mini" onclick="messeEditEvent(${_jsq(ev.id)})" aria-label="Bearbeiten">✎</button>
+        <button class="me-mini del" onclick="messeDeleteEvent(${_jsq(ev.id)})" aria-label="Löschen">🗑</button>
       </div></div>`;
   }).join('') : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung. Lege eine an (z. B. „Messe 26").</div>';
-  o.innerHTML=`<div class="me-wrap"><div class="me-card">
+  const noAccess = _srv.events===null && _online();
+  o.innerHTML=`<div class="me-wrap">
+    <div class="me-top"><span class="cnt">${_statusLine()}</span></div>
+    <div class="me-card">
     <div class="me-h">Veranstaltungen</div>
-    <div class="me-sub">Wähle eine Veranstaltung zum Erfassen – oder lege eine neue an. Mehrere parallel möglich.</div>
+    <div class="me-sub">Gilt für alle Messe-Geräte gemeinsam. Wähle eine Veranstaltung zum Erfassen – oder lege eine neue an.</div>
+    ${noAccess?'<div style="background:var(--warn-bg,#fff4e0);color:var(--warn-text,#7a4a00);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px">Kein Zugriff auf die gemeinsame Messe-Ablage. Bitte den Administrator, „Messemodus: Nutzen" freizuschalten.</div>':''}
     ${rows}
     <button class="me-btn" onclick="messeEditEvent('')">＋ Neue Veranstaltung</button>
     <button class="me-btn warn" onclick="messeEnd()">Messemodus beenden</button>
@@ -123,8 +240,9 @@ function _renderPicker(){
 }
 // Event anlegen/bearbeiten
 function messeEditEvent(id){
-  const o=_ensureOverlay(); const s=_state();
-  const ev = id ? s.events.find(e=>e.id===id) : null;
+  _view='edit';
+  const o=_ensureOverlay();
+  const ev = id ? _event(id) : null;
   let cats=[]; try{ cats=getCategories()||[]; }catch(e){ cats=[]; }
   const sel = ev ? (ev.cats||[]) : [];
   const rows = cats.length
@@ -132,63 +250,73 @@ function messeEditEvent(id){
     : '<div style="color:var(--muted,#5b6b7d);font-size:14px">Keine Kategorien gefunden. Bitte (online) vorher in der Verwaltung anlegen – z. B. „Messe 26", „Erstkontakt".</div>';
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
     <div class="me-h">${ev?'Veranstaltung bearbeiten':'Neue Veranstaltung'}</div>
-    <div class="me-sub">Name + Kategorien, die jeder erfasste Kontakt automatisch bekommt.</div>
-    <div class="me-field"><label>Name der Veranstaltung <span class="me-req">*</span></label><input id="me-evname" placeholder="z. B. Messe 26" value="${_esc(ev?ev.name:'')}"></div>
-    <div class="me-field"><label>PIN fürs Personal <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(schützt Liste &amp; Übertragen dieser Veranstaltung)</span></label><input id="me-evpin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="mind. 3 Zeichen" value="${_esc(ev?(ev.pin||''):'')}"></div>
+    <div class="me-sub">Name + Kategorien, die jeder erfasste Kontakt automatisch bekommt. Gilt auf allen Geräten.</div>
+    <div class="me-field"><label for="me-evname">Name der Veranstaltung <span class="me-req">*</span></label><input id="me-evname" maxlength="100" placeholder="z. B. Messe 26" value="${_esc(ev?ev.name:'')}"></div>
+    <div class="me-field"><label for="me-evpin">PIN fürs Personal ${ev&&ev.pinHash?'<span style="font-weight:400;color:var(--muted,#5b6b7d)">(leer lassen = unverändert)</span>':'<span class="me-req">*</span>'} <span style="font-weight:400;color:var(--muted,#5b6b7d)">(gilt auf allen Geräten)</span></label><input id="me-evpin" type="password" inputmode="numeric" autocomplete="new-password" placeholder="mind. 4 Zeichen"></div>
     <div class="me-field"><label>Kategorien</label><div class="me-catrow" style="max-height:210px;overflow:auto;border:1.5px solid var(--border,#cdd7e2);border-radius:10px;padding:2px 10px">${rows}</div></div>
-    <button class="me-btn" onclick="messeSaveEvent('${ev?ev.id:''}')">Speichern</button>
+    <button class="me-btn" onclick="messeSaveEvent(${_jsq(ev?ev.id:'')})">Speichern</button>
     <button class="me-btn sec" onclick="messeManage()">Abbrechen</button>
   </div></div>`;
 }
-function messeSaveEvent(id){
-  const name=(document.getElementById('me-evname')?.value||'').trim();
+async function messeSaveEvent(id){
+  const name=(document.getElementById('me-evname')?.value||'').trim().slice(0,100);
   if(!name){ toast('Bitte einen Namen für die Veranstaltung eingeben.','err'); return; }
   const pin=(document.getElementById('me-evpin')?.value||'').trim();
-  if(pin.length<3){ toast('Bitte eine PIN mit mindestens 3 Zeichen für diese Veranstaltung setzen.','err'); return; }
+  const ev = id ? _event(id) : null;
+  if(!(ev&&ev.pinHash) && pin.length<4){ toast('Bitte eine PIN mit mindestens 4 Zeichen setzen.','err'); return; }
+  if(pin && pin.length<4){ toast('Die PIN muss mindestens 4 Zeichen haben.','err'); return; }
   const boxes=[...document.querySelectorAll('.me-cat:checked')];
   const cats=boxes.map(b=>b.value); const catLabels={}; boxes.forEach(b=>{ catLabels[b.value]=b.getAttribute('data-label')||b.value; });
-  const s=_state();
-  if(id){ const ev=s.events.find(e=>e.id===id); if(ev){ ev.name=name; ev.pin=pin; ev.cats=cats; ev.catLabels=catLabels; } }
-  else { const ev={ id:_newEid(), name, pin, cats, catLabels, entries:[] }; s.events.push(ev); s.activeId=ev.id; }
-  _persist(s);
+  const evId=id||_newEid();
+  const data=Object.assign({}, ev?{ name:ev.name, cats:ev.cats||[], catLabels:ev.catLabels||{}, pinHash:ev.pinHash||'', pinSalt:ev.pinSalt||'', createdAt:ev.createdAt||Date.now(), createdBy:ev.createdBy||_me() }:{ createdAt:Date.now(), createdBy:_me() },
+    { name, cats, catLabels, updatedAt:Date.now() });
+  if(pin){ data.pinSalt=Math.random().toString(36).slice(2,12); data.pinHash=await _hash(data.pinSalt, pin); }
+  delete data.id;
+  _queue({ t:'ev', ev:evId, id:'', data });
+  if(!id){ L.activeId=evId; _save(L); }
   _renderPicker();
 }
-function messeDeleteEvent(id){
-  const s=_state(); const ev=s.events.find(e=>e.id===id); if(!ev) return;
-  const n=ev.entries.length;
-  if(!window.confirm(`Veranstaltung „${ev.name}" löschen?`+(n?`\n\nAchtung: ${n} erfasste(r) Kontakt(e) gehen dabei verloren.`:''))) return;
-  s.events=s.events.filter(e=>e.id!==id);
-  if(s.activeId===id) s.activeId = s.events[0] ? s.events[0].id : '';
-  _persist(s); _renderPicker();
+async function messeDeleteEvent(id){
+  const ev=_event(id); if(!ev) return;
+  const n=_entries(id).length;
+  if(!window.confirm(`Veranstaltung „${ev.name}" auf ALLEN Geräten löschen?`+(n?`\n\nAchtung: ${n} noch nicht übertragene(r) Kontakt(e) gehen dabei verloren.`:''))) return;
+  L.outbox=L.outbox.filter(x=>x.ev!==id); if(L.activeId===id) L.activeId=''; _save(L);
+  if(_fbOk()){
+    try{ await firebase.database().ref('messe').update({ ['events/'+id]:null, ['entries/'+id]:null, ['transferred/'+id]:null }); }
+    catch(e){ toast('Löschen fehlgeschlagen: '+((e&&e.code)||e),'err'); }
+  }
+  _renderPicker();
 }
-function messeOpenEvent(id){ const s=_state(); if(s.events.some(e=>e.id===id)){ s.activeId=id; _persist(s); } _renderForm(); }
+function messeOpenEvent(id){ if(_event(id)){ L.activeId=id; _save(L); } _renderForm(); }
 
 // ── Erfassungs-Formular (das sehen Besucher – nur das) ──
+function _updateFormTop(){ const el=document.getElementById('me-formtop'); if(el){ const ev=_active(); if(ev) el.innerHTML=_formTop(ev); } }
+function _formTop(ev){ return `${_esc(ev.name)} · ${_statusLine()}`; }
 function _renderForm(msg){
-  const o=_ensureOverlay(); const s=_state(); const ev=_active(s);
+  _view='form';
+  const o=_ensureOverlay(); const ev=_active();
   if(!ev){ _renderPicker(); return; }
-  const pend=ev.entries.filter(e=>!e.uploaded).length;
   o.innerHTML=`<div class="me-wrap">
     <div class="me-top">
-      <span class="cnt">${_esc(ev.name)} · ${ev.entries.length} erfasst${pend?` · ${pend} offen`:''}</span>
+      <span class="cnt" id="me-formtop">${_formTop(ev)}</span>
       <button class="me-lock" onclick="messeStaff()">🔒 Personal</button>
     </div>
     <div class="me-card">
       <div class="me-h">Kontakt aufnehmen</div>
       <div class="me-sub">Vielen Dank für Ihr Interesse! Bitte tragen Sie Ihre Daten ein. <span class="me-req">*</span> = Pflichtfeld.</div>
       <div class="me-row2">
-        <div class="me-field"><label>Vorname <span class="me-req">*</span></label><input id="me-vorname" autocomplete="off"></div>
-        <div class="me-field"><label>Nachname <span class="me-req">*</span></label><input id="me-nachname" autocomplete="off"></div>
+        <div class="me-field"><label for="me-vorname">Vorname <span class="me-req">*</span></label><input id="me-vorname" maxlength="100" autocomplete="off"></div>
+        <div class="me-field"><label for="me-nachname">Nachname <span class="me-req">*</span></label><input id="me-nachname" maxlength="100" autocomplete="off"></div>
       </div>
-      <div class="me-field"><label>Organisation / Verein</label><input id="me-org" autocomplete="off" placeholder="optional, z. B. Segelclub Pitz"></div>
+      <div class="me-field"><label for="me-org">Organisation / Verein</label><input id="me-org" maxlength="200" autocomplete="off" placeholder="optional, z. B. Segelclub Pitz"></div>
       <div class="me-row2">
-        <div class="me-field"><label>E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder Telefon)</span></label><input id="me-email" type="email" autocomplete="off"></div>
-        <div class="me-field"><label>Telefon <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder E-Mail)</span></label><input id="me-tel" type="tel" autocomplete="off"></div>
+        <div class="me-field"><label for="me-email">E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder Telefon)</span></label><input id="me-email" type="email" maxlength="200" autocomplete="off"></div>
+        <div class="me-field"><label for="me-tel">Telefon <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder E-Mail)</span></label><input id="me-tel" type="tel" maxlength="60" autocomplete="off"></div>
       </div>
-      <div class="me-field"><label>Adresse</label><input id="me-adresse" autocomplete="off"></div>
-      <div class="me-field"><label>Notiz / Interesse</label><textarea id="me-note" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
+      <div class="me-field"><label for="me-adresse">Adresse</label><input id="me-adresse" maxlength="300" autocomplete="off"></div>
+      <div class="me-field"><label for="me-note">Notiz / Interesse</label><textarea id="me-note" maxlength="2000" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
       <button class="me-btn" onclick="messeSaveEntry(this)">✓ Speichern</button>
-      <div class="me-ok" id="me-ok">${msg?_esc(msg):''}</div>
+      <div class="me-ok" id="me-ok" role="status">${msg?_esc(msg):''}</div>
     </div>
   </div>`;
 }
@@ -197,59 +325,66 @@ function messeSaveEntry(btn){
   const vorname=g('me-vorname'), nachname=g('me-nachname'), email=g('me-email'), tel=g('me-tel');
   if(!vorname || !nachname){ toast('Bitte Vor- und Nachnamen eingeben.','err'); return; }
   if(!email && !tel){ toast('Bitte E-Mail ODER Telefon angeben.','err'); return; }
-  const s=_state(); const ev=_active(s); if(!ev){ _renderPicker(); return; }
-  ev.entries.push({ id:'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-    vorname, nachname, org:g('me-org'), email, tel, adresse:g('me-adresse'), note:g('me-note'),
-    ts:Date.now(), uploaded:false });
-  _persist(s);
+  const ev=_active(); if(!ev){ _renderPicker(); return; }
   if(btn){ btn.disabled=true; }
+  _queue({ t:'en', ev:ev.id, id:_newMid(), data:_entryData({ vorname, nachname, org:g('me-org'), email, tel, adresse:g('me-adresse'), note:g('me-note'), ts:Date.now() }) });
   _renderForm('✓ Gespeichert – danke!');
 }
 
 // ── Personal-Bereich (per PIN): Liste, Übertragen, Events, Beenden ──
-function messeStaff(){ const ev=_active(_state()); if(!ev || !ev.pin){ _renderStaff(); return; } _renderPinCheck(); }
+function messeStaff(){ const ev=_active(); if(!ev || !ev.pinHash){ _renderStaff(); return; } _renderPinCheck(); }
 function _renderPinCheck(){
+  _view='pin';
   const o=_ensureOverlay();
   o.innerHTML=`<div class="me-wrap"><div class="me-card">
     <div class="me-h">🔒 Personal</div>
     <div class="me-sub">Bitte PIN eingeben.</div>
-    <div class="me-field"><label>PIN</label><input id="me-pincheck" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
+    <div class="me-field"><label for="me-pincheck">PIN</label><input id="me-pincheck" type="password" inputmode="numeric" autocomplete="off" placeholder="PIN"></div>
     <button class="me-btn" onclick="messeStaffCheck()">Weiter →</button>
     <button class="me-btn sec" onclick="messeBackToForm()">Abbrechen</button>
   </div></div>`;
   setTimeout(()=>{ const el=document.getElementById('me-pincheck'); if(el){ el.focus(); el.addEventListener('keydown',e=>{ if(e.key==='Enter') messeStaffCheck(); }); } },40);
 }
-function messeStaffCheck(){
-  const ev=_active(_state());
+async function messeStaffCheck(){
+  const ev=_active();
   const pin=(document.getElementById('me-pincheck')?.value||'').trim();
-  if(!ev || !ev.pin || pin!==ev.pin){ toast('Falsche PIN.','err'); const el=document.getElementById('me-pincheck'); if(el){ el.value=''; el.focus(); } return; }
+  let ok=false; try{ ok=!!(ev && ev.pinHash && pin && (await _hash(ev.pinSalt||'', pin))===ev.pinHash); }catch(e){ ok=false; }
+  if(!ok){ toast('Falsche PIN.','err'); const el=document.getElementById('me-pincheck'); if(el){ el.value=''; el.focus(); } return; }
   _renderStaff();
 }
-function _pName(e){ return ((e.vorname||'')+' '+(e.nachname||'')).trim() || e.person || '(ohne Name)'; }
+function _pName(e){ return ((e.vorname||'')+' '+(e.nachname||'')).trim() || '(ohne Name)'; }
 function _renderStaff(){
-  const o=_ensureOverlay(); const s=_state(); const ev=_active(s);
+  _view='staff';
+  const o=_ensureOverlay(); const ev=_active();
   if(!ev){ _renderPicker(); return; }
-  const pend=ev.entries.filter(e=>!e.uploaded).length;
-  const items = ev.entries.length
-    ? ev.entries.slice().reverse().map(e=>`<div class="me-list-item">
+  const list=_entries(ev.id); const pend=list.filter(e=>e.pending).length; const ready=list.length-pend;
+  const items = list.length
+    ? list.slice().reverse().map(e=>`<div class="me-list-item">
         <div><div class="nm">${_esc(_pName(e))}${e.org?` · ${_esc(e.org)}`:''}</div>
-          <div class="dt">${new Date(e.ts).toLocaleString('de-DE')}${e.uploaded?' · ✓ übertragen':''}${e.email?' · '+_esc(e.email):(e.tel?' · '+_esc(e.tel):'')}</div></div>
-        <button class="me-x" onclick="messeDeleteEntry('${e.id}')">Löschen</button></div>`).join('')
-    : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:8px 0">Noch keine Kontakte erfasst.</div>';
-  o.innerHTML=`<div class="me-wrap"><div class="me-card">
+          <div class="dt">${_esc(new Date(e.ts||0).toLocaleString('de-DE'))}${e.pending?' · ⏳ wartet auf Netz':''}${e.email?' · '+_esc(e.email):(e.tel?' · '+_esc(e.tel):'')}</div></div>
+        <button class="me-x" onclick="messeDeleteEntry(${_jsq(e.id)})">Löschen</button></div>`).join('')
+    : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:8px 0">Keine offenen Kontakte.</div>';
+  o.innerHTML=`<div class="me-wrap">
+    <div class="me-top"><span class="cnt">${_statusLine()}</span></div>
+    <div class="me-card">
     <div class="me-h">🔒 ${_esc(ev.name)}</div>
-    <div class="me-sub">${ev.entries.length} Kontakt(e), ${pend} noch nicht übertragen · Kategorien: ${_esc((ev.cats||[]).map(k=>ev.catLabels[k]||k).join(', ')||'–')}</div>
-    <button class="me-btn" onclick="messeTransfer(this)">⬆ ${pend} Kontakt(e) ins CRM übertragen (online)</button>
+    <div class="me-sub">${list.length} offen (alle Geräte) · ${_doneCount(ev.id)} bereits ins CRM übertragen · Kategorien: ${_esc((ev.cats||[]).map(k=>(ev.catLabels||{})[k]||k).join(', ')||'–')}</div>
+    ${ev.pinHash?'':'<div style="background:var(--warn-bg,#fff4e0);color:var(--warn-text,#7a4a00);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px">Diese Veranstaltung hat noch keine PIN – bitte unter „Veranstaltungen verwalten" → ✎ eine PIN setzen.</div>'}
+    <button class="me-btn" onclick="messeTransfer(this)" ${(!_online()||!ready)?'disabled style="opacity:.55"':''}>⬆ ${ready} Kontakt(e) ins CRM übertragen${_online()?'':' (nur online)'}</button>
+    <div style="font-size:12px;color:var(--muted,#5b6b7d);margin-top:6px">Nach dem Übertragen werden die Besucherdaten hier gelöscht – sie stehen dann nur noch im CRM.</div>
     <div style="max-height:44vh;overflow:auto;margin:14px 0">${items}</div>
     <button class="me-btn sec" onclick="messeBackToForm()">← Zurück zum Formular</button>
     <button class="me-btn sec" onclick="messeManage()">Veranstaltungen verwalten</button>
     <button class="me-btn warn" onclick="messeEnd()">Messemodus beenden</button>
   </div></div>`;
 }
-function messeDeleteEntry(id){
+async function messeDeleteEntry(id){
   if(!window.confirm('Diesen Kontakt löschen?')) return;
-  const s=_state(); const ev=_active(s); if(!ev) return;
-  ev.entries=ev.entries.filter(e=>e.id!==id); _persist(s); _renderStaff();
+  const ev=_active(); if(!ev) return;
+  const inBox=L.outbox.some(x=>x.t==='en'&&x.id===id);
+  if(inBox){ L.outbox=L.outbox.filter(x=>!(x.t==='en'&&x.id===id)); _save(L); }
+  if(_fbOk()){ try{ await firebase.database().ref('messe/entries/'+ev.id+'/'+id).remove(); }catch(e){ if(!inBox) toast('Löschen fehlgeschlagen (offline?).','err'); } }
+  _renderStaff();
 }
 function messeBackToForm(){ _renderForm(); }
 function messeManage(){ _renderPicker(); }
@@ -269,29 +404,46 @@ function _toEntity(m, cats){
   return { tree, ent };
 }
 async function messeTransfer(btn){
-  if(!navigator.onLine){ toast('Zum Übertragen bitte online gehen (WLAN/Daten).','err'); return; }
-  const s=_state(); const ev=_active(s); if(!ev) return;
-  const pend=ev.entries.filter(e=>!e.uploaded);
-  if(!pend.length){ toast('Keine neuen Kontakte zum Übertragen.',''); return; }
+  if(!_online()){ toast('Zum Übertragen bitte online gehen (WLAN/Daten).','err'); return; }
+  const ev=_active(); if(!ev) return;
+  await _flush();
+  const todo=_entries(ev.id).filter(e=>!e.pending);
+  if(!todo.length){ toast('Keine Kontakte zum Übertragen.',''); return; }
   if(btn){ btn.disabled=true; btn.textContent='⏳ Übertrage …'; }
   try{ await ensureCrmReady(); }catch(e){}
-  let n=0;
-  for(const m of pend){
-    try{ const {tree,ent}=_toEntity(m, ev.cats); await saveEntity(tree, ent); m.uploaded=true; m.crmId=ent.id; n++; }
-    catch(e){ console.warn('Messe-Transfer:',e); }
+  const db=firebase.database(); let n=0, skip=0, fail=0;
+  for(const m of todo){
+    const mark=db.ref('messe/transferred/'+ev.id+'/'+m.id);
+    try{
+      // 1) Marker anlegen – nur EIN Gerät gewinnt (Transaktion bricht ab, wenn schon vorhanden)
+      const tr=await mark.transaction(cur=> cur ? undefined : { by:_me(), at:Date.now() });
+      if(!tr.committed){ skip++; continue; }
+      // 2) CRM-Kontakt anlegen
+      const { tree, ent }=_toEntity(m, ev.cats);
+      await saveEntity(tree, ent);
+      await mark.update({ crmId:ent.id });
+      // 3) Besucherdaten aus der Messe-Ablage löschen (Datensparsamkeit)
+      await db.ref('messe/entries/'+ev.id+'/'+m.id).remove();
+      n++;
+    }catch(e){
+      fail++; console.warn('Messe-Übertrag:', e);
+      try{ await mark.remove(); }catch(_){}   // eigenen Marker zurücknehmen → später erneut versuchen
+    }
   }
-  _persist(s);
-  toast(n+' Kontakt(e) ins CRM übertragen ✓', n?'ok':'err');
+  toast(`${n} Kontakt(e) ins CRM übertragen ✓`+(skip?` · ${skip} lief(en) schon auf einem anderen Gerät`:'')+(fail?` · ${fail} fehlgeschlagen`:''), fail?'err':'ok');
   _renderStaff();
 }
 function messeEnd(){
-  if(!window.confirm('Messemodus beenden? Die App kehrt zur normalen Ansicht zurück.\n(Noch nicht übertragene Kontakte bleiben auf diesem Tablet gespeichert.)')) return;
+  const pend=L.outbox.length;
+  if(!window.confirm('Messemodus beenden? Die App kehrt zur normalen Ansicht zurück.'+(pend?`\n\n${pend} Eintrag/Einträge warten noch auf Netz und werden beim nächsten Öffnen des Messemodus mit Netz gesendet.`:''))) return;
   _close();
 }
 function messeClose(){ _close(); }
 
 export { messeStart };
+// Ausgang auch ohne geöffneten Messemodus nachschicken (nach der Anmeldung, siehe main.js)
+function messeFlush(){ return _flush(); }
 Object.assign(window, {
-  messeStart, messeClose, messeEditEvent, messeSaveEvent, messeDeleteEvent, messeOpenEvent,
+  messeFlush, messeStart, messeClose, messeEditEvent, messeSaveEvent, messeDeleteEvent, messeOpenEvent,
   messeSaveEntry, messeStaff, messeStaffCheck, messeDeleteEntry, messeBackToForm, messeManage, messeTransfer, messeEnd
 });

@@ -333,6 +333,8 @@ initFirebase().then(async function(){
   // (persistierte) Sitzung existiert.
   initFirebaseEvents();
   try{ initAccessClaims(); }catch(e){}   // Freigabe-Markierung fürs Speicher-Konto (js/claims.js)
+  // Messemodus: offline erfasste Kontakte nachschicken, sobald angemeldet und online (js/messe.js)
+  try{ firebase.auth().onAuthStateChanged(u=>{ if(u) setTimeout(()=>{ try{ window.messeFlush&&window.messeFlush(); }catch(e){} }, 5000); }); }catch(e){}
   checkPasswordResetToken();
 
   const _hideSplash=()=>{ try{ document.getElementById('fb-loading').style.display='none'; }catch(_){} };

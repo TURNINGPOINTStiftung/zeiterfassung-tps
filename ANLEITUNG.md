@@ -260,7 +260,13 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
   **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
   „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
 - **Verteiler:** gespeicherte E-Mail- und Adresslisten (z. B. für Serienbriefe).
-- **Messemodus:** Kontakte auf Messen offline am Tablet erfassen und später ins CRM übertragen.
+- **Messemodus:** Besucher tragen sich am Tablet selbst ein (Vollbild, nur das leere Formular sichtbar).
+  Veranstaltungen und erfasste Kontakte gelten für **alle Messe-Geräte gemeinsam** – mehrere Tablets am Stand
+  sehen dieselbe Liste. **Ohne Netz** wird auf dem Gerät zwischengespeichert und automatisch nachgeschickt,
+  sobald wieder Netz da ist (oben steht „📴 offline · x wartet auf Netz“). Dafür muss man auf dem Gerät vorher
+  einmal angemeldet gewesen sein („Angemeldet bleiben“). Das Personal öffnet mit der **PIN der Veranstaltung**
+  (gilt auf allen Geräten) die Liste und **überträgt ins CRM** – danach werden die Besucherdaten im Messemodus gelöscht
+  und stehen nur noch im CRM. Freigabe: Verwaltung → Mitarbeiter → Zugriffe → Messemodus „Nutzen“.
 
 ---
 
