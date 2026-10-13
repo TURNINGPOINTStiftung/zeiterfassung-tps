@@ -1,0 +1,370 @@
+{
+  "rules": {
+    "zeiterfassung": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/admins').child(auth.uid).val() === true",
+      "loginDir": {
+        ".read": true,
+        "$key": {
+          ".validate": "!newData.exists() || $key.matches(/^[A-Za-z0-9._-]+$/)"
+        }
+      },
+      "users": {
+        "$i": {
+          "id": {
+            ".validate": "!newData.exists() || newData.val().matches(/^[A-Za-z0-9._-]+$/)"
+          },
+          "pw": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()))"
+          },
+          "email": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()) || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val()))"
+          },
+          "city": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()) || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val()))"
+          },
+          "bundesland": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()) || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val()))"
+          },
+          "lecturePeriods": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()) || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val()))",
+            "$n": {
+              "von": {
+                ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+              },
+              "bis": {
+                ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+              }
+            }
+          },
+          "lectureFreeDays": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === root.child('zeiterfassung/users').child($i).child('id').val()) || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val()))",
+            "$n": {
+              "von": {
+                ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+              },
+              "bis": {
+                ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+              }
+            }
+          },
+          "team": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+          },
+          "teams": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            "$n": {
+              ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+            }
+          },
+          "teamHistory": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            "$n": {
+              "team": {
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+              },
+              "fromDate": {
+                ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+              }
+            }
+          },
+          "customRole": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          },
+          "customRoles": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          },
+          "wh": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "dpw": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "al": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "entryDate": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+          },
+          "exitDate": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+          },
+          "vacHoursPerDay": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "holidaysLikeSunday": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          },
+          "allowHalfVac": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          },
+          "sollWorkdays": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          },
+          "maxHours": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())",
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "paramHistory": {
+            ".write": "auth != null && (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() === true && auth.token.firebase.sign_in_second_factor != null) && root.child('zeiterfassung/users').child($i).child('id').exists() && root.child('zeiterfassung/users').child($i).child('role').val() !== 'admin' && root.child('zeiterfassung/users').child($i).child('id').val() !== root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+          }
+        }
+      },
+      "entries": {
+        "$k": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/managers').child(auth.uid).val() === true || root.child('zeiterfassung/grants/genehmigung_abwesenheit').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && $k.beginsWith(root.child('zeiterfassung/uidUser').child(auth.uid).val() + '_') && $k.replace(root.child('zeiterfassung/uidUser').child(auth.uid).val() + '_', '').matches(/^[0-9]{4}_[0-9]{2}$/) && data.child('status').val() !== 'approved'))",
+          "status": {
+            ".validate": "root.child('zeiterfassung/admins').child(auth.uid).val() === true || (newData.val() === 'submitted' && (!data.exists() || data.val() === 'draft' || data.val() === 'rejected')) || (newData.val() === 'draft' && (!data.exists() || data.val() === 'draft' || data.val() === 'submitted' || data.val() === 'rejected')) || (root.child('zeiterfassung/managers').child(auth.uid).val() === true && (newData.val() === 'approved' || newData.val() === 'rejected') && data.val() === 'submitted')"
+          },
+          "days": {
+            "$ds": {
+              "b1von": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              },
+              "b1bis": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              },
+              "b2von": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              },
+              "b2bis": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              },
+              "ktmin": {
+                ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+              },
+              "b1zuord": {
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+              },
+              "b2zuord": {
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+              },
+              "ktzuord": {
+                ".validate": "!newData.isString() || (newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/))"
+              }
+            }
+          }
+        }
+      },
+      "stamps": {
+        "$uid": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === $uid))"
+        }
+      },
+      "vacRequests": {
+        "$id": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/managers').child(auth.uid).val() === true || root.child('zeiterfassung/grants/genehmigung_abwesenheit').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && (!data.exists() || data.child('userId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val()) && (!newData.exists() || newData.child('userId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())))",
+          "id": {
+            ".validate": "!newData.isString() || newData.val().matches(/^[A-Za-z0-9_.-]{1,120}$/)"
+          },
+          "userId": {
+            ".validate": "!newData.isString() || newData.val().matches(/^[A-Za-z0-9_.-]{1,64}$/)"
+          },
+          "type": {
+            ".validate": "!newData.isString() || (newData.val().length <= 60 && !newData.val().matches(/[<>\"'`]/))"
+          },
+          "startDate": {
+            ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+          },
+          "endDate": {
+            ".validate": "!newData.isString() || newData.val().matches(/^([0-9]{4}-[0-9]{2}-[0-9]{2})?$/)"
+          },
+          "workDays": {
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          },
+          "status": {
+            ".validate": "newData.val() === 'pending' || newData.val() === 'approved' || newData.val() === 'rejected'"
+          },
+          "dayTimes": {
+            "$d": {
+              "von": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              },
+              "bis": {
+                ".validate": "!newData.isString() || newData.val().matches(/^[0-9:. ]{0,8}$/)"
+              }
+            }
+          }
+        }
+      },
+      "teamReports": {
+        ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/managers').child(auth.uid).val() === true || root.child('zeiterfassung/grants/btn_teamberichte').child(auth.uid).val() === true || root.child('zeiterfassung/grants/btn_jahresbericht').child(auth.uid).val() === true || root.child('zeiterfassung/grants/tab_gfberichte').child(auth.uid).val() === true)"
+      },
+      "yearReports": {
+        ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/managers').child(auth.uid).val() === true || root.child('zeiterfassung/grants/btn_teamberichte').child(auth.uid).val() === true || root.child('zeiterfassung/grants/btn_jahresbericht').child(auth.uid).val() === true || root.child('zeiterfassung/grants/tab_gfberichte').child(auth.uid).val() === true)"
+      },
+      "_fixes": {
+        "lastAppBackup": {
+          ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+          ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)"
+        }
+      },
+      "vertretungen": {
+        ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/gfAdmins').child(auth.uid).val() === true)"
+      },
+      "teams": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))",
+        "$i": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
+        }
+      },
+      "cats": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))",
+        "$i": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
+        }
+      },
+      "teamCats": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung_ze').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))",
+        "$team": {
+          "$i": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && !newData.val().matches(/[<>\"'`]/)"
+          }
+        }
+      }
+    },
+    "ze_audit": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      "$k": {
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.exists() && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || root.child('zeiterfassung/managers').child(auth.uid).val() === true || root.child('zeiterfassung/grants/genehmigung_abwesenheit').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && $k.beginsWith(root.child('zeiterfassung/uidUser').child(auth.uid).val() + '_') && $k.replace(root.child('zeiterfassung/uidUser').child(auth.uid).val() + '_', '').matches(/^[0-9]{4}_[0-9]{2}$/) && root.child('zeiterfassung/entries/' + $k + '/status').val() !== 'approved'))",
+          ".validate": "newData.hasChildren(['ts', 'by', 'ds', 'f']) && newData.child('by').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val()"
+        }
+      }
+    },
+    "crm": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".write": "auth != null && root.child('zeiterfassung/admins').child(auth.uid).val() === true",
+      ".validate": "root.child('zeiterfassung/admins').child(auth.uid).val() === true || (data.child('access').exists() === newData.child('access').exists() && data.child('config').exists() === newData.child('config').exists() && data.child('pathAccess').exists() === newData.child('pathAccess').exists())",
+      "config": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung_crm').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))"
+      },
+      "shopConfig": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))"
+      },
+      "shopPlaces": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null))"
+      },
+      "shopItems": {
+        "$id": {
+          ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null)) || (root.child('zeiterfassung/grants/shop_nutzen').child(auth.uid).val() === true && newData.exists()))",
+          "foto": {
+            ".validate": "!newData.isString() || newData.val().matches(/^(data:image\\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\\/=]+|https:\\/\\/[^\\s'\"()<>]+)?$/)"
+          },
+          "min": {
+            ".validate": "newData.isNumber() || (newData.isString() && newData.val().matches(/^[0-9.,]{0,8}$/))"
+          }
+        }
+      },
+      "shopOrders": {
+        "$id": {
+          ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null)) || (root.child('zeiterfassung/grants/shop_nutzen').child(auth.uid).val() === true && (newData.exists() || data.child('byId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())))"
+        }
+      },
+      "shopLoans": {
+        "$id": {
+          ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null)) || (root.child('zeiterfassung/grants/shop_nutzen').child(auth.uid).val() === true && newData.exists()) || (data.exists() && newData.exists() && data.child('borrowerId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val() && newData.child('borrowerId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val()))"
+        }
+      },
+      "shopLog": {
+        "$id": {
+          ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((root.child('zeiterfassung/grants/verw_shop').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null)) || (root.child('zeiterfassung/grants/shop_nutzen').child(auth.uid).val() === true && !data.exists() && newData.exists()))"
+        }
+      },
+      "$coll": {
+        ".write": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true && $coll !== 'access' && $coll !== 'config' && $coll !== 'pathAccess' && !$coll.beginsWith('shop') && $coll !== 'teamprojekte' && $coll !== 'userPrefs'"
+      },
+      "teamprojekte": {
+        "$id": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((root.child('zeiterfassung/grants/verw_kanban').child(auth.uid).val() === true && (root.child('zeiterfassung/grants/zugriff_verwaltung').child(auth.uid).val() !== true || auth.token.firebase.sign_in_second_factor != null)) || (!data.exists() && newData.exists() && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && newData.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val()) || (data.exists() && newData.exists() && newData.child('owner').val() === data.child('owner').val() && newData.child('team').val() === data.child('team').val()) || (data.exists() && root.child('zeiterfassung/uidUser').child(auth.uid).val() != null && data.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val() && (!newData.exists() || newData.child('owner').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())))))"
+        }
+      },
+      "userPrefs": {
+        "$uid": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/uidUser').child(auth.uid).val() === $uid))"
+        }
+      }
+    },
+    "crm_history": {
+      ".read": "auth != null && root.child('zeiterfassung/allowed').child(auth.uid).val() === true",
+      ".indexOn": [
+        "ts"
+      ],
+      "$id": {
+        ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && ((!data.exists() && newData.exists()) || (data.exists() && !newData.exists() && data.child('ts').val() < now - 604800000))))",
+        ".validate": "newData.child('ts').isNumber() && newData.child('ts').val() <= now + 300000 && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || newData.child('byId').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())"
+      }
+    },
+    "messe": {
+      ".read": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/messe_nutzen').child(auth.uid).val() === true))",
+      "events": {
+        "$ev": {
+          ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/messe_nutzen').child(auth.uid).val() === true))",
+          ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 100",
+          "pinHash": {
+            ".validate": "newData.isString() && newData.val().length <= 128"
+          },
+          "pinSalt": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          }
+        }
+      },
+      "entries": {
+        "$ev": {
+          "$id": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/messe_nutzen').child(auth.uid).val() === true))",
+            ".validate": "newData.hasChildren(['vorname','nachname','ts'])",
+            "vorname": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "nachname": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "org": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "email": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "tel": {
+              ".validate": "newData.isString() && newData.val().length <= 60"
+            },
+            "adresse": {
+              ".validate": "newData.isString() && newData.val().length <= 300"
+            },
+            "note": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "by": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "dev": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "ts": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      },
+      "transferred": {
+        "$ev": {
+          "$id": {
+            ".write": "auth != null && (root.child('zeiterfassung/admins').child(auth.uid).val() === true || (root.child('zeiterfassung/allowed').child(auth.uid).val() === true && root.child('zeiterfassung/grants/messe_nutzen').child(auth.uid).val() === true && (!data.exists() || data.child('by').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val())))",
+            ".validate": "newData.child('by').val() === root.child('zeiterfassung/uidUser').child(auth.uid).val() || root.child('zeiterfassung/admins').child(auth.uid).val() === true"
+          }
+        }
+      }
+    }
+  }
+}
