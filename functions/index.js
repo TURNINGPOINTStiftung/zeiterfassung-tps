@@ -16,6 +16,7 @@
 //  POST { action:'mfaPrep' | 'mfaReset' | 'mfaStatus' } – Zwei-Faktor-Anmeldung (siehe unten).
 //  POST { action:'claimSelf' | 'claimSync' } – Freigabe-Markierung tps:true für Storage (siehe unten).
 //  POST { action:'create', id, newPw } – Anmeldekonto anlegen (nur Admin mit zweitem Faktor; Registrierung ist zu).
+//  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
 //
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
@@ -109,6 +110,86 @@ exports.tpsPw = async (req, res) => {
         if (e && e.code === 'auth/email-already-exists') return res.status(409).json({ ok: false, error: 'exists' });
         throw e;
       }
+    }
+
+    // Mitarbeiter anlegen durch die System-Verwaltung (seit 13.10.; Admin darf es ebenfalls).
+    // Die Datenbank-Regeln erlauben neue Datensätze in users nur dem Admin – deshalb legt diese Function
+    // Anmeldekonto + Datensatz + Freischaltung an und prüft alles selbst:
+    //  · Aufrufer: Admin oder System-Verwaltung (grants/zugriff_verwaltung), jeweils mit zweitem Faktor
+    //  · Rollen nur ohne Sonderrechte: mitarbeiter, berater, freiberuflich
+    //  · Zugriffe/Einzelrechte erlaubt – AUSSER „System-Verwaltung“ selbst (zugriff_verwaltung)
+    //  · Felder nur aus einer festen Liste, Texte ohne < > " ' ` (wie Regeln v8)
+    if (action === 'staffCreate') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
+      const isStaff = !isAdmin
+        && (await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() === true
+        && (await db.ref('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid).once('value')).val() === true;
+      if (!isAdmin && !isStaff) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(tok)) return mfaRequired(res);
+      const inU = body.user || {};
+      const newPw = String(body.newPw || '');
+      const uid0 = String(inU.id || '');
+      if (!ID_RE.test(uid0) || uid0 === 'admin') return res.status(400).json({ ok: false, error: 'id' });
+      if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      const ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
+      const role = String(inU.role || 'mitarbeiter');
+      if (!ROLES.includes(role)) return res.status(400).json({ ok: false, error: 'role' });
+      const clean = v => {
+        if (typeof v === 'string') return v.replace(/[<>"'`]/g, '').slice(0, 300);
+        if (typeof v === 'number') return isFinite(v) ? v : 0;
+        if (typeof v === 'boolean' || v === null) return v;
+        if (Array.isArray(v)) return v.slice(0, 50).map(clean);
+        if (v && typeof v === 'object') { const o = {}; Object.keys(v).slice(0, 50).forEach(k => { if (/^[A-Za-z0-9_-]{1,40}$/.test(k)) o[k] = clean(v[k]); }); return o; }
+        return null;
+      };
+      const name = clean(String(inU.name || '')).trim().slice(0, 80);
+      if (!name) return res.status(400).json({ ok: false, error: 'name' });
+      const FIELDS = ['email', 'city', 'bundesland', 'team', 'teams', 'teamHistory', 'customRole', 'customRoles', 'wh', 'dpw', 'al',
+        'entryDate', 'exitDate', 'vacHoursPerDay', 'holidaysLikeSunday', 'allowHalfVac', 'sollWorkdays', 'maxHours',
+        'lecturePeriods', 'lectureFreeDays', 'paramHistory', 'kanbanTeams', 'crmOnly'];
+      const rec = { id: uid0, name, role };
+      FIELDS.forEach(f => { if (inU[f] !== undefined) rec[f] = clean(inU[f]); });
+      const PERM_OK = k => k !== 'zugriff_verwaltung' && (/^(path|verw)_[a-z_]{1,30}$/.test(k) || ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'startseite',
+        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel'].includes(k));
+      const perms = {};
+      Object.keys(inU.perms || {}).forEach(k => { if (PERM_OK(k) && typeof inU.perms[k] === 'boolean') perms[k] = inU.perms[k]; });
+      rec.perms = perms;
+      const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
+      rec.createdBy = callerId; rec.createdAt = new Date().toISOString();
+      // Login-ID darf es weder aktiv noch im Archiv geben
+      const arch = (await db.ref('zeiterfassung/archivedUsers').once('value')).val() || [];
+      if ((Array.isArray(arch) ? arch : Object.values(arch)).some(x => x && x.id === uid0)) return res.status(409).json({ ok: false, error: 'id-archived' });
+      let authUser;
+      try { authUser = await admin.auth().createUser({ email: accountEmail(uid0), password: newPw }); }
+      catch (e) { if (e && e.code === 'auth/email-already-exists') return res.status(409).json({ ok: false, error: 'exists' }); throw e; }
+      const tr = await db.ref('zeiterfassung/users').transaction(cur => {
+        const list = Array.isArray(cur) ? cur : (cur ? Object.values(cur) : []);
+        if (list.some(x => x && x.id === uid0)) return;   // abbrechen: ID schon vergeben
+        return list.concat([rec]);
+      });
+      if (!tr.committed) { try { await admin.auth().deleteUser(authUser.uid); } catch (_) {} return res.status(409).json({ ok: false, error: 'id-taken' }); }
+      const nuid = authUser.uid;
+      const upd = {};
+      upd['zeiterfassung/allowed/' + nuid] = true;
+      upd['zeiterfassung/uidUser/' + nuid] = uid0;
+      upd['zeiterfassung/loginDir/' + dirKey(uid0)] = { id: uid0, name };
+      if (role === 'freiberuflich') upd['zeiterfassung/freelancers/' + nuid] = true;
+      // Freigabelisten für ausdrücklich gesetzte Rechte sofort (der Admin-Start rechnet später alles autoritativ neu)
+      ['genehmigung_abwesenheit', 'btn_teamberichte', 'btn_jahresbericht', 'tab_gfberichte', 'zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop']
+        .forEach(k => { if (perms[k] === true) upd['zeiterfassung/grants/' + k + '/' + nuid] = true; });
+      if (perms.path_shop === true) upd['zeiterfassung/grants/shop_nutzen/' + nuid] = true;
+      if (perms.path_messe === true) upd['zeiterfassung/grants/messe_nutzen/' + nuid] = true;
+      const lvl = String((body.crm && body.crm.level) || 'none');
+      if (['verein', 'readonly', 'full'].includes(lvl)) {
+        const vids = (lvl === 'verein' && Array.isArray(body.crm.vereinIds)) ? body.crm.vereinIds.filter(x => typeof x === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x)).slice(0, 100) : [];
+        upd['crm/access/' + uid0] = { level: lvl, vereinIds: vids };
+      }
+      await db.ref().update(upd);
+      try { await admin.auth().setCustomUserClaims(nuid, { tps: true }); } catch (_) {}
+      return res.json({ ok: true, uid: nuid });
     }
 
     // Offboarding / Wiederherstellen eines Mitarbeiters:

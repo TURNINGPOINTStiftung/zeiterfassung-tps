@@ -366,10 +366,25 @@ export function moveTeamCat(teamName,i,dir){
 
 export function showAddUser(){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
+  if(!_canStamm(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveNewUser())">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
   try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
+  if(_isDelegated(cu)) _limitDelegatedAdd();
+}
+// System-Verwaltung legt an (über tpsPw „staffCreate“): nur Rollen ohne Sonderrechte, „System-Verwaltung“
+// nicht weitergeben; ohne Zwei-Faktor-Anmeldung Speichern sperren.
+function _limitDelegatedAdd(){
+  const box=document.getElementById('modal-body'); if(!box) return;
+  const sel=document.getElementById('uf-role');
+  if(sel && sel.tagName==='SELECT') [...sel.options].forEach(o=>{ if(!['mitarbeiter','berater','freiberuflich'].includes(o.value)) o.remove(); });
+  box.querySelectorAll('input[name="ufmod-system"]').forEach(r=>{ r.checked=(r.value==='kein'); r.disabled=true; const l=r.closest('.uf-seg-opt'); if(l){ l.classList.toggle('on', r.value==='kein'); l.style.pointerEvents='none'; l.style.opacity='.6'; } });
+  const h3=box.querySelector('h3');
+  if(h3) h3.insertAdjacentHTML('afterend','<div style="margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:var(--info-bg);color:var(--info-text);font-size:12px">🔑 System-Verwaltung: Rollen Mitarbeiter/in, Berater/in oder Freiberuflich. Leitung/GF und „System-Verwaltung“ vergibt der Administrator.</div>');
+  if(window._tps2fa===false){
+    if(h3 && window.mfaSessionHint) h3.insertAdjacentHTML('afterend', window.mfaSessionHint());
+    box.querySelectorAll('button').forEach(b=>{ if(/saveNewUser/.test(b.getAttribute('onclick')||'')){ b.disabled=true; b.title='Erst mit Zwei-Faktor-Code anmelden'; } });
+  }
 }
 
 export function showEditUser(id){
@@ -962,6 +977,7 @@ async function _ufSaveAdr(uid){
 }
 
 export async function saveNewUser(){
+  if(_isDelegated(window.cu)) return _saveNewUserDelegated();
   if(!_canVerwaltung(window.cu)){ toast('Nur der Administrator-Account darf Mitarbeiter anlegen.','err'); return; }
   const u=collectUserForm();
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
@@ -986,6 +1002,29 @@ export async function saveNewUser(){
   await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.();
   if(_setupProblem) openModal(`<h3>⚠ Mitarbeiter angelegt, Anmeldung noch nicht möglich</h3><p style="font-size:13px">${esc(_setupProblem)}</p><div class="modal-btns"><button class="btn btn-primary" onclick="closeModal()">OK</button></div>`);
   else toast('Mitarbeiter hinzugefügt. ✓','ok');
+}
+
+// Anlegen durch die System-Verwaltung: alles serverseitig in tpsPw „staffCreate“ (Konto, Datensatz,
+// Freischaltung, CRM-Zugriff) – die Datenbank-Regeln erlauben neue Datensätze nur dem Admin.
+async function _saveNewUserDelegated(){
+  const u=collectUserForm();
+  if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
+  if(!['mitarbeiter','berater','freiberuflich'].includes(u.role)){ toast('Diese Rolle vergibt nur der Administrator.','err'); return; }
+  if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
+  if(String(u.pw).length<8){ toast('Startpasswort: mindestens 8 Zeichen.','err'); return; }
+  const pw=u.pw; delete u.pw;
+  if(u.perms) delete u.perms.zugriff_verwaltung;
+  const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
+  const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+  const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
+  try{ await _adminFn({ action:'staffCreate', user:u, newPw:pw, crm:{ level, vereinIds } }); }
+  catch(e){
+    const m=String((e&&e.message)||e);
+    toast(/exists|id-taken|id-archived/.test(m)?'Login-ID ist schon vergeben (auch im Archiv prüfen).':(/role/.test(m)?'Diese Rolle vergibt nur der Administrator.':m),'err');
+    return;
+  }
+  try{ await _ufSaveAdr(u.id); }catch(_){}
+  closeModal(); toast(`${u.name} angelegt ✓ – Anmeldung mit Login-ID und Startpasswort möglich.`,'ok');
 }
 
 export async function saveEditUser(id){

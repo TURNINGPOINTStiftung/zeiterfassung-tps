@@ -4819,7 +4819,7 @@ function paintVerwUsers(){
     </tr>`;
   }).join('');
   host.innerHTML = `<div class="crm-sec">
-    <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span>${(window.cu&&window.cu.role==='admin')?'<button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button>':''}</h4>
+    <h4><span class="ttl">👥 Mitarbeiter &amp; Zugriff</span>${(window.cu&&(window.cu.role==='admin'||(window.hasPermission&&window.hasPermission('zugriff_verwaltung',window.cu))))?'<button class="btn-sm-crm primary" onclick="showAddUser()">＋ Hinzufügen</button>':''}</h4>
     <div class="small" style="color:var(--muted);margin-bottom:10px">Alles zu einer Person – Rolle, Teams, Arbeitszeit, Urlaub, Berechtigungen und <b>CRM-Zugriff</b> – wird über „Bearbeiten" gesetzt. Die Spalte „CRM-Zugriff" zeigt nur den aktuellen Stand.</div>
     <div style="overflow-x:auto"><table class="vw-table">
       <thead><tr><th>Name</th><th>Rolle</th><th>Team(s)</th><th>CRM-Zugriff</th><th></th></tr></thead>
