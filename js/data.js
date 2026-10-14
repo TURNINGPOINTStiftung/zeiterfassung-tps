@@ -76,12 +76,37 @@ export function _migrate(d){
   // Abwesenheit: reine Arbeitszeit, KEINE Pflichtpause. Bis v377 hat die Live-Pausenlogik dort
   // trotzdem 30/45 Min auf die Endzeit aufgeschlagen (08:00–15:48 → 16:18) – hier idempotent
   // zurücknehmen (bei jedem Laden; danach ist _paused=0 und es passiert nichts mehr).
+  // Tage aus Gutschrift-Anträgen („Sonstiges“ + creditWork), die zwischen v371 und v377 eingetragen wurden, haben
+  // die Zeiten, aber noch keine _absCredit-Markierung → es wurde fälschlich die Pause abgezogen (z. B. 7:18 statt
+  // 7:48 bei Bildungsurlaub im September). Markierung hier idempotent ergänzen – nur für Tage im Zeitraum eines
+  // GENEHMIGTEN Antrags dieser Person mit Zuordnung „Sonstiges“.
   try{
-    Object.values(d.entries).forEach(entry=>{ if(!entry||!entry.days) return;
+    Object.values(d.vacRequests||{}).forEach(req=>{
+      if(!req||req.status!=='approved'||req.type!=='Sonstiges'||req.creditWork!==true||!req.userId||!req.startDate) return;
+      const end=req.endDate||req.startDate;
+      Object.keys(d.entries).forEach(k=>{
+        if(!k.startsWith(req.userId+'_')) return;
+        const e=d.entries[k]; if(!e||!e.days) return;
+        if(k.slice(req.userId.length+1).split('_').length!==2) return;   // genau <uid>_JJJJ_MM (keine anderen IDs mit gleichem Anfang)
+        Object.keys(e.days).forEach(ds=>{ const day=e.days[ds];
+          if(ds>=req.startDate && ds<=end && day && day.b1zuord==='Sonstiges' && !day._absCredit) day._absCredit=true; });
+      });
+    });
+  }catch(e){ console.warn('Gutschrift-Markierung (ignoriert):', e&&e.message); }
+  try{
+    const _uById={}; (d.users||[]).forEach(u=>{ if(u&&u.id) _uById[u.id]=u; });
+    Object.entries(d.entries).forEach(([k,entry])=>{ if(!entry||!entry.days) return;
+      const u=_uById[k.split('_').slice(0,-2).join('_')];
+      const dailyMin=u?(Math.round((Number(u.wh)||0)*60/(Number(u.dpw)||5))||480):0;
       Object.values(entry.days).forEach(day=>{
         if(!day||!day._absCredit||day.b1zuord!=='Sonstiges') return;
         const p=Number(day._paused||0), f=day._pausedF||'';
-        if(p>0 && (f==='b1bis'||f==='b2bis') && day[f]) day[f]=addMin(day[f],-p);
+        // Nur abziehen, wenn die Endzeit die Pause wirklich enthält. Ein vom Antrag erzeugter Tag (08:00 bis
+        // 08:00+Tagessoll) mit einem liegengebliebenen Pausen-Vermerk ist bereits richtig – früher wurden dort
+        // bei jedem Laden 30 Min abgezogen (7:18 statt 7:48, Fehler 15.10.2026).
+        const syncShape=day.b1von==='08:00' && !day.b2von && f==='b1bis' && dailyMin>0;
+        const alreadyOk=syncShape && diffMin(day.b1von, day.b1bis||'')===dailyMin;
+        if(p>0 && !alreadyOk && (f==='b1bis'||f==='b2bis') && day[f]) day[f]=addMin(day[f],-p);
         if(p>0) day._paused=0;
         if(day._netRaw||day._netRawF){ day._netRaw=''; day._netRawF=''; }
       });

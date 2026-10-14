@@ -1216,6 +1216,9 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
               // Pflichtpause, keine 15-Min-Rundung (sonst Minus). AU/Krank ist über die
               // Zuordnung ohnehin schon Abwesenheit, braucht das Flag nicht.
               if(type==='Sonstiges') dayObj._absCredit=true; else if(dayObj._absCredit) delete dayObj._absCredit;
+              // Zeiten wurden neu gesetzt → alte Pausen-Vermerke dieses Tages gelten nicht mehr (sonst zieht die
+              // Korrektur in data.js sie später fälschlich von der Endzeit ab)
+              delete dayObj._pInit; delete dayObj._paused; delete dayObj._pausedF; delete dayObj._netRaw; delete dayObj._netRawF;
               perWeek[wk]=used+1;
             } else {
               dayObj.b1bem=type;
