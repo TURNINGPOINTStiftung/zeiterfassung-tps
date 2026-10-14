@@ -44,6 +44,9 @@ export function hasPermission(permission, roleOrUser){
   const user = (roleOrUser && typeof roleOrUser==='object') ? roleOrUser : null;
   const role = user ? user.role : roleOrUser;
   if(role==='admin') return true;
+  // System-Verwaltung (+ „erweitert“) gibt es nur pro Person – nie über die Rollen-Matrix (sonst über eine Rolle
+  // weitergebbar; Server rechnet genauso, functions/index.js grantUpdates). Audit 14.10.2026.
+  if(permission==='zugriff_verwaltung' || permission==='zugriff_verwaltung_plus') return !!(user && user.perms && user.perms[permission]===true);
   if(user && user.perms && Object.prototype.hasOwnProperty.call(user.perms, permission)){
     return !!user.perms[permission];
   }

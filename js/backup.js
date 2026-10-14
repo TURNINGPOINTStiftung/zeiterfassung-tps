@@ -13,6 +13,7 @@
 // ══════════════════════════════════════════════════════════════════
 import { localISODate, openModal, closeModal, esc, toast, jsArg as jsq } from './utils.js';
 import { PW_FUNCTION_URL } from './config.js';
+import { getUser } from './data.js';
 import { runAutoUserBackup } from './user-backup.js';   // persönlicher Monats-Schnappschuss (Phase 2)
 
 const KEEP_DAILY_DAYS = 90;
@@ -34,7 +35,11 @@ export async function runAutoBackup(){
     const mark = db.ref('zeiterfassung/_fixes/lastAppBackup');
     const last = (await mark.once('value')).val();
     if(last !== today){
-      // Frischer Server-Stand (nicht der lokale Cache).
+      // Seit v458 legt der SERVER das Tages-Backup an (tpsPw autoBackup) – nur dessen Dateien gelten als vertrauenswürdig.
+      const srv = await _fnRaw({ action:'autoBackup' });
+      if(srv.j && srv.j.ok){ console.info('[Backup] Tages-Backup '+today+' (Server) '+(srv.j.created?'angelegt.':'war schon da.')); if(window.cu.role==='admin') await _pruneOld(); return; }
+      if(!(srv.j && srv.j.error==='action')) throw new Error('Server-Backup: '+((srv.j&&srv.j.error)||srv.status));
+      // Ältere Function ohne 'autoBackup': wie bisher vom Gerät hochladen. Frischer Server-Stand (nicht der lokale Cache).
       const [ze, crm] = await Promise.all([
         db.ref('zeiterfassung').once('value').then(s=>s.val()),
         db.ref('crm').once('value').then(s=>s.val()).catch(()=>null),
@@ -112,12 +117,19 @@ try{ window.runAutoBackup = runAutoBackup; window.listAppBackups = listAppBackup
 //  sind. Der Server sichert vor dem Einspielen den aktuellen Stand und übernimmt KEINE Rechte aus dem Backup.
 // ══════════════════════════════════════════════════════════════════
 export function isBackupPlus(cu){ cu=cu||window.cu; return !!(cu && cu.role!=='admin' && cu.perms && cu.perms.zugriff_verwaltung===true && cu.perms.zugriff_verwaltung_plus===true); }
+async function _fnRaw(payload){
+  const me=firebase.auth().currentUser; if(!me) return { status:0, j:null };
+  const tok=await me.getIdToken();
+  const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok}, body:JSON.stringify(payload) });
+  let j=null; try{ j=await r.json(); }catch(_){}
+  return { status:r.status, j };
+}
 async function _fn(payload, fresh){
   const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
   const tok=await me.getIdToken(!!fresh);
   const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok}, body:JSON.stringify(payload) });
   let j={}; try{ j=await r.json(); }catch(_){}
-  if(!r.ok || !j.ok) throw new Error(j.error==='reauth-required' ? 'Die Bestätigung ist abgelaufen – bitte erneut mit Passwort und Code bestätigen.' : j.error==='mfa-required' ? 'Dafür ist eine Anmeldung mit Zwei-Faktor-Code nötig (ab- und wieder anmelden).'
+  if(!r.ok || !j.ok) throw new Error(j.error==='untrusted' ? 'Dieses Backup wurde nicht vom Server erstellt – bitte die Herkunft bestätigen.' : j.error==='reauth-required' ? 'Die Bestätigung ist abgelaufen – bitte erneut mit Passwort und Code bestätigen.' : j.error==='mfa-required' ? 'Dafür ist eine Anmeldung mit Zwei-Faktor-Code nötig (ab- und wieder anmelden).'
     : (j.error==='forbidden' ? 'Keine Berechtigung (System-Verwaltung erweitert nötig).' : (r.status===413 ? 'Die Datei ist zu groß.' : 'Server: '+(j.error||r.status))));
   return j;
 }
@@ -125,12 +137,17 @@ const _PARTS=[['ze','⏱️ Zeiterfassung'],['crm','📇 CRM'],['shop','📦 Lag
 export async function showPlusBackups(){
   if(!isBackupPlus()){ toast('Nur mit „System-Verwaltung erweitert“.','err'); return; }
   openModal('<h3>☁ Automatische Backups</h3><p style="color:var(--muted)">Lädt …</p>');
-  let names=[];
-  try{ names=(await _fn({ action:'backupList' })).names||[]; }
+  let names=[], items=[];
+  try{ const j=await _fn({ action:'backupList' }); names=j.names||[]; items=Array.isArray(j.items)?j.items:names.map(n=>({ name:n, kind:'geraet', by:'' })); }
   catch(e){ openModal('<h3>☁ Automatische Backups</h3><p style="color:var(--danger)">'+esc(e.message)+'</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
-  const lbl=n=>esc(n.slice(8,10)+'.'+n.slice(5,7)+'.'+n.slice(0,4))+(/_vorEinspielen-/.test(n)?' <span class="chip" style="font-size:10px">Sicherung vor Einspielen</span>':(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':''));
-  const rows=names.length ? names.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${lbl(n)}</span>
-      <span style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="plusBackupDownload(${jsq(n)})">⬇ Laden</button><button class="btn btn-warn btn-sm" onclick="plusRestoreAsk(${jsq(n)})">↺ Einspielen</button></span></div>`).join('')
+  // Herkunft (Audit 14.10.2026): server = vom Server erstellt · vor = Sicherung vor Einspielen · geraet = von einem
+  // Gerät hochgeladen (ältere Backups oder – ungeprüft – von irgendeiner Person); Einspielen nur mit Bestätigung.
+  const KIND={ server:['Server','green'], vor:['Sicherung vor Einspielen',''], geraet:['vom Gerät','amber'] };
+  const lbl=it=>{ const n=it.name, k=KIND[it.kind]||KIND.geraet;
+    return esc(n.slice(8,10)+'.'+n.slice(5,7)+'.'+n.slice(0,4))+' <span class="chip" style="font-size:10px">'+esc(k[0])+(it.kind==='geraet'&&it.by?': '+esc(it.by):'')+'</span>'
+      +(/^\d{4}-\d{2}-01_/.test(n)&&it.kind!=='vor'?' <span class="chip" style="font-size:10px">dauerhaft</span>':''); };
+  const rows=items.length ? items.map(it=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${lbl(it)}</span>
+      <span style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="plusBackupDownload(${jsq(it.name)})">⬇ Laden</button><button class="btn btn-warn btn-sm" onclick="plusRestoreAsk(${jsq(it.name)},${jsq(it.kind)},${jsq(it.by||'')})">↺ Einspielen</button></span></div>`).join('')
     : '<p style="color:var(--muted)">Noch keine automatischen Backups vorhanden.</p>';
   openModal('<h3 style="margin-bottom:6px">☁ Automatische Backups</h3><p style="font-size:12px;color:var(--muted);margin-bottom:12px">Täglich automatisch; 90 Tage, der 1. jedes Monats dauerhaft. Vor jedem Einspielen sichert der Server den aktuellen Stand.</p>'
     +'<div style="max-height:50vh;overflow-y:auto">'+rows+'</div><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
@@ -149,24 +166,27 @@ function _partsOf(d){
   if(d._type==='tps-shop-backup') return ['shop'];
   return (d.users&&d.entries)?['ze']:[];
 }
-function _askParts(src, avail, title){
+function _askParts(src, avail, title, untrusted){
   if(!avail.length){ toast('Unbekannte oder leere Backup-Datei.','err'); return; }
-  _pending=src;
+  _pending=Object.assign({}, src, { _untrusted:!!untrusted });
   openModal(`<h3>↺ Backup einspielen</h3><p style="font-size:13px;margin:0 0 10px">${title}</p>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">${_PARTS.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;${avail.includes(k)?'':'opacity:.45'}"><input type="checkbox" class="plus-rp" value="${k}" style="width:auto" ${avail.includes(k)?'':'disabled'}> ${l}</label>`).join('')}</div>
-    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe und Anmeldedaten bleiben wie jetzt.</div>
+    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe, Anmeldedaten und wer aktiv/archiviert ist bleiben wie jetzt. Die Zeichen &lt; und &gt; werden aus Texten entfernt.</div>
+    ${untrusted?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:8px;padding:10px 12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="plus-rp-untrusted" style="width:auto;margin-top:2px"> <span><b>Nicht vom Server erstellt.</b> ${esc(untrusted)} Ich habe geprüft, woher die Datei stammt, und will sie trotzdem einspielen. (Texte werden bereinigt, Rechte bleiben wie jetzt.)</span></label>`:''}
     <div class="form-group" style="margin-bottom:6px"><label for="plus-rp-pw" style="font-size:13px;font-weight:600">🔐 Zur Sicherheit: dein Passwort</label>
       <input type="password" id="plus-rp-pw" autocomplete="current-password" style="width:100%;box-sizing:border-box">
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Danach fragt die App einen neuen Code aus deiner Authenticator-App ab – erst dann wird eingespielt.</div></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-danger" onclick="submitBtn(this,()=>plusRestoreRun())">Einspielen</button></div>`);
 }
-export function plusRestoreAsk(name){ if(!isBackupPlus()) return; _askParts({ name }, ['ze','crm','shop'], 'Automatisches Backup vom <b>'+esc(name.slice(8,10)+'.'+name.slice(5,7)+'.'+name.slice(0,4))+'</b>. Welche Bereiche?'); }
+export function plusRestoreAsk(name, kind, by){ if(!isBackupPlus()) return;
+  _askParts({ name }, ['ze','crm','shop'], 'Automatisches Backup vom <b>'+esc(name.slice(8,10)+'.'+name.slice(5,7)+'.'+name.slice(0,4))+'</b>. Welche Bereiche?',
+    (kind==='server'||kind==='vor') ? '' : ('Dieses Backup hat ein Gerät hochgeladen'+(by?' (Konto: '+by+')':'')+'.')); }
 export function plusRestoreFile(){
   if(!isBackupPlus()) return;
   const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
   inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
     const r=new FileReader(); r.onload=()=>{ let d=null; try{ d=JSON.parse(r.result); }catch(_){ toast('Keine gültige Backup-Datei (JSON).','err'); return; }
-      _askParts({ data:d }, _partsOf(d), 'Datei <b>'+esc(f.name)+'</b>. Welche Bereiche?'); };
+      _askParts({ data:d }, _partsOf(d), 'Datei <b>'+esc(f.name)+'</b>. Welche Bereiche?', 'Es ist eine Datei von diesem Gerät.'); };
     r.readAsText(f); };
   inp.click();
 }
@@ -174,6 +194,8 @@ export async function plusRestoreRun(){
   const src=_pending; if(!src) return;
   const parts={}; document.querySelectorAll('.plus-rp:checked').forEach(c=>{ parts[c.value]=true; });
   if(!Object.keys(parts).length){ toast('Bitte mindestens einen Bereich anhaken.','err'); return; }
+  const untrusted=!!src._untrusted;
+  if(untrusted && !(document.getElementById('plus-rp-untrusted')||{}).checked){ toast('Bitte bestätigen, dass du die Herkunft geprüft hast.','err'); return; }
   // Extra-Bestätigung (User 14.10.2026): Passwort + neuer Zwei-Faktor-Code direkt vor dem Einspielen.
   // Der Server prüft, dass diese Bestätigung höchstens 5 Minuten alt ist.
   const pw=(document.getElementById('plus-rp-pw')||{}).value||'';
@@ -188,9 +210,24 @@ export async function plusRestoreRun(){
     if(c==='auth/mfa-cancelled'){ toast('Einspielen abgebrochen.','err'); return; }
     toast(/wrong-password|invalid-credential|invalid-login/.test(c)?'Passwort falsch.':((window.mfaFriendly&&/verification|multi-factor|too-many/.test(c))?window.mfaFriendly(e):('Bestätigung fehlgeschlagen: '+(c||e&&e.message||''))),'err'); return;
   }
-  try{ toast('Spiele Backup ein …',''); const j=await _fn(Object.assign({ action:'restore', parts }, src), true);
+  const req={ action:'restore', parts }; if(src.name) req.name=src.name; if(src.data) req.data=src.data; if(untrusted) req.allowUntrusted=true;
+  try{ toast('Spiele Backup ein …',''); const j=await _fn(req, true);
     _pending=null; closeModal(); toast('Backup eingespielt ✓ (Sicherung vorher: '+(j.safety||'')+') – Seite wird neu geladen …','ok');
     setTimeout(()=>location.reload(),1800); }
   catch(e){ toast('Einspielen fehlgeschlagen: '+e.message,'err'); }
 }
-try{ Object.assign(window, { showPlusBackups, plusBackupDownload, plusRestoreAsk, plusRestoreFile, plusRestoreRun, isBackupPlus }); }catch(_){}
+// Protokoll der Verwaltungsaktionen (tpsPw ze_admin_log, seit v458) – Administrator und „erweitert“, mit Zwei-Faktor
+export async function showAdminLog(){
+  const cu=window.cu; if(!cu || !(cu.role==='admin' || isBackupPlus(cu))){ toast('Nur Administrator bzw. „System-Verwaltung erweitert“.','err'); return; }
+  openModal('<h3>📜 Verwaltungs-Protokoll</h3><p style="color:var(--muted)">Lädt …</p>');
+  let es=[];
+  try{ es=(await _fn({ action:'adminLog' })).entries||[]; }
+  catch(e){ openModal('<h3>📜 Verwaltungs-Protokoll</h3><p style="color:var(--danger)">'+esc(e.message)+'</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
+  const nm=id=>{ try{ const u=getUser(id); return (u&&u.name)||id; }catch(_){ return id; } };
+  const rows=es.length ? es.map(x=>`<tr><td style="white-space:nowrap">${esc(new Date(x.ts||0).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}))}</td><td>${esc(nm(x.by)||'?')}</td><td>${esc(x.action||'')}</td><td>${esc(x.target?nm(x.target):'')}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="color:var(--muted)">Noch keine Einträge (protokolliert wird seit v458).</td></tr>';
+  openModal('<h3 style="margin-bottom:6px">📜 Verwaltungs-Protokoll</h3><p style="font-size:12px;color:var(--muted);margin-bottom:10px">Was über den Server geändert wurde: Passwörter, Rollen, Zugriffe, Anlegen, Sperren/Wiederherstellen, Zwei-Faktor, Backups. Neueste zuerst (letzte 300).</p>'
+    +'<div style="max-height:55vh;overflow:auto"><table class="vw-table" style="width:100%;font-size:12.5px"><thead><tr><th>Wann</th><th>Wer</th><th>Was</th><th>Wen/Was</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>', true);
+}
+try{ Object.assign(window, { showPlusBackups, plusBackupDownload, plusRestoreAsk, plusRestoreFile, plusRestoreRun, isBackupPlus, showAdminLog }); }catch(_){}
