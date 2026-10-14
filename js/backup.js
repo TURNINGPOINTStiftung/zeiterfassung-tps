@@ -112,12 +112,12 @@ try{ window.runAutoBackup = runAutoBackup; window.listAppBackups = listAppBackup
 //  sind. Der Server sichert vor dem Einspielen den aktuellen Stand und übernimmt KEINE Rechte aus dem Backup.
 // ══════════════════════════════════════════════════════════════════
 export function isBackupPlus(cu){ cu=cu||window.cu; return !!(cu && cu.role!=='admin' && cu.perms && cu.perms.zugriff_verwaltung===true && cu.perms.zugriff_verwaltung_plus===true); }
-async function _fn(payload){
+async function _fn(payload, fresh){
   const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
-  const tok=await me.getIdToken();
+  const tok=await me.getIdToken(!!fresh);
   const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok}, body:JSON.stringify(payload) });
   let j={}; try{ j=await r.json(); }catch(_){}
-  if(!r.ok || !j.ok) throw new Error(j.error==='mfa-required' ? 'Dafür ist eine Anmeldung mit Zwei-Faktor-Code nötig (ab- und wieder anmelden).'
+  if(!r.ok || !j.ok) throw new Error(j.error==='reauth-required' ? 'Die Bestätigung ist abgelaufen – bitte erneut mit Passwort und Code bestätigen.' : j.error==='mfa-required' ? 'Dafür ist eine Anmeldung mit Zwei-Faktor-Code nötig (ab- und wieder anmelden).'
     : (j.error==='forbidden' ? 'Keine Berechtigung (System-Verwaltung erweitert nötig).' : (r.status===413 ? 'Die Datei ist zu groß.' : 'Server: '+(j.error||r.status))));
   return j;
 }
@@ -154,7 +154,10 @@ function _askParts(src, avail, title){
   _pending=src;
   openModal(`<h3>↺ Backup einspielen</h3><p style="font-size:13px;margin:0 0 10px">${title}</p>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">${_PARTS.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;${avail.includes(k)?'':'opacity:.45'}"><input type="checkbox" class="plus-rp" value="${k}" style="width:auto" ${avail.includes(k)?'':'disabled'}> ${l}</label>`).join('')}</div>
-    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:6px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe und Anmeldedaten bleiben wie jetzt.</div>
+    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe und Anmeldedaten bleiben wie jetzt.</div>
+    <div class="form-group" style="margin-bottom:6px"><label for="plus-rp-pw" style="font-size:13px;font-weight:600">🔐 Zur Sicherheit: dein Passwort</label>
+      <input type="password" id="plus-rp-pw" autocomplete="current-password" style="width:100%;box-sizing:border-box">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Danach fragt die App einen neuen Code aus deiner Authenticator-App ab – erst dann wird eingespielt.</div></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-danger" onclick="submitBtn(this,()=>plusRestoreRun())">Einspielen</button></div>`);
 }
 export function plusRestoreAsk(name){ if(!isBackupPlus()) return; _askParts({ name }, ['ze','crm','shop'], 'Automatisches Backup vom <b>'+esc(name.slice(8,10)+'.'+name.slice(5,7)+'.'+name.slice(0,4))+'</b>. Welche Bereiche?'); }
@@ -171,7 +174,21 @@ export async function plusRestoreRun(){
   const src=_pending; if(!src) return;
   const parts={}; document.querySelectorAll('.plus-rp:checked').forEach(c=>{ parts[c.value]=true; });
   if(!Object.keys(parts).length){ toast('Bitte mindestens einen Bereich anhaken.','err'); return; }
-  try{ toast('Spiele Backup ein …',''); const j=await _fn(Object.assign({ action:'restore', parts }, src));
+  // Extra-Bestätigung (User 14.10.2026): Passwort + neuer Zwei-Faktor-Code direkt vor dem Einspielen.
+  // Der Server prüft, dass diese Bestätigung höchstens 5 Minuten alt ist.
+  const pw=(document.getElementById('plus-rp-pw')||{}).value||'';
+  if(!pw){ toast('Bitte dein Passwort eingeben.','err'); return; }
+  const fu=firebase.auth().currentUser; if(!fu||!fu.email){ toast('Keine gültige Anmeldung – bitte neu anmelden.','err'); return; }
+  try{
+    const cred=firebase.auth.EmailAuthProvider.credential(fu.email, pw);
+    try{ await fu.reauthenticateWithCredential(cred); toast('Für dieses Konto ist kein Zwei-Faktor eingerichtet – Einspielen nicht möglich.','err'); return; }
+    catch(e1){ if(e1&&e1.code==='auth/multi-factor-auth-required') await window.mfaResolve(e1); else throw e1; }
+  }catch(e){
+    const c=(e&&e.code)||'';
+    if(c==='auth/mfa-cancelled'){ toast('Einspielen abgebrochen.','err'); return; }
+    toast(/wrong-password|invalid-credential|invalid-login/.test(c)?'Passwort falsch.':((window.mfaFriendly&&/verification|multi-factor|too-many/.test(c))?window.mfaFriendly(e):('Bestätigung fehlgeschlagen: '+(c||e&&e.message||''))),'err'); return;
+  }
+  try{ toast('Spiele Backup ein …',''); const j=await _fn(Object.assign({ action:'restore', parts }, src), true);
     _pending=null; closeModal(); toast('Backup eingespielt ✓ (Sicherung vorher: '+(j.safety||'')+') – Seite wird neu geladen …','ok');
     setTimeout(()=>location.reload(),1800); }
   catch(e){ toast('Einspielen fehlgeschlagen: '+e.message,'err'); }
