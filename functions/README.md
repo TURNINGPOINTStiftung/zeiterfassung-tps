@@ -13,5 +13,8 @@ gcloud functions deploy tpsPw --gen2 --runtime=nodejs22 --region=europe-west1 \
 ```
 `--allow-unauthenticated` ist nötig, weil „Passwort vergessen" vor dem Login läuft; die
 Aktion `set` prüft selbst das ID-Token + `zeiterfassung/admins`.
-Der Standard-Dienstkonto-Zugriff (Admin SDK) umgeht die Datenbank-Regeln – die Function
-schreibt nur `zeiterfassung/pwResetRequests/*` und das Firebase-Auth-Passwort.
+Der Standard-Dienstkonto-Zugriff (Admin SDK) umgeht die Datenbank-Regeln. Die Function schreibt deshalb nach
+eigener Prüfung u. a. `users`, `archivedUsers`, Freigabelisten (`allowed`, `uidUser`, `managers`, `gfAdmins`,
+`freelancers`, `grants`), `crm/access`, beim Einspielen eines Backups Inhaltsknoten von `zeiterfassung`/`crm`,
+Storage `backups/daily/` (Tages-Backup `_srv.json`, Sicherung `_vorEinspielen-…`) und das Protokoll `ze_admin_log`.
+Speicher: für das Einspielen großer Backups ggf. `--memory=512MiB` verwenden.

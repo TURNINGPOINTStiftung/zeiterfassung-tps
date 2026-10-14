@@ -19,7 +19,8 @@
 //  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
 //  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams } – Zugriffe bestehender Personen (siehe unten).
 //  POST { action:'staffRole', id, role } – Rolle ändern (nur Admin und „System-Verwaltung erweitert“, siehe unten).
-//  POST { action:'backupList' | 'backupGet' | 'restore' } – Backups ansehen/laden/einspielen („erweitert“, siehe unten).
+//  POST { action:'backupList' | 'backupGet' | 'restore' | 'adminLog' } – Backups / Protokoll („erweitert“, siehe unten).
+//  POST { action:'autoBackup' } – Tages-Backup durch den Server (jede freigeschaltete Person, siehe unten).
 //
 //  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
 //  zusammen mit „System-Verwaltung“ und nur mit zweitem Faktor): zusätzlich Einmal-Passwörter setzen ('set') und die
@@ -57,22 +58,61 @@ const mfaRequired = res => res.status(403).json({ ok: false, error: 'mfa-require
 // Die Rechte-Matrix (zeiterfassung/rolePermissions) hat Vorrang, persönliche Einzelrechte (perms) erst recht.
 const ROLE_DEFAULTS = { tab_gfberichte: ['geschaeftsfuehrer'], btn_teamberichte: [], btn_jahresbericht: ['leitung'],
   genehmigung_abwesenheit: ['leitung', 'geschaeftsfuehrer'], zugriff_verwaltung: [] };
-const AREA_KEYS = ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop'];
 const ALL_ROLES = ['mitarbeiter', 'berater', 'freiberuflich', 'leitung', 'geschaeftsfuehrer'];
 const BASIC_ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
 // Freigabelisten (grants) einer Person aus Rolle + Einzelrechten – gleiche Logik wie admin-setup.js
 // refreshPermissionAllowlists (der Admin-Start rechnet ohnehin alles autoritativ neu).
-async function grantUpdates(authUid, u) {
-  const rp = (await db.ref('zeiterfassung/rolePermissions').once('value')).val() || {};
+// „System-Verwaltung“ (+ „erweitert“) gibt es NUR pro Person – die Rollen-Matrix zählt dafür nicht, sonst
+// ließe sie sich über eine Rolle weitergeben (Audit 14.10.2026). opts.crmLevel: CRM-Stufe, falls gerade erst gesetzt.
+async function grantUpdates(authUid, u, opts) {
+  const val = async p => (await db.ref(p).once('value')).val();
+  const rp = (await val('zeiterfassung/rolePermissions')) || {};
+  const pa = (await val('crm/pathAccess')) || {};
+  const acc = (await val('crm/access/' + String(u.id || '').replace(/[.#$\[\]\/]/g, '_'))) || {};
   const p = (u && u.perms) || {};
-  const has = k => Object.prototype.hasOwnProperty.call(p, k) ? !!p[k] : (Array.isArray(rp[k]) ? rp[k] : (ROLE_DEFAULTS[k] || [])).includes(u.role);
-  const sys = has('zugriff_verwaltung');
-  const upd = {};
-  ['tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'genehmigung_abwesenheit', 'zugriff_verwaltung']
-    .forEach(k => { upd['zeiterfassung/grants/' + k + '/' + authUid] = has(k) ? true : null; });
-  AREA_KEYS.forEach(k => { upd['zeiterfassung/grants/' + k + '/' + authUid] = (sys || p[k] === true) ? true : null; });
-  upd['zeiterfassung/grants/zugriff_verwaltung_plus/' + authUid] = (sys && p.zugriff_verwaltung_plus === true) ? true : null;
+  const own = k => Object.prototype.hasOwnProperty.call(p, k);
+  const has = k => own(k) ? !!p[k] : (Array.isArray(rp[k]) ? rp[k] : (ROLE_DEFAULTS[k] || [])).includes(u.role);
+  const sys = p.zugriff_verwaltung === true;
+  const upd = {}; const g = (k, on) => { upd['zeiterfassung/grants/' + k + '/' + authUid] = on ? true : null; };
+  ['tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'genehmigung_abwesenheit'].forEach(k => g(k, has(k)));
+  g('zugriff_verwaltung', sys);
+  g('zugriff_verwaltung_plus', sys && p.zugriff_verwaltung_plus === true);
+  ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender'].forEach(k => g(k, sys || has(k)));
+  const shopUse = own('path_shop') ? !!p.path_shop : !!(pa.shop && pa.shop[u.role]);
+  g('shop_nutzen', shopUse);
+  g('verw_shop', shopUse && (sys || has('verw_shop')));
+  const lvl = (opts && opts.crmLevel) || acc.level || 'none';
+  const messeUse = own('path_messe') ? !!p.path_messe
+    : ((pa.messe && Object.prototype.hasOwnProperty.call(pa.messe, u.role)) ? !!pa.messe[u.role] : (lvl === 'full' || lvl === 'admin'));
+  g('messe_nutzen', messeUse);
   return upd;
+}
+// ── Hilfen für Backups ──
+const SHOP_COLLS = ['shopItems', 'shopPlaces', 'shopOrders', 'shopLog', 'shopLoans', 'shopConfig'];
+const berlinDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });   // JJJJ-MM-TT
+function fullBlob(ze, crm, source, by) {
+  const crmPart = {}, shopPart = { _v: 1 };
+  Object.keys(crm || {}).forEach(k => { if (SHOP_COLLS.includes(k)) shopPart[k] = crm[k]; else crmPart[k] = crm[k]; });
+  return { _type: 'tps-vollbackup', _v: 2, source, exportedAt: new Date().toISOString(), byUser: by || '', zeiterfassung: ze, crm: crmPart, shop: shopPart };
+}
+// Eingespielte Inhalte bereinigen: Texte ohne < >, nur gültige Datenbank-Schlüssel, begrenzte Tiefe (Audit 14.10.2026)
+const cleanStr = s => String(s).replace(/[<>]/g, '');
+function cleanDeep(v, depth) {
+  depth = depth || 0;
+  if (depth > 30) return null;
+  if (typeof v === 'string') return cleanStr(v).slice(0, 20000);
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (typeof v === 'boolean' || v === null) return v;
+  if (Array.isArray(v)) return v.slice(0, 5000).map(x => cleanDeep(x, depth + 1));
+  if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach(k => { if (k && k.length <= 200 && !/[.#$/\[\]]/.test(k)) { const x = cleanDeep(v[k], depth + 1); if (x !== undefined) o[k] = x; } }); return o; }
+  return null;
+}
+// Protokoll aller Verwaltungsaktionen der Function (Audit 14.10.2026): ze_admin_log/<Schlüssel> – im SELBEN
+// update wie die Änderung (atomar). Lesen nur über die Aktion 'adminLog' (Admin / „erweitert“).
+function logTo(upd, c, action, target, details) {
+  const k = db.ref('ze_admin_log').push().key;
+  upd['ze_admin_log/' + k] = { ts: Date.now(), by: String((c && c.callerId) || ''), byUid: String((c && c.tok && c.tok.uid) || ''),
+    action: String(action), target: String(target || '').slice(0, 80), details: details || null };
 }
 // Wer ruft auf? → { tok, isAdmin, isStaff (System-Verwaltung), isPlus (… erweitert), callerId } oder null
 async function whoCalls(req) {
@@ -138,6 +178,7 @@ exports.tpsPw = async (req, res) => {
       const u = await admin.auth().getUserByEmail(accountEmail(id));
       if (!c.isAdmin && (u.uid === c.tok.uid || (await db.ref('zeiterfassung/admins/' + u.uid).once('value')).val() === true))
         return res.status(403).json({ ok: false, error: 'protected' });
+      const lu = {}; logTo(lu, c, 'Einmal-Passwort gesetzt', id); await db.ref().update(lu);   // Protokoll zuerst
       await admin.auth().updateUser(u.uid, { password: newPw });
       await db.ref('zeiterfassung/pwResetRequests/' + id).remove();
       return res.json({ ok: true });
@@ -158,6 +199,8 @@ exports.tpsPw = async (req, res) => {
       if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
       try {
         const u = await admin.auth().createUser({ email: accountEmail(id), password: newPw });
+        const lu = {}; logTo(lu, { callerId: (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '', tok }, 'Anmeldekonto angelegt', id);
+        await db.ref().update(lu);
         return res.json({ ok: true, uid: u.uid });
       } catch (e) {
         if (e && e.code === 'auth/email-already-exists') return res.status(409).json({ ok: false, error: 'exists' });
@@ -236,10 +279,9 @@ exports.tpsPw = async (req, res) => {
       if (role === 'leitung' || role === 'geschaeftsfuehrer') upd['zeiterfassung/managers/' + nuid] = true;
       if (role === 'geschaeftsfuehrer') upd['zeiterfassung/gfAdmins/' + nuid] = true;
       // Freigabelisten aus Rolle + Rechten sofort (der Admin-Start rechnet später alles autoritativ neu)
-      Object.assign(upd, await grantUpdates(nuid, rec));
-      if (perms.path_shop === true) upd['zeiterfassung/grants/shop_nutzen/' + nuid] = true;
-      if (perms.path_messe === true) upd['zeiterfassung/grants/messe_nutzen/' + nuid] = true;
       const lvl = String((body.crm && body.crm.level) || 'none');
+      Object.assign(upd, await grantUpdates(nuid, rec, { crmLevel: lvl }));
+      logTo(upd, { callerId, tok }, 'Person angelegt', uid0, { role, crm: lvl });
       if (['verein', 'readonly', 'full'].includes(lvl)) {
         const vids = (lvl === 'verein' && Array.isArray(body.crm.vereinIds)) ? body.crm.vereinIds.filter(x => typeof x === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x)).slice(0, 100) : [];
         upd['crm/access/' + uid0] = { level: lvl, vereinIds: vids };
@@ -287,9 +329,10 @@ exports.tpsPw = async (req, res) => {
         if (u.role === 'admin' || !TARGET_ROLES.includes(u.role)) { reason = 'role'; return; }
         if (!isAdmin && isPlusUser(u)) { reason = 'protected'; return; }
         // „System-Verwaltung“ und „… erweitert“ bleiben wie sie sind (vergibt nur der Administrator)
+        // (auch ein ausdrückliches „Nein“ bleibt erhalten – Audit 14.10.2026)
         const perms = Object.assign({}, newPerms);
-        if (u.perms && u.perms.zugriff_verwaltung) perms.zugriff_verwaltung = true;
-        if (u.perms && u.perms.zugriff_verwaltung_plus) perms.zugriff_verwaltung_plus = true;
+        ['zugriff_verwaltung', 'zugriff_verwaltung_plus'].forEach(k => {
+          if (u.perms && Object.prototype.hasOwnProperty.call(u.perms, k)) perms[k] = u.perms[k]; else delete perms[k]; });
         list[i] = Object.assign({}, u, { perms, crmOnly });
         if (kanbanTeams) list[i].kanbanTeams = kanbanTeams;
         target = list[i];
@@ -299,12 +342,9 @@ exports.tpsPw = async (req, res) => {
       // Freigabelisten der Person angleichen (Admin-Start rechnet später ohnehin alles autoritativ neu)
       let au = null; try { au = await admin.auth().getUserByEmail(accountEmail(id)); } catch (_) {}
       const upd = {};
-      if (au) {
-        Object.assign(upd, await grantUpdates(au.uid, target));
-        if ('path_shop' in target.perms) upd['zeiterfassung/grants/shop_nutzen/' + au.uid] = target.perms.path_shop ? true : null;
-        if ('path_messe' in target.perms) upd['zeiterfassung/grants/messe_nutzen/' + au.uid] = target.perms.path_messe ? true : null;
-      }
       const lvl = String((body.crm && body.crm.level) || 'none');
+      if (au) Object.assign(upd, await grantUpdates(au.uid, target, { crmLevel: ['verein', 'readonly', 'full'].includes(lvl) ? lvl : 'none' }));
+      logTo(upd, { callerId, tok }, 'Zugriffe geändert', id, { crm: lvl });
       if (['verein', 'readonly', 'full'].includes(lvl)) {
         const vids = (lvl === 'verein' && Array.isArray(body.crm.vereinIds)) ? body.crm.vereinIds.filter(x => typeof x === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(x)).slice(0, 100) : [];
         upd['crm/access/' + id] = { level: lvl, vereinIds: vids };
@@ -313,29 +353,68 @@ exports.tpsPw = async (req, res) => {
       return res.json({ ok: true });
     }
 
-    // ── Backups für „System-Verwaltung erweitert“ (seit 14.10.; der Administrator nutzt weiter die App direkt) ──
-    //  backupList          – Namen der automatischen Backups (Storage backups/daily/)
-    //  backupGet { name }  – Inhalt eines automatischen Backups (zum Herunterladen)
-    //  restore { name | data, parts:{ze,crm,shop} } – Backup einspielen, NUR mit zweitem Faktor UND frischer
-    //     Bestätigung: Passwort + neuer Code unmittelbar vorher (auth_time höchstens 5 Minuten alt), damit es
-    //     nicht versehentlich passiert (User 14.10.2026). Sonst 403 'reauth-required'.
-    //   · Vorher wird der aktuelle Stand als backups/daily/<Datum>_vorEinspielen-<uid>-<Zeit>.json gesichert
-    //     (klappt das nicht, wird nichts eingespielt).
-    //   · Ein Backup darf keine Rechte vergeben: Anmelde-/Freigabeknoten, Rechte-Matrix, CRM-Zugriffe und
-    //     persönliche Einstellungen bleiben wie JETZT; bei Personen, die es jetzt gibt, bleiben Rolle und
-    //     Rechte wie jetzt; Personen nur im Backup kommen ohne Sonder- und System-Rechte zurück; Personen,
-    //     die es nur jetzt gibt, bleiben erhalten (niemand wird ausgesperrt).
-    if (action === 'backupList' || action === 'backupGet' || action === 'restore') {
+    // ── Tages-Backup durch den SERVER (seit v458): Das erste Gerät des Tages ruft 'autoBackup' auf; die Function
+    //    liest den Stand selbst und legt backups/daily/<Datum>_srv.json an. Diese Namen kann kein Gerät erzeugen
+    //    (Storage-Regel verlangt dort die eigene UID) → Server-Backups sind von Geräte-Uploads unterscheidbar.
+    if (action === 'autoBackup') {
+      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
+      const tok = await admin.auth().verifyIdToken(m[1]);
+      if ((await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() !== true
+        && (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() !== true) return res.status(403).json({ ok: false, error: 'forbidden' });
+      const day = berlinDay();
+      const file = admin.storage().bucket(BUCKET).file('backups/daily/' + day + '_srv.json');
+      const [exists] = await file.exists();
+      if (!exists) {
+        const ze = (await db.ref('zeiterfassung').once('value')).val() || {};
+        const crm = (await db.ref('crm').once('value')).val() || {};
+        if (!Array.isArray(ze.users) || !ze.users.length) return res.status(409).json({ ok: false, error: 'empty' });
+        try { await file.save(JSON.stringify(fullBlob(ze, crm, 'server', '')), { contentType: 'application/json', resumable: false, preconditionOpts: { ifGenerationMatch: 0 } }); }
+        catch (e) { if (!(e && (e.code === 412 || e.code === '412'))) throw e; }   // gleichzeitig schon angelegt → in Ordnung
+      }
+      await db.ref('zeiterfassung/_fixes/lastAppBackup').set(day);
+      return res.json({ ok: true, created: !exists, day });
+    }
+
+    // ── Backups für „System-Verwaltung erweitert“ (seit 14.10.; Admin nutzt zusätzlich die App direkt) ──
+    //  backupList          – automatische Backups mit Herkunft: server (vom Server erstellt), vor (Sicherung vor
+    //                        Einspielen), geraet (älteres/fremdes Geräte-Upload – Inhalt nicht serverseitig erstellt)
+    //  backupGet { name }  – Inhalt (zum Herunterladen)
+    //  restore { name | data, parts:{ze,crm,shop} } – Einspielen, NUR mit zweitem Faktor UND frischer Bestätigung
+    //     (Passwort + neuer Code, auth_time ≤ 5 Min.). Gehärtet nach dem Audit 14.10.2026:
+    //   · Geräte-Uploads und eigene Dateien nur nach ausdrücklicher Bestätigung (allowUntrusted) – sonst nur Server-Backups
+    //   · Vorher Pflicht-Sicherung des aktuellen Stands
+    //   · Nur eine ERLAUBNISLISTE von Inhaltsknoten wird ersetzt (alles andere – Anmeldung, Freigaben, Matrix,
+    //     Vertretungen, Einstellungen – bleibt wie jetzt), Inhalte werden geprüft/bereinigt (IDs, Schlüssel, Texte ohne < >)
+    //   · Rollen/Rechte bestehender Personen bleiben wie jetzt; wer heute aktiv ist, bleibt aktiv; Personen nur im
+    //     Backup kommen als Mitarbeiter/in ohne Sonderrechte zurück
+    if (action === 'backupList' || action === 'backupGet' || action === 'restore' || action === 'adminLog') {
       const c = await whoCalls(req);
       if (!c) return res.status(401).json({ ok: false, error: 'auth' });
       if (!c.isAdmin && !c.isPlus) return res.status(403).json({ ok: false, error: 'forbidden' });
       if (!hasMfa(c.tok)) return mfaRequired(res);
+      if (action === 'adminLog') {
+        const snap = await db.ref('ze_admin_log').orderByKey().limitToLast(300).once('value');
+        const out = []; snap.forEach(ch => { out.push(ch.val()); });
+        return res.json({ ok: true, entries: out.reverse() });
+      }
       const bucket = admin.storage().bucket(BUCKET);
       const NAME_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}_[A-Za-z0-9_-]{1,120}\.json$/;
+      const kindOf = n => /_srv\.json$/.test(n) ? 'server' : (/_vorEinspielen-/.test(n) ? 'vor' : 'geraet');
       if (action === 'backupList') {
-        const [files] = await bucket.getFiles({ prefix: 'backups/daily/' });
-        const names = files.map(f => f.name.slice('backups/daily/'.length)).filter(n => NAME_RE.test(n)).sort().reverse();
-        return res.json({ ok: true, names });
+        // alle Seiten lesen; Dateien mit unplausiblem Datum (vor 2025 / in der Zukunft) ausblenden – sonst ließe sich die
+        // Liste mit Geräte-Uploads fluten bzw. echte Backups verdrängen (Audit-Gegenprüfung 14.10.2026)
+        const [files] = await bucket.getFiles({ prefix: 'backups/daily/', autoPaginate: true });
+        const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
+        const names = files.map(f => f.name.slice('backups/daily/'.length)).filter(n => NAME_RE.test(n) && n.slice(0, 10) >= '2025-01-01' && n.slice(0, 10) <= tomorrow)
+          .sort().reverse().slice(0, 400);
+        const uu = (await db.ref('zeiterfassung/uidUser').once('value')).val() || {};
+        const users = (await db.ref('zeiterfassung/users').once('value')).val() || [];
+        const nameOf = id => { const u = (Array.isArray(users) ? users : Object.values(users)).find(x => x && x.id === id); return u ? String(u.name || id) : id; };
+        const items = names.map(n => { const k = kindOf(n); let by = '';
+          if (k === 'geraet') { const m = n.match(/^[0-9-]{10}_([A-Za-z0-9]+)\.json$/); const lid = m ? uu[m[1]] : ''; by = lid ? nameOf(lid) : 'unbekannt'; }
+          return { name: n, kind: k, by }; });
+        return res.json({ ok: true, names, items });
       }
       const readBackup = async name => {
         if (!NAME_RE.test(String(name || ''))) return null;
@@ -345,74 +424,86 @@ exports.tpsPw = async (req, res) => {
       if (action === 'backupGet') {
         const d = await readBackup(body.name);
         if (!d) return res.status(400).json({ ok: false, error: 'name' });
+        const lu = {}; logTo(lu, c, 'Backup heruntergeladen', String(body.name).slice(0, 80)); await db.ref().update(lu);
         return res.json({ ok: true, data: d });
       }
       // restore – nur direkt nach erneuter Bestätigung (Passwort + Code)
       const age = Date.now() / 1000 - Number(c.tok.auth_time || 0);
       if (!(age >= 0 && age <= 300)) return res.status(403).json({ ok: false, error: 'reauth-required' });
+      const trusted = !!body.name && kindOf(String(body.name)) !== 'geraet';
+      if (!trusted && body.allowUntrusted !== true) return res.status(409).json({ ok: false, error: 'untrusted' });
       let src = null;
       try { src = body.name ? await readBackup(body.name) : body.data; } catch (e) { return res.status(400).json({ ok: false, error: 'file' }); }
       if (!src || typeof src !== 'object' || Array.isArray(src)) return res.status(400).json({ ok: false, error: 'file' });
-      const SHOP = ['shopItems', 'shopPlaces', 'shopOrders', 'shopLog', 'shopLoans', 'shopConfig'];
       const isVoll = src._type === 'tps-vollbackup', isCrm = src._type === 'tps-crm-backup', isShop = src._type === 'tps-shop-backup';
       const ze = isVoll ? src.zeiterfassung : ((isCrm || isShop) ? null : src);
-      let crmIn = (isVoll || isCrm) ? src.crm : null;
+      const crmIn = (isVoll || isCrm) ? src.crm : null;
       let shopIn = isShop ? src.shop : (isVoll ? (src.shop || null) : null);
-      if (crmIn && typeof crmIn === 'object' && !shopIn && SHOP.some(k => k in crmIn)) { shopIn = {}; SHOP.forEach(k => { if (k in crmIn) shopIn[k] = crmIn[k]; }); }
+      if (crmIn && typeof crmIn === 'object' && !shopIn && SHOP_COLLS.some(k => k in crmIn)) { shopIn = {}; SHOP_COLLS.forEach(k => { if (k in crmIn) shopIn[k] = crmIn[k]; }); }
       const parts = body.parts || {};
-      const doZe = parts.ze === true && !!(ze && Array.isArray(ze.users) && ze.entries && typeof ze.entries === 'object');
-      const doCrm = parts.crm === true && !!(crmIn && typeof crmIn === 'object' && !Array.isArray(crmIn));
-      const doShop = parts.shop === true && !!(shopIn && typeof shopIn === 'object' && !Array.isArray(shopIn));
+      const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+      const doZe = parts.ze === true && !!(ze && isObj(ze) && (Array.isArray(ze.users) || isObj(ze.users)) && isObj(ze.entries));
+      const doCrm = parts.crm === true && isObj(crmIn);
+      const doShop = parts.shop === true && isObj(shopIn);
       if (!doZe && !doCrm && !doShop) return res.status(400).json({ ok: false, error: 'nothing' });
       // 1) Sicherung des aktuellen Stands (Pflicht)
       const curZe = (await db.ref('zeiterfassung').once('value')).val() || {};
       const curCrm = (await db.ref('crm').once('value')).val() || {};
-      const now = new Date(); const day = now.toISOString().slice(0, 10);
-      const safeName = day + '_vorEinspielen-' + c.tok.uid.replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + '-' + now.getTime() + '.json';
-      const curCrmPart = {}, curShopPart = { _v: 1 };
-      Object.keys(curCrm).forEach(k => { if (SHOP.includes(k)) curShopPart[k] = curCrm[k]; else curCrmPart[k] = curCrm[k]; });
-      await bucket.file('backups/daily/' + safeName).save(JSON.stringify({ _type: 'tps-vollbackup', _v: 2, source: 'vor-einspielen',
-        exportedAt: now.toISOString(), byUser: c.callerId, zeiterfassung: curZe, crm: curCrmPart, shop: curShopPart }), { contentType: 'application/json', resumable: false });
+      const now = new Date();
+      const safeName = berlinDay() + '_vorEinspielen-' + c.tok.uid.replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + '-' + now.getTime() + '.json';
+      await bucket.file('backups/daily/' + safeName).save(JSON.stringify(fullBlob(curZe, curCrm, 'vor-einspielen', c.callerId)), { contentType: 'application/json', resumable: false });
       const upd = {};
-      // 2) Zeiterfassung: Inhalte aus dem Backup, Rechte wie jetzt
+      // 2) Zeiterfassung: nur Inhaltsknoten der Erlaubnisliste, bereinigt; Rechte wie jetzt
       if (doZe) {
-        const KEEP = ['allowed', 'uidUser', 'admins', 'gfAdmins', 'managers', 'freelancers', 'grants', 'loginDir', 'pwResetRequests', 'pwResetTokens', 'rolePermissions', '_fixes'];
-        const SEC = ['role', 'perms', 'crmOnly', 'noTimesheet', 'noReport', 'gfCountersign', 'kanbanTeams'];
-        const list = v => Array.isArray(v) ? v.filter(Boolean) : (v && typeof v === 'object' ? Object.values(v).filter(Boolean) : []);
-        const curAll = {}; list(curZe.users).concat(list(curZe.archivedUsers)).forEach(u => { if (u && u.id) curAll[u.id] = u; });
+        const list = v => Array.isArray(v) ? v.filter(Boolean) : (isObj(v) ? Object.values(v).filter(Boolean) : []);
+        const SEC = ['role', 'perms', 'crmOnly', 'noTimesheet', 'noReport', 'gfCountersign', 'kanbanTeams', 'accessRevoked', 'archivedAt', 'archivedBy'];
+        const curActive = {}, curAll = {};
+        list(curZe.archivedUsers).forEach(u => { if (u && u.id) curAll[u.id] = u; });
+        list(curZe.users).forEach(u => { if (u && u.id) { curAll[u.id] = u; curActive[u.id] = u; } });   // aktiv hat Vorrang
         const fix = u => {
-          if (!u || typeof u !== 'object' || !u.id) return null;
-          const o = Object.assign({}, u); delete o.pw;
+          if (!isObj(u) || typeof u.id !== 'string' || !ID_RE.test(u.id)) return null;
+          const o = cleanDeep(u); delete o.pw;
           const cu0 = curAll[u.id];
           if (cu0) {
             if (cu0.role === 'admin' || u.id === 'admin') return Object.assign({}, cu0);   // Admin-Datensatz bleibt wie jetzt
             SEC.forEach(k => { if (cu0[k] === undefined) delete o[k]; else o[k] = cu0[k]; });
+            if (cu0.role === 'leitung') ['team', 'teams', 'teamHistory'].forEach(k => { if (cu0[k] === undefined) delete o[k]; else o[k] = cu0[k]; });   // Sichtbereich der Leitung
           } else {
-            if (o.role === 'admin') o.role = 'mitarbeiter';
-            if (o.perms && typeof o.perms === 'object') { o.perms = Object.assign({}, o.perms); delete o.perms.zugriff_verwaltung; delete o.perms.zugriff_verwaltung_plus; }
+            o.role = BASIC_ROLES.includes(o.role) ? o.role : 'mitarbeiter';                 // nie Leitung/GF/Admin aus dem Backup
+            const pp = {}; Object.keys(isObj(o.perms) ? o.perms : {}).forEach(k => { if (/^path_[a-z_]{1,30}$/.test(k) && typeof o.perms[k] === 'boolean') pp[k] = o.perms[k]; });
+            o.perms = pp; delete o.crmOnly; delete o.kanbanTeams; delete o.noTimesheet; delete o.noReport; delete o.gfCountersign;
           }
           return o;
         };
-        const nu = list(ze.users).map(fix).filter(Boolean);
-        const na = list(ze.archivedUsers).map(fix).filter(Boolean);
-        const inB = new Set(nu.concat(na).map(u => u.id));
-        list(curZe.users).forEach(u => { if (u && u.id && !inB.has(u.id)) nu.push(u); });          // niemand wird ausgesperrt
-        list(curZe.archivedUsers).forEach(u => { if (u && u.id && !inB.has(u.id)) na.push(u); });
-        const merged = Object.assign({}, ze, { users: nu, archivedUsers: na });
-        KEEP.forEach(k => { if (curZe[k] === undefined) delete merged[k]; else merged[k] = curZe[k]; });
-        upd['zeiterfassung'] = merged;
+        const seen = new Set(); const nu = [], na = [];
+        // Ob jemand aktiv oder archiviert ist, bestimmt der JETZIGE Stand (niemand wird ausgesperrt, niemand Gesperrtes kommt
+        // zurück). Personen, die es nur im Backup gibt, kommen ins Archiv und gesperrt – freischalten nur bewusst.
+        const place = o => { if (curActive[o.id]) nu.push(o); else { if (!curAll[o.id]) o.accessRevoked = true; na.push(o); } };
+        list(ze.users).concat(list(ze.archivedUsers)).forEach(u => { const o = fix(u); if (o && !seen.has(o.id)) { seen.add(o.id); place(o); } });
+        list(curZe.users).forEach(u => { if (u && u.id && !seen.has(u.id)) { seen.add(u.id); nu.push(u); } });              // niemand wird ausgesperrt
+        list(curZe.archivedUsers).forEach(u => { if (u && u.id && !seen.has(u.id)) { seen.add(u.id); na.push(u); } });
+        upd['zeiterfassung/users'] = nu;
+        upd['zeiterfassung/archivedUsers'] = na;
+        const KEYED = { entries: /^[a-z0-9._-]{1,64}_[0-9]{4}_[0-9]{2}$/, stamps: /^[A-Za-z0-9._-]{1,80}$/, vacRequests: /^[A-Za-z0-9._-]{1,120}$/,
+          teamReports: /^[A-Za-z0-9._-]{1,160}$/, yearReports: /^[A-Za-z0-9._-]{1,160}$/, teamCats: /^[^.#$/\[\]]{1,120}$/ };
+        Object.keys(KEYED).forEach(n => {
+          const v = ze[n]; if (!isObj(v)) { upd['zeiterfassung/' + n] = null; return; }
+          const o = {}; Object.keys(v).forEach(k => { if (KEYED[n].test(k) && (n === 'entries' ? isObj(v[k]) : v[k] != null)) o[k] = cleanDeep(v[k]); });
+          upd['zeiterfassung/' + n] = Object.keys(o).length ? o : null;
+        });
+        if (Array.isArray(ze.customRoles)) upd['zeiterfassung/customRoles'] = cleanDeep(ze.customRoles.slice(0, 200));   // nur Anzeige-Bezeichnungen
+        ['teams', 'cats'].forEach(n => { if (Array.isArray(ze[n])) upd['zeiterfassung/' + n] = ze[n].filter(x => typeof x === 'string').map(x => cleanStr(x).slice(0, 120)).slice(0, 500); });
       }
-      // 3) CRM (ohne Lager): Zugriffe/Matrix/persönliche Einstellungen bleiben wie jetzt
+      // 3) CRM (ohne Lager): Zugriffe/Matrix/persönliche Einstellungen/Konfiguration der Rechte bleiben wie jetzt
       const CRM_KEEP = ['access', 'pathAccess', 'userPrefs'];
       if (doCrm) {
-        Object.keys(curCrm).forEach(k => { if (!SHOP.includes(k) && !CRM_KEEP.includes(k) && !(k in crmIn)) upd['crm/' + k] = null; });
-        Object.keys(crmIn).forEach(k => { if (!SHOP.includes(k) && !CRM_KEEP.includes(k) && /^[A-Za-z0-9_-]{1,80}$/.test(k)) upd['crm/' + k] = crmIn[k]; });
+        Object.keys(curCrm).forEach(k => { if (!SHOP_COLLS.includes(k) && !CRM_KEEP.includes(k) && !(k in crmIn)) upd['crm/' + k] = null; });
+        Object.keys(crmIn).forEach(k => { if (!SHOP_COLLS.includes(k) && !CRM_KEEP.includes(k) && /^[A-Za-z0-9_-]{1,80}$/.test(k)) upd['crm/' + k] = isObj(crmIn[k]) ? cleanDeep(crmIn[k]) : null; });
       }
       // 4) Lager
-      if (doShop) SHOP.forEach(k => { const v = shopIn[k]; upd['crm/' + k] = (v && typeof v === 'object' && Object.keys(v).length) ? v : null; });
+      if (doShop) SHOP_COLLS.forEach(k => { const v = shopIn[k]; upd['crm/' + k] = (isObj(v) && Object.keys(v).length) ? cleanDeep(v) : null; });
+      logTo(upd, c, 'Backup eingespielt', body.name ? String(body.name).slice(0, 80) : 'Datei', { ze: doZe, crm: doCrm, shop: doShop, safety: safeName, trusted });
       await db.ref().update(upd);
-      await db.ref('ze_audit/_restore').push({ ts: Date.now(), by: c.callerId, action: 'restore', parts: { ze: doZe, crm: doCrm, shop: doShop },
-        source: body.name ? String(body.name).slice(0, 140) : 'Datei', safety: safeName }).catch(() => {});
       return res.json({ ok: true, safety: safeName, parts: { ze: doZe, crm: doCrm, shop: doShop } });
     }
 
@@ -444,13 +535,15 @@ exports.tpsPw = async (req, res) => {
       });
       if (!tr.committed || !target) return res.status(reason === 'no-user' ? 404 : 403).json({ ok: false, error: reason || 'conflict' });
       let au = null; try { au = await admin.auth().getUserByEmail(accountEmail(id)); } catch (_) {}
+      const upd = {};
       if (au) {
-        const upd = await grantUpdates(au.uid, target);
+        Object.assign(upd, await grantUpdates(au.uid, target));
         upd['zeiterfassung/managers/' + au.uid] = (role === 'leitung' || role === 'geschaeftsfuehrer') ? true : null;
         upd['zeiterfassung/gfAdmins/' + au.uid] = role === 'geschaeftsfuehrer' ? true : null;
         upd['zeiterfassung/freelancers/' + au.uid] = role === 'freiberuflich' ? true : null;
-        await db.ref().update(upd);
       }
+      logTo(upd, c, 'Rolle geändert', id, { role });
+      await db.ref().update(upd);
       return res.json({ ok: true });
     }
 
@@ -531,6 +624,7 @@ exports.tpsPw = async (req, res) => {
           upd['zeiterfassung/archivedUsers'] = aList.filter(x => x && x.id !== id);
         }
       }
+      logTo(upd, { callerId, tok }, action === 'offboard' ? (body.archive === true ? 'gesperrt + archiviert' : 'gesperrt') : (body.restore === true ? 'wiederhergestellt' : 'entsperrt'), id);
       await db.ref().update(upd);
       return res.json({ ok: true, account: !!u });
     }
@@ -560,6 +654,8 @@ exports.tpsPw = async (req, res) => {
         if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
         const u = await admin.auth().getUserByEmail(accountEmail(id));
         const had = ((u.multiFactor && u.multiFactor.enrolledFactors) || []).length;
+        const upd = {}; logTo(upd, { callerId: (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '', tok }, 'Zwei-Faktor zurückgesetzt', id, { removed: had });
+        await db.ref().update(upd);   // Protokoll zuerst
         if (had) await admin.auth().updateUser(u.uid, { multiFactor: { enrolledFactors: null } });
         return res.json({ ok: true, removed: had });
       }
