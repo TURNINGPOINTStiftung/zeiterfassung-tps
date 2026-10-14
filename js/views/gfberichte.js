@@ -450,7 +450,8 @@ function _ensureNoticeCss(){
 // [{ key, area:'ze', ts, html, open:'js()', ack:'js()' }] – open/ack als reiner JS-Text (Maskierung beim Einsetzen)
 export function zeNoticeItems(){
   return _myNotices().map(function(n){
-    const g=n.g, mon=MONTHS[g.m-1]+' '+g.y;
+    // Monat/Jahr stammen aus der Datenbank (gfReturn) → nur als Zahl verwenden und maskieren (Audit 14.10.2026)
+    const g=n.g, mon=esc((MONTHS[(parseInt(g.m,10)||0)-1]||'')+' '+(parseInt(g.y,10)||''));
     const html=n.self
       ? '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat deine Zeiterfassung <b>'+mon+'</b> zur Korrektur zurückgegeben: „'+esc(g.reason)+'“ – bitte korrigieren und erneut einreichen.'
       : '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat die Zeiterfassung von <b>'+esc(n.empName)+'</b> ('+mon+') zurückgegeben: „'+esc(g.reason)+'“ – nach der Korrektur bitte erneut genehmigen und nachreichen.';

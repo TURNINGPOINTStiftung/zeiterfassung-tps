@@ -235,7 +235,10 @@ export async function doLogin(){
 // Wichtig auf geteilten Geräten. Noch nicht übertragene Änderungen werden vorher nachgeholt;
 // klappt das nicht, wird nachgefragt statt still zu verwerfen. Geräte-Einstellungen (gemerkter
 // Name, Zoom, zuletzt geöffnetes Modul, KI-Adresse) bleiben erhalten.
-const _LOGOUT_CLEAR=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tps_crm_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session'];
+const _LOGOUT_CLEAR=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tps_crm_v1', 'tps_crm_pending_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session'];
+// Personenbezogene Reste je Nutzer (Favoriten/zuletzt geöffnet, Wetter-Ort, Warenkorb, Lager-Quittungen) – Audit 14.10.2026.
+// Der Messe-Ausgang (tps_messe_v2) bleibt bewusst: dort liegen noch nicht übertragene Erfassungen.
+const _LOGOUT_PREFIX=['tp_zt_premigrate_','tps_home_recent_','tps_home_favs_','tps_home_geo_','tps_shop_cart_','tps_shop_ack2_','tps_shop_soll_ack_','tps_shop_od_ack_','tps_shop_due_ack_'];
 export async function doLogout(){
   try{
     if(pendingCount()>0){
@@ -244,11 +247,15 @@ export async function doLogout(){
       if(n>0 && !confirm(n+' Änderung'+(n===1?' wurde':'en wurden')+' noch nicht an den Server übertragen (keine Verbindung?).\n\nBeim Abmelden gehen sie verloren. Trotzdem abmelden?')) return;
     }
   }catch(e){}
+  // CRM/Lager: noch offene Schreibaufträge dieses Kontos → nachfragen (sie werden beim Abmelden verworfen)
+  try{ const CD=await import('./crm/crm-data.js'); const m=CD.crmPendingCount?CD.crmPendingCount():0;
+    if(m>0 && !confirm(m+' CRM-/Lager-Änderung'+(m===1?' wurde':'en wurden')+' noch nicht an den Server übertragen (keine Verbindung?).\n\nBeim Abmelden gehen sie verloren. Trotzdem abmelden?')) return;
+  }catch(e){}
   window.cu=null; window.viewEmpId=null;
   try{ await firebase.auth().signOut(); }catch(e){ console.warn('signOut:',e&&e.message); }
   try{
     _LOGOUT_CLEAR.forEach(k=>localStorage.removeItem(k));
-    Object.keys(localStorage).filter(k=>k.startsWith('tp_zt_premigrate_')).forEach(k=>localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k=>_LOGOUT_PREFIX.some(p=>k.startsWith(p))).forEach(k=>localStorage.removeItem(k));
   }catch(e){}
   // Gemerkte Ansicht (#/… aus js/nav.js) verwerfen – nach dem nächsten Anmelden startet man vorn
   // (Startseite, falls freigeschaltet), nicht in der Ansicht des vorherigen Nutzers.

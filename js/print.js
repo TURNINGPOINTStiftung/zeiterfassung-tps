@@ -224,7 +224,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     const _vs=vacStatus(u.id,u,y,m);   // inkl. „Resturlaub Vorjahr" (nur Januar)
     const vacUpTo=_vs.usedUpTo, _annualVac=_vs.annual, vacLeft=_vs.left, vacFuture=_vs.future;
     sumCards+=
-      '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+eu.wh+' h/Woche</div></div>'
+      '<div class="bh-sc"><div class="lbl">Stunden SOLL</div><div class="val">'+hFmt(soll)+'</div><div class="sub">bei '+esc(eu.wh)+' h/Woche</div></div>'
       +'<div class="bh-sc"><div class="lbl">Stunden IST</div><div class="val">'+hFmt(monthTotal)+'</div><div class="sub">'+(dayFmt(monthTotal)||'tatsächlich')+'</div></div>'
       +'<div class="bh-sc '+diffCls+'"><div class="lbl">Differenz</div><div class="val">'+sFmt(diff)+'</div><div class="sub">'+(diff>=0?'über SOLL':'unter SOLL')+'</div></div>'
       +(carryH?'<div class="bh-sc"><div class="lbl">Übertrag Vormonat</div><div class="val">'+sFmt(carryH*60)+'</div><div class="sub">'+(entry.carryoverManual?'manuell':'automatisch')+'</div></div>':'')
@@ -232,7 +232,7 @@ export function renderBuchhaltungHTML(u,entry,y,m){
   }
   sumCards+='</div>';
 
-  const empType=isFree?'Freiberuflich':'Festangestellt, '+eu.wh+' h/Woche';
+  const empType=isFree?'Freiberuflich':'Festangestellt, '+esc(eu.wh)+' h/Woche';
   const statusLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[entry.status]||entry.status||'Entwurf';
   const _city=u.city||'';
   const _today=new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});

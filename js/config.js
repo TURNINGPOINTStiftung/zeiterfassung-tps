@@ -57,7 +57,5 @@ export const DEFAULT_TEAM_CATS = {
 // Schlüssel zum Admin-Konto und die Ursache dafür, dass ein Zurückfallen auf die Defaults
 // das Admin-Passwort auf einen allgemein bekannten Wert setzte.
 export const DEFAULT_USERS = [
-  {id:'admin',name:'Administrator',role:'admin',pw:'',city:'',wh:0,al:0,team:'',bundesland:'',dpw:5},
-  {id:'jens',name:'Jens Kroker',role:'geschaeftsfuehrer',pw:'',city:'',wh:40,al:30,team:'',bundesland:'',dpw:5},
-  {id:'janne',name:'Janne Handermann',role:'mitarbeiter',pw:'',city:'Speyer',wh:20,al:24,team:'Akademie',bundesland:'RP',dpw:5}
-];
+  {id:'admin',name:'Administrator',role:'admin',pw:'',city:'',wh:0,al:0,team:'',bundesland:'',dpw:5}
+];   // nur Startwert für eine leere Datenbank – keine echten Personen im öffentlichen Code (Audit 14.10.2026)

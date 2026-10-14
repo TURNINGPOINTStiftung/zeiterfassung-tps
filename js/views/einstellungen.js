@@ -66,7 +66,7 @@ export function renderSettings(){
         :'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${esc(u.role)}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
         <div class="details"><span data-mfa="${esc(u.id)}"></span> ${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${esc(u.wh)}h/Woche · ${esc(u.al)} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -138,7 +138,7 @@ export function renderSettings(){
 
 // ── Einmalige Datenkorrektur (Admin) ─────────────────────────────────
 // Genehmigte Zeiterfassungen und an die GF gesendete Berichte, die
-// versehentlich über das Admin-Konto liefen, der Leitung „Moritz Kriese"
+// versehentlich über das Admin-Konto liefen, der zuständigen Team-Leitung
 // zuordnen. Zeigt vor dem Schreiben eine Vorschau. Idempotent – mehrfaches
 // Ausführen ist gefahrlos (bereits korrigierte Einträge werden übersprungen).
 // Es werden NUR Genehmiger-/Absender-Felder gesetzt – Zeiten/Inhalte bleiben unangetastet.
@@ -577,7 +577,7 @@ export function showEditDpw(id){
   if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
   if(cu.role!=='admin'){ toast('Nur der Administrator-Account darf Nutzerdaten ändern.','err'); return; }
   openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${u.wh||0}&thinsp;h/Woche</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${esc(u.wh||0)}&thinsp;h/Woche</p>
     <div class="form-group">
       <label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
       <input id="edit-dpw-val" type="number" min="1" max="7" value="${esc(u.dpw||5)}" style="max-width:90px">

@@ -155,10 +155,10 @@ export function renderOverview(){
       const e=d.entries[entryKey(u.id,oy,i+1)];
       const st=e?e.status:'draft';
       if(doneSub(u,i+1,e)) return `<span class="m-pill s-approved" title="${mn}: Eingereicht – als Bericht an die Geschäftsführung übermittelt">${mn.slice(0,3)}</span>`;
-      return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
+      return `<span class="m-pill ${bCls[st]}" title="${mn}: ${esc({draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st)}">${mn.slice(0,3)}</span>`;
     }).join('');
     const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'&&!doneSub(u,i+1,e); }).length;
-    const roleChip=`<span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>`;
+    const roleChip=`<span class="chip chip-${esc(u.role)}">${roleLabel(u.role,u)}</span>`;
     const isFree=isFreelancer(u);
     const maxH=isFree?(u.maxHours||0):0;
     const curEntry=d.entries[entryKey(u.id,oy,om)]||{};

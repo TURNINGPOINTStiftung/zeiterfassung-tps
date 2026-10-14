@@ -41,6 +41,12 @@ export function setCrmRenderHook(fn){ _onChange = fn; }
 const CRM_PENDING_KEY = 'tps_crm_pending_v1';
 function _pendLoad(){ try{ const p=JSON.parse(localStorage.getItem(CRM_PENDING_KEY)||'{}'); return (p&&typeof p==='object')?p:{}; }catch(e){ return {}; } }
 function _pendSave(p){ try{ localStorage.setItem(CRM_PENDING_KEY, JSON.stringify(p)); }catch(e){} }
+// Warteschlangen-Einträge tragen die Konto-ID (u). Nachgeholt werden nur eigene – sonst könnte auf einem
+// geteilten Gerät die nächste Person fremde (z. B. Lösch-)Aufträge mit IHREM Konto ausführen (Audit 14.10.2026).
+function _authUid(){ try{ const u=firebase.auth().currentUser; return (u&&u.uid)||''; }catch(e){ return ''; } }
+function _pendMine(it){ const me=_authUid(); if(!it) return false; if(it.u) return !!me && it.u===me; return it.op!=='del'; }   // alte Einträge ohne Konto: Löschungen nicht nachholen
+export function crmPendingCount(){ return Object.keys(_pendLoad()).length; }
+export function crmPendingClear(){ try{ localStorage.removeItem(CRM_PENDING_KEY); }catch(e){} }
 function _isDenied(e){ const s=String((e&&(e.code||''))+' '+(e&&e.message||'')); return /permission/i.test(s); }
 let _deniedToastTs = 0;
 function _denied(path){
@@ -51,7 +57,7 @@ function _denied(path){
 function _write(coll, id, val){
   const path = id==null ? coll : coll+'/'+id;
   const tok  = Date.now()+'_'+Math.random().toString(36).slice(2,7);
-  const p=_pendLoad(); p[path]={ op: val===null?'del':'set', t: tok }; _pendSave(p);
+  const p=_pendLoad(); p[path]={ op: val===null?'del':'set', t: tok, u: _authUid() }; _pendSave(p);
   // Verlaufseintrag (von _logHistory vorgemerkt) erst schreiben, wenn die Änderung selbst gespeichert ist.
   const hist=_histNext[path]; delete _histNext[path];
   if(!_ref) return Promise.resolve();
@@ -68,6 +74,7 @@ function _replayPending(local){
   const p=_pendLoad();
   Object.keys(p).forEach(path=>{
     const it=p[path]||{}; const parts=path.split('/');
+    if(!_pendMine(it)){ delete p[path]; return; }   // fremder/unklarer Auftrag → verwerfen
     let val=null;
     if(it.op==='set'){
       val = parts.length>1 ? (local[parts[0]]&&local[parts[0]][parts[1]]) : local[parts[0]];
@@ -197,6 +204,7 @@ export function ensureCrmReady(){
         const pend  = _pendLoad();
         Object.keys(pend).forEach(path=>{
           const it=pend[path]||{}; const parts=path.split('/'); const c=parts[0], id=parts[1];
+          if(!_pendMine(it)) return;
           if(id==null){ if(it.op==='set' && local[c]!=null) fb[c]=local[c]; return; }
           if(!fb[c] || typeof fb[c]!=='object') fb[c]={};
           if(it.op==='del') delete fb[c][id];

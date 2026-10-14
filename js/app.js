@@ -58,9 +58,9 @@ export function initApp(){
   document.getElementById('hdr-role').textContent=roleLabel(cu.role,cu);
   const isMgr=isManagerRole(cu);
   const isAdmin=cu.role==='admin';
-  const _showVer=isAdmin||cu.name==='Moritz Kriese';
+  const _showVer=isAdmin||!!(cu.perms&&cu.perms.zugriff_verwaltung);   // Versionsnummer für Admin + System-Verwaltung
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v456':'';
+  if(_hv) _hv.textContent=_showVer?'v457':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()

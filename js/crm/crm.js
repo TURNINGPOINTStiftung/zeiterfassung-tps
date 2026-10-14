@@ -5611,7 +5611,7 @@ function paintVerwImpExp(){
   </div>
   <div class="crm-sec">
     <h4><span class="ttl">🔤 Umlaut-IDs bereinigen</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">Enthält eine Login-ID ein <b>ö/ä/ü/ß</b> (z. B. „jörg"), wird sie als Firebase-Schlüssel nicht zuverlässig gespeichert – Ursache des wiederkehrenden Login-Fehlers. Dieser Knopf benennt die ID im <b>gesamten Datenbestand</b> auf reines ASCII um (z. B. jörg→joerg): Zeiteinträge, Abwesenheiten, Berichte, Stempel, CRM-Zugriff und Login. Der <b>Anzeigename bleibt</b> („Jörg Aleith"). Bitte vorher <b>Backup ziehen</b> (Daten → Export); die Person muss sich danach einmal neu einloggen.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Enthält eine Login-ID ein <b>ö/ä/ü/ß</b> (z. B. „jörg"), wird sie als Firebase-Schlüssel nicht zuverlässig gespeichert – Ursache des wiederkehrenden Login-Fehlers. Dieser Knopf benennt die ID im <b>gesamten Datenbestand</b> auf reines ASCII um (z. B. jörg→joerg): Zeiteinträge, Abwesenheiten, Berichte, Stempel, CRM-Zugriff und Login. Der <b>Anzeigename bleibt</b> (z. B. „Jörg Muster“). Bitte vorher <b>Backup ziehen</b> (Daten → Export); die Person muss sich danach einmal neu einloggen.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-sm-crm primary" onclick="crmMigrateUmlautIds(this)">🔤 Umlaut-IDs suchen &amp; umstellen</button>
     </div>

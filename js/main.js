@@ -11,7 +11,7 @@ import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
 import { initApp, switchView, switchModule, changeMonth, rebuildEmpSelect, onEmpSelect,
          toggleModuleMenu, closeModuleMenu } from './app.js';
 import { initZoom, zoomStep, zoomReset } from './zoom.js';
-import { openModal, closeModal, submitBtn } from './utils.js';
+import { openModal, closeModal, submitBtn, esc } from './utils.js';
 
 // ── View modules ───────────────────────────────────────────────────
 import { renderZeiterfassung, renderSignature, td_change, td_zuord,
@@ -398,14 +398,14 @@ initFirebase().then(async function(){
   try{ populateLoginDropdown(); }
   catch(e){
     const el=document.getElementById('login-user-list');
-    if(el) el.innerHTML='<div style="background:var(--danger-bg,#fdd);border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: '+e.message+'</div>';
+    if(el) el.innerHTML='<div style="background:var(--danger-bg,#fdd);border:1px solid red;border-radius:5px;padding:10px;font-size:12px;color:red">Fehler beim Laden: '+esc(e&&e.message)+'</div>';
     console.error('Boot-Fehler:',e);
   }
 }).catch(function(e){
   console.error('Firebase Verbindungsfehler:',e);
   document.getElementById('fb-loading').innerHTML=
     '<div style="font-size:17px;color:#ff6b6b;font-weight:700">&#9888; Verbindungsfehler</div>'
-    +'<div style="font-size:13px;margin-top:10px;opacity:.8">Bitte Seite neu laden.<br><small>'+e.message+'</small></div>';
+    +'<div style="font-size:13px;margin-top:10px;opacity:.8">Bitte Seite neu laden.<br><small>'+esc(e&&e.message)+'</small></div>';
 });
 
 // Service Worker wird jetzt inline in index.html registriert

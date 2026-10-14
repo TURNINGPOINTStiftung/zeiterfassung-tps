@@ -392,7 +392,7 @@ export async function migrateUserId(oldId, newId, opts){
     const del={}; Object.keys(dir).forEach(k=>{ const e=dir[k]||{}; if((e.id||k)===oldId) del[k]=null; });
     if(Object.keys(del).length){ await firebase.database().ref('zeiterfassung/loginDir').update(del); log('Alte Login-Einträge entfernt: '+Object.keys(del).join(', ')); }
   }catch(e){ log('Login-Cleanup-Hinweis: '+((e&&e.message)||e)); }
-  log('FERTIG. Jörg bitte einmal neu einloggen (Name bleibt „Jörg Aleith", Passwort neu setzen).');
+  log('FERTIG. Die Person bitte einmal neu einloggen lassen (Anzeigename bleibt, Passwort neu setzen).');
   return { ok:true, report };
 }
 
