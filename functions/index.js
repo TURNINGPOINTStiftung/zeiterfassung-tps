@@ -316,7 +316,9 @@ exports.tpsPw = async (req, res) => {
     // ── Backups für „System-Verwaltung erweitert“ (seit 14.10.; der Administrator nutzt weiter die App direkt) ──
     //  backupList          – Namen der automatischen Backups (Storage backups/daily/)
     //  backupGet { name }  – Inhalt eines automatischen Backups (zum Herunterladen)
-    //  restore { name | data, parts:{ze,crm,shop} } – Backup einspielen, NUR mit zweitem Faktor.
+    //  restore { name | data, parts:{ze,crm,shop} } – Backup einspielen, NUR mit zweitem Faktor UND frischer
+    //     Bestätigung: Passwort + neuer Code unmittelbar vorher (auth_time höchstens 5 Minuten alt), damit es
+    //     nicht versehentlich passiert (User 14.10.2026). Sonst 403 'reauth-required'.
     //   · Vorher wird der aktuelle Stand als backups/daily/<Datum>_vorEinspielen-<uid>-<Zeit>.json gesichert
     //     (klappt das nicht, wird nichts eingespielt).
     //   · Ein Backup darf keine Rechte vergeben: Anmelde-/Freigabeknoten, Rechte-Matrix, CRM-Zugriffe und
@@ -345,7 +347,9 @@ exports.tpsPw = async (req, res) => {
         if (!d) return res.status(400).json({ ok: false, error: 'name' });
         return res.json({ ok: true, data: d });
       }
-      // restore
+      // restore – nur direkt nach erneuter Bestätigung (Passwort + Code)
+      const age = Date.now() / 1000 - Number(c.tok.auth_time || 0);
+      if (!(age >= 0 && age <= 300)) return res.status(403).json({ ok: false, error: 'reauth-required' });
       let src = null;
       try { src = body.name ? await readBackup(body.name) : body.data; } catch (e) { return res.status(400).json({ ok: false, error: 'file' }); }
       if (!src || typeof src !== 'object' || Array.isArray(src)) return res.status(400).json({ ok: false, error: 'file' });
