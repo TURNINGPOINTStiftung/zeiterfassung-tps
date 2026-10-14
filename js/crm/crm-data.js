@@ -380,6 +380,16 @@ export function listTeamProjekte(team){
 // ── Shop (Lager + Bestellungen) ────────────────────────────────────
 // Generisch für alle SHOP_COLLS: crm/<coll>/<id>. Verlauf (crm_history) nur für Artikel/Orte/
 // Bestellungen – das Buchungs-Log (shopLog) IST selbst der Verlauf.
+// Ein einzelnes Feld eines Lager-Datensatzes schreiben (z. B. shopOrders/<id>/seenBy/<ich>) – für Personen mit
+// Lager „Nutzen“, die fremde Datensätze nicht als Ganzes schreiben dürfen (Regeln v11). Best effort, ohne Verlauf.
+export function saveShopField(coll, id, sub, val){
+  if(!SHOP_COLLS.includes(coll) || !id || !sub || !/^[A-Za-z0-9_\-]+(\/[A-Za-z0-9_.\-]+)*$/.test(sub)) return Promise.resolve();
+  const d = getCrm(); const rec = d[coll] && d[coll][id]; if(!rec) return Promise.resolve();
+  let o = rec; const ks = sub.split('/'); for(let i=0;i<ks.length-1;i++){ if(!o[ks[i]] || typeof o[ks[i]]!=='object') o[ks[i]]={}; o=o[ks[i]]; }
+  o[ks[ks.length-1]] = val; _cache = d; _persistLocal();
+  try{ if(_ref) return _ref.child(coll+'/'+id+'/'+sub).set(val).catch(e=>{ if(_isDenied(e)) _denied(coll+'/'+id+'/'+sub); }); }catch(e){}
+  return Promise.resolve();
+}
 export function saveShop(coll, rec){
   if(!SHOP_COLLS.includes(coll) || !rec || !rec.id) return Promise.resolve();
   rec.updatedAt = Date.now();

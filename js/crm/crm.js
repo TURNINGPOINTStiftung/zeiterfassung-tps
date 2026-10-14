@@ -2869,13 +2869,16 @@ function crmAttFile(nid){
   const fi=document.getElementById('crm-att-file'); const file=fi&&fi.files&&fi.files[0];
   if(!file){ toast('Bitte eine Datei wählen.','err'); return; }
   if(file.size>15*1024*1024){ toast('Datei zu groß (max. 15 MB).','err'); return; }
+  // Erlaubte Dateiarten (Storage-Regeln Stand 3): Bilder, PDF, Office, Text/CSV
+  const ctype=String(file.type||'');
+  if(!/^(image\/(jpeg|png|gif|webp)|application\/pdf|text\/(plain|csv)|application\/(msword|vnd\.openxmlformats-officedocument\.[a-z.]+|vnd\.ms-excel|vnd\.ms-powerpoint|vnd\.oasis\.opendocument\.[a-z.]+))$/.test(ctype)){ toast('Dateiart nicht erlaubt (Bilder, PDF, Office, Text).','err'); return; }
   if(!_storageOn()){ toast('Firebase Storage ist nicht verfügbar.','err'); return; }
   const safe=file.name.replace(/[^\w.\-]+/g,'_');
   const path='crm-anlagen/'+nid+'/'+Date.now()+'_'+safe;
   toast('Lädt hoch …','');
   try{
     const ref=firebase.storage().ref(path);
-    Promise.resolve(window.ensureAccessClaim&&window.ensureAccessClaim()).catch(()=>{}).then(()=>ref.put(file)).then(s=>s.ref.getDownloadURL()).then(url=>{
+    Promise.resolve(window.ensureAccessClaim&&window.ensureAccessClaim()).catch(()=>{}).then(()=>ref.put(file,{ contentType:ctype, customMetadata:{ uploaderUid:((firebase.auth().currentUser||{}).uid||'') } })).then(s=>s.ref.getDownloadURL()).then(url=>{
       mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'file',name:file.name,url,size:file.size,path}); });
       crmAttOpen(nid); toast('Datei hochgeladen ✓','ok');
     }).catch(e=>{ toast('Upload fehlgeschlagen: '+((e&&e.message)||''),'err'); });

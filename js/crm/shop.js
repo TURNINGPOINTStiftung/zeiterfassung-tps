@@ -1810,8 +1810,10 @@ function shopUnitSave(itemId, unitId){
 // Ausmustern / verbraucht – Verwalter aus „Stücke", alle über „➖ Verbrauch"
 function shopUnitRetire(itemId, unitId, fromUse){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
-  const why=prompt(`„${u.nr}" ausmustern / als verbraucht melden?\nGrund (optional):`, fromUse?'verbraucht':''); if(why===null) return;
   const ul=unitLoan(unitId);   // war zugeordnet → Zuordnung mit beenden
+  // Eine fremde Zuordnung/Ausleihe beenden darf nur „Verwaltend“ (Regeln v11) – sonst vorher abbrechen
+  if(ul && !canManage() && ul.borrowerId!==_me().id){ toast('Dieses Stück ist jemandem zugeordnet – bitte das Lager-Team ausmustern lassen.','err'); return; }
+  const why=prompt(`„${u.nr}" ausmustern / als verbraucht melden?\nGrund (optional):`, fromUse?'verbraucht':''); if(why===null) return;
   if(ul){ ul.status='zurueck'; ul.qty=0; ul.returnedTs=Date.now(); ul.note=(ul.note?ul.note+' · ':'')+'ausgemustert'; saveShop('shopLoans', ul); }
   const pl=u.placeId||(ul&&ul.fromPlace)||''; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
   _log(it,'verbrauch',1,pl,null,'Stück: '+u.nr+(why?' · '+why:''));
@@ -2095,8 +2097,9 @@ function shopNoticeOpen(id){
 }
 function shopNoticeSeen(id){
   const o=getShop('shopOrders',id); const cu=_me(); if(!o||!cu.id) return;
-  if(!o.seenBy||typeof o.seenBy!=='object') o.seenBy={};
-  o.seenBy[cu.id]=Date.now(); saveShop('shopOrders', o);
+  // nur das eigene „gesehen“-Feld schreiben (Regeln v11: fremde Bestellungen nicht als Ganzes)
+  if(CD.saveShopField) CD.saveShopField('shopOrders', id, 'seenBy/'+cu.id, Date.now());
+  else { if(!o.seenBy||typeof o.seenBy!=='object') o.seenBy={}; o.seenBy[cu.id]=Date.now(); saveShop('shopOrders', o); }
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 function shopNoticeAck(id){
