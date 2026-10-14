@@ -653,7 +653,7 @@ export function renderAbwesenheiten(){
           ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
           ${extra}${rnBtns}${delBtn}
         </div>
-        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${new Date(r.submittedAt).toLocaleDateString('de-DE')}</div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</div>
       </div>
     </div>`;
   };

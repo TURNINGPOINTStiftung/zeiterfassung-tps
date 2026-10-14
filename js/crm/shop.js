@@ -327,8 +327,25 @@ function _styles(){
   .shop-cart-act{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border)}
   .shop-cart-act .shop-btn{flex:1}
   @media(max-width:640px){ .shop-wrap{padding:12px 12px 90px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr}
-    .shop-cart{right:8px;left:8px;bottom:8px;width:auto;max-height:65vh} .shop-cart.min{right:auto}
-    .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1} }
+    .shop-cart{right:8px;left:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:65vh} .shop-cart.min{right:auto}
+    .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1}
+    /* Handy (v451): Reiter in einer wischbaren Zeile, Filter geordnet, größere Knöpfe, kompakte Artikelkarten */
+    .shop-tabs{position:relative;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .shop-tabs button{flex:0 0 auto;white-space:nowrap;padding:10px 12px;min-height:42px}
+    .shop-bar{gap:8px}
+    .shop-bar input,.shop-bar select{font-size:16px;min-height:42px;padding:8px 10px;box-sizing:border-box}
+    .shop-bar input[type=search]{flex:1 1 100%;min-width:0}
+    .shop-bar select{flex:1 1 calc(50% - 4px);min-width:0;max-width:100%}
+    .shop-bar .shop-sp{display:none}
+    .shop-btn{min-height:40px;padding:8px 12px;font-size:14px}
+    .shop-btn.sm{min-height:38px;padding:7px 10px;font-size:13px}
+    .shop-card{flex-direction:row}
+    .shop-img{width:88px;height:auto;min-height:88px;flex:0 0 88px;font-size:32px}
+    .shop-cb{min-width:0}
+    .shop-act{gap:6px}
+    .shop-row .main{min-width:0;flex:1 1 100%}
+    .shop-f input,.shop-f select,.shop-f textarea{font-size:16px}
+    .shop-seg{max-width:100%;overflow-x:auto} .shop-seg button{padding:8px 12px;font-size:13px;min-height:38px;white-space:nowrap} }
   `;
   document.head.appendChild(st);
 }
@@ -370,6 +387,9 @@ export function renderShop(){
       ${body}
     </div><div id="shop-cart"></div>`;
     _cartPaint();
+    // Handy: Reiterzeile ist wischbar → aktiven Reiter sichtbar halten (z. B. „Fällig" ganz rechts)
+    try{ const tb=root.querySelector('.shop-tabs'), on=tb&&tb.querySelector('button.on');
+      if(on && tb.scrollWidth>tb.clientWidth) tb.scrollLeft=Math.max(0, on.offsetLeft-(tb.clientWidth-on.offsetWidth)/2); }catch(e){}
   }catch(e){ console.error('renderShop Fehler:',e); }
 }
 function shopTab(t){ TAB=t; renderShop(); }

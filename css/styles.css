@@ -481,7 +481,10 @@ table.zt{width:100%;border-collapse:collapse;font-size:12px;min-width:960px}
   .month-nav{gap:6px}
   .month-nav h2{font-size:17px;min-width:150px}
   .month-nav>div:last-child{margin-left:0!important;width:100%;display:flex;gap:5px;flex-wrap:wrap}
-  .month-nav .btn-sm{font-size:12px;padding:8px 10px;flex:1;min-width:0;justify-content:center}
+  .month-nav .btn-sm{font-size:13px;padding:8px 10px;flex:1 1 140px;min-width:0;justify-content:center;white-space:nowrap}
+  .month-nav>.btn-sm{flex:0 0 46px}   /* ◀ ▶ nicht auf halbe Breite ziehen */
+  .month-nav .hide-m{display:none}   /* z. B. „(vollständig)" – am Handy zu lang */
+  #zt-today-btn{bottom:calc(78px + env(safe-area-inset-bottom))!important}
 
   /* ─ Info Panel ─ */
   .info-panel{gap:12px;padding:12px 14px}

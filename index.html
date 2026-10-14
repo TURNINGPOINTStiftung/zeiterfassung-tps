@@ -150,7 +150,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
           &nbsp;<button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px" onclick="if(cu)viewEmpId=cu.id;renderZeiterfassung()">Eigene anzeigen</button>
         </span>
         <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap" class="no-print">
-          <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken (vollständig)</button>
+          <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken<span class="hide-m"> (vollständig)</span></button>
           <button class="btn btn-outline btn-sm" onclick="printBuchhaltung()" title="Ohne Bemerkungsspalten – für die Buchhaltung">📋 Buchhaltung</button>
           <button class="btn btn-warn btn-sm" id="btn-teamberichte" style="display:none" onclick="sendTeamReport()" title="Teamberichte an Geschäftsführung senden und drucken">📤 An GF senden</button>
         </div>
@@ -495,6 +495,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=311"></script>
+<script type="module" src="js/main.js?v=312"></script>
 </body>
 </html>
