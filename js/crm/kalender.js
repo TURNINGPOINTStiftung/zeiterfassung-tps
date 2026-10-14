@@ -145,6 +145,15 @@ function _bindTips(root){
   root.addEventListener('mouseover', e=>{ const t=e.target.closest('[data-tip]'); if(!t) return; const el=_tip(); el.textContent=t.getAttribute('data-tip'); el.style.display='block'; });
   root.addEventListener('mousemove', e=>{ if(!_tipEl||_tipEl.style.display==='none') return; const pad=14, w=_tipEl.offsetWidth, h=_tipEl.offsetHeight; let x=e.clientX+pad, y=e.clientY+pad; if(x+w>window.innerWidth) x=e.clientX-w-pad; if(y+h>window.innerHeight) y=e.clientY-h-pad; _tipEl.style.left=Math.max(4,x)+'px'; _tipEl.style.top=Math.max(4,y)+'px'; });
   root.addEventListener('mouseout', e=>{ if(e.target.closest('[data-tip]')&&_tipEl) _tipEl.style.display='none'; });
+  // Handy/Tablet: kein Mauszeiger → Antippen zeigt die Info für 3 s (Einträge mit eigener Klick-Aktion öffnen wie gewohnt)
+  let _tipT=null;
+  root.addEventListener('click', e=>{
+    const t=e.target.closest('[data-tip]'); if(!t || t.closest('[onclick]')){ if(_tipEl) _tipEl.style.display='none'; return; }
+    const el=_tip(); el.textContent=t.getAttribute('data-tip'); el.style.display='block';
+    const w=el.offsetWidth, h=el.offsetHeight; let x=e.clientX-w/2, y=e.clientY-h-14; if(y<4) y=e.clientY+18;
+    el.style.left=Math.max(4,Math.min(window.innerWidth-w-4,x))+'px'; el.style.top=Math.max(4,y)+'px';
+    clearTimeout(_tipT); _tipT=setTimeout(()=>{ el.style.display='none'; },3000);
+  });
 }
 // Wer erscheint im Kalender: interne Mitarbeiter. Raus fliegen nur Admin und EXTERNE
 // „nur CRM"-Nutzer (crmOnly). Die GF (noTimesheet = keine EIGENE Zeiterfassung) bleibt
@@ -152,6 +161,11 @@ function _bindTips(root){
 function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
+// Handy (schmal): schmale Namensspalte mit Kurznamen („Mia M."), Standardansicht „Liste" (User 14.10.2026)
+const _mobile=()=>{ try{ return window.matchMedia('(max-width: 640px)').matches; }catch(e){ return false; } };
+const _NW=()=>_mobile()?96:180;
+function _short(n){ const p=String(n||'').trim().split(/\s+/); return p.length>1?(p[0]+' '+p[p.length-1].charAt(0)+'.'):(p[0]||''); }
+const _nm=u=>_mobile()?_short(u.name):u.name;
 function empName(id){ const d=getData()||{}; const u=(d.users||[]).find(x=>x&&x.id===id); return u?u.name:id; }
 function empTeamById(id){ const d=getData()||{}; const u=(d.users||[]).find(x=>x&&x.id===id); return u?_teamOf(u):''; }
 
@@ -256,6 +270,35 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-py-seg{min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .kal-py-seg.kal-clickable{cursor:pointer} .kal-py-seg.kal-clickable:hover{filter:brightness(1.08)}
   .kal-py-lbl{font-size:11px;font-weight:700;color:#fff;padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center;line-height:1.15}
+  .kal-ag{display:flex;flex-direction:column}
+  .kal-ag-day{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border,#dce3ec)} .kal-ag-day:last-child{border-bottom:none}
+  .kal-ag-day.we{background:var(--surface-2,#f7f9fc)} .kal-ag-day.today{background:var(--warn-bg,#fff3e0)}
+  .kal-ag-date{width:44px;flex:none;display:flex;flex-direction:column;align-items:center;padding-top:2px}
+  .kal-ag-date .dn{font-size:1.35rem;font-weight:800;color:var(--primary-d,#15263a);line-height:1.1} .kal-ag-date .dw{font-size:.74rem;font-weight:700;color:var(--muted,#5d7086);text-align:center}
+  .kal-ag-list{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .kal-ag-it{border-left:4px solid;border-radius:6px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(0,0,0,.08);padding:8px 10px;min-height:44px;box-sizing:border-box}
+  .kal-ag-it .t{font-weight:700;font-size:.98rem;color:var(--text,#15263a);overflow-wrap:anywhere} .kal-ag-it .m{font-size:.84rem;color:var(--muted,#5d7086);margin-top:2px}
+  .kal-ag-it .cf{font-size:.84rem;font-weight:700;color:var(--danger,#c8442f);margin-top:3px}
+  .kal-ag-abs{font-size:.88rem;color:var(--info,#2563eb);font-weight:600;padding:2px 2px}
+  .kal-ag-none{font-size:.88rem;color:var(--muted,#5d7086);padding-top:8px}
+  @media(max-width:640px){
+    #kalender-root{padding:12px 10px 60px}
+    .kal-h{font-size:1.35rem} .kal-sub{display:none}
+    .kal-bar{gap:8px}
+    .kal-seg{max-width:100%;overflow-x:auto} .kal-seg button{padding:9px 11px;font-size:.92rem;min-height:40px}
+    .kal-nav{min-width:0;font-size:1rem} .kal-nav button{width:40px;height:40px}
+    .kal-today,.kal-new{min-height:40px} .kal-sel{min-height:40px;flex:1;min-width:140px}
+    .kal-spacer{display:none}
+    .kal-legend{font-size:.8rem;gap:4px 12px;margin-bottom:10px}
+    .kal-name{padding:0 6px;font-size:.84rem}
+    .kal-teamrow{padding:6px 8px}
+    .kal-ev{font-size:.8rem;padding:0 6px}
+    .kal-cfitem{flex-wrap:wrap;gap:6px 12px;padding:12px} .kal-cfdate{min-width:0;width:100%}
+    .kal-pm-head,.kal-pm-grid{grid-template-columns:28px repeat(7,minmax(0,1fr))}
+    .kal-pm-hc{padding:6px 2px;font-size:.72rem;text-align:center;overflow:hidden}
+    .kal-pm-cell{min-height:64px;padding:3px 2px} .kal-pchip,.kal-pabs{font-size:.68rem;padding:2px 3px}
+    .kal-tip{font-size:14px;max-width:calc(100vw - 16px)}
+  }
   .kal-py-kw{position:absolute;top:0;left:0;font-size:9.5px;font-weight:700;line-height:1;padding:1px 4px;border-bottom-right-radius:4px;background:rgba(90,110,140,.92);color:#fff;z-index:3;pointer-events:none}
   `;
   document.head.appendChild(el);
@@ -267,7 +310,8 @@ function _dayGrid(days){
   const abs=_abs(); const items=_events().concat(_termine()); const N=days.length;
   const myId=(window.cu&&window.cu.id)||'';
   const isoList=days.map(d=>d.iso);
-  const cs='grid-template-columns:180px repeat('+N+',minmax(34px,1fr));';
+  const NW=_NW(), DW=_mobile()?30:34;
+  const cs='grid-template-columns:'+NW+'px repeat('+N+',minmax('+DW+'px,1fr));';
   const cfSet=new Set();
   days.forEach(dd=>{ if(items.some(e=>overlap(e.von,e.bis,dd.iso,dd.iso))&&abs.some(a=>overlap(a.von,a.bis,dd.iso,dd.iso))) cfSet.add(dd.iso); });
   const colOf=iso=>{ const i=isoList.indexOf(iso); return i<0?-1:i+2; };
@@ -288,16 +332,16 @@ function _dayGrid(days){
     const c=_clk(it);
     return '<div class="kal-asg'+(cfl?' cf':'')+c.cls+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:1 / -1;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
-  let h='<div class="kal-grid" style="min-width:'+(180+N*34)+'px">';
+  let h='<div class="kal-grid" style="min-width:'+(NW+N*DW)+'px">';
   // Kopf
-  h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">Mitarbeiter</div>';
+  h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+(_mobile()?'Name':'Mitarbeiter')+'</div>';
   days.forEach((dd,i)=>{ const isMon=dd.dow===0; const kw=(isMon||i===0)?_isoWeek(_parse(dd.iso)):null; h+='<div class="kal-dh'+(dd.we?' we':'')+(isMon?' mon':'')+'" style="grid-column:'+(i+2)+'">'+(kw!=null?'<span class="kal-kw">KW'+kw+'</span>':'')+'<span class="dow">'+DOW[dd.dow]+'</span><span class="dn">'+dd.dom+'</span></div>'; });
   h+='</div>';
   // Band = ALLE Veranstaltungen/Termine, benannt (die „für alle" gültige Zeile)
   if(items.length){
     const laneN=Math.max(1,_laneAssign(items));
     const laneH=laneN===1?42:(laneN===2?34:28);
-    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:var(--danger,#dc2626);grid-row:1 / span '+laneN+'">Veranstaltungen</div>';
+    h+='<div class="kal-row kal-evband" style="'+cs+'grid-auto-rows:'+laneH+'px"><div class="kal-name" style="color:var(--danger,#dc2626);grid-row:1 / span '+laneN+'">'+(_mobile()?'Termine':'Veranstaltungen')+'</div>';
     days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / span '+laneN+'"></div>'; });
     items.forEach(it=>{ h+=namedBar(it); });
     h+='</div>';
@@ -314,7 +358,7 @@ function _dayGrid(days){
       const laneH=(42/aRows).toFixed(2);   // alle Zeilen gleich hoch (42px); überlappende Abwesenheiten teilen sich die Höhe
       const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(u.name)+'</div>';
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
       myAsg.forEach(it=>{ h+=asgBar(it, myAbs); });   // heller Balken (volle Höhe) zuerst – Abwesenheit liegt darüber
       myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(a._lane+1)+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
@@ -343,7 +387,8 @@ function _yearGrid(months, title){
   const weeks=[]; { weeks.push({doy:0,kw:_isoWeek(start0)}); for(let dy=1;dy<YLEN;dy++){ const c=_addDays(start0,dy); if(_dowMon(c)===0) weeks.push({doy:dy,kw:_isoWeek(c)}); } }
   const wlines=weeks.filter(w=>w.doy>0).map(w=>'<div class="kal-wline" style="left:'+(w.doy/YLEN*100)+'%"></div>').join('');
   const tISO=_todayISO(); const todayLine=(tISO>=Y0&&tISO<=Y1)?'<div class="kal-today-line" style="left:'+leftPct(tISO)+'%"></div>':'';
-  const cs='grid-template-columns:180px '+MD.map(d=>d+'fr').join(' ')+';';
+  const NW=_NW();
+  const cs='grid-template-columns:'+NW+'px '+MD.map(d=>d+'fr').join(' ')+';';
   const mcells=()=>{ let s=''; for(let i=0;i<months.length;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
   const mH=28;
   // benannter Marker oben im Band „Veranstaltungen"
@@ -361,7 +406,7 @@ function _yearGrid(months, title){
     const c=_clk(it);
     return '<div class="kal-yasg'+(cfl?' cf':'')+c.cls+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:3px;height:'+(rowH-6)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
-  let h='<div class="kal-grid" style="min-width:'+(180+months.length*(months.length<=6?150:110))+'px">';
+  let h='<div class="kal-grid" style="min-width:'+(NW+months.length*(months.length<=6?150:110))+'px">';
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+esc(title||'Mitarbeiter')+'</div>';
   months.forEach((o,i)=>{ const lbl=MON_ABBR[o.m-1]+(o.y!==_first.y?(" '"+String(o.y).slice(2)):''); h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+lbl+'</div>'; });
   h+='</div>';
@@ -370,7 +415,7 @@ function _yearGrid(months, title){
   const yItems=items.filter(it=>inYear(it.von,it.bis));
   if(yItems.length){
     const bN=Math.max(1,_laneAssign(yItems));
-    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:var(--danger,#dc2626)">Veranstaltungen</div>'+mcells();
+    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:var(--danger,#dc2626)">'+(_mobile()?'Termine':'Veranstaltungen')+'</div>'+mcells();
     h+='<div class="kal-track" style="min-height:'+(bN*mH+6)+'px">'+wlines+todayLine;
     yItems.forEach(it=>{ h+=namedMark(it); });
     h+='</div></div>';
@@ -387,7 +432,7 @@ function _yearGrid(months, title){
       const rowH=42;                 // alle Zeilen gleich hoch
       const segH=(rowH-6)/aL;        // Abwesenheits-Spuren teilen sich die Höhe
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(u.name)+'</div>'+mcells();
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
       myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs); });   // heller Balken volle Höhe (z1)
       myAbs.forEach(a=>{ h+=absMark(a, u.name, segH); });    // Abwesenheit darüber (z2)
@@ -451,7 +496,7 @@ function _persMonth(y,m){
   for(let i=0;i<startDow;i++) cells.push({dt:_addDays(first,-(startDow-i)),out:true});
   for(let d=1;d<=dim;d++) cells.push({dt:new Date(y,m-1,d,12),out:false});
   while(cells.length%7!==0){ const last=cells[cells.length-1].dt; cells.push({dt:_addDays(last,1),out:true}); }
-  let h='<div class="kal-pm"><div class="kal-pm-head"><div class="kal-pm-hc kal-pm-kw-h">KW</div>'+_DOWLONG.map((d,i)=>'<div class="kal-pm-hc'+(i>=5?' we':'')+'">'+d+'</div>').join('')+'</div><div class="kal-pm-grid">';
+  let h='<div class="kal-pm"><div class="kal-pm-head"><div class="kal-pm-hc kal-pm-kw-h">KW</div>'+_DOWLONG.map((d,i)=>'<div class="kal-pm-hc'+(i>=5?' we':'')+'">'+(_mobile()?DOW[i]:d)+'</div>').join('')+'</div><div class="kal-pm-grid">';
   for(let r=0;r<cells.length;r+=7){
     const week=cells.slice(r,r+7);
     h+='<div class="kal-pm-kw">'+_isoWeek(week[0].dt)+'</div>';
@@ -533,18 +578,57 @@ function _persConflict(from,to){
   return h+'</div>';
 }
 
+// ── Liste (Agenda): Tag für Tag, was ansteht – gut am Handy (User 14.10.2026) ──
+// Zeitraum = gewählter Monat. Je Tag: Veranstaltungen/Termine (mit Hinweis, wer davon abwesend ist) und
+// Abwesenheiten (Team-Filter; „Nur ich" = nur die eigenen). Mehrtägiges steht nur einmal – am ersten Tag
+// im Monat – mit Zeitraum. Tage ohne Einträge werden übersprungen (außer heute).
+function _agenda(){
+  const personal=curTeam==='@me'; const myId=(window.cu&&window.cu.id)||'';
+  const inTeam=id=>!curTeam||personal||empTeamById(id)===curTeam;
+  const zeIds=new Set(_emps().map(u=>u.id));
+  const abs=_abs().filter(a=>zeIds.has(a.emp) && (personal ? a.emp===myId : inTeam(a.emp)));
+  const items=_events().concat(_termine());
+  const n=_daysInMonth(curY,curM); let h='<div class="kal-ag">', any=false;
+  const m0=curY+'-'+_pad(curM)+'-01';
+  const startsOn=(x,iso)=>(x.von<m0?m0:x.von)===iso;   // erster sichtbarer Tag im Monat
+  const rng=x=>x.von===x.bis?'':(_deDate(x.von)+'–'+_deDate(x.bis));
+  for(let d=1; d<=n; d++){
+    const dt=new Date(curY,curM-1,d,12), iso=_iso(dt), dow=_dowMon(dt), today=iso===_todayISO();
+    const its=items.filter(it=>startsOn(it,iso)).sort((a,b)=>String(a.uhr||'').localeCompare(String(b.uhr||'')));
+    const ab=abs.filter(a=>startsOn(a,iso));
+    if(!its.length && !ab.length && !today) continue;
+    any=true;
+    h+='<div class="kal-ag-day'+(today?' today':'')+(dow>=5?' we':'')+'"'+(today?' id="kal-ag-today"':'')+'><div class="kal-ag-date"><span class="dn">'+d+'</span><span class="dw">'+DOW[dow]+(today?' · heute':'')+'</span></div><div class="kal-ag-list">';
+    its.forEach(it=>{
+      const isVa=it.typ==='va', c=_clk(it), mine=(it.mitarbeiter||[]).indexOf(myId)>=0;
+      const away=abs.filter(a=>(it.mitarbeiter||[]).indexOf(a.emp)>=0 && overlap(a.von,a.bis,it.von,it.bis));
+      const span=rng(it);
+      const meta=[it.uhr, span, it.entity, mine?'dir zugewiesen':''].filter(Boolean).join(' · ');
+      h+='<div class="kal-ag-it'+c.cls+'" style="border-left-color:'+(isVa?'#dc2626':'#d97706')+'"'+c.on+'>'
+        +'<div class="t">'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>'+(meta?'<div class="m">'+esc(meta)+'</div>':'')
+        +(away.length?'<div class="cf">⚠ abwesend: '+away.map(a=>esc(empName(a.emp))).join(', ')+'</div>':'')+'</div>';
+    });
+    if(ab.length) h+='<div class="kal-ag-abs">🏖 '+ab.map(a=>esc((personal?KMETA[a.type].lbl:empName(a.emp)+' ('+KMETA[a.type].lbl+(a.half?' ½':'')+')')+(rng(a)?' '+rng(a):''))).join(', ')+'</div>';
+    if(!its.length && !ab.length) h+='<div class="kal-ag-none">Nichts eingetragen.</div>';
+    h+='</div></div>';
+  }
+  if(!any) h+='<div class="kal-empty">In '+MONTHS[curM-1]+' ist nichts eingetragen.</div>';
+  return h+'</div>';
+}
+
 // ── Periodenbezeichnung + Board ──
 function _periodLabel(){
-  if(V==='monat') return MONTHS[curM-1]+' '+curY;
+  if(V==='monat'||V==='liste') return MONTHS[curM-1]+' '+curY;
   if(V==='woche'){ const e=_addDays(weekStart,6); const kw=_isoWeek(weekStart); return 'KW '+kw+' · '+weekStart.getDate()+'.'+(weekStart.getMonth()+1)+'. – '+e.getDate()+'.'+(e.getMonth()+1)+'. '+e.getFullYear(); }
   if(V==='jahr') return _saisonLabel();
   return String(curY);
 }
 function _boardHtml(){
   const personal = curTeam==='@me';   // „Nur ich" → klassische persönliche Ansicht
+  if(V==='liste') return _agenda();
   if(V==='monat'){ if(personal) return _persMonth(curY,curM); const n=_daysInMonth(curY,curM); const days=[]; for(let d=1;d<=n;d++){ const dt=new Date(curY,curM-1,d,12); const iso=_iso(dt); days.push({iso,dom:d,dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
   if(V==='woche'){ if(personal) return _persWeek(weekStart); const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(weekStart,i); const iso=_iso(dt); days.push({iso,dom:dt.getDate(),dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
-  if(V==='jahr'){ const months=_saisonMonths(); return personal?_persYear(months):_yearGrid(months, 'Mitarbeiter · '+_saisonLabel()); }
+  if(V==='jahr'){ const months=_saisonMonths(); return personal?_persYear(months):_yearGrid(months, (_mobile()?'Name':'Mitarbeiter · '+_saisonLabel())); }
   // konflikt
   return personal ? _persConflict(curY+'-01-01', curY+'-12-31') : _conflictList(curY+'-01-01', curY+'-12-31');
 }
@@ -554,7 +638,8 @@ export function renderKalender(){
     _styles();
     const root=document.getElementById('kalender-root'); if(!root) return;
     _bindTips(root);
-    const tabs=[['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
+    if(!_vChosen && _mobile()) V='liste';   // Handy: beim ersten Öffnen mit der Liste starten
+    const tabs=[['liste','Liste'],['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
     const emps=_emps(); const personal=curTeam==='@me';
     const kalCanManage=_kalAccess().verwaltend;   // nur „Verwaltend" darf anlegen
     const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>','<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
@@ -569,26 +654,28 @@ export function renderKalender(){
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
         <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
-      <div class="kal-legend">
+      <div class="kal-legend"${V==='liste'||V==='konflikt'?' style="display:none"':''}>
         <span class="kal-lg"><span class="kal-sw" style="background:var(--danger,#dc2626)"></span>Veranstaltung</span>
         <span class="kal-lg"><span class="kal-sw" style="background:var(--warn,#d97706);border:1.5px dashed #fff"></span>Termin</span>
         <span class="kal-lg"><span class="kal-sw" style="background:var(--info,#2563eb)"></span>Abwesend (Urlaub/AZA)</span>
         ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (heller Balken auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid var(--warn,#f0a92e)"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
-      ${V==='konflikt'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll" tabindex="0" aria-label="Kalender (scrollbar)">${_boardHtml()}</div></div>`}
+      ${V==='konflikt'||V==='liste'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll" tabindex="0" aria-label="Kalender (scrollbar)">${_boardHtml()}</div></div>`}
     </div>`;
   }catch(e){ console.error('renderKalender Fehler:',e); }
 }
 
-function kalSetView(v){ V=v; renderKalender(); }
+let _vChosen=false;
+function kalSetView(v){ V=v; _vChosen=true; renderKalender(); }
 // Zurück-Taste (js/nav.js): Ansicht (Woche/Monat/Jahr/Konflikte) gehört zum „Ort" in der App
-try{ (window._navRegs=window._navRegs||{}).kalender={ get:()=>({v:V}), set:s=>{ if(s&&s.v) V=s.v; }, path:s=>s.v, parse:p=>({v:String(p).split('/')[0]}) }; }catch(e){}
+try{ (window._navRegs=window._navRegs||{}).kalender={ get:()=>({v:V}), set:s=>{ if(s&&s.v){ V=s.v; _vChosen=true; } }, path:s=>s.v, parse:p=>({v:String(p).split('/')[0]}) }; }catch(e){}
 function kalSetTeam(t){ curTeam=t; renderKalender(); }
-function kalToday(){ const n=new Date(); curY=n.getFullYear(); curM=n.getMonth()+1; weekStart=_mondayOf(n); renderKalender(); }
+function kalToday(){ const n=new Date(); curY=n.getFullYear(); curM=n.getMonth()+1; weekStart=_mondayOf(n); renderKalender();
+  if(V==='liste') try{ const t=document.getElementById('kal-ag-today'); if(t) t.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} }
 function kalSetSaison(s){ curSaison=s; renderKalender(); }
 function kalNav(dir){
-  if(V==='monat'){ curM+=dir; if(curM<1){curM=12;curY--;} if(curM>12){curM=1;curY++;} }
+  if(V==='monat'||V==='liste'){ curM+=dir; if(curM<1){curM=12;curY--;} if(curM>12){curM=1;curY++;} }
   else if(V==='woche'){ weekStart=_addDays(weekStart,7*dir); }
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
