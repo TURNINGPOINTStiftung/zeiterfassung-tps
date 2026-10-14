@@ -446,32 +446,49 @@ function _ensureNoticeCss(){
     document.head.appendChild(st);
   }
 }
+// Mitteilungen der Zeiterfassung im gemeinsamen Format (auch für die Startseite, js/home.js):
+// [{ key, area:'ze', ts, html, open:'js()', ack:'js()' }] – open/ack als reiner JS-Text (Maskierung beim Einsetzen)
+export function zeNoticeItems(){
+  return _myNotices().map(function(n){
+    const g=n.g, mon=MONTHS[g.m-1]+' '+g.y;
+    const html=n.self
+      ? '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat deine Zeiterfassung <b>'+mon+'</b> zur Korrektur zurückgegeben: „'+esc(g.reason)+'“ – bitte korrigieren und erneut einreichen.'
+      : '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat die Zeiterfassung von <b>'+esc(n.empName)+'</b> ('+mon+') zurückgegeben: „'+esc(g.reason)+'“ – nach der Korrektur bitte erneut genehmigen und nachreichen.';
+    return { key:'ze|'+n.k, area:'ze', ts:Date.parse(g.ts)||0, html, open:'zeNoticeOpen('+JSON.stringify(String(n.k))+')', ack:'zeNoticeAck('+JSON.stringify(String(n.k))+')' };   // reines JS – wird beim Einsetzen maskiert
+  });
+}
+function _lagerItems(){ try{ return (window.shopNotices&&window.shopNotices())||[]; }catch(e){ return []; } }
+function _noticeRow(n){
+  return '<div class="ze-notice"><span class="tx">'+n.html+'</span>'
+    +'<button class="pri" onclick="'+esc(n.open)+'">Öffnen</button>'
+    +'<button onclick="'+esc(n.ack)+'">✓ Gelesen</button></div>';
+}
+// Die Leiste unter der Modulleiste zeigt nur, was zum offenen Bereich gehört (User 14.10.2026:
+// „nicht vermischen"): Zeiterfassung → ZE-Mitteilungen · Lager → Lager-Mitteilungen · CRM & Rest → keine
+// (CRM hat die Glocke). Alles zusammen steht auf der Startseite unter „Neuigkeiten".
+// Wer keine Startseite hat, bekommt in der Zeiterfassung einen kurzen Hinweis auf offene Lager-Mitteilungen.
 export function renderZeNotices(){
   _ensureNoticeCss();
   let bar=document.getElementById('ze-notice-bar');
-  const list=_myNotices();
-  // Weitere Mitteilungs-Quellen (z. B. Shop-Bestellungen): [{ts, html, open:'js()', ack:'js()'}]
-  let extra=[]; try{ extra=(window.shopNotices&&window.shopNotices())||[]; }catch(e){ extra=[]; }
-  if(!list.length&&!extra.length){ if(bar) bar.remove(); return; }
+  const am=window._activeModule||'zeiterfassung';
+  let rows=[];
+  if(am==='zeiterfassung'){
+    rows=zeNoticeItems().map(_noticeRow);
+    let home=false; try{ home=!!(window.homeEnabled&&window.homeEnabled()); }catch(e){}
+    if(!home){ const n=_lagerItems().length;
+      if(n) rows.push('<div class="ze-notice"><span class="tx">📦 '+n+' neue Lager-Mitteilung'+(n===1?'':'en')+'</span>'
+        +'<button class="pri" onclick="switchModule(\'shop\')">Im Lager ansehen</button></div>'); }
+  } else if(am==='shop'){
+    rows=_lagerItems().map(_noticeRow);
+  }
+  try{ if(am==='start' && window.homeNewsRefresh) window.homeNewsRefresh(); }catch(e){}
+  if(!rows.length){ if(bar) bar.remove(); return; }
   if(!bar){
     bar=document.createElement('div'); bar.id='ze-notice-bar';
     const mb=document.getElementById('module-bar');
     if(mb&&mb.parentNode) mb.parentNode.insertBefore(bar, mb.nextSibling); else document.body.prepend(bar);
   }
-  bar.innerHTML=list.map(function(n){
-    const g=n.g, mon=MONTHS[g.m-1]+' '+g.y;
-    const tx=n.self
-      ? '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat deine Zeiterfassung <b>'+mon+'</b> zur Korrektur zurückgegeben: „'+esc(g.reason)+'“ – bitte korrigieren und erneut einreichen.'
-      : '↩ <b>'+esc(g.byName||'Die Geschäftsführung')+'</b> hat die Zeiterfassung von <b>'+esc(n.empName)+'</b> ('+mon+') zurückgegeben: „'+esc(g.reason)+'“ – nach der Korrektur bitte erneut genehmigen und nachreichen.';
-    return '<div class="ze-notice"><span class="tx">'+tx+'</span>'
-      +'<button class="pri" onclick="zeNoticeOpen('+jsq(n.k)+')">Öffnen</button>'
-      +'<button onclick="zeNoticeAck('+jsq(n.k)+')">✓ Gelesen</button></div>';
-  }).join('')
-  +extra.map(function(n){
-    return '<div class="ze-notice"><span class="tx">'+n.html+'</span>'
-      +'<button class="pri" onclick="'+esc(n.open)+'">Öffnen</button>'
-      +'<button onclick="'+esc(n.ack)+'">✓ Gelesen</button></div>';
-  }).join('');
+  bar.innerHTML=rows.join('');
 }
 
 export function zeNoticeOpen(k){

@@ -1132,6 +1132,24 @@ function crmNotifGo(coll, recId){
     if(coll==='teamprojekte'){ window._crmMode='teams'; window._crmTeamProjSel=recId; paint(); return; }
   }catch(e){}
 }
+// Für die Startseite (js/home.js, „Neuigkeiten"): Änderungen ANDERER an MEINEN ⭐ Favoriten, letzte 7 Tage
+// (gleiche Aufbereitung wie die Glocke). keys: 'e|<tree>|<id>' · 'va|<id>' · 'tp|<id>'
+// → Promise<[{coll, recId, name, by, ts, desc, icon}]>. Einträge/Veranstaltungen nur bei CRM-Sicht.
+function crmFavNews(keys){
+  try{
+    return ensureCrmReady().then(()=>{
+      const view=crmCanView(), want=new Set();
+      (keys||[]).forEach(k=>{ const [t,a,b]=String(k).split('|');
+        if(t==='e' && a && b && view) want.add(a+'::'+b);
+        else if(t==='va' && a && view) want.add('veranstaltungen::'+a);
+        else if(t==='tp' && a) want.add('teamprojekte::'+a); });
+      if(!want.size) return [];
+      return listHistory().then(list=>_buildNotif(list).items.filter(it=>want.has(it.coll+'::'+it.recId))
+        .map(it=>Object.assign({ icon:_notifType(it.coll).icon }, it)));
+    }).catch(()=>[]);
+  }catch(e){ return Promise.resolve([]); }
+}
+window.crmFavNews=crmFavNews;
 
 // ── Bar ────────────────────────────────────────────────────────────
 function barHtml(){

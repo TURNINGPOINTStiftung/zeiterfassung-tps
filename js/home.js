@@ -38,7 +38,7 @@ const CARDS=[
   { k:'stamp',  l:'⏱️ Stempeln', hint:'nur wer die Zeiterfassung nutzt und stempeln darf' },
   { k:'sys',    l:'🛠️ System', hint:'nur Admin bzw. System-Verwaltung' },
   { k:'todo',   l:'📌 Was ansteht' },
-  { k:'notes',  l:'🔔 Mitteilungen' },
+  { k:'notes',  l:'🔔 Neuigkeiten' },
   { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf' },
   { k:'favs',   l:'⭐ Favoriten' },
   { k:'recent', l:'🕘 Zuletzt geöffnet', hint:'Standard aus – bei Bedarf pro Rolle einschalten' },
@@ -147,6 +147,10 @@ function _styles(){
   .home-days{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
   .home-day{flex:1;min-width:90px;background:var(--surface-2,#f0f2f5);border-radius:10px;padding:6px 8px;font-size:12px;text-align:center}
   .home-notes .ze-notice{margin:0 0 6px;border-radius:10px;background:var(--warn-bg,#fff4e5);padding:8px 10px}
+  .home-notes .ze-notice .ar{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .home-news-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .home-news-h .home-h{margin-bottom:8px}
+  .home-news-all{border:1px solid var(--border);background:var(--surface,#fff);color:var(--text);border-radius:6px;font-size:12px;padding:3px 9px;cursor:pointer;margin-bottom:8px}
   .home-chips{display:flex;gap:8px;flex-wrap:wrap}
   .home-chip{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:20px;background:var(--surface,#fff);font-size:13.5px;max-width:100%}
   .home-chip .lbl{padding:6px 4px 6px 12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
@@ -178,7 +182,7 @@ export function renderHome(){
       stamp:()=>_stampAllowed(cu)?'<div class="home-card" id="home-stamp"></div>':'',
       sys:  ()=>_sysAllowed(cu)?'<div class="home-card" id="home-sys"><p class="home-h">🛠️ System</p><div class="home-empty">Lädt …</div></div>':'',
       todo: ()=>'<div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>',
-      notes:()=>'<div class="home-card" id="home-notes"><p class="home-h">🔔 Mitteilungen</p><div class="home-notes"></div></div>',
+      notes:()=>'<div class="home-card" id="home-notes"><div class="home-news-h"><p class="home-h">🔔 Neuigkeiten</p><button class="home-news-all" onclick="homeNewsAllSeen()">✓ Alle gelesen</button></div><div class="home-notes"></div></div>',
       team: ()=>'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>',
       favs:  ()=>'<div class="home-card" id="home-favs" style="display:none"></div>',
       recent:()=>'<div class="home-card" id="home-recent" style="display:none"></div>',
@@ -312,15 +316,68 @@ function _fillStamp(){
   }catch(e){ box.innerHTML='<p class="home-h">⏱️ Stempeln</p><div class="home-empty">Gerade nicht verfügbar.</div>'; }
 }
 
-// ── Mitteilungen (gleiche Einträge wie die Leiste oben – die ist auf der Startseite ausgeblendet) ──
+// ── 🔔 Neuigkeiten: alles aus allen Bereichen an einer Stelle (User 14.10.2026) ──
+// Zeiterfassung (Rückgaben) + Lager (Bestellungen, Ausleihen, Termine) + CRM-Änderungen anderer an meinen
+// ⭐ Favoriten. Jede Neuigkeit erscheint nur, bis sie gelesen ist; der Gelesen-Stand liegt in der Datenbank
+// (ZE/Lager wie bisher am Eintrag bzw. crm/userPrefs.shopAck, CRM in crm/userPrefs/<uid>.newsSeen) und
+// gilt damit auf allen Geräten. Die Leiste oben ist auf der Startseite ausgeblendet.
+const _AREA={ ze:'⏱️ Zeiterfassung', lager:'📦 Lager', crm:'⭐ CRM-Favorit' };
+let _crmNews=[], _crmNewsTs=0, _crmNewsBusy=false;
+const _nk=(coll,id)=>String(coll+'_'+id).replace(/[.#$/\[\]]/g,'_');   // als Datenbank-Schlüssel tauglich
+function _newsSeenMap(){ const p=_prefs(); return (p && p.newsSeen && typeof p.newsSeen==='object') ? p.newsSeen : {}; }
+function _loadCrmNews(force){
+  if(_crmNewsBusy || !window.crmFavNews || (!force && Date.now()-_crmNewsTs<60000)) return;
+  const keys=_favList().map(x=>x.key); if(!keys.length){ _crmNews=[]; return; }
+  _crmNewsBusy=true; _crmNewsTs=Date.now();
+  window.crmFavNews(keys).then(l=>{ _crmNews=Array.isArray(l)?l:[]; }).catch(()=>{})
+    .then(()=>{ _crmNewsBusy=false; if(window._activeModule==='start') _fillNotes(); });
+}
+function _newsItems(){
+  let out=[];
+  try{ out=out.concat(window.zeNoticeItems ? window.zeNoticeItems() : []); }catch(e){}
+  try{ out=out.concat(window.shopNotices ? window.shopNotices() : []); }catch(e){}
+  const seen=_newsSeenMap();
+  _crmNews.filter(it=>(it.ts||0) > (+seen[_nk(it.coll,it.recId)]||0)).forEach(it=>{
+    const a=JSON.stringify(String(it.coll))+','+JSON.stringify(String(it.recId))+','+(+it.ts||0);
+    out.push({ key:'crm|'+it.coll+'|'+it.recId, area:'crm', ts:it.ts||0,
+      html:`${esc(it.icon||'•')} <b>${esc(it.name||'(ohne Name)')}</b>: ${esc(it.desc||'geändert')} · von ${esc(it.by||'?')}`,
+      open:`homeNewsOpen(${a})`, ack:`homeNewsSeen(${a})` });
+  });
+  return out.sort((x,y)=>(y.ts||0)-(x.ts||0));
+}
 function _fillNotes(){
   const box=document.querySelector('#home-notes .home-notes'); if(!box) return;
-  const items=[...document.querySelectorAll('#ze-notice-bar .ze-notice')];
-  // Alles gelesen → Karte ganz ausblenden (User: „im Grunde ein leeres Feld"); kommt bei neuen Mitteilungen wieder
+  _loadCrmNews(false);
+  const items=_newsItems();
+  // Alles gelesen → Karte ganz ausblenden (User: „im Grunde ein leeres Feld"); kommt bei Neuem wieder
   const card=document.getElementById('home-notes'); if(card) card.style.display=items.length?'':'none';
-  const html=items.map(n=>n.outerHTML).join('');
+  const all=card&&card.querySelector('.home-news-all'); if(all) all.style.display=items.length>1?'':'none';
+  const html=items.map(n=>`<div class="ze-notice"><span class="tx"><span class="ar">${esc(_AREA[n.area]||'')}</span>${n.html}</span>`
+    +`<button class="pri" onclick="${esc(n.open)}">Öffnen</button><button onclick="${esc(n.ack)}">✓ Gelesen</button></div>`).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   box.onclick=()=>setTimeout(_fillNotes,250);   // nach „✓ Gelesen" sofort aktualisieren
+}
+function homeNewsRefresh(){ if(window._activeModule==='start') _fillNotes(); }
+function _markCrmSeen(list){
+  if(!list.length) return;
+  const m=Object.assign({}, _newsSeenMap()); const old=Date.now()-14*864e5;
+  list.forEach(([c,id,ts])=>{ const k=_nk(c,id); m[k]=Math.max(+m[k]||0, +ts||0); });
+  Object.keys(m).forEach(k=>{ if(!(+m[k]>old)) delete m[k]; });   // ältere als 14 Tage fallen ohnehin aus der Liste
+  _savePrefs({ newsSeen:m });
+}
+function homeNewsSeen(coll,id,ts){ _markCrmSeen([[coll,id,ts]]); _fillNotes(); }
+function homeNewsOpen(coll,id,ts){
+  _markCrmSeen([[coll,id,ts]]);
+  homeOpenItem(coll==='veranstaltungen' ? 'va|'+id : (coll==='teamprojekte' ? 'tp|'+id : 'e|'+coll+'|'+id));
+}
+function homeNewsAllSeen(){
+  const items=_newsItems(); const crm=[];
+  items.forEach(n=>{
+    if(n.area==='crm'){ const [,c,id]=String(n.key).split('|'); crm.push([c,id,n.ts]); return; }
+    try{ new Function(n.ack)(); }catch(e){ console.warn('Neuigkeit quittieren:', e&&e.message); }   // eigener, intern erzeugter Aufruf
+  });
+  _markCrmSeen(crm);
+  setTimeout(_fillNotes,250);
 }
 
 // ── Was ansteht: CRM-Aufgaben (mir zugewiesen) + meine Termine (7 Tage) + Shop ──
@@ -612,4 +669,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen }); }catch(e){}

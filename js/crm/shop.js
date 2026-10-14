@@ -1718,7 +1718,7 @@ function shopDueDoneSave(key){
 }
 function shopAddMonths(iso,m){ return _addMonths(iso,m); }
 function shopDueNoticeOpen(){ TAB='faellig'; fDue='soon'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
-function shopDueAck(){ try{ localStorage.setItem('tps_shop_due_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
+function shopDueAck(){ _bulkAckSet('due', _dueNoticeIds()); _noticesRefresh(); }
 
 // ── Tab: Orte ──────────────────────────────────────────────────────
 function _orteHtml(){
@@ -1848,31 +1848,54 @@ function shopNotices(){
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeAck(${JSON.stringify(o.id)})` });
     }
   });
-  // Ausleihe: direkt verliehen (Ausleiher) · überfällig (Ausleiher, 1× pro Tag) · Sammelmeldung für Verwalter
-  const today=_todayIso();
+  // Ausleihe: direkt verliehen (Ausleiher) · überfällig (Ausleiher, 1× pro Monat) · Sammelmeldung für Verwalter
+  const month=_todayIso().slice(0,7);
   activeLoans().forEach(l=>{
     if(l.borrowerId!==cu.id) return;
     const what=(l.placeId||l.unitId)?`${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>`:`${_num(l.qty)}× ${esc(l.itemName||'')}`;
     if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Das Lager')}</b> hat dir ${what} ${isZuord(l)?'dauerhaft zugeordnet':(l.due?'ausgeliehen – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':'als Dauerleihe ausgeliehen')}${l.placeId?' (mit Inhalt – du bekommst jetzt auch dessen Termine &amp; Bestellungen)':''}.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanAck(${JSON.stringify(l.id)})` });
-    else if(_overdue(l) && l.ackOverdue!==today) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
+    else if(_overdue(l) && String(l.ackOverdue||'').slice(0,7)!==month) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });
   });
   if(mgr){
     const late=activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id && forMe(loanTeams(l)));
-    let acked=''; try{ acked=localStorage.getItem('tps_shop_od_ack_'+cu.id)||''; }catch(e){}
-    if(late.length && acked!==today) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
+    if(late.length && _bulkAckDue('od', late.map(l=>l.id))) out.push({ ts:Date.now(), html:`⏰ ${late.length} Ausleihe${late.length===1?'':'n'} überfällig: `+late.slice(0,3).map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')} (${esc(bName(l))}, seit ${_fmtDate(l.due)})`).join(', ')+(late.length>3?' …':''),
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
     // (Orte unter Soll-Bestand melden sich jetzt als automatische Bestellung → „Neue Bestellung"-Mitteilung oben)
   }
-  // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Tag.
+  // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Monat
+  // (früher nur, wenn ein neuer Termin dazukommt).
   // Verwalter: fürs eigene Team · ALLE zusätzlich für das, was ihnen zugeordnet ist (Trailer, Weste …)
   const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && ((mgr && forMe(dueTeams(d))) || dueHeld(d,held)));
-  let ackD=''; try{ ackD=localStorage.getItem('tps_shop_due_ack_'+cu.id)||''; }catch(e){}
-  if(due.length && ackD!==today){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
+  if(due.length && _bulkAckDue('due', due.map(_dueId))){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
     out.push({ ts:Date.now(), html:`⏰ ${due.length} Termin${due.length===1?'':'e'} fällig${over?` (${over} überfällig)`:''}: `+due.slice(0,3).map(d=>`${esc(d.title)} – ${esc(d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l)} ${_fmtDate(d.t.datum)}`).join(' · ')+(due.length>3?' …':''),
       open:'shopDueNoticeOpen()', ack:'shopDueAck()' }); }
+  out.forEach(n=>{ n.area='lager'; if(!n.key) n.key='lager|'+n.ack; });
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+// Sammelmeldungen „überfällig" / „Termine fällig": Quittung pro Person geräteübergreifend in
+// crm/userPrefs/<uid>.shopAck = { od:{m:'JJJJ-MM', ids:[…]}, due:{…} }. Erneut gemeldet wird erst im
+// nächsten Monat oder wenn etwas Neues dazukommt (User 14.10.2026: „einmal im Monat reicht").
+const _dueId=d=>d.key+'|'+d.t.datum;
+function _dueNoticeIds(){ const held=myHeld(), mgr=canManage();
+  return allDue().filter(d=>d.t.datum<=_soonIso(14) && ((mgr && forMe(dueTeams(d))) || dueHeld(d,held))).map(_dueId); }
+function _bulkAckGet(kind){
+  const uid=_me().id||''; let a=null;
+  try{ const p=CD.getUserPrefs&&CD.getUserPrefs(uid); a=p&&p.shopAck&&p.shopAck[kind]; }catch(e){}
+  if(!a){ try{ a=JSON.parse(localStorage.getItem('tps_shop_ack2_'+kind+'_'+uid)||'null'); }catch(e){} }
+  return (a&&typeof a==='object')?a:null;
+}
+function _bulkAckDue(kind, ids){
+  const a=_bulkAckGet(kind); if(!a || a.m!==_todayIso().slice(0,7)) return true;
+  const old=new Set(Array.isArray(a.ids)?a.ids:[]); return ids.some(id=>!old.has(id));
+}
+function _bulkAckSet(kind, ids){
+  const uid=_me().id||''; if(!uid) return;
+  const v={ m:_todayIso().slice(0,7), ids:ids.slice(0,300) };
+  try{ localStorage.setItem('tps_shop_ack2_'+kind+'_'+uid, JSON.stringify(v)); }catch(e){}
+  try{ if(CD.getUserPrefs && CD.saveUserPrefs){ const p=Object.assign({}, CD.getUserPrefs(uid)||{});
+    p.shopAck=Object.assign({}, p.shopAck||{}, { [kind]:v }); CD.saveUserPrefs(uid, p); } }catch(e){}
 }
 function shopRefillNoticeOpen(){ TAB='nachfuellen'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 // Für die Startseite (js/home.js): was im Shop für MICH ansteht – gleiche Regeln wie Mitteilungen/Zähler
@@ -1895,7 +1918,8 @@ function shopLoanNoticeOpen(){ TAB='ausleihen'; fLoan='aktiv'; try{ window.switc
 function _noticesRefresh(){ try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){} }
 function shopLoanAck(id){ const l=getShop('shopLoans',id); if(!l) return; l.ackBorrower=true; saveShop('shopLoans', l); _noticesRefresh(); }
 function shopLoanSnooze(id){ const l=getShop('shopLoans',id); if(!l) return; l.ackOverdue=_todayIso(); saveShop('shopLoans', l); _noticesRefresh(); }
-function shopLoanMgrAck(){ try{ localStorage.setItem('tps_shop_od_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }
+function shopLoanMgrAck(){ const cu=_me();
+  _bulkAckSet('od', activeLoans().filter(l=>_overdue(l) && l.borrowerId!==cu.id && forMe(loanTeams(l))).map(l=>l.id)); _noticesRefresh(); }
 function shopNoticeOpen(id){
   const o=getShop('shopOrders',id);
   if(o){ const cu=_me(); if(o.byId===cu.id && o.status!=='offen' && o.status!=='inarbeit') shopNoticeAck(id); else if(o.byId!==cu.id) shopNoticeSeen(id); }

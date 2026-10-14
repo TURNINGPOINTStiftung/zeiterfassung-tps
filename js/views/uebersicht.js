@@ -141,14 +141,23 @@ export function renderOverview(){
     teamMap[t].push(u);
   });
 
+  // Eingereichte Monate, die schon in einem Bericht an die GF stehen (z. B. Leitung reicht den eigenen
+  // Monat ein → geht direkt als Buchhaltungsversion an die GF, ohne Genehmigungsschritt dazwischen),
+  // gelten als erledigt → grün (User 14.10.2026).
+  const inReport=new Set();
+  Object.values(d.teamReports||{}).forEach(r=>{
+    if(r&&r.year===oy&&Array.isArray(r.employeeIds)) r.employeeIds.forEach(id=>inReport.add(id+'|'+r.month));
+  });
+  const doneSub=(u,m,e)=>!!(e&&e.status==='submitted'&&inReport.has(u.id+'|'+m));
   const renderCard=(u)=>{
     const pills=MONTHS.map((mn,i)=>{
       if(!employedRange(u,oy,i+1)) return `<span class="m-pill" style="opacity:.25" title="${mn}: nicht beschäftigt">${mn.slice(0,3)}</span>`;
       const e=d.entries[entryKey(u.id,oy,i+1)];
       const st=e?e.status:'draft';
+      if(doneSub(u,i+1,e)) return `<span class="m-pill s-approved" title="${mn}: Eingereicht – als Bericht an die Geschäftsführung übermittelt">${mn.slice(0,3)}</span>`;
       return `<span class="m-pill ${bCls[st]}" title="${mn}: ${{draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st}">${mn.slice(0,3)}</span>`;
     }).join('');
-    const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'; }).length;
+    const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'&&!doneSub(u,i+1,e); }).length;
     const roleChip=`<span class="chip chip-${u.role}">${roleLabel(u.role,u)}</span>`;
     const isFree=isFreelancer(u);
     const maxH=isFree?(u.maxHours||0):0;
