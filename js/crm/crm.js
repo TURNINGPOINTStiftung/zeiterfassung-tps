@@ -824,6 +824,34 @@ function injectStyles(){
   .crm-tag-suggest button{display:block;width:100%;text-align:left;background:none;border:none;padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--text)}
   .crm-tag-suggest button:hover{background:var(--hover,#eef3f9)}
   .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:15px;height:15px;cursor:pointer;flex-shrink:0;margin:0}
+  /* ── Kanban am Handy (v450): Spalten als Reiter, eine Spalte in voller Breite, Verschieben per Auswahl ── */
+  .kb-mtabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .kb-mtab{flex:0 0 auto;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--text);border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;min-height:40px;white-space:nowrap;cursor:pointer}
+  .kb-mtab.on{background:var(--primary);color:var(--on-primary,#fff);border-color:var(--primary)}
+  .kb-mtab.on .kb-count{background:rgba(255,255,255,.25);color:inherit}
+  .kb-mtab.add{border-style:dashed;color:var(--primary)}
+  .kb-mcol{width:100%;box-sizing:border-box}
+  .kb-mcol .kb-cards{max-height:none;overflow:visible}
+  .kb-mcol .kb-col-title{font-size:16px}
+  .kb-mmove{display:flex;gap:6px;align-items:center;margin-top:8px}
+  .kb-mmove select{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface,#fff);color:var(--text);min-height:40px}
+  .kb-mmove button{min-width:40px;min-height:40px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface,#fff);color:var(--primary);font-size:15px;cursor:pointer}
+  .kb-mmove button:disabled{opacity:.35;cursor:default}
+  @media(max-width:640px){
+    .kb-card{cursor:default;padding:11px 12px}
+    .kb-card input[type=checkbox],.kb-check input[type=checkbox]{width:20px;height:20px}
+    .kb-card-title{font-size:15px}
+    .kb-check{padding:8px 10px;font-size:14px;min-height:40px;box-sizing:border-box}
+    .kb-qadd{font-size:16px;padding:10px 12px}          /* 16 px: iPhone zoomt beim Tippen nicht hinein */
+    .kb-toggle{font-size:14px;padding:8px 9px}
+    .kb-additem{font-size:14px;padding:8px 4px}
+    .kb-col-head .crm-x{min-width:36px;min-height:36px}
+    #crm-vboard .vb-scroll{overflow-y:auto}
+    #crm-vboard .kb-board{height:auto}
+    /* Kopf (Projekt, Eintrag, Veranstaltung): Titel auf eigener Zeile über den Knöpfen statt überlappend */
+    .crm-detail-head{gap:8px;margin-bottom:12px}
+    .crm-detail-head h2{order:-1;flex:1 1 100%;width:100%;min-width:0;font-size:19px;overflow-wrap:anywhere}
+  }
   @media(max-width:640px){
     /* Ganze CRM-Seite scrollt (kein interner Scroll) → Header + Leiste verschwinden beim Scrollen */
     #crm-root{display:block;flex:none}
@@ -1497,7 +1525,7 @@ function kbCardHtml(c, n){
   }).join('');
   const cdone=!vo&&n.status==='erledigt';
   const st=vo?null:taskStatusByKey(n.status);
-  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${esc(n.id)}" draggable="true" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
+  return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${esc(n.id)}" draggable="${_kbMob?'false':'true'}" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
     <div class="kb-card-top">
       <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(n.id)})">${collapsed?'▸':'▾'}</button>
       ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
@@ -1519,11 +1547,72 @@ function kbCardHtml(c, n){
       <div class="kb-cardbtns">
         <button class="kb-additem" onclick="event.stopPropagation();crmAttOpen(${jsq(n.id)})">📎 Anlage${(n.attachments&&n.attachments.length)?' ('+n.attachments.length+')':''}</button>
       </div>
+      ${_kbMobMoveHtml(n)}
     </div>
   </div>`;
 }
+// Handy (schmal): Spalten nebeneinander sind dort unbrauchbar (je nur eine sichtbar, doppeltes Scrollen,
+// Ziehen geht per Touch nicht). Stattdessen Reiter je Spalte + EINE Spalte in voller Breite; Karten werden
+// per „In Spalte …"-Auswahl bzw. ▲▼ verschoben (User 14.10.2026).
+const _kbIsMob=()=>{ try{ return window.matchMedia('(max-width: 640px)').matches; }catch(e){ return false; } };
+let _kbMob=null;   // { tops:[…], cur:<Spalten-ID> } nur während des Zeichnens am Handy
+function _kbMobileHtml(c, tops){
+  let sel=window._kbMobSel;
+  if(sel!=='__new__' && !tops.some(t=>t.id===sel)) sel=tops.length?tops[0].id:'__new__';
+  const cnt=t=>(_hideDone()?(t.children||[]).filter(x=>x.status!=='erledigt'):(t.children||[])).length;
+  const tabs=`<div class="kb-mtabs" role="tablist">${tops.map(t=>`<button class="kb-mtab${t.id===sel?' on':''}" role="tab" aria-selected="${t.id===sel}" onclick="crmKbMobCol(${jsq(t.id)})">${esc(t.text)} <span class="kb-count">${cnt(t)}</span></button>`).join('')}<button class="kb-mtab add${sel==='__new__'?' on':''}" onclick="crmKbMobCol('__new__')">＋ Spalte</button></div>`;
+  if(sel==='__new__') return `<div class="kb-mboard">${tabs}<div class="kb-col kb-mcol kb-col-new"><input class="kb-qadd kb-qadd-col" id="kb-qa-col" placeholder="＋ Name der neuen Spalte (Enter)" onkeydown="crmQaKey(event,'col','')"></div></div>`;
+  const top=tops.find(t=>t.id===sel);
+  const childs=_hideDone()?(top.children||[]).filter(card=>card.status!=='erledigt'):(top.children||[]);
+  _kbMob={ tops, cur:top.id };
+  let cards=''; try{ cards=childs.map(card=>kbCardHtml(c,card)).join(''); } finally { _kbMob=null; }
+  return `<div class="kb-mboard">${tabs}<div class="kb-col kb-mcol">
+      <div class="kb-col-head">
+        <span class="kb-col-title" onclick="crmOpenTask(${jsq(top.id)})">${esc(top.text)}</span>
+        <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode(${jsq(top.id)})">✕</button>
+      </div>
+      ${(top.teams&&top.teams.length)?`<div class="kb-col-sub">👥 ${esc(top.teams.join(', '))}</div>`:''}
+      <input class="kb-qadd" id="kb-qa-card-${esc(top.id)}" placeholder="＋ Aufgabe (Enter)" onkeydown="crmQaKey(event,'card',${jsq(top.id)})">
+      <div class="kb-cards">${cards||'<div class="small" style="color:var(--muted);padding:6px 2px">Noch keine Aufgaben in dieser Spalte.</div>'}</div>
+    </div></div>`;
+}
+// Bedienelemente „verschieben" auf einer Karte (nur am Handy)
+function _kbMobMoveHtml(n){
+  const m=_kbMob; if(!m) return '';
+  const top=m.tops.find(t=>t.id===m.cur); const sib=(top&&top.children)||[]; const i=sib.findIndex(x=>x.id===n.id);
+  const opts=m.tops.filter(t=>t.id!==m.cur).map(t=>`<option value="${esc(t.id)}">${esc(t.text)}</option>`).join('');
+  return `<div class="kb-mmove" onclick="event.stopPropagation()">
+    ${opts?`<select aria-label="In andere Spalte verschieben" onchange="crmKbMoveCard(${jsq(n.id)},this.value)"><option value="">⇄ In Spalte …</option>${opts}</select>`:''}
+    <button title="Nach oben" aria-label="Nach oben" ${i<=0?'disabled':''} onclick="crmKbMoveStep(${jsq(n.id)},-1)">▲</button>
+    <button title="Nach unten" aria-label="Nach unten" ${(i<0||i>=sib.length-1)?'disabled':''} onclick="crmKbMoveStep(${jsq(n.id)},1)">▼</button>
+  </div>`;
+}
+function crmKbMobCol(id){ window._kbMobSel=id; if(id==='__new__') window._crmFocusAfter='kb-qa-col'; repaintContainer();
+  try{ const t=document.querySelector('.kb-mtab.on'); if(t) t.scrollIntoView({inline:'nearest',block:'nearest'}); }catch(e){} }
+function crmKbMoveCard(id, colId){
+  if(!id || !colId) return;
+  mutateContainer(c=>{
+    const f=findNode(c,id), t=findNode(c,colId); if(!f || !t) return;
+    if(flatNodes([f.node]).some(x=>x.id===colId)) return;     // nicht in den eigenen Teilbaum
+    const i=f.arr.indexOf(f.node); if(i<0) return;
+    f.arr.splice(i,1);
+    if(!Array.isArray(t.node.children)) t.node.children=[];
+    t.node.children.push(f.node);
+  });
+  repaintContainer();
+}
+function crmKbMoveStep(id, dir){
+  mutateContainer(c=>{
+    const f=findNode(c,id); if(!f) return;
+    const i=f.arr.indexOf(f.node), j=i+dir; if(i<0 || j<0 || j>=f.arr.length) return;
+    f.arr.splice(i,1); f.arr.splice(j,0,f.node);
+  });
+  repaintContainer();
+}
+Object.assign(window, { crmKbMobCol, crmKbMoveCard, crmKbMoveStep });
 function taskBoardHtml(c){
   const tops=_hideDone()?(c.todos||[]).filter(t=>t.status!=='erledigt'):(c.todos||[]);
+  if(_kbIsMob()) return _kbMobileHtml(c, tops);
   const cols=tops.map(top=>{
     const collapsed=_kbCollapsed(top.id);
     const w=_kbWidth(top.id);
