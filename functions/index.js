@@ -18,6 +18,12 @@
 //  POST { action:'create', id, newPw } – Anmeldekonto anlegen (nur Admin mit zweitem Faktor; Registrierung ist zu).
 //  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
 //  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams } – Zugriffe bestehender Personen (siehe unten).
+//  POST { action:'staffRole', id, role } – Rolle ändern (nur Admin und „System-Verwaltung erweitert“, siehe unten).
+//
+//  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
+//  zusammen mit „System-Verwaltung“ und nur mit zweitem Faktor): zusätzlich Einmal-Passwörter setzen ('set') und die
+//  Rollen Leitung/GF vergeben (staffCreate, staffRole, staffPerms auch für Leitung/GF). Nie für das Administrator-Konto,
+//  nie für die eigene Person und nie für andere Personen mit „erweitert“ – die bleiben beim Administrator.
 //
 //  Deploy (Cloud Shell): siehe functions/README.md
 // ══════════════════════════════════════════════════════════════════
@@ -44,6 +50,42 @@ const dirKey = id => String(id || '')
 // eigene Freigabe-Markierung), sonst könnte man sich aussperren.
 const hasMfa = tok => !!(tok && tok.firebase && tok.firebase.sign_in_second_factor);
 const mfaRequired = res => res.status(403).json({ ok: false, error: 'mfa-required' });
+
+// Rollen-Standardrechte (wie js/config.js DEFAULT_PERMISSIONS) – nur die serverseitig geprüften (grants).
+// Die Rechte-Matrix (zeiterfassung/rolePermissions) hat Vorrang, persönliche Einzelrechte (perms) erst recht.
+const ROLE_DEFAULTS = { tab_gfberichte: ['geschaeftsfuehrer'], btn_teamberichte: [], btn_jahresbericht: ['leitung'],
+  genehmigung_abwesenheit: ['leitung', 'geschaeftsfuehrer'], zugriff_verwaltung: [] };
+const AREA_KEYS = ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop'];
+const ALL_ROLES = ['mitarbeiter', 'berater', 'freiberuflich', 'leitung', 'geschaeftsfuehrer'];
+const BASIC_ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
+// Freigabelisten (grants) einer Person aus Rolle + Einzelrechten – gleiche Logik wie admin-setup.js
+// refreshPermissionAllowlists (der Admin-Start rechnet ohnehin alles autoritativ neu).
+async function grantUpdates(authUid, u) {
+  const rp = (await db.ref('zeiterfassung/rolePermissions').once('value')).val() || {};
+  const p = (u && u.perms) || {};
+  const has = k => Object.prototype.hasOwnProperty.call(p, k) ? !!p[k] : (Array.isArray(rp[k]) ? rp[k] : (ROLE_DEFAULTS[k] || [])).includes(u.role);
+  const sys = has('zugriff_verwaltung');
+  const upd = {};
+  ['tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'genehmigung_abwesenheit', 'zugriff_verwaltung']
+    .forEach(k => { upd['zeiterfassung/grants/' + k + '/' + authUid] = has(k) ? true : null; });
+  AREA_KEYS.forEach(k => { upd['zeiterfassung/grants/' + k + '/' + authUid] = (sys || p[k] === true) ? true : null; });
+  upd['zeiterfassung/grants/zugriff_verwaltung_plus/' + authUid] = (sys && p.zugriff_verwaltung_plus === true) ? true : null;
+  return upd;
+}
+// Wer ruft auf? → { tok, isAdmin, isStaff (System-Verwaltung), isPlus (… erweitert), callerId } oder null
+async function whoCalls(req) {
+  const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
+  if (!m) return null;
+  const tok = await admin.auth().verifyIdToken(m[1]);
+  const val = async p => (await db.ref(p).once('value')).val();
+  const isAdmin = (await val('zeiterfassung/admins/' + tok.uid)) === true;
+  const isStaff = !isAdmin && (await val('zeiterfassung/allowed/' + tok.uid)) === true
+    && (await val('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid)) === true;
+  const isPlus = isStaff && (await val('zeiterfassung/grants/zugriff_verwaltung_plus/' + tok.uid)) === true;
+  const callerId = (await val('zeiterfassung/uidUser/' + tok.uid)) || '';
+  return { tok, isAdmin, isStaff, isPlus, callerId };
+}
+const isPlusUser = u => !!(u && u.perms && u.perms.zugriff_verwaltung_plus === true);
 
 function cors(req, res) {
   const o = req.get('Origin') || '';
@@ -76,16 +118,24 @@ exports.tpsPw = async (req, res) => {
     }
 
     if (action === 'set') {
-      const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
-      if (!m) return res.status(401).json({ ok: false, error: 'auth' });
-      const tok = await admin.auth().verifyIdToken(m[1]);
-      const isAdmin = (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() === true;
-      if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
-      if (!hasMfa(tok)) return mfaRequired(res);
+      const c = await whoCalls(req);
+      if (!c) return res.status(401).json({ ok: false, error: 'auth' });
+      if (!c.isAdmin && !c.isPlus) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(c.tok)) return mfaRequired(res);
       const newPw = String(body.newPw || '');
       if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
       if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      if (!c.isAdmin) {
+        // „System-Verwaltung erweitert": nur aktive Mitarbeitende, nicht Admin, nicht sich selbst, nicht andere „erweitert"
+        if (id === 'admin' || id === c.callerId) return res.status(403).json({ ok: false, error: 'protected' });
+        const users = (await db.ref('zeiterfassung/users').once('value')).val() || [];
+        const t = (Array.isArray(users) ? users : Object.values(users)).find(x => x && x.id === id);
+        if (!t) return res.status(404).json({ ok: false, error: 'no-user' });
+        if (t.role === 'admin' || isPlusUser(t)) return res.status(403).json({ ok: false, error: 'protected' });
+      }
       const u = await admin.auth().getUserByEmail(accountEmail(id));
+      if (!c.isAdmin && (u.uid === c.tok.uid || (await db.ref('zeiterfassung/admins/' + u.uid).once('value')).val() === true))
+        return res.status(403).json({ ok: false, error: 'protected' });
       await admin.auth().updateUser(u.uid, { password: newPw });
       await db.ref('zeiterfassung/pwResetRequests/' + id).remove();
       return res.json({ ok: true });
@@ -130,12 +180,13 @@ exports.tpsPw = async (req, res) => {
         && (await db.ref('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid).once('value')).val() === true;
       if (!isAdmin && !isStaff) return res.status(403).json({ ok: false, error: 'forbidden' });
       if (!hasMfa(tok)) return mfaRequired(res);
+      const isPlus = isStaff && (await db.ref('zeiterfassung/grants/zugriff_verwaltung_plus/' + tok.uid).once('value')).val() === true;
       const inU = body.user || {};
       const newPw = String(body.newPw || '');
       const uid0 = String(inU.id || '');
       if (!ID_RE.test(uid0) || uid0 === 'admin') return res.status(400).json({ ok: false, error: 'id' });
       if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
-      const ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
+      const ROLES = (isAdmin || isPlus) ? ALL_ROLES : BASIC_ROLES;   // Leitung/GF nur Admin und „erweitert"
       const role = String(inU.role || 'mitarbeiter');
       if (!ROLES.includes(role)) return res.status(400).json({ ok: false, error: 'role' });
       const clean = v => {
@@ -180,9 +231,10 @@ exports.tpsPw = async (req, res) => {
       upd['zeiterfassung/uidUser/' + nuid] = uid0;
       upd['zeiterfassung/loginDir/' + dirKey(uid0)] = { id: uid0, name };
       if (role === 'freiberuflich') upd['zeiterfassung/freelancers/' + nuid] = true;
-      // Freigabelisten für ausdrücklich gesetzte Rechte sofort (der Admin-Start rechnet später alles autoritativ neu)
-      ['genehmigung_abwesenheit', 'btn_teamberichte', 'btn_jahresbericht', 'tab_gfberichte', 'zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop']
-        .forEach(k => { if (perms[k] === true) upd['zeiterfassung/grants/' + k + '/' + nuid] = true; });
+      if (role === 'leitung' || role === 'geschaeftsfuehrer') upd['zeiterfassung/managers/' + nuid] = true;
+      if (role === 'geschaeftsfuehrer') upd['zeiterfassung/gfAdmins/' + nuid] = true;
+      // Freigabelisten aus Rolle + Rechten sofort (der Admin-Start rechnet später alles autoritativ neu)
+      Object.assign(upd, await grantUpdates(nuid, rec));
       if (perms.path_shop === true) upd['zeiterfassung/grants/shop_nutzen/' + nuid] = true;
       if (perms.path_messe === true) upd['zeiterfassung/grants/messe_nutzen/' + nuid] = true;
       const lvl = String((body.crm && body.crm.level) || 'none');
@@ -213,6 +265,8 @@ exports.tpsPw = async (req, res) => {
       if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
       const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
       if (callerId === id) return res.status(400).json({ ok: false, error: 'self' });
+      const isPlus = isStaff && (await db.ref('zeiterfassung/grants/zugriff_verwaltung_plus/' + tok.uid).once('value')).val() === true;
+      const TARGET_ROLES = (isAdmin || isPlus) ? ALL_ROLES : BASIC_ROLES;
       const PERM_OK = k => k !== 'zugriff_verwaltung' && (/^(path|verw)_[a-z_]{1,30}$/.test(k) || ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'startseite',
         'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel'].includes(k));
       const inPerms = (body.perms && typeof body.perms === 'object') ? body.perms : {};
@@ -228,9 +282,12 @@ exports.tpsPw = async (req, res) => {
         const i = list.findIndex(x => x && x.id === id);
         if (i < 0) { reason = 'no-user'; return; }
         const u = list[i];
-        if (u.role === 'admin' || !['mitarbeiter', 'berater', 'freiberuflich'].includes(u.role)) { reason = 'role'; return; }
-        const keepSys = !!(u.perms && u.perms.zugriff_verwaltung);
-        const perms = Object.assign({}, newPerms); if (keepSys) perms.zugriff_verwaltung = true;
+        if (u.role === 'admin' || !TARGET_ROLES.includes(u.role)) { reason = 'role'; return; }
+        if (!isAdmin && isPlusUser(u)) { reason = 'protected'; return; }
+        // „System-Verwaltung“ und „… erweitert“ bleiben wie sie sind (vergibt nur der Administrator)
+        const perms = Object.assign({}, newPerms);
+        if (u.perms && u.perms.zugriff_verwaltung) perms.zugriff_verwaltung = true;
+        if (u.perms && u.perms.zugriff_verwaltung_plus) perms.zugriff_verwaltung_plus = true;
         list[i] = Object.assign({}, u, { perms, crmOnly });
         if (kanbanTeams) list[i].kanbanTeams = kanbanTeams;
         target = list[i];
@@ -241,12 +298,7 @@ exports.tpsPw = async (req, res) => {
       let au = null; try { au = await admin.auth().getUserByEmail(accountEmail(id)); } catch (_) {}
       const upd = {};
       if (au) {
-        const sys = !!target.perms.zugriff_verwaltung;
-        const AREA = ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender', 'verw_shop'];
-        ['genehmigung_abwesenheit', 'btn_teamberichte', 'btn_jahresbericht', 'tab_gfberichte'].concat(AREA).forEach(k => {
-          const on = target.perms[k] === true || (sys && AREA.includes(k));
-          upd['zeiterfassung/grants/' + k + '/' + au.uid] = on ? true : null;
-        });
+        Object.assign(upd, await grantUpdates(au.uid, target));
         if ('path_shop' in target.perms) upd['zeiterfassung/grants/shop_nutzen/' + au.uid] = target.perms.path_shop ? true : null;
         if ('path_messe' in target.perms) upd['zeiterfassung/grants/messe_nutzen/' + au.uid] = target.perms.path_messe ? true : null;
       }
@@ -256,6 +308,44 @@ exports.tpsPw = async (req, res) => {
         upd['crm/access/' + id] = { level: lvl, vereinIds: vids };
       } else upd['crm/access/' + id] = null;
       await db.ref().update(upd);
+      return res.json({ ok: true });
+    }
+
+    // Rolle einer bestehenden Person ändern (seit 14.10.): Administrator oder „System-Verwaltung erweitert“,
+    // jeweils mit zweitem Faktor. Rollen: Mitarbeiter/in, Berater/in, Freiberuflich, Leitung, GF – nie Admin.
+    // Nicht die eigene Person, nie ein Admin-Konto; Personen mit „erweitert“ nur der Administrator.
+    // Danach managers/gfAdmins/freelancers + Freigabelisten der Person passend setzen.
+    if (action === 'staffRole') {
+      const c = await whoCalls(req);
+      if (!c) return res.status(401).json({ ok: false, error: 'auth' });
+      if (!c.isAdmin && !c.isPlus) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(c.tok)) return mfaRequired(res);
+      if (!ID_RE.test(id) || id === 'admin') return res.status(400).json({ ok: false, error: 'id' });
+      if (c.callerId === id) return res.status(400).json({ ok: false, error: 'self' });
+      const role = String(body.role || '');
+      if (!ALL_ROLES.includes(role)) return res.status(400).json({ ok: false, error: 'role' });
+      let target = null, reason = '';
+      const tr = await db.ref('zeiterfassung/users').transaction(cur => {
+        if (cur === null) return null;   // erster Durchlauf ohne Cache → Firebase wiederholt mit echtem Wert
+        const list = Array.isArray(cur) ? cur : Object.values(cur);
+        const i = list.findIndex(x => x && x.id === id);
+        if (i < 0) { reason = 'no-user'; return; }
+        const u = list[i];
+        if (u.role === 'admin') { reason = 'admin-target'; return; }
+        if (!c.isAdmin && isPlusUser(u)) { reason = 'protected'; return; }
+        list[i] = Object.assign({}, u, { role });
+        target = list[i];
+        return list;
+      });
+      if (!tr.committed || !target) return res.status(reason === 'no-user' ? 404 : 403).json({ ok: false, error: reason || 'conflict' });
+      let au = null; try { au = await admin.auth().getUserByEmail(accountEmail(id)); } catch (_) {}
+      if (au) {
+        const upd = await grantUpdates(au.uid, target);
+        upd['zeiterfassung/managers/' + au.uid] = (role === 'leitung' || role === 'geschaeftsfuehrer') ? true : null;
+        upd['zeiterfassung/gfAdmins/' + au.uid] = role === 'geschaeftsfuehrer' ? true : null;
+        upd['zeiterfassung/freelancers/' + au.uid] = role === 'freiberuflich' ? true : null;
+        await db.ref().update(upd);
+      }
       return res.json({ ok: true });
     }
 
@@ -287,6 +377,7 @@ exports.tpsPw = async (req, res) => {
       const aList = Array.isArray(arch) ? arch : Object.values(arch);
       const rec = uList.find(x => x && x.id === id) || aList.find(x => x && x.id === id) || null;
       if (rec && rec.role === 'admin') return res.status(403).json({ ok: false, error: 'admin-target' });
+      if (!isAdmin && isPlusUser(rec)) return res.status(403).json({ ok: false, error: 'protected' });   // „erweitert" sperrt nur der Admin
       let u = null;
       try { u = await admin.auth().getUserByEmail(accountEmail(id)); } catch (e) { if (e.code !== 'auth/user-not-found') throw e; }
       if (u && u.uid === tok.uid) return res.status(400).json({ ok: false, error: 'self' });
