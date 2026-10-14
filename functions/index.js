@@ -19,6 +19,7 @@
 //  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
 //  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams } – Zugriffe bestehender Personen (siehe unten).
 //  POST { action:'staffRole', id, role } – Rolle ändern (nur Admin und „System-Verwaltung erweitert“, siehe unten).
+//  POST { action:'backupList' | 'backupGet' | 'restore' } – Backups ansehen/laden/einspielen („erweitert“, siehe unten).
 //
 //  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
 //  zusammen mit „System-Verwaltung“ und nur mit zweitem Faktor): zusätzlich Einmal-Passwörter setzen ('set') und die
@@ -30,6 +31,7 @@
 const admin = require('firebase-admin');
 admin.initializeApp({ databaseURL: 'https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app' });
 const db = admin.database();
+const BUCKET = 'zeiterfassung-tps.firebasestorage.app';   // Storage (automatische Backups)
 
 const ALLOWED_ORIGINS = [
   'https://turningpointstiftung.github.io',
@@ -309,6 +311,105 @@ exports.tpsPw = async (req, res) => {
       } else upd['crm/access/' + id] = null;
       await db.ref().update(upd);
       return res.json({ ok: true });
+    }
+
+    // ── Backups für „System-Verwaltung erweitert“ (seit 14.10.; der Administrator nutzt weiter die App direkt) ──
+    //  backupList          – Namen der automatischen Backups (Storage backups/daily/)
+    //  backupGet { name }  – Inhalt eines automatischen Backups (zum Herunterladen)
+    //  restore { name | data, parts:{ze,crm,shop} } – Backup einspielen, NUR mit zweitem Faktor.
+    //   · Vorher wird der aktuelle Stand als backups/daily/<Datum>_vorEinspielen-<uid>-<Zeit>.json gesichert
+    //     (klappt das nicht, wird nichts eingespielt).
+    //   · Ein Backup darf keine Rechte vergeben: Anmelde-/Freigabeknoten, Rechte-Matrix, CRM-Zugriffe und
+    //     persönliche Einstellungen bleiben wie JETZT; bei Personen, die es jetzt gibt, bleiben Rolle und
+    //     Rechte wie jetzt; Personen nur im Backup kommen ohne Sonder- und System-Rechte zurück; Personen,
+    //     die es nur jetzt gibt, bleiben erhalten (niemand wird ausgesperrt).
+    if (action === 'backupList' || action === 'backupGet' || action === 'restore') {
+      const c = await whoCalls(req);
+      if (!c) return res.status(401).json({ ok: false, error: 'auth' });
+      if (!c.isAdmin && !c.isPlus) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (!hasMfa(c.tok)) return mfaRequired(res);
+      const bucket = admin.storage().bucket(BUCKET);
+      const NAME_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}_[A-Za-z0-9_-]{1,120}\.json$/;
+      if (action === 'backupList') {
+        const [files] = await bucket.getFiles({ prefix: 'backups/daily/' });
+        const names = files.map(f => f.name.slice('backups/daily/'.length)).filter(n => NAME_RE.test(n)).sort().reverse();
+        return res.json({ ok: true, names });
+      }
+      const readBackup = async name => {
+        if (!NAME_RE.test(String(name || ''))) return null;
+        const [buf] = await bucket.file('backups/daily/' + name).download();
+        return JSON.parse(buf.toString('utf8'));
+      };
+      if (action === 'backupGet') {
+        const d = await readBackup(body.name);
+        if (!d) return res.status(400).json({ ok: false, error: 'name' });
+        return res.json({ ok: true, data: d });
+      }
+      // restore
+      let src = null;
+      try { src = body.name ? await readBackup(body.name) : body.data; } catch (e) { return res.status(400).json({ ok: false, error: 'file' }); }
+      if (!src || typeof src !== 'object' || Array.isArray(src)) return res.status(400).json({ ok: false, error: 'file' });
+      const SHOP = ['shopItems', 'shopPlaces', 'shopOrders', 'shopLog', 'shopLoans', 'shopConfig'];
+      const isVoll = src._type === 'tps-vollbackup', isCrm = src._type === 'tps-crm-backup', isShop = src._type === 'tps-shop-backup';
+      const ze = isVoll ? src.zeiterfassung : ((isCrm || isShop) ? null : src);
+      let crmIn = (isVoll || isCrm) ? src.crm : null;
+      let shopIn = isShop ? src.shop : (isVoll ? (src.shop || null) : null);
+      if (crmIn && typeof crmIn === 'object' && !shopIn && SHOP.some(k => k in crmIn)) { shopIn = {}; SHOP.forEach(k => { if (k in crmIn) shopIn[k] = crmIn[k]; }); }
+      const parts = body.parts || {};
+      const doZe = parts.ze === true && !!(ze && Array.isArray(ze.users) && ze.entries && typeof ze.entries === 'object');
+      const doCrm = parts.crm === true && !!(crmIn && typeof crmIn === 'object' && !Array.isArray(crmIn));
+      const doShop = parts.shop === true && !!(shopIn && typeof shopIn === 'object' && !Array.isArray(shopIn));
+      if (!doZe && !doCrm && !doShop) return res.status(400).json({ ok: false, error: 'nothing' });
+      // 1) Sicherung des aktuellen Stands (Pflicht)
+      const curZe = (await db.ref('zeiterfassung').once('value')).val() || {};
+      const curCrm = (await db.ref('crm').once('value')).val() || {};
+      const now = new Date(); const day = now.toISOString().slice(0, 10);
+      const safeName = day + '_vorEinspielen-' + c.tok.uid.replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + '-' + now.getTime() + '.json';
+      const curCrmPart = {}, curShopPart = { _v: 1 };
+      Object.keys(curCrm).forEach(k => { if (SHOP.includes(k)) curShopPart[k] = curCrm[k]; else curCrmPart[k] = curCrm[k]; });
+      await bucket.file('backups/daily/' + safeName).save(JSON.stringify({ _type: 'tps-vollbackup', _v: 2, source: 'vor-einspielen',
+        exportedAt: now.toISOString(), byUser: c.callerId, zeiterfassung: curZe, crm: curCrmPart, shop: curShopPart }), { contentType: 'application/json', resumable: false });
+      const upd = {};
+      // 2) Zeiterfassung: Inhalte aus dem Backup, Rechte wie jetzt
+      if (doZe) {
+        const KEEP = ['allowed', 'uidUser', 'admins', 'gfAdmins', 'managers', 'freelancers', 'grants', 'loginDir', 'pwResetRequests', 'pwResetTokens', 'rolePermissions', '_fixes'];
+        const SEC = ['role', 'perms', 'crmOnly', 'noTimesheet', 'noReport', 'gfCountersign', 'kanbanTeams'];
+        const list = v => Array.isArray(v) ? v.filter(Boolean) : (v && typeof v === 'object' ? Object.values(v).filter(Boolean) : []);
+        const curAll = {}; list(curZe.users).concat(list(curZe.archivedUsers)).forEach(u => { if (u && u.id) curAll[u.id] = u; });
+        const fix = u => {
+          if (!u || typeof u !== 'object' || !u.id) return null;
+          const o = Object.assign({}, u); delete o.pw;
+          const cu0 = curAll[u.id];
+          if (cu0) {
+            if (cu0.role === 'admin' || u.id === 'admin') return Object.assign({}, cu0);   // Admin-Datensatz bleibt wie jetzt
+            SEC.forEach(k => { if (cu0[k] === undefined) delete o[k]; else o[k] = cu0[k]; });
+          } else {
+            if (o.role === 'admin') o.role = 'mitarbeiter';
+            if (o.perms && typeof o.perms === 'object') { o.perms = Object.assign({}, o.perms); delete o.perms.zugriff_verwaltung; delete o.perms.zugriff_verwaltung_plus; }
+          }
+          return o;
+        };
+        const nu = list(ze.users).map(fix).filter(Boolean);
+        const na = list(ze.archivedUsers).map(fix).filter(Boolean);
+        const inB = new Set(nu.concat(na).map(u => u.id));
+        list(curZe.users).forEach(u => { if (u && u.id && !inB.has(u.id)) nu.push(u); });          // niemand wird ausgesperrt
+        list(curZe.archivedUsers).forEach(u => { if (u && u.id && !inB.has(u.id)) na.push(u); });
+        const merged = Object.assign({}, ze, { users: nu, archivedUsers: na });
+        KEEP.forEach(k => { if (curZe[k] === undefined) delete merged[k]; else merged[k] = curZe[k]; });
+        upd['zeiterfassung'] = merged;
+      }
+      // 3) CRM (ohne Lager): Zugriffe/Matrix/persönliche Einstellungen bleiben wie jetzt
+      const CRM_KEEP = ['access', 'pathAccess', 'userPrefs'];
+      if (doCrm) {
+        Object.keys(curCrm).forEach(k => { if (!SHOP.includes(k) && !CRM_KEEP.includes(k) && !(k in crmIn)) upd['crm/' + k] = null; });
+        Object.keys(crmIn).forEach(k => { if (!SHOP.includes(k) && !CRM_KEEP.includes(k) && /^[A-Za-z0-9_-]{1,80}$/.test(k)) upd['crm/' + k] = crmIn[k]; });
+      }
+      // 4) Lager
+      if (doShop) SHOP.forEach(k => { const v = shopIn[k]; upd['crm/' + k] = (v && typeof v === 'object' && Object.keys(v).length) ? v : null; });
+      await db.ref().update(upd);
+      await db.ref('ze_audit/_restore').push({ ts: Date.now(), by: c.callerId, action: 'restore', parts: { ze: doZe, crm: doCrm, shop: doShop },
+        source: body.name ? String(body.name).slice(0, 140) : 'Datei', safety: safeName }).catch(() => {});
+      return res.json({ ok: true, safety: safeName, parts: { ze: doZe, crm: doCrm, shop: doShop } });
     }
 
     // Rolle einer bestehenden Person ändern (seit 14.10.): Administrator oder „System-Verwaltung erweitert“,
