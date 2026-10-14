@@ -11,7 +11,8 @@
 //  • Aufräumen (Aufbewahrung) läuft nur, wenn der Administrator angemeldet ist.
 //  Alles best effort: Fehler landen nur in der Konsole und stören die App nie.
 // ══════════════════════════════════════════════════════════════════
-import { localISODate, openModal, esc, toast, jsArg as jsq } from './utils.js';
+import { localISODate, openModal, closeModal, esc, toast, jsArg as jsq } from './utils.js';
+import { PW_FUNCTION_URL } from './config.js';
 import { runAutoUserBackup } from './user-backup.js';   // persönlicher Monats-Schnappschuss (Phase 2)
 
 const KEEP_DAILY_DAYS = 90;
@@ -104,3 +105,75 @@ export async function showAppBackups(){
 }
 
 try{ window.runAutoBackup = runAutoBackup; window.listAppBackups = listAppBackups; window.downloadAppBackup = downloadAppBackup; window.showAppBackups = showAppBackups; }catch(_){}
+
+// ══════════════════════════════════════════════════════════════════
+//  Backups für „System-Verwaltung erweitert“ (seit v454) – alles über die Cloud Function tpsPw
+//  (backupList / backupGet / restore), weil Storage und das Überschreiben der Daten dem Admin vorbehalten
+//  sind. Der Server sichert vor dem Einspielen den aktuellen Stand und übernimmt KEINE Rechte aus dem Backup.
+// ══════════════════════════════════════════════════════════════════
+export function isBackupPlus(cu){ cu=cu||window.cu; return !!(cu && cu.role!=='admin' && cu.perms && cu.perms.zugriff_verwaltung===true && cu.perms.zugriff_verwaltung_plus===true); }
+async function _fn(payload){
+  const me=firebase.auth().currentUser; if(!me) throw new Error('Nicht angemeldet.');
+  const tok=await me.getIdToken();
+  const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok}, body:JSON.stringify(payload) });
+  let j={}; try{ j=await r.json(); }catch(_){}
+  if(!r.ok || !j.ok) throw new Error(j.error==='mfa-required' ? 'Dafür ist eine Anmeldung mit Zwei-Faktor-Code nötig (ab- und wieder anmelden).'
+    : (j.error==='forbidden' ? 'Keine Berechtigung (System-Verwaltung erweitert nötig).' : (r.status===413 ? 'Die Datei ist zu groß.' : 'Server: '+(j.error||r.status))));
+  return j;
+}
+const _PARTS=[['ze','⏱️ Zeiterfassung'],['crm','📇 CRM'],['shop','📦 Lager']];
+export async function showPlusBackups(){
+  if(!isBackupPlus()){ toast('Nur mit „System-Verwaltung erweitert“.','err'); return; }
+  openModal('<h3>☁ Automatische Backups</h3><p style="color:var(--muted)">Lädt …</p>');
+  let names=[];
+  try{ names=(await _fn({ action:'backupList' })).names||[]; }
+  catch(e){ openModal('<h3>☁ Automatische Backups</h3><p style="color:var(--danger)">'+esc(e.message)+'</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
+  const lbl=n=>esc(n.slice(8,10)+'.'+n.slice(5,7)+'.'+n.slice(0,4))+(/_vorEinspielen-/.test(n)?' <span class="chip" style="font-size:10px">Sicherung vor Einspielen</span>':(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':''));
+  const rows=names.length ? names.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${lbl(n)}</span>
+      <span style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="plusBackupDownload(${jsq(n)})">⬇ Laden</button><button class="btn btn-warn btn-sm" onclick="plusRestoreAsk(${jsq(n)})">↺ Einspielen</button></span></div>`).join('')
+    : '<p style="color:var(--muted)">Noch keine automatischen Backups vorhanden.</p>';
+  openModal('<h3 style="margin-bottom:6px">☁ Automatische Backups</h3><p style="font-size:12px;color:var(--muted);margin-bottom:12px">Täglich automatisch; 90 Tage, der 1. jedes Monats dauerhaft. Vor jedem Einspielen sichert der Server den aktuellen Stand.</p>'
+    +'<div style="max-height:50vh;overflow-y:auto">'+rows+'</div><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
+}
+export async function plusBackupDownload(name){
+  try{ toast('Lade Backup …',''); const d=(await _fn({ action:'backupGet', name })).data;
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(d)],{type:'application/json'})); a.download='TPS-Backup_'+name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+  catch(e){ toast(e.message,'err'); }
+}
+// Einspielen: erst Teile wählen + bestätigen. src = { name } (automatisches Backup) oder { data } (Datei)
+let _pending=null;
+function _partsOf(d){
+  if(!d) return ['ze','crm','shop'];
+  if(d._type==='tps-vollbackup') return ['ze'].concat(d.crm?['crm']:[], (d.shop||(d.crm&&d.crm.shopItems))?['shop']:[]);
+  if(d._type==='tps-crm-backup') return ['crm'].concat(d.crm&&d.crm.shopItems?['shop']:[]);
+  if(d._type==='tps-shop-backup') return ['shop'];
+  return (d.users&&d.entries)?['ze']:[];
+}
+function _askParts(src, avail, title){
+  if(!avail.length){ toast('Unbekannte oder leere Backup-Datei.','err'); return; }
+  _pending=src;
+  openModal(`<h3>↺ Backup einspielen</h3><p style="font-size:13px;margin:0 0 10px">${title}</p>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">${_PARTS.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;${avail.includes(k)?'':'opacity:.45'}"><input type="checkbox" class="plus-rp" value="${k}" style="width:auto" ${avail.includes(k)?'':'disabled'}> ${l}</label>`).join('')}</div>
+    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:6px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe und Anmeldedaten bleiben wie jetzt.</div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-danger" onclick="submitBtn(this,()=>plusRestoreRun())">Einspielen</button></div>`);
+}
+export function plusRestoreAsk(name){ if(!isBackupPlus()) return; _askParts({ name }, ['ze','crm','shop'], 'Automatisches Backup vom <b>'+esc(name.slice(8,10)+'.'+name.slice(5,7)+'.'+name.slice(0,4))+'</b>. Welche Bereiche?'); }
+export function plusRestoreFile(){
+  if(!isBackupPlus()) return;
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=()=>{ let d=null; try{ d=JSON.parse(r.result); }catch(_){ toast('Keine gültige Backup-Datei (JSON).','err'); return; }
+      _askParts({ data:d }, _partsOf(d), 'Datei <b>'+esc(f.name)+'</b>. Welche Bereiche?'); };
+    r.readAsText(f); };
+  inp.click();
+}
+export async function plusRestoreRun(){
+  const src=_pending; if(!src) return;
+  const parts={}; document.querySelectorAll('.plus-rp:checked').forEach(c=>{ parts[c.value]=true; });
+  if(!Object.keys(parts).length){ toast('Bitte mindestens einen Bereich anhaken.','err'); return; }
+  try{ toast('Spiele Backup ein …',''); const j=await _fn(Object.assign({ action:'restore', parts }, src));
+    _pending=null; closeModal(); toast('Backup eingespielt ✓ (Sicherung vorher: '+(j.safety||'')+') – Seite wird neu geladen …','ok');
+    setTimeout(()=>location.reload(),1800); }
+  catch(e){ toast('Einspielen fehlgeschlagen: '+e.message,'err'); }
+}
+try{ Object.assign(window, { showPlusBackups, plusBackupDownload, plusRestoreAsk, plusRestoreFile, plusRestoreRun, isBackupPlus }); }catch(_){}

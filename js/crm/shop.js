@@ -2013,14 +2013,13 @@ function shopNotices(){
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeAck(${JSON.stringify(o.id)})` });
     }
   });
-  // Ausleihe: direkt verliehen (Ausleiher) · überfällig (Ausleiher, 1× pro Monat) · Sammelmeldung für Verwalter
-  const month=_todayIso().slice(0,7);
+  // Ausleihe: direkt verliehen (Ausleiher) · überfällig (Ausleiher, EINMAL – danach steht es unter „Was ansteht“) · Sammelmeldung für Verwalter
   activeLoans().forEach(l=>{
     if(l.borrowerId!==cu.id) return;
     const what=(l.placeId||l.unitId)?`${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>`:`${_num(l.qty)}× ${esc(l.itemName||'')}`;
     if(!l.ackBorrower) out.push({ ts:l.ts, html:`🔁 <b>${esc(l.byName||'Das Lager')}</b> hat dir ${what} ${isZuord(l)?'dauerhaft zugeordnet':(l.due?'ausgeliehen – bitte zurückgeben bis <b>'+_fmtDate(l.due)+'</b>':'als Dauerleihe ausgeliehen')}${l.placeId?' (mit Inhalt – du bekommst jetzt auch dessen Termine &amp; Bestellungen)':''}.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanAck(${JSON.stringify(l.id)})` });
-    else if(_overdue(l) && String(l.ackOverdue||'').slice(0,7)!==month) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
+    else if(_overdue(l) && !l.ackOverdue) out.push({ ts:Date.now(), html:`⏰ Bitte zurückgeben: ${what} – war bis <b>${_fmtDate(l.due)}</b> ausgeliehen.`,
       open:'shopLoanNoticeOpen()', ack:`shopLoanSnooze(${JSON.stringify(l.id)})` });
   });
   if(mgr){
@@ -2029,8 +2028,8 @@ function shopNotices(){
       open:'shopLoanNoticeOpen()', ack:'shopLoanMgrAck()' });
     // (Orte unter Soll-Bestand melden sich jetzt als automatische Bestellung → „Neue Bestellung"-Mitteilung oben)
   }
-  // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung, 1× pro Monat
-  // (früher nur, wenn ein neuer Termin dazukommt).
+  // Termine (Ablauf / Prüfung / TÜV): überfällig oder in ≤ 14 Tagen – Sammelmeldung EINMAL je Termin
+  // (erneut nur, wenn ein neuer dazukommt; offen bleibt es unter „Was ansteht“ auf der Startseite).
   // Verwalter: fürs eigene Team · ALLE zusätzlich für das, was ihnen zugeordnet ist (Trailer, Weste …)
   const due=allDue().filter(d=>d.t.datum<=_soonIso(14) && ((mgr && forMe(dueTeams(d))) || dueHeld(d,held)));
   if(due.length && _bulkAckDue('due', due.map(_dueId))){ const over=due.filter(d=>d.t.datum<_todayIso()).length;
@@ -2040,8 +2039,8 @@ function shopNotices(){
   return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
 }
 // Sammelmeldungen „überfällig" / „Termine fällig": Quittung pro Person geräteübergreifend in
-// crm/userPrefs/<uid>.shopAck = { od:{m:'JJJJ-MM', ids:[…]}, due:{…} }. Erneut gemeldet wird erst im
-// nächsten Monat oder wenn etwas Neues dazukommt (User 14.10.2026: „einmal im Monat reicht").
+// crm/userPrefs/<uid>.shopAck = { od:{m:'JJJJ-MM', ids:[…]}, due:{…} }. Gemeldet wird nur, wenn etwas Neues
+// dazukommt – keine Wiederholung (User 14.10.2026: einmal hinweisen reicht, es steht zusätzlich unter „Was ansteht“).
 const _dueId=d=>d.key+'|'+d.t.datum;
 function _dueNoticeIds(){ const held=myHeld(), mgr=canManage();
   return allDue().filter(d=>d.t.datum<=_soonIso(14) && ((mgr && forMe(dueTeams(d))) || dueHeld(d,held))).map(_dueId); }
@@ -2052,7 +2051,7 @@ function _bulkAckGet(kind){
   return (a&&typeof a==='object')?a:null;
 }
 function _bulkAckDue(kind, ids){
-  const a=_bulkAckGet(kind); if(!a || a.m!==_todayIso().slice(0,7)) return true;
+  const a=_bulkAckGet(kind); if(!a) return true;
   const old=new Set(Array.isArray(a.ids)?a.ids:[]); return ids.some(id=>!old.has(id));
 }
 function _bulkAckSet(kind, ids){
@@ -2073,8 +2072,11 @@ function shopHomeItems(){
       .map(d=>({ title:d.title, label:d.t.label||(TERMIN_ART[d.t.art]||TERMIN_ART.pruefung).l, datum:d.t.datum, over:d.t.datum<_todayIso() }));
     const os=orders().filter(o=>mgr ? (o.status==='offen' && (forMe(orderTeams(o)) || held.places.has(o.ortId)))
       : ((o.byId===me.id || held.places.has(o.ortId)) && (o.status==='offen'||o.status==='inarbeit')));
-    return { due, orders:os.length, mgr };
-  }catch(e){ return { due:[], orders:0 }; }
+    // Überfällige Ausleihen: meine (als Ausleiher) + für Verwaltende die des eigenen Teams
+    const late=activeLoans().filter(l=>_overdue(l) && (l.borrowerId===me.id || (mgr && forMe(loanTeams(l)))))
+      .map(l=>({ title:(l.placeId?placeLabel(l.placeId):(_num(l.qty)+'× '+(l.itemName||''))), who:l.borrowerId===me.id?'':bName(l), datum:l.due }));
+    return { due, orders:os.length, mgr, late };
+  }catch(e){ return { due:[], orders:0, late:[] }; }
 }
 function shopOpenTab(t){ TAB=t||'bestand'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 try{ window.shopHomeItems=shopHomeItems; window.shopOpenTab=shopOpenTab; }catch(e){}

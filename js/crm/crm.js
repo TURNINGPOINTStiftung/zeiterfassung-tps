@@ -4787,9 +4787,12 @@ function ensureVerwMounted(){
        <div class="verw-panel" id="verw-tab-ze" style="display:none"></div>
        <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
        <div class="verw-panel" id="verw-tab-data" style="display:none"><div class="crm-sec"><h4><span class="ttl">💾 Datenexport</span></h4>
-         <div class="small" style="color:var(--muted);margin-bottom:10px">Lese-Kopie zum Sichern oder Auswerten. Passwort-Daten sind nicht enthalten. Wiederherstellen (Import) kann nur der Administrator.</div>
+         <div class="small" style="color:var(--muted);margin-bottom:10px">Lese-Kopie zum Sichern oder Auswerten. Passwort-Daten sind nicht enthalten.${(window.isBackupPlus&&window.isBackupPlus())?'':' Wiederherstellen (Import) kann nur der Administrator bzw. „System-Verwaltung erweitert“.'}</div>
          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-sm-crm primary" onclick="exportAllData()">⬇ Vollbackup (Zeiterfassung + CRM + Lager)</button><button class="btn-sm-crm" onclick="exportData()">⬇ Nur Zeiterfassung</button><button class="btn-sm-crm" onclick="exportCrmOnly()">⬇ Nur CRM</button><button class="btn-sm-crm" onclick="window.exportShopOnly&&exportShopOnly()">⬇ Nur Shop</button></div>
-       </div></div>
+       </div>${(window.isBackupPlus&&window.isBackupPlus())?`<div class="crm-sec"><h4><span class="ttl">☁ Backups &amp; Wiederherstellen</span></h4>
+         <div class="small" style="color:var(--muted);margin-bottom:10px">System-Verwaltung erweitert: automatische Backups ansehen und laden oder ein Backup einspielen (nur mit Zwei-Faktor). Vor dem Einspielen sichert der Server den aktuellen Stand; Rechte, Rollen und Zugriffe bleiben wie jetzt.</div>
+         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-sm-crm primary" onclick="showPlusBackups()">☁ Automatische Backups</button><button class="btn-sm-crm" onclick="plusRestoreFile()">⬆ Backup-Datei einspielen (JSON)</button></div>
+       </div>`:''}</div>
      </div>`;
     _mountZeOrg();
     verwShowTab(['crm','data','ze'].includes(_verwTab())?_verwTab():'users');

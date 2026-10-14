@@ -387,7 +387,8 @@ async function _fillTodo(){
   const rows=[]; const today=isoDay(new Date()); const in7=isoDay(new Date(Date.now()+7*864e5));
   // Shop (sofort verfügbar)
   try{ const s=window.shopHomeItems?window.shopHomeItems():null;
-    if(s){ s.due.slice(0,4).forEach(d=>rows.push({ sort:d.datum, html:`<div class="home-row" onclick="shopDueNoticeOpen()"><span>🔧</span><span class="tx">${esc(d.title)} – ${esc(d.label)}</span><span class="home-pill ${d.over?'red':'amber'}">${d.over?'überfällig':fmtD(d.datum)}</span></div>` }));
+    if(s){ (s.late||[]).slice(0,4).forEach(l=>rows.push({ sort:l.datum, html:`<div class="home-row" onclick="shopLoanNoticeOpen()"><span>⏰</span><span class="tx">${l.who?'Ausleihe '+esc(l.who)+': ':'Zurückgeben: '}${esc(l.title)}</span><span class="home-pill red">seit ${fmtD(l.datum)}</span></div>` }));
+      s.due.slice(0,4).forEach(d=>rows.push({ sort:d.datum, html:`<div class="home-row" onclick="shopDueNoticeOpen()"><span>🔧</span><span class="tx">${esc(d.title)} – ${esc(d.label)}</span><span class="home-pill ${d.over?'red':'amber'}">${d.over?'überfällig':fmtD(d.datum)}</span></div>` }));
       if(s.orders) rows.push({ sort:'0', html:`<div class="home-row" onclick="shopOpenTab('bestellungen')"><span>🛒</span><span class="tx">${s.orders} ${s.mgr?'neue Bestellung':'offene Bestellung'}${s.orders===1?'':'en'}</span><span class="home-pill">Lager</span></div>` }); }
   }catch(e){}
   // CRM (Daten ggf. erst laden)
