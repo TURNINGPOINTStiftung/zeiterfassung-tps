@@ -410,9 +410,154 @@ function _bestandHtml(mgr){
       <select aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
       ${_teamFilterHtml()}
       <span class="shop-sp"></span>
+      ${mgr?`<button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel</button><button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Import</button>`:''}
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
+}
+
+// ── Excel-Export / -Import (Inventur) – nur Lager-Verwaltende (User 14.10.2026) ────────────────
+// Export: eine Zeile je Artikel, eine Spalte je Ort (Bestand), dazu Verliehen + Gesamt; Blatt „Orte".
+// Import: dieselbe Tabelle (oder eine eigene mit gleichen Spaltennamen) wieder einlesen →
+//  · neue Artikel anlegen (Name Pflicht; Kategorie, Art, Einheit, Mindestbestand, Team, Notiz optional)
+//  · Bestände je Ort SETZEN (Inventur: Zelle = neuer Ist-Bestand; leere Zelle = unverändert)
+//  · vorhandene Artikel: nur Bestände, Stammangaben bleiben unverändert
+//  Zuordnung: Spalte „ID" (aus dem Export), sonst Name + Variante. Spalten, die keinem Ort entsprechen,
+//  werden angezeigt und ignoriert (Orte werden NICHT automatisch angelegt). Vor dem Übernehmen kommt
+//  immer eine Vorschau; jede Änderung landet als Buchung im Verlauf.
+let _xlsxP=null;
+function _loadXLSX(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(_xlsxP) return _xlsxP;
+  _xlsxP=new Promise((res,rej)=>{ const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=()=>res(window.XLSX); s.onerror=()=>{ _xlsxP=null; rej(new Error('Excel-Baustein konnte nicht geladen werden (Internetverbindung nötig).')); };
+    document.head.appendChild(s); });
+  return _xlsxP;
+}
+const _IE_FIX=['ID','Name','Variante','Kategorie','Art','Einheit','Mindestbestand','Team','Notiz'];
+const _IE_INFO=['Einzeln erfasst','Verliehen','Gesamt'];   // nur zur Info, beim Import ignoriert
+async function shopExport(){
+  if(!canManage()) return;
+  let X; try{ X=await _loadXLSX(); }catch(e){ toast(e.message,'err'); return; }
+  const pls=places();
+  const head=_IE_FIX.concat(pls.map(p=>p.name), _IE_INFO);
+  const rows=items().map(it=>[it.id, it.name||'', it.variante||'', it.kategorie||'', (ARTEN[itemArt(it)]||{}).l||'', it.einheit||'Stück',
+      it.min===''||it.min==null?'':_num(it.min), it.team||'', it.note||'']
+    .concat(pls.map(p=>{ const n=_num((it.stock||{})[p.id]); return n||''; }), [isEinzeln(it)?'ja':'', lent(it)||'', total(it)]));
+  const ws=X.utils.aoa_to_sheet([head].concat(rows));
+  ws['!cols']=head.map((h,i)=>({ wch: i===0?10:(i===1?28:Math.max(10,String(h).length+2)) }));
+  const wsO=X.utils.aoa_to_sheet([['Ort','Art','Team','Notiz']].concat(pls.map(p=>[p.name, (PLACE_TYPES[p.typ]||PLACE_TYPES.sonst).l, p.team||'', p.note||''])));
+  const wb=X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Bestand'); X.utils.book_append_sheet(wb, wsO, 'Orte');
+  X.writeFile(wb, 'Lager_Bestand_'+_todayIso()+'.xlsx');
+  toast('Excel-Datei erstellt ✓ – zum Zählen ausdrucken oder ausfüllen und über „⬆ Import" wieder einlesen.','ok');
+}
+function shopImportPick(){
+  if(!canManage()) return;
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls,.csv';
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(f) _shopImportRead(f); };
+  inp.click();
+}
+const _ieClean=v=>String(v==null?'':v).replace(/[<>"'`]/g,'').trim().slice(0,200);
+const _ieKey=(n,v)=>(_ieClean(n)+'|'+_ieClean(v)).toLowerCase();
+function _ieArt(v){ const s=String(v||'').toLowerCase(); if(!s) return ''; if(s.startsWith('leih')||s.includes('🔁')) return 'leihe'; if(s.startsWith('aus')||s.startsWith('fest')||s.includes('🧰')) return 'ausstattung'; return 'verbrauch'; }
+async function _shopImportRead(file){
+  let X; try{ X=await _loadXLSX(); }catch(e){ toast(e.message,'err'); return; }
+  let aoa;
+  try{ const wb=X.read(await file.arrayBuffer(), { type:'array' });
+    const ws=wb.Sheets['Bestand']||wb.Sheets[wb.SheetNames[0]];
+    aoa=X.utils.sheet_to_json(ws, { header:1, raw:true, defval:'' }); }
+  catch(e){ toast('Datei konnte nicht gelesen werden: '+((e&&e.message)||e),'err'); return; }
+  window._shopImportPlan=_shopImportPlan(aoa||[]);
+  _shopImportPreview();
+}
+// Reine Planung (ohne Schreiben) – auch für Tests: aoa = Zeilen als Arrays, erste Zeile = Spaltennamen
+function _shopImportPlan(aoa){
+  const head=(aoa[0]||[]).map(h=>String(h==null?'':h).trim());
+  const low=head.map(h=>h.toLowerCase());
+  const col=n=>low.indexOf(n.toLowerCase());
+  const plan={ neu:[], aend:[], skip:[], fehler:[], unbekannt:[], ohneName:0 };
+  if(col('Name')<0){ plan.fehler.push('Keine Spalte „Name" gefunden – bitte die Tabelle aus „⬇ Excel" als Vorlage nehmen.'); return plan; }
+  const plByName={}; places().forEach(p=>{ plByName[String(p.name||'').trim().toLowerCase()]=p; });
+  const plCols=[];
+  head.forEach((h,i)=>{ if(!h) return; const l=h.toLowerCase();
+    if(_IE_FIX.some(x=>x.toLowerCase()===l) || _IE_INFO.some(x=>x.toLowerCase()===l)) return;
+    const p=plByName[l]; if(p) plCols.push({ i, p }); else plan.unbekannt.push(h); });
+  const its=items(); const byId={}, byKey={}; its.forEach(it=>{ byId[it.id]=it; byKey[_ieKey(it.name,it.variante)]=it; });
+  const teams=new Set(teamList()); const seen=new Set();
+  const cell=(r,n)=>{ const i=col(n); return i<0?'':r[i]; };
+  aoa.slice(1).forEach((r,ri)=>{
+    const z=ri+2;   // Zeilennummer wie in Excel
+    if(!r || r.every(v=>String(v==null?'':v).trim()==='')) return;
+    const name=_ieClean(cell(r,'Name')), varnt=_ieClean(cell(r,'Variante'));
+    if(!name){ plan.ohneName++; return; }
+    const id=String(cell(r,'ID')||'').trim();
+    const it=(id && byId[id]) || byKey[_ieKey(name,varnt)] || null;
+    const k=it?it.id:_ieKey(name,varnt);
+    if(seen.has(k)){ plan.fehler.push(`Zeile ${z}: „${name}${varnt?' · '+varnt:''}" steht doppelt in der Datei – nur die erste Zeile zählt.`); return; }
+    seen.add(k);
+    // Bestände je Ort: leere Zelle = unverändert; sonst ganze Zahl ≥ 0
+    const stock={}; let bad='';
+    plCols.forEach(({i,p})=>{ const raw=r[i]; if(raw===''||raw==null) return;
+      const n=typeof raw==='number'?raw:parseFloat(String(raw).replace(',','.'));
+      if(!isFinite(n)||n<0||Math.round(n)!==n){ bad=bad||`„${raw}" bei ${p.name}`; return; }
+      stock[p.id]=n; });
+    if(bad){ plan.fehler.push(`Zeile ${z} (${name}): ungültige Menge ${bad} – Zeile übersprungen.`); return; }
+    if(it){
+      if(isEinzeln(it)){ if(Object.keys(stock).some(pid=>_num((it.stock||{})[pid])!==stock[pid])) plan.skip.push(`${itemLabel(it)} – einzeln erfasst (Stücke bitte unter „🏷️ Stücke" ändern)`); return; }
+      const ch=Object.keys(stock).filter(pid=>_num((it.stock||{})[pid])!==stock[pid]).map(pid=>({ pid, alt:_num((it.stock||{})[pid]), neu:stock[pid] }));
+      if(ch.length) plan.aend.push({ itemId:it.id, label:itemLabel(it), ch });
+      return;
+    }
+    const tm=_ieClean(cell(r,'Team')); const minRaw=cell(r,'Mindestbestand');
+    const min=(minRaw===''||minRaw==null)?'':Math.max(0,Math.round(_num(minRaw)));
+    plan.neu.push({ name, variante:varnt, kategorie:_ieClean(cell(r,'Kategorie')), art:_ieArt(cell(r,'Art'))||'verbrauch',
+      einheit:_ieClean(cell(r,'Einheit'))||'Stück', min, team:teams.has(tm)?tm:'', teamUnbekannt:(tm&&!teams.has(tm))?tm:'',
+      note:_ieClean(cell(r,'Notiz')), stock });
+  });
+  return plan;
+}
+function _shopImportPreview(){
+  const pl=window._shopImportPlan; if(!pl) return;
+  const nCh=pl.aend.reduce((s,a)=>s+a.ch.length,0);
+  const li=a=>a.length?`<ul style="margin:4px 0 10px;padding-left:18px;font-size:12.5px;max-height:28vh;overflow:auto">${a.join('')}</ul>`:'';
+  const neu=pl.neu.slice(0,150).map(n=>`<li><b>${esc(n.name)}</b>${n.variante?' · '+esc(n.variante):''} <span style="color:var(--muted)">(${esc((ARTEN[n.art]||{}).l||'')}${n.kategorie?', '+esc(n.kategorie):''})</span>${Object.keys(n.stock).length?' – '+Object.keys(n.stock).map(pid=>`${esc(placeLabel(pid))}: ${n.stock[pid]}`).join(', '):''}${n.teamUnbekannt?` <span style="color:var(--danger)">· Team „${esc(n.teamUnbekannt)}" unbekannt → für alle</span>`:''}</li>`);
+  const aend=pl.aend.slice(0,150).map(a=>`<li><b>${esc(a.label)}</b>: ${a.ch.map(c=>`${esc(placeLabel(c.pid))} ${c.alt} → <b>${c.neu}</b>`).join(', ')}</li>`);
+  const nothing=!pl.neu.length && !nCh;
+  openModal(`<h3>⬆ Lager-Import – Vorschau</h3>
+    <p style="font-size:13px;margin:0 0 10px">Noch ist nichts gespeichert. <b>${pl.neu.length}</b> neue Artikel · <b>${nCh}</b> Bestandsänderung${nCh===1?'':'en'} bei <b>${pl.aend.length}</b> Artikel${pl.aend.length===1?'':'n'}.</p>
+    ${pl.fehler.length?`<div style="font-size:12.5px;color:var(--danger);font-weight:600">⚠ Hinweise</div>${li(pl.fehler.map(f=>`<li style="color:var(--danger)">${esc(f)}</li>`))}`:''}
+    ${pl.unbekannt.length?`<div style="font-size:12.5px;color:var(--warn,#b45309)">Spalten ohne passenden Ort (werden ignoriert – Ort ggf. erst unter „📍 Orte" anlegen): <b>${pl.unbekannt.map(esc).join(', ')}</b></div>`:''}
+    ${pl.neu.length?`<div style="font-size:13px;font-weight:700;margin-top:8px">＋ Neue Artikel</div>${li(neu)}${pl.neu.length>150?'<div class="small">… und weitere</div>':''}`:''}
+    ${pl.aend.length?`<div style="font-size:13px;font-weight:700;margin-top:8px">✎ Bestände (Inventur)</div>${li(aend)}${pl.aend.length>150?'<div class="small">… und weitere</div>':''}`:''}
+    ${pl.skip.length?`<div style="font-size:12.5px;color:var(--muted)">Übersprungen:</div>${li(pl.skip.map(s=>`<li>${esc(s)}</li>`))}`:''}
+    ${pl.ohneName?`<div style="font-size:12px;color:var(--muted)">${pl.ohneName} Zeile${pl.ohneName===1?'':'n'} ohne Namen übersprungen.</div>`:''}
+    ${nothing?'<div class="shop-empty">Keine Änderungen gefunden – Bestände stimmen bereits überein.</div>':''}
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>${nothing?'':`<button class="btn btn-primary" onclick="shopImportApply()">Übernehmen</button>`}</div>`, true);
+}
+function shopImportApply(){
+  const pl=window._shopImportPlan; if(!pl || !canManage()) return;
+  const cu=_me(); let nNew=0, nCh=0;
+  pl.neu.forEach(n=>{
+    const it={ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'',
+      name:n.name, kategorie:n.kategorie, variante:n.variante, einheit:n.einheit, min:n.min, note:n.note, team:n.team, foto:'',
+      art:n.art, leihbar:n.art==='leihe', soll:{}, einzeln:false };
+    Object.keys(n.stock).forEach(pid=>{ if(n.stock[pid]>0) it.stock[pid]=n.stock[pid]; });
+    saveShop('shopItems', it); nNew++;
+    Object.keys(it.stock).forEach(pid=>_log(it,'zugang',it.stock[pid],null,pid,'Anfangsbestand (Import)'));
+  });
+  pl.aend.forEach(a=>{
+    const it=getShop('shopItems',a.itemId); if(!it || isEinzeln(it)) return;
+    const done=[];
+    a.ch.forEach(c=>{ const cur=_num((it.stock||{})[c.pid]); const d=c.neu-cur; if(!d) return;
+      if(_applyDelta(it, c.pid, d)) done.push([c.pid, d, cur, c.neu]); });
+    if(!done.length) return;
+    saveShop('shopItems', it);
+    done.forEach(([pid,d,cur,nv])=>{ _log(it,'korrektur',d,pid,pid,`Inventur (Import) · ${cur} → ${nv}`); nCh++; });
+  });
+  window._shopImportPlan=null; closeModal();
+  toast(`Import übernommen ✓ – ${nNew} neue Artikel, ${nCh} Bestandsänderung${nCh===1?'':'en'} (siehe „📜 Verlauf").`,'ok');
+  renderShop();
 }
 function _itemsGrid(mgr){
   const q=fQ.trim().toLowerCase();
@@ -1958,7 +2103,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
