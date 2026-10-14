@@ -28,11 +28,11 @@ service firebase.storage {
     function freigeschaltet() { return appUser() && request.auth.token.tps == true; }
 
     // ── Automatische App-Backups (js/backup.js): backups/daily/<YYYY-MM-DD>_<uid>.json ──
+    // Stand 3 (Audit 14.10.2026): Das Tages-Backup legt seit App v458 der SERVER an (tpsPw autoBackup,
+    // Admin SDK – umgeht diese Regeln). Geräte dürfen hier nichts mehr anlegen, damit keine gefälschten
+    // „Backups“ in der Liste landen.
     match /backups/daily/{name} {
-      allow create: if freigeschaltet()
-                    && name.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_' + request.auth.uid + '[.]json$')
-                    && request.resource.size < 25 * 1024 * 1024
-                    && request.resource.contentType == 'application/json';
+      allow create: if false;
       allow read, delete: if isAdmin();   // read = get + list
       allow update: if false;             // Backups sind unveränderlich
     }
@@ -56,8 +56,11 @@ service firebase.storage {
     // ── CRM-Dateianhänge (js/crm/crm.js: crm-anlagen/<nodeId>/<zeit>_<name>) ──
     match /crm-anlagen/{nid}/{file} {
       allow get:    if freigeschaltet();
-      allow create: if freigeschaltet() && request.resource.size < 15 * 1024 * 1024;
-      allow delete: if freigeschaltet();
+      // Stand 3: nur übliche Dateiarten, mit Ersteller-Kennung; löschen nur Admin oder wer hochgeladen hat
+      allow create: if freigeschaltet() && request.resource.size < 15 * 1024 * 1024
+                    && request.resource.contentType.matches('^(image/(jpeg|png|gif|webp)|application/pdf|text/(plain|csv)|application/(msword|vnd[.]openxmlformats-officedocument[.][a-z.]+|vnd[.]ms-excel|vnd[.]ms-powerpoint|vnd[.]oasis[.]opendocument[.][a-z.]+))$')
+                    && request.resource.metadata.uploaderUid == request.auth.uid;
+      allow delete: if isAdmin() || (freigeschaltet() && resource.metadata.uploaderUid == request.auth.uid);
       allow update: if false;
     }
   }
