@@ -995,7 +995,7 @@ function _crmRenderNow(label){
         }
         _crmNormalizeMode();
         paint();
-        crmLoadNotif(true);   // Benachrichtigungs-Glocke initial laden
+        crmLoadNotif(false);  // Glocke: beim ersten Mal laden, danach gedrosselt (Verlauf ist groß)
       }catch(e){ console.error('CRM paint:',e); }
     });
   }catch(e){ console.error('renderCRM Fehler:',e); }
@@ -1091,7 +1091,9 @@ function _updateBellBadge(){
 function crmLoadNotif(force){
   try{
     const now=Date.now();
-    if(!force && now-_notifLoadTs<15000){ _updateBellBadge(); return; }  // Drossel: max. alle 15 s
+    // Drossel: der Verlauf ist groß (vollständige Kopien, 7 Tage) → automatisch höchstens alle 2 Minuten
+    // (v456, vorher 15 s); beim Öffnen der Glocke wird immer frisch geladen.
+    if(!force && now-_notifLoadTs<120000){ _updateBellBadge(); return; }
     _notifLoadTs=now;
     listHistory().then(list=>{ try{
       window._crmNotif=_buildNotif(list);

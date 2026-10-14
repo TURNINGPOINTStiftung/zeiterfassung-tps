@@ -325,8 +325,11 @@ const _AREA={ ze:'⏱️ Zeiterfassung', lager:'📦 Lager', crm:'⭐ CRM-Favori
 let _crmNews=[], _crmNewsTs=0, _crmNewsBusy=false;
 const _nk=(coll,id)=>String(coll+'_'+id).replace(/[.#$/\[\]]/g,'_');   // als Datenbank-Schlüssel tauglich
 function _newsSeenMap(){ const p=_prefs(); return (p && p.newsSeen && typeof p.newsSeen==='object') ? p.newsSeen : {}; }
+// Der CRM-Verlauf (crm_history, 7 Tage, mit vollständigen Kopien) ist groß → höchstens alle 10 Minuten
+// und nur bei sichtbarer Seite laden (v456: vorher jede Minute → spürbar langsam).
 function _loadCrmNews(force){
-  if(_crmNewsBusy || !window.crmFavNews || (!force && Date.now()-_crmNewsTs<60000)) return;
+  if(_crmNewsBusy || !window.crmFavNews || (!force && Date.now()-_crmNewsTs<600000)) return;
+  try{ if(document.hidden) return; }catch(e){}
   const keys=_favList().map(x=>x.key); if(!keys.length){ _crmNews=[]; return; }
   _crmNewsBusy=true; _crmNewsTs=Date.now();
   window.crmFavNews(keys).then(l=>{ _crmNews=Array.isArray(l)?l:[]; }).catch(()=>{})
@@ -565,7 +568,8 @@ async function _fillSys(){
   try{ if(window.firebase && firebase.database){ const v=(await firebase.database().ref('zeiterfassung/_fixes/lastAppBackup').once('value')).val(); if(v) last=v; } }catch(e){}
   const today=isoDay(new Date()), yest=isoDay(new Date(Date.now()-864e5));
   const bState=!last?['amber','unbekannt']:(last===today?['green','heute ✓']:(last===yest?['green','gestern']:['red',fmtD(last)+String(last).slice(0,4)]));
-  rows.push(`<div class="home-row" ${isAdm?'onclick="window.showAppBackups&&showAppBackups()"':''}><span>☁️</span><span class="tx">Letztes automatisches Backup${last&&last!==today?' <span class="home-sub">· läuft beim ersten Gerät des Tages</span>':''}</span><span class="home-pill ${bState[0]}">${esc(bState[1])}</span></div>`);
+  const bkClick=isAdm?'onclick="window.showAppBackups&&showAppBackups()"':((window.isBackupPlus&&window.isBackupPlus(cu))?'onclick="window.showPlusBackups&&showPlusBackups()"':'style="cursor:default"');
+  rows.push(`<div class="home-row" ${bkClick}><span>☁️</span><span class="tx">Letztes automatisches Backup${last&&last!==today?' <span class="home-sub">· läuft beim ersten Gerät des Tages</span>':''}</span><span class="home-pill ${bState[0]}">${esc(bState[1])}</span></div>`);
   // Verbindung
   const off=!!window._offlineMode, unv=!!window._cloudUnverified;
   rows.push(`<div class="home-row" style="cursor:default"><span>🌐</span><span class="tx">Verbindung zur Datenbank</span><span class="home-pill ${off?'red':(unv?'amber':'green')}">${off?'offline':(unv?'nicht bestätigt':'verbunden')}</span></div>`);
