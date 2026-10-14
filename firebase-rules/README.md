@@ -176,6 +176,32 @@ Grenze: workDays wird nicht gegen den Datumsbereich nachgerechnet (Regelsprache 
 Getestet: 13 Fälle im Projekt zeiterfassung-test, vollständige Datei vom Compiler akzeptiert.
 Reihenfolge: App v444 live → Admin einmal anmelden (schreibt `freelancers`) → v10 veröffentlichen.
 
+## Stand 2026-10-15: CANDIDATE-v11.json – getestet, Veröffentlichung durch Moritz (App ab v459)
+= v10 + Härtungen aus dem Audit 14.10.2026 (Datei aus v10 erzeugt, siehe Commit 60dd285):
+- `entries/$k/gfReturn`: anlegen/ändern nur Admin/managers; Mitarbeitende nur „gelesen“ (ack) bei sonst gleichen
+  Feldern; `y`/`m` Zahlen (m 1–12).
+- `crm/$coll` → Schreibrecht auf Eintrags-Ebene `crm/$coll/$id`; Löschen (außer vorlagen/verteiler/workflows) nur
+  CRM-Stufe „full“ oder `grants/zugriff_verwaltung_crm`. Ganze Sammlungen nur Admin.
+- `teamprojekte`: Ändern durch alle nur bei Team-Projekten (ohne `owner`); persönliche nur Besitzer/Kanban-Verwaltung.
+- `shopOrders`: „Nutzen“ nur eigene (`byId`) und automatische (`byId:'auto'`); fremde nur `seenBy/<eigeneId>`.
+- `shopLoans`: „Nutzen“ ohne Sonderrecht – nur eigene Ausleihen.  `shopLog`: neue Buchungen nur mit eigenem `byId`.
+- `users/$i`: System-Verwaltung ändert keine Stammdaten von Personen mit „erweitert“; `paramHistory/$n/role` nur
+  unverändert oder = aktuelle Rolle (Admin frei).
+Test im Testprojekt 15.10.2026 (vollständige Datei vom Compiler akzeptiert; Knoten umbenannt auf `rt_*`):
+33 Fälle, 32 wie erwartet. Abweichung C2 („ganze Sammlung per set überschreiben“ erlaubt) ist die bekannte
+Simulator-Eigenheit (set auf Elternknoten = Zusammenführen); real braucht `set` auf `crm/<coll>` ein Schreibrecht auf
+Sammlungsebene, das nur der Admin hat; `delete` der Sammlung (C1) ist verweigert. Gegenprobe mit v10: 13 der 33 Fälle
+sind unter v10 erlaubt und unter v11 verweigert (= geschlossene Lücken); alle „muss weiter gehen“-Fälle bleiben erlaubt.
+Nicht simulierbar (Zwei-Faktor): Stammdaten-Schutz für „erweitert“ und paramHistory durch System-Verwaltung.
+Testdaten gelöscht, Original-Regeln des Testprojekts wieder eingesetzt (PUT ohne Anmeldung → 401).
+sha256 (raw @60dd285): 467299220d00c452f149d984d435efdd87ac7cd0994b195ecffa21383b0e6f6c · Prüfwort `zugriff_verwaltung_plus` = 21 Treffer.
+Rückweg: CANDIDATE-v10.json.
+
+**Storage Stand 3** (`STORAGE.rules` @60dd285, sha256 8d72e3f3c7da42c7c23a7901564917fe8f028c02fc061ebe58da631b6dae2906):
+`backups/daily` kein Geräte-Upload mehr (Tages-Backup erstellt tpsPw `autoBackup`); `crm-anlagen` nur Bilder/PDF/Office/
+Text mit `uploaderUid`, Löschen nur Admin oder Hochladende. Im Testprojekt nicht prüfbar (Storage braucht dort den
+Blaze-Tarif) → Syntax beim Veröffentlichen in der Konsole; Rückweg: vorherigen Stand aus der Konsolen-Historie.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
