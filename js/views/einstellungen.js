@@ -13,6 +13,13 @@ const _canVerwaltung = cu => !!(cu && cu.role==='admin');
 // Archivieren/Wiederherstellen. Rechte, Anlegen, Passwörter, Admin-Konten bleiben beim Admin.
 const _canStamm = cu => !!(cu && (cu.role==='admin' || hasPermission('zugriff_verwaltung', cu)));
 const _isDelegated = cu => !!(cu && cu.role!=='admin' && _canStamm(cu));
+// „System-Verwaltung erweitert“ (seit v452, vergibt nur der Administrator): zusätzlich Einmal-Passwörter setzen
+// und die Rollen Leitung/GF vergeben – serverseitig über tpsPw (set, staffRole, staffCreate, staffPerms).
+const _isPlus = cu => !!(_isDelegated(cu) && cu.perms && cu.perms.zugriff_verwaltung_plus===true);
+const _isPlusUser = u => !!(u && u.perms && u.perms.zugriff_verwaltung_plus===true);
+const _ALL_ROLES=['mitarbeiter','berater','freiberuflich','leitung','geschaeftsfuehrer'];
+// Darf die angemeldete (delegierte) Person Passwort/Rolle/Zugriffe dieser Person ändern?
+const _plusMay = (cu,t) => !!(_isPlus(cu) && t && t.role!=='admin' && t.id!=='admin' && t.id!==cu.id && !_isPlusUser(t));
 
 // Pfade für persönliche „Modul-Zugriff"-Ausnahmen (spiegelt die Zugriffs-Matrix im CRM).
 // u.perms['path_<key>']=true|false übersteuert die Rollen-Matrix für DIESE Person; fehlt = Standard.
@@ -377,10 +384,13 @@ export function showAddUser(){
 function _limitDelegatedAdd(){
   const box=document.getElementById('modal-body'); if(!box) return;
   const sel=document.getElementById('uf-role');
-  if(sel && sel.tagName==='SELECT') [...sel.options].forEach(o=>{ if(!['mitarbeiter','berater','freiberuflich'].includes(o.value)) o.remove(); });
+  const _roles=_isPlus(window.cu)?_ALL_ROLES:['mitarbeiter','berater','freiberuflich'];
+  if(sel && sel.tagName==='SELECT') [...sel.options].forEach(o=>{ if(!_roles.includes(o.value)) o.remove(); });
   box.querySelectorAll('input[name="ufmod-system"]').forEach(r=>{ r.checked=(r.value==='kein'); r.disabled=true; const l=r.closest('.uf-seg-opt'); if(l){ l.classList.toggle('on', r.value==='kein'); l.style.pointerEvents='none'; l.style.opacity='.6'; } });
   const h3=box.querySelector('h3');
-  if(h3) h3.insertAdjacentHTML('afterend','<div style="margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:var(--info-bg);color:var(--info-text);font-size:12px">🔑 System-Verwaltung: Rollen Mitarbeiter/in, Berater/in oder Freiberuflich. Leitung/GF und „System-Verwaltung“ vergibt der Administrator.</div>');
+  if(h3) h3.insertAdjacentHTML('afterend','<div style="margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:var(--info-bg);color:var(--info-text);font-size:12px">'+(_isPlus(window.cu)
+    ? '🔑 System-Verwaltung erweitert: alle Rollen außer Administrator. „System-Verwaltung“ vergibt der Administrator.'
+    : '🔑 System-Verwaltung: Rollen Mitarbeiter/in, Berater/in oder Freiberuflich. Leitung/GF und „System-Verwaltung“ vergibt der Administrator.')+'</div>');
   if(window._tps2fa===false){
     if(h3 && window.mfaSessionHint) h3.insertAdjacentHTML('afterend', window.mfaSessionHint());
     box.querySelectorAll('button').forEach(b=>{ if(/saveNewUser/.test(b.getAttribute('onclick')||'')){ b.disabled=true; b.title='Erst mit Zwei-Faktor-Code anmelden'; } });
@@ -410,17 +420,24 @@ export function showEditUser(id){
 const _DELEG_ROLES=['mitarbeiter','berater','freiberuflich'];
 function _lockAdminOnlyFields(target){
   const box=document.getElementById('modal-body'); if(!box) return;
-  const permsOk=!!(target && _DELEG_ROLES.includes(target.role));
+  const cu=window.cu, plus=_plusMay(cu,target);
+  const permsOk=!!(target && (plus || (_DELEG_ROLES.includes(target.role) && !_isPlusUser(target))));
   const sel=permsOk
-    ? '#uf-name,#uf-id,#uf-pw,#uf-role,[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
+    ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
     : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet';
   box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
-  box.querySelectorAll('button').forEach(b=>{ const oc=b.getAttribute('onclick')||''; if(/resetUserPassword|reprovisionUserFull|secureAccountUi/.test(oc)) b.style.display='none'; });
+  // Rollenwahl für „erweitert": alles außer Administrator
+  if(plus){ const rs=document.getElementById('uf-role'); if(rs && rs.tagName==='SELECT') [...rs.options].forEach(o=>{ if(!_ALL_ROLES.includes(o.value)) o.remove(); }); }
+  box.querySelectorAll('button').forEach(b=>{ const oc=b.getAttribute('onclick')||''; if((plus?/reprovisionUserFull|secureAccountUi/:/resetUserPassword|reprovisionUserFull|secureAccountUi/).test(oc)) b.style.display='none'; });
   const h=document.createElement('div');
   h.style.cssText='margin:6px 0 10px;padding:8px 10px;border-radius:6px;background:rgba(59,130,246,.08);font-size:12px;color:var(--muted)';
-  h.textContent=permsOk
-    ? '🔑 System-Verwaltung: Stammdaten und Zugriffe änderbar. Name, Login, Passwort, Rolle und „System-Verwaltung“ vergibt nur der Administrator.'
-    : '🔑 System-Verwaltung: Stammdaten (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt, Ort …) änderbar. Bei Leitung/GF vergibt Name, Login, Passwort, Rolle und Zugriffe nur der Administrator.';
+  h.textContent=plus
+    ? '🔑 System-Verwaltung erweitert: Stammdaten, Rolle (außer Administrator), Zugriffe und Einmal-Passwort änderbar. Name, Login und „System-Verwaltung“ vergibt nur der Administrator.'
+    : (_isPlusUser(target)
+      ? '🔑 Diese Person hat „System-Verwaltung erweitert“ – Rolle, Zugriffe und Passwort ändert nur der Administrator. Stammdaten sind änderbar.'
+      : (permsOk
+        ? '🔑 System-Verwaltung: Stammdaten und Zugriffe änderbar. Name, Login, Passwort, Rolle und „System-Verwaltung“ vergibt nur der Administrator.'
+        : '🔑 System-Verwaltung: Stammdaten (Arbeitszeit, Urlaub, Teams, Eintritt/Austritt, Ort …) änderbar. Bei Leitung/GF vergibt Name, Login, Passwort, Rolle und Zugriffe nur der Administrator.'));
   const h3=box.querySelector('h3'); if(h3) h3.after(h);
 }
 
@@ -449,8 +466,9 @@ async function _adminSetFirebasePw(id,newPw){ return _adminFn({action:'set',id,n
 
 export async function resetUserPassword(id){
   const cu=window.cu;
-  if(!_canVerwaltung(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   const u=getUser(id); if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
+  if(!_canVerwaltung(cu) && !_plusMay(cu,u)){ toast('Das Passwort dieser Person setzt nur der Administrator.','err'); return; }
+  if(_isDelegated(cu) && window._tps2fa===false){ toast('Erst mit Zwei-Faktor-Code anmelden (ab- und wieder anmelden).','err'); return; }
   if(!confirm('Neues Startpasswort für '+(u.name||id)+' erzeugen?\n\nDas bisherige Passwort wird ungültig. '+(u.name||'Die Person')+' meldet sich mit dem neuen Passwort an und ändert es danach im Profil.')) return;
   let temp;
   try{ temp=_genTempPw(); }
@@ -470,9 +488,9 @@ export async function resetUserPassword(id){
 
 // Offene „Passwort vergessen"-Anfragen (vom Login-Bildschirm) – für die Verwaltung, nur Admin.
 export function pwRequestsHtml(){
-  const cu=window.cu; if(!_canVerwaltung(cu)) return '';
+  const cu=window.cu; const adm=_canVerwaltung(cu); if(!adm && !_isPlus(cu)) return '';
   const req=getData().pwResetRequests||{};
-  const list=Object.entries(req).filter(([id,r])=>r&&getUser(id)).sort((a,b)=>(b[1].at||0)-(a[1].at||0));
+  const list=Object.entries(req).filter(([id,r])=>r&&getUser(id)&&(adm||_plusMay(cu,getUser(id)))).sort((a,b)=>(b[1].at||0)-(a[1].at||0));
   if(!list.length) return '';
   return `<div class="crm-sec" style="border:2px solid var(--warn)"><h4><span class="ttl">🔑 Passwort-Anfragen (${list.length})</span></h4>
     <div class="small" style="color:var(--muted);margin-bottom:10px">Diese Personen haben „Passwort vergessen" gewählt. „Neues Startpasswort" setzt das Passwort und zeigt es dir zur Weitergabe an.</div>
@@ -480,7 +498,7 @@ export function pwRequestsHtml(){
       <td><span class="vw-name">${esc(getUser(id).name||id)}</span></td>
       <td class="small" style="color:var(--muted)">${r.at?new Date(r.at).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}):''}</td>
       <td style="text-align:right;white-space:nowrap"><button class="btn-sm-crm primary" onclick="resetUserPassword(${jsq(id)})">🔑 Neues Startpasswort</button>
-        <button class="btn-sm-crm" onclick="dismissPwRequest(${jsq(id)})">Verwerfen</button></td>
+        ${adm?`<button class="btn-sm-crm" onclick="dismissPwRequest(${jsq(id)})">Verwerfen</button>`:''}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 export function dismissPwRequest(id){
@@ -806,7 +824,8 @@ function userForm(u={}){
           return `<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🏠 Startseite</span><div class="uf-seg">${o('aus','Aus',!hp)}${o('ein','Ein',hp)}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Startet mit der Übersicht (Wetter, Stempeln, Was ansteht, Mitteilungen, Kacheln) statt mit dem zuletzt benutzten Modul.</div></div>`; })()}
         ${modBlock('shop','📦','Lager (Bestand, Bestellungen &amp; Ausleihe)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
         ${modBlock('anleitung','📖','Anleitung','<div style="font-size:12px;color:var(--muted)">Sieht die Bedienungsanleitung im Menü und als Kachel auf der Startseite.</div>')}
-        <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg"><label class="uf-seg-opt${acc.system!=='ja'?' on':''}"><input type="radio" name="ufmod-system" value="kein"${acc.system!=='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Kein</label><label class="uf-seg-opt${acc.system==='ja'?' on':''}"><input type="radio" name="ufmod-system" value="ja"${acc.system==='ja'?' checked':''} onchange="ufSetMod('system')" style="display:none">Ja</label></div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Voller Admin-Zugriff: Mitarbeiter &amp; Rechte, Teams &amp; Rollen, Daten &amp; Backup, Sicherheit.</div></div>`;
+        <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg">${(()=>{ const sv=acc.system!=='ja'?'kein':(_isPlusUser(u)?'plus':'ja');
+          return [['kein','Kein'],['ja','Ja'],['plus','Erweitert']].map(([v,l])=>`<label class="uf-seg-opt${sv===v?' on':''}"><input type="radio" name="ufmod-system" value="${v}"${sv===v?' checked':''} onchange="ufSetMod('system')" style="display:none">${l}</label>`).join(''); })()}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)"><b>Ja:</b> Stammdaten, Mitarbeitende anlegen, Zugriffe (ohne Sonderrollen), Archivieren, Export – alles nur mit Zwei-Faktor. <b>Erweitert:</b> zusätzlich Einmal-Passwörter setzen und die Rollen Leitung/GF vergeben (nicht für das Administrator-Konto und andere „Erweitert“).</div></div>`;
     })()}
     <script>toggleFreelancerFields();toggleWerkstudentFields()<\/script>`;
 }
@@ -919,7 +938,7 @@ function collectUserForm(){
   // 3) CRM: „Verwaltend" → CRM-Verwalter-Recht (Umfang/Level separat via crmSetUserAccess)
   if(_mod('crm')==='verwaltend') perms['zugriff_verwaltung_crm']=true;
   // 4) System-Verwaltung (voller Admin)
-  const _sys=_mod('system'); if(_sys!==null) perms['zugriff_verwaltung']=(_sys==='ja');
+  const _sys=_mod('system'); if(_sys!==null){ perms['zugriff_verwaltung']=(_sys==='ja'||_sys==='plus'); perms['zugriff_verwaltung_plus']=(_sys==='plus'); }
   // 5) Startseite (Ein/Aus) – Standard: nur Admin
   const _stp=_mod('start'); if(_stp!==null) perms['startseite']=(_stp==='ein');
   // „Nur CRM / keine Zeiterfassung" wird jetzt ALLEIN über ZE=Kein ausgedrückt (eine Quelle der
@@ -1016,11 +1035,11 @@ export async function saveNewUser(){
 async function _saveNewUserDelegated(){
   const u=collectUserForm();
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
-  if(!['mitarbeiter','berater','freiberuflich'].includes(u.role)){ toast('Diese Rolle vergibt nur der Administrator.','err'); return; }
+  if(!(_isPlus(cu)?_ALL_ROLES:['mitarbeiter','berater','freiberuflich']).includes(u.role)){ toast('Diese Rolle vergibt nur der Administrator.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   if(String(u.pw).length<8){ toast('Startpasswort: mindestens 8 Zeichen.','err'); return; }
   const pw=u.pw; delete u.pw;
-  if(u.perms) delete u.perms.zugriff_verwaltung;
+  if(u.perms){ delete u.perms.zugriff_verwaltung; delete u.perms.zugriff_verwaltung_plus; }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
   const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
   const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
@@ -1039,9 +1058,12 @@ export async function saveEditUser(id){
   if(!_canStamm(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
   const u=collectUserForm(); u.id=id;
   const _deleg=_isDelegated(cu);
+  let _newRole=null;
   if(_deleg){ const ex0=getUser(id);
     if(!ex0 || ex0.role==='admin' || id==='admin' || id===cu.id){ toast('Diesen Datensatz kann nur der Administrator ändern.','err'); return; }
-    u.role=ex0.role; u.name=ex0.name; u.pw=''; }
+    if(_plusMay(cu,ex0) && _ALL_ROLES.includes(u.role) && u.role!==ex0.role) _newRole=u.role;   // Rollenwechsel über tpsPw staffRole
+    else u.role=ex0.role;
+    u.name=ex0.name; u.pw=''; }
   if(id==='admin') u.role='admin';
   // Passwort im Bearbeiten-Dialog: direkt am Firebase-Konto setzen (Cloud Function), nie als Hash speichern.
   const _newPw=u.pw; delete u.pw;
@@ -1083,14 +1105,19 @@ export async function saveEditUser(id){
     delete u.paramHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
   }
   if(_deleg){
+    // „erweitert": Rolle zuerst serverseitig ändern (danach passt auch die Parameter-Historie mit der neuen Rolle)
+    if(_newRole){
+      try{ await _adminFn({ action:'staffRole', id, role:_newRole }); }
+      catch(e){ toast('Rolle konnte nicht geändert werden: '+((e&&e.message)||e),'err'); return; }
+    }
     // Nur Stammdaten schreiben (feldgenau) – keine Rechte, kein CRM-Zugriff, kein Konto-Setup.
     const patch={}; STAMM_FIELDS.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(u,k) && u[k]!==undefined) patch[k]=u[k]; });
     try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0) Object.assign(d.users[i],patch); }); }
     catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt'),'err'); return; }
-    // Zugriffe (nur Rollen ohne Sonderrechte) serverseitig über tpsPw „staffPerms“
-    const ex1=getUser(id);
-    if(ex1 && _DELEG_ROLES.includes(ex1.role)){
-      const perms=Object.assign({}, u.perms||{}); delete perms.zugriff_verwaltung;
+    // Zugriffe serverseitig über tpsPw „staffPerms“ (Rollen ohne Sonderrechte; bei „erweitert“ auch Leitung/GF)
+    const ex1=getUser(id); const _r1=_newRole||(ex1&&ex1.role);
+    if(ex1 && (_plusMay(cu,ex1) || (_DELEG_ROLES.includes(_r1) && !_isPlusUser(ex1)))){
+      const perms=Object.assign({}, u.perms||{}); delete perms.zugriff_verwaltung; delete perms.zugriff_verwaltung_plus;
       const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
       const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
       const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);

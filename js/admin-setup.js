@@ -270,6 +270,8 @@ export async function refreshPermissionAllowlists(opts){
       const on = AREA_ADMIN_KEYS.includes(k) ? (sys || !!hasPermission(k,u)) : !!hasPermission(k,u);
       if(on){ (grants[k]=grants[k]||{})[uid]=true; }
     });
+    // „System-Verwaltung erweitert“ (tpsPw prüft grants/zugriff_verwaltung_plus) – nur zusammen mit System-Verwaltung
+    if(sys && u.perms && u.perms.zugriff_verwaltung_plus===true) (grants.zugriff_verwaltung_plus=grants.zugriff_verwaltung_plus||{})[uid]=true;
     const _own=u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_shop');
     const shopUse=_own ? !!u.perms.path_shop : !!(_paShop&&_paShop[u.role]);
     if(shopUse){ (grants.shop_nutzen=grants.shop_nutzen||{})[uid]=true;
