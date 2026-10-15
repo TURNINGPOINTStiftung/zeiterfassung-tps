@@ -2635,7 +2635,8 @@ function crmEditTermin(tid){
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Von</label><input id="crm-te-datum" type="date" value="${esc(t.datum||'')}"${ro}></div>
      <div class="crm-modal-field" style="flex:1;min-width:130px"><label>Bis (optional)</label><input id="crm-te-bis" type="date" value="${esc(t.bis||'')}"${ro}></div>
-     <div class="crm-modal-field" style="flex:1;min-width:110px"><label>Uhrzeit (optional)</label><input id="crm-te-uhr" type="time" value="${esc(t.uhr||'')}"${ro}></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>Uhrzeit von</label><input id="crm-te-uhrvon" type="time" value="${esc(_splitUhr(t.uhr).von)}"${ro}></div>
+     <div class="crm-modal-field" style="flex:1;min-width:90px"><label>bis</label><input id="crm-te-uhrbis" type="time" value="${esc(_splitUhr(t.uhr).bis)}"${ro}></div>
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"${ro}></div>
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"${ro}></div>
@@ -2652,12 +2653,16 @@ function crmSaveTerminEdit(tid){
   const backToKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-te-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
   const datum=val('crm-te-datum'); let bis=val('crm-te-bis'); if(bis && datum && bis<datum) bis=datum;
+  { const e0=curEntity(); const t0=e0&&(e0.termine||[]).find(x=>x.id===tid);
+    if(datum && datum<localISODate() && (!t0 || t0.datum!==datum) && !confirm('Das Datum '+fmtDate(Date.parse(datum))+' liegt in der Vergangenheit. Trotzdem speichern?\n(„Abbrechen“ zum Korrigieren, z. B. falsches Jahr)')) return; }
   const canAsg=_canAssignStaff();
   mutateEntity(e=>{ const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
     t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=_joinUhr(val('crm-te-uhrvon'),val('crm-te-uhrbis')); t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
     t.teilnehmer=readMultiKontakt('crm-te');
     if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
     (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
+    // Ergebnis-Zeile einer Kontaktnotiz auf den neuen Stand bringen
+    (e.kontaktnotizen||[]).forEach(n=>(n.folgen||[]).forEach(f=>{ if(f.ref&&f.ref.kind==='termin'&&f.ref.tid===tid){ f.datum=datum; f.uhr=t.uhr; f.text=titel; } }));
   });
   crmCloseModal();
   if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(e){} }   // aus dem Kalender geöffnet → dort bleiben
@@ -2938,19 +2943,24 @@ function _knExtraHtml(n, e, part){
   if(part!=='folgen' && (tps.length||ext.length)) out.push(`<div class="crm-kn-who">${tps.length?`<span class="crm-kn-wl">👥 TPS</span>${tps.map(x=>`<span class="crm-kn-chip">${esc(x)}</span>`).join('')}`:''}${ext.length?`<span class="crm-kn-wl">🏟️ Verein/Sonstige</span>${ext.map(x=>`<span class="crm-kn-chip ext">${esc(x)}</span>`).join('')}`:''}</div>`);
   const rows=(n.folgen||[]).map(f=>{
     let stand='', open='';
+    const live={ text:f.text, datum:f.datum, uhr:f.uhr, wer:f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:f.wer.name):'' };
     if(f.ref && f.ref.kind==='task' && e){
       const p=(e.projekte||[]).find(x=>x.id===f.ref.pid); const hit=p?findNodeIn(p.todos||[], f.ref.tid):null; const t=hit&&hit.node;
+      if(t){ live.text=String(t.text||f.text).replace(/^⏰\s*/,''); live.datum=t.due||''; live.uhr='';
+        live.wer=t.assigneeName||((t.teams||[]).length?'👥 '+t.teams.join(', '):''); }
       stand = t ? (t.status==='erledigt'?'<span class="crm-kn-st ok">✓ erledigt</span>':'<span class="crm-kn-st">☐ offen</span>') : '<span class="crm-kn-st">gelöscht</span>';
       if(t) open=` onclick="crmMeineOpen('entity',${jsq(window._crmTree)},${jsq(e.id)},${jsq(f.ref.tid)})" style="cursor:pointer" title="Aufgabe öffnen"`;
     } else if(f.ref && f.ref.kind==='termin' && e){
       const t=(e.termine||[]).find(x=>x.id===f.ref.tid);
+      if(t){ live.text=t.titel||f.text; live.datum=t.datum||''; live.uhr=t.uhr||'';
+        const ma=staffNames(t.mitarbeiter||[]); if(ma.length) live.wer=ma.join(', '); }
       stand = t ? '<span class="crm-kn-st">📅 im Kalender</span>' : '<span class="crm-kn-st">gelöscht</span>';
       if(t) open=` onclick="crmEditTermin(${jsq(f.ref.tid)})" style="cursor:pointer" title="Termin öffnen"`;
     }
-    const wer=f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:f.wer.name):'';
-    const dat=f.datum?fmtDate(Date.parse(f.datum))+(f.uhr?' '+f.uhr:''):'';
-    const pastF=f.typ==='termin' && f.datum && f.datum<localISODate();
-    return `<div class="crm-kn-f"${open}><span class="crm-kn-ft">➜ ${esc(KN_TYP[f.typ]||f.typ)}</span><span class="crm-kn-fx">${esc(f.text)}</span><span class="crm-kn-fm">${esc([wer,dat].filter(Boolean).join(' · '))}${pastF?' <span style="color:var(--danger);font-weight:600">(vergangen)</span>':''}</span>${stand}</div>`;
+    const wer=live.wer;
+    const dat=live.datum?fmtDate(Date.parse(live.datum))+(live.uhr?' '+live.uhr:''):'';
+    const pastF=f.typ==='termin' && live.datum && live.datum<localISODate();
+    return `<div class="crm-kn-f"${open}><span class="crm-kn-ft">➜ ${esc(KN_TYP[f.typ]||f.typ)}</span><span class="crm-kn-fx">${esc(live.text)}</span><span class="crm-kn-fm">${esc([wer,dat].filter(Boolean).join(' · '))}${pastF?' <span style="color:var(--danger);font-weight:600">(vergangen)</span>':''}</span>${stand}</div>`;
   }).join('');
   if(part!=='who' && rows) out.push(`<div class="crm-kn-folgen">${rows}</div>`);
   return out.join('');
