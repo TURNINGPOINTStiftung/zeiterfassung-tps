@@ -270,16 +270,20 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-py-seg{min-width:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .kal-py-seg.kal-clickable{cursor:pointer} .kal-py-seg.kal-clickable:hover{filter:brightness(1.08)}
   .kal-py-lbl{font-size:11px;font-weight:700;color:#fff;padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;text-align:center;line-height:1.15}
-  .kal-ag{display:flex;flex-direction:column}
+  .kal-ag{display:flex;flex-direction:column;max-width:920px;margin:0 auto;width:100%}
   .kal-ag-day{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border,#dce3ec)} .kal-ag-day:last-child{border-bottom:none}
   .kal-ag-day.we{background:var(--surface-2,#f7f9fc)} .kal-ag-day.today{background:var(--warn-bg,#fff3e0)}
   .kal-ag-date{width:44px;flex:none;display:flex;flex-direction:column;align-items:center;padding-top:2px}
   .kal-ag-date .dn{font-size:1.35rem;font-weight:800;color:var(--primary-d,#15263a);line-height:1.1} .kal-ag-date .dw{font-size:.74rem;font-weight:700;color:var(--muted,#5d7086);text-align:center}
   .kal-ag-list{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
   .kal-ag-it{border-left:4px solid;border-radius:6px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(0,0,0,.08);padding:8px 10px;min-height:44px;box-sizing:border-box}
-  .kal-ag-it .t{font-weight:700;font-size:.98rem;color:var(--text,#15263a);overflow-wrap:anywhere} .kal-ag-it .m{font-size:.84rem;color:var(--muted,#5d7086);margin-top:2px}
+  .kal-ag-it .t{font-weight:700;font-size:.92rem;color:var(--text,#15263a);overflow-wrap:anywhere} .kal-ag-it .m{font-size:.8rem;color:var(--muted,#5d7086);margin-top:2px}
   .kal-ag-it .cf{font-size:.84rem;font-weight:700;color:var(--danger,#c8442f);margin-top:3px}
-  .kal-ag-abs{font-size:.88rem;color:var(--info,#2563eb);font-weight:600;padding:2px 2px}
+  .kal-ag-abs{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:2px 0}
+  .kal-ag-al{font-size:.76rem;font-weight:700;color:var(--muted,#5d7086);margin-right:2px}
+  .kal-ag-ac{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;background:var(--surface-2,#f1f4f8);border:1px solid var(--border,#dce3ec);font-size:.8rem;font-weight:600;color:var(--text,#15263a);white-space:nowrap}
+  .kal-ag-ac i{width:8px;height:8px;border-radius:50%;flex:none}
+  .kal-ag-ac .ty{font-weight:400;color:var(--muted,#5d7086)}
   .kal-ag-none{font-size:.88rem;color:var(--muted,#5d7086);padding-top:8px}
   @media(max-width:640px){
     #kalender-root{padding:12px 10px 60px}
@@ -586,29 +590,34 @@ function _agenda(){
   const personal=curTeam==='@me'; const myId=(window.cu&&window.cu.id)||'';
   const inTeam=id=>!curTeam||personal||empTeamById(id)===curTeam;
   const zeIds=new Set(_emps().map(u=>u.id));
-  const abs=_abs().filter(a=>zeIds.has(a.emp) && (personal ? a.emp===myId : inTeam(a.emp)));
-  const items=_events().concat(_termine());
   const n=_daysInMonth(curY,curM); let h='<div class="kal-ag">', any=false;
-  const m0=curY+'-'+_pad(curM)+'-01';
+  const m0=curY+'-'+_pad(curM)+'-01', m1=curY+'-'+_pad(curM)+'-'+_pad(n);
+  const inMonth=x=>!!x.von && overlap(x.von, x.bis||x.von, m0, m1);   // nur, was diesen Monat berührt
+  const abs=_abs().filter(a=>zeIds.has(a.emp) && (personal ? a.emp===myId : inTeam(a.emp)) && inMonth(a))
+    .sort((a,b)=>String(empName(a.emp)).localeCompare(String(empName(b.emp)),'de'));
+  const items=_events().concat(_termine()).filter(inMonth);
   const startsOn=(x,iso)=>(x.von<m0?m0:x.von)===iso;   // erster sichtbarer Tag im Monat
   const rng=x=>x.von===x.bis?'':(_deDate(x.von)+'–'+_deDate(x.bis));
   for(let d=1; d<=n; d++){
     const dt=new Date(curY,curM-1,d,12), iso=_iso(dt), dow=_dowMon(dt), today=iso===_todayISO();
     const its=items.filter(it=>startsOn(it,iso)).sort((a,b)=>String(a.uhr||'').localeCompare(String(b.uhr||'')));
     const ab=abs.filter(a=>startsOn(a,iso));
+    const absAll=abs;
     if(!its.length && !ab.length && !today) continue;
     any=true;
     h+='<div class="kal-ag-day'+(today?' today':'')+(dow>=5?' we':'')+'"'+(today?' id="kal-ag-today"':'')+'><div class="kal-ag-date"><span class="dn">'+d+'</span><span class="dw">'+DOW[dow]+(today?' · heute':'')+'</span></div><div class="kal-ag-list">';
     its.forEach(it=>{
       const isVa=it.typ==='va', c=_clk(it), mine=(it.mitarbeiter||[]).indexOf(myId)>=0;
-      const away=abs.filter(a=>(it.mitarbeiter||[]).indexOf(a.emp)>=0 && overlap(a.von,a.bis,it.von,it.bis));
+      const away=absAll.filter(a=>(it.mitarbeiter||[]).indexOf(a.emp)>=0 && overlap(a.von,a.bis,it.von,it.bis));
       const span=rng(it);
       const meta=[it.uhr, span, it.entity, mine?'dir zugewiesen':''].filter(Boolean).join(' · ');
       h+='<div class="kal-ag-it'+c.cls+'" style="border-left-color:'+(isVa?'#dc2626':'#d97706')+'"'+c.on+'>'
-        +'<div class="t">'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>'+(meta?'<div class="m">'+esc(meta)+'</div>':'')
+        +'<div class="t">'+(isVa?'📅 ':'')+esc(it.titel)+'</div>'+(meta?'<div class="m">'+esc(meta)+'</div>':'')
         +(away.length?'<div class="cf">⚠ abwesend: '+away.map(a=>esc(empName(a.emp))).join(', ')+'</div>':'')+'</div>';
     });
-    if(ab.length) h+='<div class="kal-ag-abs">🏖 '+ab.map(a=>esc((personal?KMETA[a.type].lbl:empName(a.emp)+' ('+KMETA[a.type].lbl+(a.half?' ½':'')+')')+(rng(a)?' '+rng(a):''))).join(', ')+'</div>';
+    if(ab.length) h+='<div class="kal-ag-abs"><span class="kal-ag-al">🏖 Abwesend</span>'+ab.map(a=>{ const m=KMETA[a.type]||{lbl:'',c:'#2563eb'};
+      const nm=personal?m.lbl:empName(a.emp); const sub=[personal?'':m.lbl+(a.half?' ½':''), rng(a)].filter(Boolean).join(' · ');
+      return '<span class="kal-ag-ac"><i style="background:'+m.c+'"></i>'+esc(nm)+(sub?' <span class="ty">'+esc(sub)+'</span>':'')+'</span>'; }).join('')+'</div>';
     if(!its.length && !ab.length) h+='<div class="kal-ag-none">Nichts eingetragen.</div>';
     h+='</div></div>';
   }
