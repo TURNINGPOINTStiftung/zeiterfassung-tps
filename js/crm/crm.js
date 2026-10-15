@@ -784,7 +784,11 @@ function injectStyles(){
   .crm-kn-sub{font-size:12px;font-weight:700;color:var(--primary);margin:10px 0 4px}
   .crm-kn-folge{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;padding:6px;border:1px solid var(--border);border-radius:8px}
   .crm-kn-folge .kf-text{flex:1 1 180px;min-width:0}
-  .crm-kn-who{font-size:12px;color:var(--muted);margin-top:6px}
+  .crm-kn-who{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+  .crm-kn-wl{font-size:12.5px;font-weight:700;color:var(--primary);margin-right:2px}
+  .crm-kn-wl:not(:first-child){margin-left:8px}
+  .crm-kn-chip{font-size:13.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--info-bg,#e8f0fe);color:var(--text)}
+  .crm-kn-chip.ext{background:var(--surface-2,#f1f4f8);border:1px solid var(--border)}
   .crm-kn-folgen{margin-top:6px;display:flex;flex-direction:column;gap:4px}
   .crm-kn-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;padding:4px 8px;border-radius:6px;background:var(--surface-2,#f4f7fb)}
   .crm-kn-ft{font-weight:700;color:var(--primary);white-space:nowrap}
@@ -794,6 +798,10 @@ function injectStyles(){
   .crm-kn-st.ok{color:var(--ok,#16a34a)}
   .crm-kn-ver>summary,.crm-kn-wd>summary{cursor:pointer;font-size:11.5px;color:var(--muted);margin-top:6px}
   .crm-kn-v{border-left:3px solid var(--border);padding-left:8px;margin:6px 0;opacity:.85}
+  .crm-kn-diff{border-left:3px solid var(--border);padding:4px 0 4px 10px;margin:6px 0;font-size:13px;line-height:1.55;white-space:pre-wrap}
+  .crm-kn-diff del{background:var(--danger-bg,#fdecea);color:var(--danger,#b42318);text-decoration:line-through}
+  .crm-kn-diff ins{background:var(--ok-bg,#e3f6e8);color:var(--ok-text,#14632e);text-decoration:none;font-weight:600}
+  .crm-kn-diffx{margin-top:6px;font-size:12.5px;color:var(--muted);white-space:normal}
   .crm-kn-wd .crm-kn-item{opacity:.6}
   .crm-kn-meta .crm-x{margin-left:auto}
   .crm-kn-text{white-space:pre-line;font-size:13.5px;line-height:1.5;word-break:break-word}
@@ -2007,8 +2015,11 @@ function crmSearchAll(q){
         res.contacts.push({tree:tr.key, eid:e.id, name:k.name||'(Kontakt)', sub:(s.name||'')+(k.funktion?' · '+k.funktion:'')}); });
       // Kontaktnotizen durchsuchen (auch ältere) → Treffer mit Text, Verfasser, Datum
       migKontaktnotizen(e);
-      (e.kontaktnotizen||[]).forEach(n=>{ if(hit(n.text))
-        res.notes.push({tree:tr.key, eid:e.id, entryName:s.name||'(ohne Name)', text:n.text||'', by:(n.byName||n.byKuerzel||''), ts:n.ts}); });
+      (e.kontaktnotizen||[]).forEach(n=>{ if(n.withdrawn) return;
+        const who=_knWhoNames(n, e); const fo=(n.folgen||[]).map(x=>x.text+' '+(x.wer&&x.wer.name||'')).join(' ');
+        if(hit(n.text, who.tps.join(' '), who.ext.join(' '), fo)){
+          const inWho=!hit(n.text) && hit(who.tps.join(' '), who.ext.join(' '));
+          res.notes.push({tree:tr.key, eid:e.id, entryName:s.name||'(ohne Name)', text:(inWho?'👥 '+who.tps.concat(who.ext).join(', ')+' – ':'')+(n.text||''), by:(n.byName||n.byKuerzel||''), ts:n.when||n.ts}); } });
       migEntityProjekte(e);
       e.projekte.forEach(p=>{
         if(hit(p.name)) res.projects.push({kind:'entity', tree:tr.key, eid:e.id, pid:p.id, name:p.name||'Projekt', sub:s.name||'', closed:!!p.closed});
@@ -2693,7 +2704,7 @@ function kontaktnotizenSecHtml(e){
         ${(!shared&&n.withdrawn&&_knMayPurge())?`<button class="crm-x" title="Endgültig löschen (nur CRM-Verwaltung)" onclick="crmDeleteKontaktnotiz(${jsq(n.id)})">✕</button>`:''}</div>
       <div class="crm-kn-text">${linkify(n.text||'')}</div>
       ${_knExtraHtml(n, shared?null:e)}
-      ${(Array.isArray(n.versionen)&&n.versionen.length)?`<details class="crm-kn-ver"><summary>Frühere Fassungen (${n.versionen.length})</summary>${n.versionen.map(v=>`<div class="crm-kn-v"><div class="crm-kn-meta">bis ${esc(fmtDateTime(v.ts))}${v.byKuerzel?' · geändert von '+esc(v.byKuerzel):''}</div><div class="crm-kn-text">${linkify(v.text||'')}</div></div>`).join('')}</details>`:''}
+      ${(Array.isArray(n.versionen)&&n.versionen.length)?_knLastChangeHtml(n, shared?null:e):''}
     </div>`; };
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
@@ -2770,8 +2781,8 @@ function _knMoreHtml(e){
     <div class="small" style="color:var(--muted);margin-top:4px">Aufgaben und Fristen landen im Projekt dieses Eintrags und bei der verantwortlichen Person bzw. dem Team im Projektmanagement; Termine im Kalender.</div>
   </details>`;
 }
-function crmKnAddFolge(){
-  const box=document.getElementById('crm-kn-folgen'); if(!box) return;
+function crmKnAddFolge(boxId){
+  const box=document.getElementById(boxId||'crm-kn-folgen'); if(!box) return;
   const e=curEntity(); if(e) migEntityProjekte(e);
   const row=document.createElement('div'); row.className='crm-kn-folge';
   row.innerHTML=`<select class="kf-typ" onchange="crmKnTypChg(this)">${Object.entries(KN_TYP).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select>
@@ -2793,14 +2804,14 @@ function crmKnTypChg(sel){
 // Formular → Zusatzfelder lesen (null, wenn der Bereich nicht genutzt wurde)
 function _knReadMore(){
   const more=document.querySelector('.crm-kn-more'); if(!more) return null;
-  const whenRaw=(document.getElementById('crm-kn-when')||{}).value||'';
+  const whenRaw=(more.querySelector('#crm-kn-when')||{}).value||'';
   const when=whenRaw?Date.parse(whenRaw):null;
-  const art=(document.getElementById('crm-kn-art')||{}).value||'';
-  const tps=more.open ? readStaffPicker('crm-kn') : [];
-  const ext=Array.from(document.querySelectorAll('.crm-kn-ext:checked')).map(x=>({ kid:x.value }));
-  String((document.getElementById('crm-kn-extfree')||{}).value||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(n=>ext.push({ name:n.slice(0,80) }));
+  const art=(more.querySelector('#crm-kn-art')||{}).value||'';
+  const tps=more.open ? [...new Set(Array.from(more.querySelectorAll('.crm-kn-ma:checked')).map(x=>x.value))] : [];
+  const ext=Array.from(more.querySelectorAll('.crm-kn-ext:checked')).map(x=>({ kid:x.value }));
+  String((more.querySelector('#crm-kn-extfree')||{}).value||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(n=>ext.push({ name:n.slice(0,80) }));
   const us=getData().users||[];
-  const folgen=Array.from(document.querySelectorAll('.crm-kn-folge')).map(r=>{
+  const folgen=Array.from(more.querySelectorAll('.crm-kn-folge')).map(r=>{
     const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim();
     if(!text) return null;
     const w=r.querySelector('.kf-wer').value||''; let wer=null;
@@ -2846,12 +2857,45 @@ function _knApplyFolgen(e, note){
     delete f.proj;
   });
 }
+// „Letzte Änderung“: Unterschied zur vorherigen Fassung farbig – entfernte Wörter rot durchgestrichen, neue grün
+// (User 15.10.2026: „auf einen Blick sehen, dann reicht eine frühere Fassung“). Ältere Fassungen bleiben gespeichert.
+function _knWordDiff(a, b){
+  const A=String(a||'').split(/(\s+)/), B=String(b||'').split(/(\s+)/);
+  if(A.length*B.length>250000) return `<del>${esc(a)}</del> <ins>${esc(b)}</ins>`;   // sehr lange Texte: ganz zeigen
+  const m=A.length, n=B.length, L=Array.from({length:m+1},()=>new Array(n+1).fill(0));
+  for(let i=m-1;i>=0;i--) for(let j=n-1;j>=0;j--) L[i][j]=A[i]===B[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  let i=0, j=0, out='';
+  while(i<m && j<n){
+    if(A[i]===B[j]){ out+=esc(A[i]); i++; j++; }
+    else if(L[i+1][j]>=L[i][j+1]){ out+=/^\s+$/.test(A[i])?esc(A[i]):`<del>${esc(A[i])}</del>`; i++; }
+    else { out+=/^\s+$/.test(B[j])?esc(B[j]):`<ins>${esc(B[j])}</ins>`; j++; }
+  }
+  while(i<m){ out+=/^\s+$/.test(A[i])?esc(A[i]):`<del>${esc(A[i])}</del>`; i++; }
+  while(j<n){ out+=/^\s+$/.test(B[j])?esc(B[j]):`<ins>${esc(B[j])}</ins>`; j++; }
+  return out;
+}
+function _knLastChangeHtml(n, e){
+  const v=n.versionen[0]; const chg=[];
+  if((v.art||'')!==(n.art||'')) chg.push('Art: <del>'+esc(KN_ARTEN[v.art]||v.art||'–')+'</del> → <ins>'+esc(KN_ARTEN[n.art]||n.art||'–')+'</ins>');
+  if((v.when||0)!==(n.when||0)) chg.push('Zeitpunkt: <del>'+esc(v.when?fmtDateTime(v.when):'–')+'</del> → <ins>'+esc(n.when?fmtDateTime(n.when):'–')+'</ins>');
+  const wa=_knWhoNames(v, e), wb=_knWhoNames(n, e);
+  const pa=wa.tps.concat(wa.ext), pb=wb.tps.concat(wb.ext);
+  const weg=pa.filter(x=>!pb.includes(x)), neu=pb.filter(x=>!pa.includes(x));
+  if(weg.length||neu.length) chg.push('Teilnehmende: '+weg.map(x=>'<del>'+esc(x)+'</del>').concat(neu.map(x=>'<ins>'+esc(x)+'</ins>')).join(', '));
+  const textChanged=(v.text||'')!==(n.text||'');
+  return `<details class="crm-kn-ver"><summary>✎ Letzte Änderung: ${esc(fmtDateTime(n.editedAt||v.ts))}${n.editedByKuerzel?' von '+esc(n.editedByKuerzel):''}</summary>
+    <div class="crm-kn-diff">${textChanged?`<div>${_knWordDiff(v.text, n.text)}</div>`:'<div class="small" style="color:var(--muted)">Text unverändert.</div>'}${chg.length?`<div class="crm-kn-diffx">${chg.join('<br>')}</div>`:''}</div></details>`;
+}
+function _knWhoNames(n, e){
+  const tps=[...new Set(staffNames([...new Set(n.tps||[])]))];
+  const ext=[...new Set((n.ext||[]).map(x=>{ if(x.kid){ const k=(e&&e.kontakte||[]).find(y=>y.id===x.kid); return k?(k.name||'(Kontakt)'):'(Kontakt)'; } return x.name||''; }).filter(Boolean))];
+  return { tps, ext };
+}
 // Anzeige der Zusatzfelder einer Notiz (Teilnehmende + Ergebnisse mit aktuellem Stand)
 function _knExtraHtml(n, e){
   const out=[];
-  const tps=staffNames(n.tps||[]);
-  const ext=(n.ext||[]).map(x=>{ if(x.kid){ const k=(e&&e.kontakte||[]).find(y=>y.id===x.kid); return k?(k.name||'(Kontakt)'):'(Kontakt)'; } return x.name||''; }).filter(Boolean);
-  if(tps.length||ext.length) out.push(`<div class="crm-kn-who">👥 ${tps.length?'TPS: '+esc(tps.join(', ')):''}${tps.length&&ext.length?' &nbsp;·&nbsp; ':''}${ext.length?'Verein/Sonstige: '+esc(ext.join(', ')):''}</div>`);
+  const { tps, ext }=_knWhoNames(n, e);
+  if(tps.length||ext.length) out.push(`<div class="crm-kn-who">${tps.length?`<span class="crm-kn-wl">👥 TPS</span>${tps.map(x=>`<span class="crm-kn-chip">${esc(x)}</span>`).join('')}`:''}${ext.length?`<span class="crm-kn-wl">🏟️ Verein/Sonstige</span>${ext.map(x=>`<span class="crm-kn-chip ext">${esc(x)}</span>`).join('')}`:''}</div>`);
   const rows=(n.folgen||[]).map(f=>{
     let stand='', open='';
     if(f.ref && f.ref.kind==='task' && e){
@@ -2906,30 +2950,30 @@ function crmEditKontaktnotiz(id){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Kontaktnotiz bearbeiten</h3>
     <div class="crm-kn-grid">
-      <label>Art<select id="crm-kn-art">${Object.entries(KN_ARTEN).map(([k,l])=>`<option value="${k}"${n.art===k?' selected':''}>${l}</option>`).join('')}</select></label>
-      <label>Datum / Uhrzeit<input type="datetime-local" id="crm-kn-when" value="${whenVal}"></label>
+      <label>Art<select id="crm-kne-art">${Object.entries(KN_ARTEN).map(([k,l])=>`<option value="${k}"${n.art===k?' selected':''}>${l}</option>`).join('')}</select></label>
+      <label>Datum / Uhrzeit<input type="datetime-local" id="crm-kne-when" value="${whenVal}"></label>
     </div>
     <div class="crm-modal-field"><label>Information</label><textarea class="crm-ta" id="crm-kn-edit" rows="5">${esc(n.text||'')}</textarea></div>
     <div class="crm-kn-sub">👥 Teilnehmende TPS</div>
-    ${staffPickerHtml(n.tps||[], 'crm-kn')}
+    ${staffPickerHtml(n.tps||[], 'crm-kne')}
     <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
-    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kn-ext" value="${esc(k.id)}"${extIds.has(k.id)?' checked':''}> ${esc(k.name||'(Kontakt)')}</label>`).join('')}</div>`:''}
-    <input type="text" id="crm-kn-extfree" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
+    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kne-ext" value="${esc(k.id)}"${extIds.has(k.id)?' checked':''}> ${esc(k.name||'(Kontakt)')}</label>`).join('')}</div>`:''}
+    <input type="text" id="crm-kne-extfree" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
     <div class="crm-kn-sub">➜ Weitere Ergebnisse hinzufügen</div>
     <div class="small" style="color:var(--muted);margin-bottom:4px">Schon angelegte Aufgaben/Termine bearbeitest du direkt dort (Klick auf das Ergebnis).</div>
-    <div id="crm-kn-folgen"></div>
-    <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge()">＋ Ergebnis</button>
+    <div id="crm-kne-folgen"></div>
+    <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge('crm-kne-folgen')">＋ Ergebnis</button>
     <div class="small" style="color:var(--muted);margin-top:8px">Die bisherige Fassung bleibt im Verlauf der Notiz erhalten.</div>
     <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button><button class="btn-sm-crm primary" onclick="crmSaveKontaktnotizEdit(${jsq(id)})">Speichern</button></div>`);
 }
 function crmSaveKontaktnotizEdit(id){
   const text=(val('crm-kn-edit')||'').trim(); if(!text){ toast('Die Notiz darf nicht leer sein – zum Entfernen „zurückziehen“.','err'); return; }
-  const whenRaw=val('crm-kn-when'); const when=whenRaw?Date.parse(whenRaw):null;
-  const art=val('crm-kn-art')||'';
-  const tps=readStaffPicker('crm-kn');
-  const ext=Array.from(document.querySelectorAll('.crm-kn-ext:checked')).map(x=>({ kid:x.value }));
-  String(val('crm-kn-extfree')||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(nm=>ext.push({ name:nm.slice(0,80) }));
-  const more=_knReadMoreFolgenOnly();
+  const whenRaw=val('crm-kne-when'); const when=whenRaw?Date.parse(whenRaw):null;
+  const art=val('crm-kne-art')||'';
+  const tps=[...new Set(readStaffPicker('crm-kne'))];
+  const ext=Array.from(document.querySelectorAll('.crm-kne-ext:checked')).map(x=>({ kid:x.value }));
+  String(val('crm-kne-extfree')||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(nm=>ext.push({ name:nm.slice(0,80) }));
+  const more=_knReadMoreFolgenOnly('crm-kne-folgen');
   mutateEntity(e=>{ migKontaktnotizen(e); const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
     if(!Array.isArray(n.versionen)) n.versionen=[];
     n.versionen.unshift({ ts:Date.now(), byKuerzel:curKuerzel(), byName:curName(), text:n.text||'', art:n.art||'', when:n.when||null, tps:n.tps||[], ext:n.ext||[] });
@@ -2940,9 +2984,9 @@ function crmSaveKontaktnotizEdit(id){
   });
   crmCloseModal(); paintDetail(); toast('Notiz geändert ✓ (alte Fassung im Verlauf)','ok');
 }
-function _knReadMoreFolgenOnly(){
-  const us=getData().users||[];
-  return Array.from(document.querySelectorAll('.crm-kn-folge')).map(r=>{
+function _knReadMoreFolgenOnly(boxId){
+  const us=getData().users||[]; const box=document.getElementById(boxId||'crm-kne-folgen'); if(!box) return [];
+  return Array.from(box.querySelectorAll('.crm-kn-folge')).map(r=>{
     const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim(); if(!text) return null;
     const w=r.querySelector('.kf-wer').value||''; let wer=null;
     if(w.startsWith('u:')){ const uid=w.slice(2); const u=us.find(x=>x&&x.id===uid); wer={ kind:'u', id:uid, name:(u&&u.name)||uid }; }
