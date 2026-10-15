@@ -2598,6 +2598,7 @@ function crmAddTermin(){ crmNewItem('termin'); }   // → Einheits-Fenster (Term
 function crmSaveTermin(){
   const fromKal=(window._crmModalReturn==='kalender');
   const titel=val('crm-tf-titel'); if(!titel){ toast('Bitte einen Titel eingeben.','err'); return; }
+  { const d0=val('crm-tf-datum'); if(d0 && d0<localISODate() && !confirm('Das Datum '+fmtDate(Date.parse(d0))+' liegt in der Vergangenheit. Trotzdem speichern?\n(„Abbrechen“ zum Korrigieren, z. B. falsches Jahr)')) return; }
   // Mehrere CRM-Kontakte möglich: der ERSTE ist der Ablageort (dort liegt der Termin),
   // die weiteren werden als Beteiligte (teilnehmer) mitgeführt.
   const kontakte=readMultiKontakt('crm-tf');
@@ -2739,10 +2740,19 @@ function kontaktnotizenSecHtml(e){
     ${history}
   </div>`;
 }
+// Termine/Fristen mit Datum in der Vergangenheit: nachfragen (häufig falsches Jahr aus der Datumsauswahl)
+function _knPastOk(folgen){
+  const today=localISODate();
+  const past=(folgen||[]).filter(f=>f && f.typ!=='info' && f.datum && f.datum<today);
+  if(!past.length) return true;
+  return confirm('Achtung – Datum liegt in der Vergangenheit:\n'+past.map(f=>'• '+(KN_TYP[f.typ]||f.typ)+' „'+f.text+'“: '+fmtDate(Date.parse(f.datum))).join('\n')
+    +'\n\nFalsches Jahr? „Abbrechen“ zum Korrigieren, „OK“ zum Speichern.');
+}
 function crmAddKontaktnotiz(){
   const t=(val('crm-kn-new')||'').trim(); if(!t){ toast('Bitte eine Notiz eingeben.','err'); return; }
   const sharedWith=Array.from(document.querySelectorAll('.crm-kn-shareopt:checked')).map(x=>({tree:x.getAttribute('data-tree'),eid:x.getAttribute('data-eid')}));
   const more=_knReadMore();
+  if(more && !_knPastOk(more.folgen)) return;
   let made=0;
   mutateEntity(e=>{ migKontaktnotizen(e);
     const n={ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName(), sharedWith };
@@ -2939,7 +2949,8 @@ function _knExtraHtml(n, e, part){
     }
     const wer=f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:f.wer.name):'';
     const dat=f.datum?fmtDate(Date.parse(f.datum))+(f.uhr?' '+f.uhr:''):'';
-    return `<div class="crm-kn-f"${open}><span class="crm-kn-ft">➜ ${esc(KN_TYP[f.typ]||f.typ)}</span><span class="crm-kn-fx">${esc(f.text)}</span><span class="crm-kn-fm">${esc([wer,dat].filter(Boolean).join(' · '))}</span>${stand}</div>`;
+    const pastF=f.typ==='termin' && f.datum && f.datum<localISODate();
+    return `<div class="crm-kn-f"${open}><span class="crm-kn-ft">➜ ${esc(KN_TYP[f.typ]||f.typ)}</span><span class="crm-kn-fx">${esc(f.text)}</span><span class="crm-kn-fm">${esc([wer,dat].filter(Boolean).join(' · '))}${pastF?' <span style="color:var(--danger);font-weight:600">(vergangen)</span>':''}</span>${stand}</div>`;
   }).join('');
   if(part!=='who' && rows) out.push(`<div class="crm-kn-folgen">${rows}</div>`);
   return out.join('');
@@ -3007,6 +3018,7 @@ function crmSaveKontaktnotizEdit(id){
   const ext=Array.from(document.querySelectorAll('.crm-kne-ext:checked')).map(x=>({ kid:x.value }));
   String(val('crm-kne-extfree')||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(nm=>ext.push({ name:nm.slice(0,80) }));
   const more=_knReadMoreFolgenOnly('crm-kne-folgen');
+  if(!_knPastOk(more)) return;
   mutateEntity(e=>{ migKontaktnotizen(e); const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
     if(!Array.isArray(n.versionen)) n.versionen=[];
     n.versionen.unshift({ ts:Date.now(), byKuerzel:curKuerzel(), byName:curName(), text:n.text||'', art:n.art||'', when:n.when||null, tps:n.tps||[], ext:n.ext||[] });
