@@ -239,7 +239,7 @@ export function renderOverview(){
         ${sent?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:''}
       </div>`;
     }
-    const sentInfo=sent?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:'';
+    const sentInfo=(sent&&(sent.employeeIds||[]).length)?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:'';
     const approvedIds=JSON.stringify(approvedUsers.map(u=>u.id));
     // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
     // geführten) Teams heißt die Aktion "Bericht einreichen", geht aber genauso

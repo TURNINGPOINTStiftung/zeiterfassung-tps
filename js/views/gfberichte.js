@@ -135,8 +135,30 @@ export function renderGFBerichte(){
     html+='</div></div>';
   }
 
-  const reports=Object.values(d.teamReports||{});
-  if(!reports.length&&!yearReports.length){
+  // Berichte, aus denen ALLE Personen zur Korrektur zurückgegeben wurden, gelten nicht mehr als
+  // eingereicht – sie stehen separat unter „Zurückgegeben“, bis nachgereicht wird (User 15.10.2026).
+  const allReports=Object.values(d.teamReports||{});
+  const reports=allReports.filter(function(r){ return Array.isArray(r.employeeIds)&&r.employeeIds.length; });
+  const returnedReports=allReports.filter(function(r){ return r&&!(Array.isArray(r.employeeIds)&&r.employeeIds.length); });
+  if(returnedReports.length){
+    _ensureNoticeCss();
+    html+='<div class="gf-team-group" style="margin-bottom:28px">';
+    html+='<div class="gf-team-header"><span class="gf-team-name">↩ Zurückgegeben – wartet auf Korrektur</span>'
+      +'<span style="margin-left:auto;font-size:12px;color:var(--muted)">'+returnedReports.length+'</span></div><div>';
+    returnedReports.sort(function(a,b){ return ((b.year|0)*100+(b.month|0))-((a.year|0)*100+(a.month|0)); }).forEach(function(r){
+      html+='<div class="gf-report-card">'
+        +'<div>'
+        +'<div class="gf-report-title">'+esc((MONTHS[(r.month|0)-1]||'')+' '+(r.year||''))+' · '+esc(r.teamName||(r.managedTeams&&r.managedTeams[0])||'–')+'</div>'
+        +'<div class="gf-report-meta">Eingereicht von <strong>'+esc(r.leitungName||'')+'</strong> · erscheint wieder bei den eingereichten Berichten, sobald nachgereicht wird</div>'
+        +_returnedHtml(r)
+        +'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +((cu&&(cu.role==='admin'||r.leitungId===cu.id))?'<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" onclick="deleteGfReport(\'team\','+jsq(r.id)+')">🗑 Entfernen</button>':'')
+        +'</div></div>';
+    });
+    html+='</div></div>';
+  }
+  if(!reports.length&&!yearReports.length&&!returnedReports.length){
     content.innerHTML='<div class="empty-state"><span class="es-icon">📭</span><span class="es-title">Noch keine Berichte eingegangen</span><span>Eingereichte Team- und Jahresberichte erscheinen hier.</span></div>';
     return;
   }

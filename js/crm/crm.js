@@ -1084,7 +1084,7 @@ function _buildNotif(list){
   // (einzelne Verlaufs-Einträge haben evtl. keine/abweichende ID).
   const isMine=h=> (!!me && h.byId===me) || (!!meName && h.byName===meName) || (!!meKrz && h.byKuerzel===meKrz);
   const cutoff=Date.now()-7*24*60*60*1000;
-  const rel=(list||[]).filter(h=> h && h.action==='save' && !isMine(h) && h.coll!=='config'); // neueste zuerst (listHistory sortiert)
+  const rel=(list||[]).filter(h=> h && h.action==='save' && !isMine(h) && h.coll!=='config' && !/^shop/.test(h.coll||'')); // Lager hat eigene Hinweise (User 15.10.2026) // neueste zuerst (listHistory sortiert)
   const seen=new Set(); const items=[];
   rel.forEach((h,idx)=>{
     const k=h.coll+'::'+h.recId; if(seen.has(k)) return; seen.add(k);
