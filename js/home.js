@@ -346,8 +346,16 @@ function _newsItems(){
       html:`${esc(it.icon||'•')} <b>${esc(it.name||'(ohne Name)')}</b>: ${esc(it.desc||'geändert')} · von ${esc(it.by||'?')}`,
       open:`homeNewsOpen(${a})`, ack:`homeNewsSeen(${a})` });
   });
+  // Aus einer Kontaktnotiz mir zugewiesene Aufgaben (von anderen angelegt, offen, letzte 30 Tage)
+  try{ (window.crmNoteAssignments?window.crmNoteAssignments():[]).forEach(a=>{
+    if((a.ts||0) <= (+seen[_nk('asg',a.tid)]||0)) return;
+    const args=JSON.stringify(String(a.tree))+','+JSON.stringify(String(a.eid))+','+JSON.stringify(String(a.tid))+','+(+a.ts||0);
+    out.push({ key:'crm|asg|'+a.tid, area:'crm', label:'📌 Aufgabe aus Kontaktnotiz', ts:a.ts||0,
+      html:`📌 Dir zugewiesen${a.by?' von '+esc(a.by):''}: <b>${esc(a.text)}</b> · ${esc(a.name)}${a.due?' · fällig '+esc(fmtD(a.due)):''}`,
+      open:`homeAsgOpen(${args})`, ack:`homeNewsSeen('asg',${JSON.stringify(String(a.tid))},${+a.ts||0})` }); }); }catch(e){}
   return out.sort((x,y)=>(y.ts||0)-(x.ts||0));
 }
+function homeAsgOpen(tree,eid,tid,ts){ _markCrmSeen([['asg',tid,ts]]); try{ window.crmOpenAssignedFromHome&&window.crmOpenAssignedFromHome(tree,eid,tid); }catch(e){} }
 function _fillNotes(){
   const box=document.querySelector('#home-notes .home-notes'); if(!box) return;
   _loadCrmNews(false);
@@ -355,7 +363,7 @@ function _fillNotes(){
   // Alles gelesen → Karte ganz ausblenden (User: „im Grunde ein leeres Feld"); kommt bei Neuem wieder
   const card=document.getElementById('home-notes'); if(card) card.style.display=items.length?'':'none';
   const all=card&&card.querySelector('.home-news-all'); if(all) all.style.display=items.length>1?'':'none';
-  const html=items.map(n=>`<div class="ze-notice"><span class="tx"><span class="ar">${esc(_AREA[n.area]||'')}</span>${n.html}</span>`
+  const html=items.map(n=>`<div class="ze-notice"><span class="tx"><span class="ar">${esc(n.label||_AREA[n.area]||'')}</span>${n.html}</span>`
     +`<button class="pri" onclick="${esc(n.open)}">Öffnen</button><button onclick="${esc(n.ack)}">✓ Gelesen</button></div>`).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   box.onclick=()=>setTimeout(_fillNotes,250);   // nach „✓ Gelesen" sofort aktualisieren
@@ -674,4 +682,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen, homeAsgOpen }); }catch(e){}

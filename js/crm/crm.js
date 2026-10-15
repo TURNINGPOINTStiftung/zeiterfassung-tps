@@ -776,7 +776,25 @@ function injectStyles(){
   /* Kontaktnotizen mit History */
   .crm-kn-item{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--surface,#fff)}
   .crm-kn-latest .crm-kn-item{border-color:var(--primary);background:rgba(45,96,153,.05)}
-  .crm-kn-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .crm-kn-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px;flex-wrap:wrap}
+  .crm-kn-more{margin:8px 0;border:1px dashed var(--border);border-radius:8px;padding:6px 10px}
+  .crm-kn-more>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)}
+  .crm-kn-grid{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+  .crm-kn-grid label{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600;flex:1;min-width:160px}
+  .crm-kn-sub{font-size:12px;font-weight:700;color:var(--primary);margin:10px 0 4px}
+  .crm-kn-folge{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;padding:6px;border:1px solid var(--border);border-radius:8px}
+  .crm-kn-folge .kf-text{flex:1 1 180px;min-width:0}
+  .crm-kn-who{font-size:12px;color:var(--muted);margin-top:6px}
+  .crm-kn-folgen{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+  .crm-kn-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;padding:4px 8px;border-radius:6px;background:var(--surface-2,#f4f7fb)}
+  .crm-kn-ft{font-weight:700;color:var(--primary);white-space:nowrap}
+  .crm-kn-fx{flex:1 1 160px;min-width:0}
+  .crm-kn-fm{color:var(--muted);white-space:nowrap}
+  .crm-kn-st{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+  .crm-kn-st.ok{color:var(--ok,#16a34a)}
+  .crm-kn-ver>summary,.crm-kn-wd>summary{cursor:pointer;font-size:11.5px;color:var(--muted);margin-top:6px}
+  .crm-kn-v{border-left:3px solid var(--border);padding-left:8px;margin:6px 0;opacity:.85}
+  .crm-kn-wd .crm-kn-item{opacity:.6}
   .crm-kn-meta .crm-x{margin-left:auto}
   .crm-kn-text{white-space:pre-line;font-size:13.5px;line-height:1.5;word-break:break-word}
   .crm-kn-hist{margin-top:8px}
@@ -2645,7 +2663,7 @@ function migKontaktnotizen(e){
   }
   return e;
 }
-function _knMeta(n){ return `${n.ts?esc(fmtDateTime(n.ts)):''}${n.byKuerzel?' · '+esc(n.byKuerzel):(n.byName?' · '+esc(n.byName):'')}`; }
+function _knMeta(n){ const t=n.when||n.ts; return `${n.art&&KN_ARTEN[n.art]?esc(KN_ARTEN[n.art])+' · ':''}${t?esc(fmtDateTime(t)):''}${n.byKuerzel?' · '+esc(n.byKuerzel):(n.byName?' · '+esc(n.byName):'')}${n.editedAt?` · <span title="${esc('bearbeitet '+fmtDateTime(n.editedAt)+(n.editedByKuerzel?' von '+n.editedByKuerzel:''))}">✎ bearbeitet</span>`:''}`; }
 // Notizen eines Eintrags: eigene + von Kooperationspartnern GETEILTE (read-only)
 function _notesForEntity(tree,eid){
   const self=getEntity(tree,eid); if(self) migKontaktnotizen(self);
@@ -2663,13 +2681,19 @@ function _notesForEntity(tree,eid){
 function kontaktnotizenSecHtml(e){
   migKontaktnotizen(e);
   const canEdit=crmFull()||crmRestricted();
-  const notes=_notesForEntity(window._crmTree, e.id).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const allNotes=_notesForEntity(window._crmTree, e.id).slice().sort((a,b)=>((b.when||b.ts)||0)-((a.when||a.ts)||0));
+  const notes=allNotes.filter(n=>!n.withdrawn), withdrawn=allNotes.filter(n=>n.withdrawn && n._own!==false);
   const noteHtml=n=>{ const shared=n._own===false;
     const tag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Notiz – beim Partner bearbeiten">🤝 mit ${esc(n._ownerName||'')}</span>`
       : ((n.sharedWith&&n.sharedWith.length) ? ` <span class="crm-koop-art" title="Gemeinsam mit Kooperationspartner">🤝 gemeinsam</span>` : '');
     return `<div class="crm-kn-item">
-      <div class="crm-kn-meta">${_knMeta(n)}${tag}${(canEdit&&!shared)?`<button class="crm-x" title="Notiz löschen" onclick="crmDeleteKontaktnotiz(${jsq(n.id)})">✕</button>`:''}</div>
+      <div class="crm-kn-meta">${_knMeta(n)}${tag}${n.withdrawn?` · <b>zurückgezogen</b> ${esc(fmtDate(n.withdrawn.ts))}${n.withdrawn.byKuerzel?' von '+esc(n.withdrawn.byKuerzel):''}${n.withdrawn.why?' – „'+esc(n.withdrawn.why)+'“':''}`:''}<span style="flex:1"></span>
+        ${(!shared&&!n.withdrawn&&_knMayEdit(n))?`<button class="btn-sm-crm" title="Notiz korrigieren (alte Fassung bleibt erhalten)" onclick="crmEditKontaktnotiz(${jsq(n.id)})">✎</button><button class="btn-sm-crm" title="Zurückziehen (wiederherstellbar)" onclick="crmWithdrawKontaktnotiz(${jsq(n.id)})">↩</button>`:''}
+        ${(!shared&&n.withdrawn&&(_knMayEdit(n)||_knMayPurge()))?`<button class="btn-sm-crm" onclick="crmRestoreKontaktnotiz(${jsq(n.id)})">Wiederherstellen</button>`:''}
+        ${(!shared&&n.withdrawn&&_knMayPurge())?`<button class="crm-x" title="Endgültig löschen (nur CRM-Verwaltung)" onclick="crmDeleteKontaktnotiz(${jsq(n.id)})">✕</button>`:''}</div>
       <div class="crm-kn-text">${linkify(n.text||'')}</div>
+      ${_knExtraHtml(n, shared?null:e)}
+      ${(Array.isArray(n.versionen)&&n.versionen.length)?`<details class="crm-kn-ver"><summary>Frühere Fassungen (${n.versionen.length})</summary>${n.versionen.map(v=>`<div class="crm-kn-v"><div class="crm-kn-meta">bis ${esc(fmtDateTime(v.ts))}${v.byKuerzel?' · geändert von '+esc(v.byKuerzel):''}</div><div class="crm-kn-text">${linkify(v.text||'')}</div></div>`).join('')}</details>`:''}
     </div>`; };
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
@@ -2677,10 +2701,12 @@ function kontaktnotizenSecHtml(e){
   const input=canEdit?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="crm-mic" id="crm-mic-btn" onclick="crmDictate('crm-kn-new',this)">🎤 Diktat starten</button>${getAiEndpoint()?`<button type="button" class="btn-sm-crm" onclick="crmCleanNote(this)">🧠 Aufbereiten</button>`:''}</div>
       <textarea class="crm-ta" id="crm-kn-new" rows="3" placeholder="Neue Kontaktnotiz … (tippen oder diktieren)"></textarea>
       ${sharePicker}
+      ${_knMoreHtml(e)}
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>`:'';
   const latestHtml = latest ? `<div class="crm-kn-latest">${noteHtml(latest)}</div>`
     : `<div class="small" style="color:var(--muted)">Noch keine Kontaktnotizen.</div>`;
-  const history = older.length ? `<details class="crm-kn-hist"><summary>🕘 Frühere Kontaktnotizen (${older.length})</summary>${older.map(noteHtml).join('')}</details>` : '';
+  const history = (older.length ? `<details class="crm-kn-hist"><summary>🕘 Frühere Kontaktnotizen (${older.length})</summary>${older.map(noteHtml).join('')}</details>` : '')
+    + (withdrawn.length ? `<details class="crm-kn-hist crm-kn-wd"><summary>↩ Zurückgezogene Notizen (${withdrawn.length})</summary>${withdrawn.map(noteHtml).join('')}</details>` : '');
   return `<div class="crm-sec">
     <h4><span class="ttl">🗒 Kontaktnotizen</span></h4>
     ${input}
@@ -2691,14 +2717,254 @@ function kontaktnotizenSecHtml(e){
 function crmAddKontaktnotiz(){
   const t=(val('crm-kn-new')||'').trim(); if(!t){ toast('Bitte eine Notiz eingeben.','err'); return; }
   const sharedWith=Array.from(document.querySelectorAll('.crm-kn-shareopt:checked')).map(x=>({tree:x.getAttribute('data-tree'),eid:x.getAttribute('data-eid')}));
-  mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen.unshift({ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName(), sharedWith }); });
-  paintDetail(); toast('Kontaktnotiz gespeichert ✓','ok');
+  const more=_knReadMore();
+  let made=0;
+  mutateEntity(e=>{ migKontaktnotizen(e);
+    const n={ id:newId(), ts:Date.now(), text:t, byKuerzel:curKuerzel(), byName:curName(), sharedWith };
+    if(more){ if(more.when) n.when=more.when; if(more.art) n.art=more.art; if(more.tps.length) n.tps=more.tps; if(more.ext.length) n.ext=more.ext;
+      if(more.folgen.length){ n.folgen=more.folgen; _knApplyFolgen(e, n); made=n.folgen.filter(f=>f.ref).length; } }
+    e.kontaktnotizen.unshift(n); });
+  paintDetail(); toast('Kontaktnotiz gespeichert ✓'+(made?` – ${made} Aufgabe${made===1?'':'n'}/Termin${made===1?'':'e'} angelegt`:''),'ok');
 }
 function crmDeleteKontaktnotiz(id){
-  if(!confirm('Diese Kontaktnotiz löschen?')) return;
+  const _e=curEntity(); const _n=_e&&(_e.kontaktnotizen||[]).find(x=>x.id===id);
+  if(!_knMayPurge() || !_n || !_n.withdrawn){ toast('Endgültig löschen kann nur die CRM-Verwaltung – und nur zurückgezogene Notizen.','err'); return; }
+  if(!confirm('Diese zurückgezogene Kontaktnotiz ENDGÜLTIG löschen? Das lässt sich nicht rückgängig machen.')) return;
   mutateEntity(e=>{ migKontaktnotizen(e); e.kontaktnotizen=(e.kontaktnotizen||[]).filter(x=>x.id!==id); });
   paintDetail();
 }
+// ── Kontaktnotiz mit Teilnehmenden + Ergebnissen (v461, nach Vorlage „Kontaktnotiz Wendestart") ──────────
+// Zusätzliche (optionale) Felder einer Notiz:
+//   when (Zeitpunkt des Gesprächs), art, tps:[userIds], ext:[{kid?,name}],
+//   folgen:[{ id, typ:'aufgabe'|'frist'|'termin'|'info', text, datum, uhr, wer:{kind:'u'|'t', id, name}, ref }]
+// Aufgaben/Fristen werden als echte Aufgaben im Projekt dieses Eintrags angelegt (Spalte „Aus Kontaktnotizen"),
+// Termine als Termin am Eintrag. Die Aufgabe liegt nur EINMAL dort und wird bei der zuständigen Person
+// („📌 Mir zugewiesen") bzw. auf der Team-Seite im Projektmanagement angezeigt.
+const KN_ARTEN={ telefon:'📞 Telefon', video:'💻 Video-Call', treffen:'🤝 Treffen', mail:'✉️ Mail', messe:'🎪 Messe', sonst:'🗒 Sonstiges' };
+const KN_TYP={ aufgabe:'Aufgabe', frist:'Frist / Wiedervorlage', termin:'Termin', info:'nur Info' };
+function _knNowLocal(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+function _knWerOptions(){
+  const us=_assignableStaff().map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('');
+  const ts=((getData().teams)||[]).map(t=>`<option value="t:${esc(t)}">👥 Team ${esc(t)}</option>`).join('');
+  return `<option value="">– verantwortlich –</option>${us}${ts}`;
+}
+function _knProjOptions(e){
+  const ps=(e&&Array.isArray(e.projekte)?e.projekte:[]).filter(p=>!p.closed);
+  return ps.map(p=>`<option value="${esc(p.id)}">📂 ${esc(p.name||'Projekt')}</option>`).join('')+`<option value="__new__">＋ neues Projekt „Nachverfolgung"</option>`;
+}
+function _knMoreHtml(e){
+  const kontakte=(e.kontakte||[]).filter(k=>k&&k.id);
+  return `<details class="crm-kn-more"><summary>➕ Gesprächsart, Teilnehmende &amp; Ergebnisse</summary>
+    <div class="crm-kn-grid">
+      <label>Art<select id="crm-kn-art">${Object.entries(KN_ARTEN).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></label>
+      <label>Datum / Uhrzeit<input type="datetime-local" id="crm-kn-when" value="${_knNowLocal()}"></label>
+    </div>
+    <div class="crm-kn-sub">👥 Teilnehmende TPS</div>
+    ${staffPickerHtml([(window.cu&&window.cu.id)||''], 'crm-kn')}
+    <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
+    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kn-ext" value="${esc(k.id)}"> ${esc(k.name||'(Kontakt)')}${k.funktion?` <span class="small" style="color:var(--muted)">(${esc(k.funktion)})</span>`:''}</label>`).join('')}</div>`:''}
+    <input type="text" id="crm-kn-extfree" placeholder="weitere Personen, mit Komma getrennt (z. B. Kassiererin Schmidt)">
+    <div class="crm-kn-sub">➜ Ergebnisse: Was folgt daraus?</div>
+    <div id="crm-kn-folgen"></div>
+    <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge()">＋ Ergebnis</button>
+    <div class="small" style="color:var(--muted);margin-top:4px">Aufgaben und Fristen landen im Projekt dieses Eintrags und bei der verantwortlichen Person bzw. dem Team im Projektmanagement; Termine im Kalender.</div>
+  </details>`;
+}
+function crmKnAddFolge(){
+  const box=document.getElementById('crm-kn-folgen'); if(!box) return;
+  const e=curEntity(); if(e) migEntityProjekte(e);
+  const row=document.createElement('div'); row.className='crm-kn-folge';
+  row.innerHTML=`<select class="kf-typ" onchange="crmKnTypChg(this)">${Object.entries(KN_TYP).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select>
+    <input type="text" class="kf-text" placeholder="Was? (z. B. Rückruf an den Vorstand)">
+    <input type="date" class="kf-datum" title="Datum / fällig am">
+    <input type="time" class="kf-uhr" title="Uhrzeit" style="display:none">
+    <select class="kf-wer">${_knWerOptions()}</select>
+    <select class="kf-proj" title="In welches Projekt?">${_knProjOptions(e)}</select>
+    <button type="button" class="crm-x" title="Zeile entfernen" onclick="this.parentNode.remove()">✕</button>`;
+  box.appendChild(row);
+}
+function crmKnTypChg(sel){
+  const row=sel.closest('.crm-kn-folge'); if(!row) return; const t=sel.value;
+  row.querySelector('.kf-uhr').style.display=(t==='termin')?'':'none';
+  row.querySelector('.kf-proj').style.display=(t==='aufgabe'||t==='frist')?'':'none';
+  row.querySelector('.kf-wer').style.display=(t==='info')?'none':'';
+  row.querySelector('.kf-datum').style.display=(t==='info')?'none':'';
+}
+// Formular → Zusatzfelder lesen (null, wenn der Bereich nicht genutzt wurde)
+function _knReadMore(){
+  const more=document.querySelector('.crm-kn-more'); if(!more) return null;
+  const whenRaw=(document.getElementById('crm-kn-when')||{}).value||'';
+  const when=whenRaw?Date.parse(whenRaw):null;
+  const art=(document.getElementById('crm-kn-art')||{}).value||'';
+  const tps=more.open ? readStaffPicker('crm-kn') : [];
+  const ext=Array.from(document.querySelectorAll('.crm-kn-ext:checked')).map(x=>({ kid:x.value }));
+  String((document.getElementById('crm-kn-extfree')||{}).value||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(n=>ext.push({ name:n.slice(0,80) }));
+  const us=getData().users||[];
+  const folgen=Array.from(document.querySelectorAll('.crm-kn-folge')).map(r=>{
+    const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim();
+    if(!text) return null;
+    const w=r.querySelector('.kf-wer').value||''; let wer=null;
+    if(w.startsWith('u:')){ const id=w.slice(2); const u=us.find(x=>x&&x.id===id); wer={ kind:'u', id, name:(u&&u.name)||id }; }
+    else if(w.startsWith('t:')) wer={ kind:'t', id:w.slice(2), name:w.slice(2) };
+    return { id:newId(), typ, text:text.slice(0,300), datum:r.querySelector('.kf-datum').value||'', uhr:r.querySelector('.kf-uhr').value||'',
+      wer, proj:r.querySelector('.kf-proj').value||'' };
+  }).filter(Boolean);
+  const used = more.open || folgen.length;
+  if(!used) return null;
+  return { when:(when&&isFinite(when))?when:null, art, tps, ext, folgen };
+}
+// Ergebnisse als Aufgaben/Termine im Eintrag anlegen (innerhalb von mutateEntity)
+function _knApplyFolgen(e, note){
+  migEntityProjekte(e);
+  const whenTxt=fmtDate(note.when||note.ts)+(note.art&&KN_ARTEN[note.art]?' ('+KN_ARTEN[note.art].replace(/^\S+\s/,'')+')':'');
+  const me=(window.cu&&window.cu.id)||'';
+  (note.folgen||[]).forEach(f=>{
+    if(f.typ==='aufgabe' || f.typ==='frist'){
+      // gewähltes Projekt; „neues Projekt Nachverfolgung“ bzw. nichts gewählt → EIN gemeinsames Projekt „Nachverfolgung“
+      let p=(f.proj && f.proj!=='__new__') ? e.projekte.find(x=>x.id===f.proj && !x.closed) : null;
+      if(!p) p=e.projekte.find(x=>!x.closed && x.name==='Nachverfolgung') || null;
+      if(!p){ p={ id:newId(), name:'Nachverfolgung', todos:[], closed:false, createdAt:Date.now() }; e.projekte.push(p); }
+      if(!Array.isArray(p.todos)) p.todos=[];
+      let col=p.todos.find(t=>t.id==='kn-'+p.id);
+      if(!col){ col={ id:'kn-'+p.id, text:'Aus Kontaktnotizen', status:'offen', children:[], deps:[], teams:[], attachments:[] }; p.todos.push(col); }
+      if(!Array.isArray(col.children)) col.children=[];
+      const t={ id:newId(), text:(f.typ==='frist'?'⏰ ':'')+f.text, status:'offen', due:f.datum||'', children:[], deps:[], attachments:[],
+        teams:(f.wer&&f.wer.kind==='t')?[f.wer.id]:[],
+        assigneeId:(f.wer&&f.wer.kind==='u')?f.wer.id:'', assigneeName:(f.wer&&f.wer.kind==='u')?f.wer.name:'',
+        note:'Aus Kontaktnotiz vom '+whenTxt+(f.typ==='frist'?' – Frist/Wiedervorlage':''),
+        fromNote:{ nid:note.id, ts:note.when||note.ts }, createdAt:Date.now(), createdById:me, createdByKuerzel:curKuerzel() };
+      col.children.push(t);
+      f.ref={ kind:'task', pid:p.id, tid:t.id };
+    } else if(f.typ==='termin'){
+      if(!Array.isArray(e.termine)) e.termine=[];
+      const staff = (f.wer&&f.wer.kind==='u') ? ((_canAssignStaff()||f.wer.id===me)?[f.wer.id]:[]) : [];
+      const t={ id:newId(), titel:f.text, datum:f.datum||'', bis:'', uhr:f.uhr||'', datumTs:f.datum?Date.parse(f.datum):null, ort:'',
+        note:'Aus Kontaktnotiz vom '+whenTxt, mitarbeiter:staff, teilnehmer:[], fromNote:{ nid:note.id, ts:note.when||note.ts } };
+      e.termine.push(t); e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
+      f.ref={ kind:'termin', tid:t.id };
+    }
+    delete f.proj;
+  });
+}
+// Anzeige der Zusatzfelder einer Notiz (Teilnehmende + Ergebnisse mit aktuellem Stand)
+function _knExtraHtml(n, e){
+  const out=[];
+  const tps=staffNames(n.tps||[]);
+  const ext=(n.ext||[]).map(x=>{ if(x.kid){ const k=(e&&e.kontakte||[]).find(y=>y.id===x.kid); return k?(k.name||'(Kontakt)'):'(Kontakt)'; } return x.name||''; }).filter(Boolean);
+  if(tps.length||ext.length) out.push(`<div class="crm-kn-who">👥 ${tps.length?'TPS: '+esc(tps.join(', ')):''}${tps.length&&ext.length?' &nbsp;·&nbsp; ':''}${ext.length?'Verein/Sonstige: '+esc(ext.join(', ')):''}</div>`);
+  const rows=(n.folgen||[]).map(f=>{
+    let stand='', open='';
+    if(f.ref && f.ref.kind==='task' && e){
+      const p=(e.projekte||[]).find(x=>x.id===f.ref.pid); const hit=p?findNodeIn(p.todos||[], f.ref.tid):null; const t=hit&&hit.node;
+      stand = t ? (t.status==='erledigt'?'<span class="crm-kn-st ok">✓ erledigt</span>':'<span class="crm-kn-st">☐ offen</span>') : '<span class="crm-kn-st">gelöscht</span>';
+      if(t) open=` onclick="crmMeineOpen('entity',${jsq(window._crmTree)},${jsq(e.id)},${jsq(f.ref.tid)})" style="cursor:pointer" title="Aufgabe öffnen"`;
+    } else if(f.ref && f.ref.kind==='termin' && e){
+      const t=(e.termine||[]).find(x=>x.id===f.ref.tid);
+      stand = t ? '<span class="crm-kn-st">📅 im Kalender</span>' : '<span class="crm-kn-st">gelöscht</span>';
+      if(t) open=` onclick="crmEditTermin(${jsq(f.ref.tid)})" style="cursor:pointer" title="Termin öffnen"`;
+    }
+    const wer=f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:f.wer.name):'';
+    const dat=f.datum?fmtDate(Date.parse(f.datum))+(f.uhr?' '+f.uhr:''):'';
+    return `<div class="crm-kn-f"${open}><span class="crm-kn-ft">➜ ${esc(KN_TYP[f.typ]||f.typ)}</span><span class="crm-kn-fx">${esc(f.text)}</span><span class="crm-kn-fm">${esc([wer,dat].filter(Boolean).join(' · '))}</span>${stand}</div>`;
+  }).join('');
+  if(rows) out.push(`<div class="crm-kn-folgen">${rows}</div>`);
+  return out.join('');
+}
+// Für „📌 Mir zugewiesen" / Team-Seite: Aufgaben aus den Projekten aller Einträge (Vereine, Sozialakteure …)
+function _entityAssignedTasks(pred){
+  const out=[];
+  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
+    (e.projekte||[]).forEach(p=>{ if(p.closed) return; flatNodes(p.todos||[]).forEach(x=>{ if(pred(x.ref)) out.push({ kind:'entity', tree:tr.key, id:e.id, name:((e.stamm&&e.stamm.name)||'(Eintrag)')+' · '+(p.name||'Projekt'), node:x.ref }); }); }); })); }catch(err){}
+  return out;
+}
+// Für die Startseite (js/home.js, „Neuigkeiten"): mir aus einer Kontaktnotiz zugewiesene, offene Aufgaben anderer
+function crmNoteAssignments(){
+  const me=(window.cu&&window.cu.id)||''; if(!me) return [];
+  const cutoff=Date.now()-30*864e5;
+  return _entityAssignedTasks(n=>n && n.assigneeId===me && n.fromNote && n.status!=='erledigt' && n.createdById!==me && (n.createdAt||0)>=cutoff)
+    .map(a=>({ tree:a.tree, eid:a.id, tid:a.node.id, text:a.node.text, name:a.name, due:a.node.due||'', by:a.node.createdByKuerzel||'', ts:a.node.createdAt||0 }));
+}
+function crmOpenAssignedFromHome(tree, eid, tid){
+  try{ window.switchModule && window.switchModule('crm'); }catch(e){}
+  setTimeout(()=>{ try{ window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; paint(); crmMeineOpen('entity', tree, eid, tid); }catch(e){} }, 400);
+}
+Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmNoteAssignments, crmOpenAssignedFromHome });
+// ── Korrigieren statt Löschen (v461) ──────────────────────────────────
+// Bearbeiten: eigene Notiz bzw. mit CRM „voll“ jede; jede Fassung wird in n.versionen festgehalten.
+// Zurückziehen statt löschen: n.withdrawn={ts,by} – bleibt sichtbar (grau, wiederherstellbar).
+// Endgültig löschen nur Admin/CRM-Verwaltung und nur bereits zurückgezogene Notizen.
+function _knIsMine(n){ const nm=curName(), kz=curKuerzel(); return !!n && ((n.byName && n.byName===nm) || (!n.byName && n.byKuerzel && n.byKuerzel===kz)); }
+function _knMayEdit(n){ return (crmFull()||crmRestricted()) && (_knIsMine(n) || crmFull()); }
+function _knMayPurge(){ try{ return _canAdminFor('crm', window.cu); }catch(e){ return false; } }
+function crmEditKontaktnotiz(id){
+  const e=curEntity(); if(!e) return; migKontaktnotizen(e);
+  const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
+  if(!_knMayEdit(n)){ toast('Diese Notiz kann nur die Verfasserin/der Verfasser oder CRM „voll“ ändern.','err'); return; }
+  const whenVal=(()=>{ const d=new Date(n.when||n.ts||Date.now()); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); })();
+  const kontakte=(e.kontakte||[]).filter(k=>k&&k.id); const extIds=new Set((n.ext||[]).filter(x=>x.kid).map(x=>x.kid));
+  const extFree=(n.ext||[]).filter(x=>!x.kid&&x.name).map(x=>x.name).join(', ');
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Kontaktnotiz bearbeiten</h3>
+    <div class="crm-kn-grid">
+      <label>Art<select id="crm-kn-art">${Object.entries(KN_ARTEN).map(([k,l])=>`<option value="${k}"${n.art===k?' selected':''}>${l}</option>`).join('')}</select></label>
+      <label>Datum / Uhrzeit<input type="datetime-local" id="crm-kn-when" value="${whenVal}"></label>
+    </div>
+    <div class="crm-modal-field"><label>Information</label><textarea class="crm-ta" id="crm-kn-edit" rows="5">${esc(n.text||'')}</textarea></div>
+    <div class="crm-kn-sub">👥 Teilnehmende TPS</div>
+    ${staffPickerHtml(n.tps||[], 'crm-kn')}
+    <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
+    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kn-ext" value="${esc(k.id)}"${extIds.has(k.id)?' checked':''}> ${esc(k.name||'(Kontakt)')}</label>`).join('')}</div>`:''}
+    <input type="text" id="crm-kn-extfree" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
+    <div class="crm-kn-sub">➜ Weitere Ergebnisse hinzufügen</div>
+    <div class="small" style="color:var(--muted);margin-bottom:4px">Schon angelegte Aufgaben/Termine bearbeitest du direkt dort (Klick auf das Ergebnis).</div>
+    <div id="crm-kn-folgen"></div>
+    <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge()">＋ Ergebnis</button>
+    <div class="small" style="color:var(--muted);margin-top:8px">Die bisherige Fassung bleibt im Verlauf der Notiz erhalten.</div>
+    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button><button class="btn-sm-crm primary" onclick="crmSaveKontaktnotizEdit(${jsq(id)})">Speichern</button></div>`);
+}
+function crmSaveKontaktnotizEdit(id){
+  const text=(val('crm-kn-edit')||'').trim(); if(!text){ toast('Die Notiz darf nicht leer sein – zum Entfernen „zurückziehen“.','err'); return; }
+  const whenRaw=val('crm-kn-when'); const when=whenRaw?Date.parse(whenRaw):null;
+  const art=val('crm-kn-art')||'';
+  const tps=readStaffPicker('crm-kn');
+  const ext=Array.from(document.querySelectorAll('.crm-kn-ext:checked')).map(x=>({ kid:x.value }));
+  String(val('crm-kn-extfree')||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30).forEach(nm=>ext.push({ name:nm.slice(0,80) }));
+  const more=_knReadMoreFolgenOnly();
+  mutateEntity(e=>{ migKontaktnotizen(e); const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
+    if(!Array.isArray(n.versionen)) n.versionen=[];
+    n.versionen.unshift({ ts:Date.now(), byKuerzel:curKuerzel(), byName:curName(), text:n.text||'', art:n.art||'', when:n.when||null, tps:n.tps||[], ext:n.ext||[] });
+    n.versionen=n.versionen.slice(0,20);
+    n.text=text; n.art=art; n.when=(when&&isFinite(when))?when:(n.when||null); n.tps=tps; n.ext=ext;
+    n.editedAt=Date.now(); n.editedByKuerzel=curKuerzel(); n.editedByName=curName();
+    if(more.length){ const add={ id:n.id, ts:n.ts, when:n.when, art:n.art, folgen:more }; _knApplyFolgen(e, add); n.folgen=(n.folgen||[]).concat(add.folgen); }
+  });
+  crmCloseModal(); paintDetail(); toast('Notiz geändert ✓ (alte Fassung im Verlauf)','ok');
+}
+function _knReadMoreFolgenOnly(){
+  const us=getData().users||[];
+  return Array.from(document.querySelectorAll('.crm-kn-folge')).map(r=>{
+    const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim(); if(!text) return null;
+    const w=r.querySelector('.kf-wer').value||''; let wer=null;
+    if(w.startsWith('u:')){ const uid=w.slice(2); const u=us.find(x=>x&&x.id===uid); wer={ kind:'u', id:uid, name:(u&&u.name)||uid }; }
+    else if(w.startsWith('t:')) wer={ kind:'t', id:w.slice(2), name:w.slice(2) };
+    return { id:newId(), typ, text:text.slice(0,300), datum:r.querySelector('.kf-datum').value||'', uhr:r.querySelector('.kf-uhr').value||'', wer, proj:r.querySelector('.kf-proj').value||'' };
+  }).filter(Boolean);
+}
+function crmWithdrawKontaktnotiz(id){
+  const e=curEntity(); if(!e) return; const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
+  if(!_knMayEdit(n)){ toast('Zurückziehen kann nur die Verfasserin/der Verfasser oder CRM „voll“.','err'); return; }
+  const why=prompt('Notiz zurückziehen? Sie bleibt unter „Zurückgezogene Notizen“ sichtbar und kann wiederhergestellt werden.\nGrund (optional):',''); if(why===null) return;
+  mutateEntity(e2=>{ migKontaktnotizen(e2); const x=(e2.kontaktnotizen||[]).find(y=>y.id===id); if(x) x.withdrawn={ ts:Date.now(), byKuerzel:curKuerzel(), byName:curName(), why:String(why||'').slice(0,200) }; });
+  paintDetail(); toast('Notiz zurückgezogen – wiederherstellbar.','ok');
+}
+function crmRestoreKontaktnotiz(id){
+  const e=curEntity(); if(!e) return; const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
+  if(!_knMayEdit(n) && !_knMayPurge()){ toast('Keine Berechtigung.','err'); return; }
+  mutateEntity(e2=>{ migKontaktnotizen(e2); const x=(e2.kontaktnotizen||[]).find(y=>y.id===id); if(x) delete x.withdrawn; });
+  paintDetail(); toast('Notiz wiederhergestellt ✓','ok');
+}
+Object.assign(window, { crmEditKontaktnotiz, crmSaveKontaktnotizEdit, crmWithdrawKontaktnotiz, crmRestoreKontaktnotiz });
+
 // KI-Aufbereitung der Kontaktnotiz über den eigenen/lokalen Server (getAiEndpoint).
 // Prüfen-vor-Speichern: das Ergebnis landet im Notizfeld; gespeichert wird erst manuell.
 async function crmCleanNote(btn){
@@ -3361,7 +3627,11 @@ function teamTasks(team){
   try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
     (e.projekte||[]).forEach(p=>{ if(p.closed) return; (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
       const tg=m.teams||[]; const match = ohne ? !tg.length : tg.includes(team); if(!match) return;
-      out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag'), oicon:'📇', node:m}); }); }); })); }catch(e){}
+      out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag'), oicon:'📇', node:m}); });
+      // Aufgaben aus Kontaktnotizen liegen als Unterpunkte („Aus Kontaktnotizen“) – eigenes Team-Feld zählt
+      flatNodes(p.todos||[]).forEach(x=>{ const m=x.ref; if(!m || !m.fromNote || m.status==='erledigt') return;
+        const tg=m.teams||[]; if(ohne || !tg.includes(team)) return;
+        out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag')+' · Kontaktnotiz', oicon:'📇', node:m}); }); }); })); }catch(e){}
   try{ listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed).forEach(p=>{ normTasks(p);
     (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
       out.push({kind:'teamprojekt', id:p.id, origin:(p.name||'Projekt'), oicon:'📂', node:m}); }); }); }catch(e){}
@@ -3672,11 +3942,13 @@ function meineSectionsHtml(){
   const assigned=[];
   listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref}); }); });
   listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
+  // auch Aufgaben in den Projekten der CRM-Einträge (z. B. aus Kontaktnotizen) – gleiche Aufgabe, nur gespiegelt
+  _entityAssignedTasks(n=>n && n.assigneeId===me).forEach(a=>assigned.push(a));
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';
-    const meta=[(a.kind==='veranstaltung'?'📅 ':'📂 ')+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):''].filter(Boolean).map(esc).join(' · ');
-    const idArg=''; const cArg=a.id;
+    const meta=[(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+a.name, t.due?('📅 '+fmtDate(Date.parse(t.due))):'', t.fromNote?'aus Kontaktnotiz':''].filter(Boolean).map(esc).join(' · ');
+    const idArg=a.kind==='entity'?a.tree:''; const cArg=a.id;
     return `<div class="crm-task${done?' done':''}">
       <input type="checkbox" class="crm-check" ${done?'checked':''} onchange="crmMeineToggle(${jsq(a.kind)},${jsq(idArg)},${jsq(cArg)},${jsq(t.id)})">
       <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
