@@ -176,7 +176,7 @@ Grenze: workDays wird nicht gegen den Datumsbereich nachgerechnet (Regelsprache 
 Getestet: 13 Fälle im Projekt zeiterfassung-test, vollständige Datei vom Compiler akzeptiert.
 Reihenfolge: App v444 live → Admin einmal anmelden (schreibt `freelancers`) → v10 veröffentlichen.
 
-## Stand 2026-10-15: CANDIDATE-v11.json – getestet, Veröffentlichung durch Moritz (App ab v459)
+## Stand 2026-10-15: CANDIDATE-v11.json ist LIVE (+ Storage Stand 3; App ab v459) – veröffentlicht von Moritz per Cloud Shell, Prüfwort 21 Treffer, Storage-Konsole geprüft, Bedienung getestet
 = v10 + Härtungen aus dem Audit 14.10.2026 (Datei aus v10 erzeugt, siehe Commit 60dd285):
 - `entries/$k/gfReturn`: anlegen/ändern nur Admin/managers; Mitarbeitende nur „gelesen“ (ack) bei sonst gleichen
   Feldern; `y`/`m` Zahlen (m 1–12).
