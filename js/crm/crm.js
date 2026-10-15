@@ -802,15 +802,12 @@ function injectStyles(){
   .crm-kn-st.ok{color:var(--ok,#16a34a)}
   .crm-kn-ver>summary,.crm-kn-wd>summary{cursor:pointer;font-size:11.5px;color:var(--muted);margin-top:6px}
   .crm-kn-v{border-left:3px solid var(--border);padding-left:8px;margin:6px 0;opacity:.85}
-  .crm-kn-item .crm-kn-mark{display:none}
-  .crm-kn-item.kn-marks .crm-kn-mark{display:inline}
-  .crm-kn-item.kn-marks div.crm-kn-mark{display:block}
-  .crm-kn-item.kn-marks .crm-kn-plain{display:none}
+  .crm-kn-lg{font-size:11.5px;padding:0 4px;border-radius:4px}
+  .crm-kn-step-h{border-left:3px solid var(--border);padding:2px 0 2px 10px;margin:8px 0}
   .crm-kn-diff{white-space:pre-wrap}
   .crm-kn-chg{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6}
-  .crm-kn-chg del,.crm-kn-diff del{background:var(--danger-bg,#fdecea);color:var(--danger,#b42318);text-decoration:line-through}
-  .crm-kn-chg ins,.crm-kn-diff ins{background:var(--ok-bg,#e3f6e8);color:var(--ok-text,#14632e);text-decoration:none;font-weight:600}
-  .crm-kn-tgl{margin-left:8px;border:0;background:none;padding:0;color:var(--primary);font-size:12px;font-weight:600;text-decoration:underline;cursor:pointer}
+  .crm-kn-chg del,.crm-kn-diff del,del.crm-kn-lg{background:var(--danger-bg,#fdecea);color:var(--danger,#b42318);text-decoration:line-through}
+  .crm-kn-chg ins,.crm-kn-diff ins,ins.crm-kn-lg{background:var(--ok-bg,#e3f6e8);color:var(--ok-text,#14632e);text-decoration:none;font-weight:600}
   .crm-kn-grid input,.crm-kn-grid select,.crm-kn-in{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:var(--surface,#fff);color:var(--text)}
   .crm-kn-wd .crm-kn-item{opacity:.6}
   .crm-kn-meta .crm-x{margin-left:auto}
@@ -2707,14 +2704,15 @@ function kontaktnotizenSecHtml(e){
   const noteHtml=n=>{ const shared=n._own===false;
     const tag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Notiz – beim Partner bearbeiten">🤝 mit ${esc(n._ownerName||'')}</span>`
       : ((n.sharedWith&&n.sharedWith.length) ? ` <span class="crm-koop-art" title="Gemeinsam mit Kooperationspartner">🤝 gemeinsam</span>` : '');
-    return `<div class="crm-kn-item${(Array.isArray(n.versionen)&&n.versionen.length)?' kn-marks':''}">
+    return `<div class="crm-kn-item">
       <div class="crm-kn-meta">${_knMeta(n)}${tag}${n.withdrawn?` · <b>zurückgezogen</b> ${esc(fmtDate(n.withdrawn.ts))}${n.withdrawn.byKuerzel?' von '+esc(n.withdrawn.byKuerzel):''}${n.withdrawn.why?' – „'+esc(n.withdrawn.why)+'“':''}`:''}<span style="flex:1"></span>
         ${(!shared&&!n.withdrawn&&_knMayEdit(n))?`<button class="btn-sm-crm" title="Notiz korrigieren (alte Fassung bleibt erhalten)" onclick="crmEditKontaktnotiz(${jsq(n.id)})">✎</button><button class="btn-sm-crm" title="Zurückziehen (wiederherstellbar)" onclick="crmWithdrawKontaktnotiz(${jsq(n.id)})">↩</button>`:''}
         ${(!shared&&n.withdrawn&&(_knMayEdit(n)||_knMayPurge()))?`<button class="btn-sm-crm" onclick="crmRestoreKontaktnotiz(${jsq(n.id)})">Wiederherstellen</button>`:''}
         ${(!shared&&n.withdrawn&&_knMayPurge())?`<button class="crm-x" title="Endgültig löschen (nur CRM-Verwaltung)" onclick="crmDeleteKontaktnotiz(${jsq(n.id)})">✕</button>`:''}</div>
       ${_knExtraHtml(n, shared?null:e, 'who')}
-      ${(Array.isArray(n.versionen)&&n.versionen.length)?_knEditedTextHtml(n, shared?null:e):`<div class="crm-kn-text">${linkify(n.text||'')}</div>`}
+      <div class="crm-kn-text">${linkify(n.text||'')}</div>
       ${_knExtraHtml(n, shared?null:e, 'folgen')}
+      ${(Array.isArray(n.versionen)&&n.versionen.length)?_knHistoryHtml(n, shared?null:e):''}
     </div>`; };
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
@@ -2894,20 +2892,29 @@ function _knWordDiff(a, b){
   while(j<n){ out+=/^\s+$/.test(B[j])?esc(B[j]):`<ins>${esc(B[j])}</ins>`; j++; }
   return out;
 }
-// Bearbeitete Notiz: aktueller Text mit farbig markierten Änderungen (umschaltbar auf „ohne Markierung“)
-function _knEditedTextHtml(n, e){
-  const v=n.versionen[0]; const chg=[];
-  if((v.art||'')!==(n.art||'')) chg.push('Art: <del>'+esc(KN_ARTEN[v.art]||v.art||'–')+'</del> → <ins>'+esc(KN_ARTEN[n.art]||n.art||'–')+'</ins>');
-  const vw=v.when||n.ts||0, nw=n.when||n.ts||0; if(_knDayVal(vw)!==_knDayVal(nw)) chg.push('Datum: <del>'+esc(fmtDate(vw))+'</del> → <ins>'+esc(fmtDate(nw))+'</ins>');
-  const wa=_knWhoNames(v, e), wb=_knWhoNames(n, e);
-  const pa=wa.tps.concat(wa.ext), pb=wb.tps.concat(wb.ext);
-  const weg=pa.filter(x=>!pb.includes(x)), neu=pb.filter(x=>!pa.includes(x));
-  if(weg.length||neu.length) chg.push('Teilnehmende: '+weg.map(x=>'<del>'+esc(x)+'</del>').concat(neu.map(x=>'<ins>'+esc(x)+'</ins>')).join(', '));
-  const textChanged=(v.text||'')!==(n.text||'');
-  return `<div class="crm-kn-text crm-kn-mark crm-kn-diff">${textChanged?_knWordDiff(v.text, n.text):linkify(n.text||'')}</div>
-    <div class="crm-kn-text crm-kn-plain">${linkify(n.text||'')}</div>
-    <div class="crm-kn-chg">✎ Geändert ${esc(fmtDateTime(n.editedAt||v.ts))}${n.editedByKuerzel?' von '+esc(n.editedByKuerzel):''}<span class="crm-kn-mark">${chg.length?' · '+chg.join(' · '):''}${textChanged?' · <del>entfernt</del> <ins>neu</ins>':''}</span>
-      <button type="button" class="crm-kn-tgl" onclick="this.closest('.crm-kn-item').classList.toggle('kn-marks')"><span class="crm-kn-mark">Markierung ausblenden</span><span class="crm-kn-plain">Änderungen zeigen</span></button></div>`;
+// Änderungsverlauf einer Notiz (Standard: eingeklappt). versionen[0] = Stand VOR der letzten Änderung;
+// Eintrag i beschreibt den Schritt versionen[i] → (i=0 ? aktuelle Notiz : versionen[i-1]), gemacht am versionen[i].ts.
+function _knStepHtml(a, b, e, ts, by){
+  const chg=[];
+  if('art' in a && (a.art||'')!==(b.art||'')) chg.push('Art: <del>'+esc(KN_ARTEN[a.art]||a.art||'–')+'</del> → <ins>'+esc(KN_ARTEN[b.art]||b.art||'–')+'</ins>');
+  if('when' in a && a.when && b.when && _knDayVal(a.when)!==_knDayVal(b.when)) chg.push('Datum: <del>'+esc(fmtDate(a.when))+'</del> → <ins>'+esc(fmtDate(b.when))+'</ins>');
+  if('tps' in a || 'ext' in a){
+    const wa=_knWhoNames(a, e), wb=_knWhoNames(b, e);
+    const pa=wa.tps.concat(wa.ext), pb=wb.tps.concat(wb.ext);
+    const weg=pa.filter(x=>!pb.includes(x)), neu=pb.filter(x=>!pa.includes(x));
+    if(weg.length||neu.length) chg.push('Teilnehmende: '+weg.map(x=>'<del>'+esc(x)+'</del>').concat(neu.map(x=>'<ins>'+esc(x)+'</ins>')).join(', '));
+  }
+  const textChanged=(a.text||'')!==(b.text||'');
+  return `<div class="crm-kn-step-h"><div class="crm-kn-meta">✎ ${esc(fmtDateTime(ts))}${by?' · '+esc(by):''}</div>
+    ${textChanged?`<div class="crm-kn-text crm-kn-diff">${_knWordDiff(a.text, b.text)}</div>`:''}
+    ${chg.length?`<div class="crm-kn-chg">${chg.join('<br>')}</div>`:''}
+    ${(!textChanged&&!chg.length)?'<div class="crm-kn-chg">keine inhaltliche Änderung</div>':''}</div>`;
+}
+function _knHistoryHtml(n, e){
+  const vs=n.versionen;
+  const steps=vs.map((v,i)=>_knStepHtml(v, i===0?n:vs[i-1], e, v.ts, v.byKuerzel||v.byName||'')).join('');
+  return `<details class="crm-kn-ver"><summary>✎ Änderungsverlauf (${vs.length}) · zuletzt ${esc(fmtDate(n.editedAt||vs[0].ts))}</summary>
+    <div class="small" style="color:var(--muted);margin:4px 0 2px"><del class="crm-kn-lg">entfernt</del> <ins class="crm-kn-lg">neu</ins></div>${steps}</details>`;
 }
 function _knWhoNames(n, e){
   const tps=[...new Set(staffNames([...new Set(n.tps||[])]))];
@@ -2988,7 +2995,7 @@ function crmEditKontaktnotiz(id){
     <div class="small" style="color:var(--muted);margin-bottom:4px">Schon angelegte Aufgaben/Termine bearbeitest du direkt dort (Klick auf das Ergebnis).</div>
     <div id="crm-kne-folgen"></div>
     <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge('crm-kne-folgen')">＋ Ergebnis</button>
-    <div class="small" style="color:var(--muted);margin-top:8px">Änderungen werden anschließend direkt in der Notiz farbig markiert (rot = entfernt, grün = neu).</div>
+    <div class="small" style="color:var(--muted);margin-top:8px">Die Änderung wird im Änderungsverlauf der Notiz farbig festgehalten (rot = entfernt, grün = neu).</div>
     <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button><button class="btn-sm-crm primary" onclick="crmSaveKontaktnotizEdit(${jsq(id)})">Speichern</button></div>`);
 }
 function crmSaveKontaktnotizEdit(id){
@@ -3008,7 +3015,7 @@ function crmSaveKontaktnotizEdit(id){
     n.editedAt=Date.now(); n.editedByKuerzel=curKuerzel(); n.editedByName=curName();
     if(more.length){ const add={ id:n.id, ts:n.ts, when:n.when, art:n.art, folgen:more }; _knApplyFolgen(e, add); n.folgen=(n.folgen||[]).concat(add.folgen); }
   });
-  crmCloseModal(); paintDetail(); toast('Notiz geändert ✓ – Änderungen sind farbig markiert','ok');
+  crmCloseModal(); paintDetail(); toast('Notiz geändert ✓ – Änderung steht im Änderungsverlauf','ok');
 }
 function _knReadMoreFolgenOnly(boxId){
   const us=getData().users||[]; const box=document.getElementById(boxId||'crm-kne-folgen'); if(!box) return [];
