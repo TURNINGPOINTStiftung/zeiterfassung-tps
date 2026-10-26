@@ -1033,7 +1033,34 @@ function _crmRenderNow(label){
     });
   }catch(e){ console.error('renderCRM Fehler:',e); }
 }
-setCrmRenderHook(()=>{ try{ paint(); crmLoadNotif(false); }catch(e){} });
+// Live-Änderungen ANDERER nicht neu zeichnen, solange hier etwas angefangen ist (User 26.10.2026:
+// Kontaktnotiz sprang beim Tippen zurück, wenn andere gleichzeitig im CRM speicherten).
+// „Angefangen“ = ein Feld im CRM weicht von seinem Ausgangswert ab oder hat gerade den Fokus.
+// Suche/Filter zählen nicht. Danach wird automatisch nachgezeichnet.
+function _crmFormDirty(){
+  try{
+    const root=document.getElementById('crm-root'); if(!root) return false;
+    const skip=el=>el.type==='search' || /search|filter/i.test(el.id||'') || /crm-search/.test(el.className||'');
+    const a=document.activeElement;
+    if(a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !skip(a) && a.type!=='checkbox' && a.type!=='radio') return true;
+    for(const el of root.querySelectorAll('input,textarea,select')){
+      if(skip(el)) continue;
+      if(el.tagName==='SELECT'){ const d=[...el.options].find(o=>o.defaultSelected)||el.options[0]; if(d && el.value!==d.value) return true; continue; }
+      if(el.type==='checkbox'||el.type==='radio'){ if(el.checked!==el.defaultChecked) return true; continue; }
+      if(el.type==='button'||el.type==='submit'||el.type==='hidden'||el.type==='file') continue;
+      if(el.value!==el.defaultValue) return true;
+    }
+    if(root.querySelector('.crm-kn-folge')) return true;   // angefangene Ergebnis-Zeilen in der Kontaktnotiz
+  }catch(e){}
+  return false;
+}
+let _crmDeferT=null; window._crmFormDirty=_crmFormDirty;   // (auch für Tests)
+function _crmLivePaint(){
+  if(_crmFormDirty()){ if(!_crmDeferT) _crmDeferT=setInterval(()=>{ if(window._crmModalOpen) return; if(!_crmFormDirty()){ clearInterval(_crmDeferT); _crmDeferT=null; try{ paint(); }catch(e){} } }, 2000); return; }
+  if(_crmDeferT){ clearInterval(_crmDeferT); _crmDeferT=null; }
+  paint();
+}
+setCrmRenderHook(()=>{ try{ if(window._activeModule!=='crm' && window._activeModule!=='kanban') return; _crmLivePaint(); crmLoadNotif(false); }catch(e){} });
 
 function paint(){
   window._crmModalOpen = false;

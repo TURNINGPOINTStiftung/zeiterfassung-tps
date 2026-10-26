@@ -54,6 +54,64 @@ function _denied(path){
   const now=Date.now(); if(now-_deniedToastTs<4000) return; _deniedToastTs=now;
   try{ toast('Keine Berechtigung – Änderung wurde nicht gespeichert.','err'); }catch(e){}
 }
+// ── Gleichzeitiges Arbeiten: Zusammenführen statt Überschreiben ──────────────────────
+// Früher: set() des GANZEN Datensatzes → speicherten zwei Personen fast gleichzeitig denselben Verein,
+// überschrieb die zweite die Änderung der ersten (z. B. neuer Termin weg). Jetzt: Transaktion gegen den
+// aktuellen Server-Stand + Drei-Wege-Abgleich: Basis (Stand, auf dem die eigene Änderung beruht),
+// eigene Fassung, Server-Fassung. Listen mit id (Termine, Notizen, Statistik, Aufgaben …) werden je
+// Element zusammengeführt. Die Basis hängt unsichtbar am Datensatz (__crmBase = Server-Schnappschuss).
+const _isObj=v=>v!==null && typeof v==='object' && !Array.isArray(v);
+const _arrOf=v=>Array.isArray(v)?v:(_isObj(v)&&Object.keys(v).every(k=>/^\d+$/.test(k))?Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]):v);
+// Vergleich unabhängig von der Feld-Reihenfolge (Firebase liefert Felder sortiert) und von leeren Werten
+// (Firebase speichert null/[]/{} nicht).
+function _canon(v){
+  if(Array.isArray(v)){ const a=v.map(_canon).filter(x=>x!==undefined); return a.length?a:undefined; }
+  if(_isObj(v)){ const o={}; Object.keys(v).sort().forEach(k=>{ const c=_canon(v[k]); if(c!==undefined) o[k]=c; }); return Object.keys(o).length?o:undefined; }
+  return v===null?undefined:v;
+}
+function _same(a,b){ if(a===b) return true; try{ return JSON.stringify(_canon(a)===undefined?null:_canon(a))===JSON.stringify(_canon(b)===undefined?null:_canon(b)); }catch(e){ return false; } }
+function _idList(a){ return Array.isArray(a) && a.length>0 && a.every(x=>_isObj(x) && x.id!=null && x.id!==''); }
+function _merge3(b, l, s){
+  if(Array.isArray(l)){ s=_arrOf(s); b=_arrOf(b); }
+  if(_same(l,s)) return l;
+  if(b!==undefined && _same(l,b)) return s;          // nur der Server hat geändert
+  if(b!==undefined && _same(s,b)) return l;          // nur ich habe geändert
+  if(l===undefined) return s;                        // gelöscht ↔ geändert: Geändertes behalten
+  if(s===undefined||s===null) return l;
+  if(_isObj(l) && _isObj(s)){
+    const bo=_isObj(b)?b:undefined, out={};
+    new Set([...Object.keys(l), ...Object.keys(s)]).forEach(k=>{
+      const r=_merge3(bo?bo[k]:undefined, l[k], s[k]);
+      if(r!==undefined) out[k]=r;
+      else if(!(bo && k in bo)) { if(s[k]!==undefined) out[k]=s[k]; }   // ohne Basis nichts löschen
+    });
+    // Feld lokal gelöscht und am Server unverändert → gelöscht lassen
+    if(bo) Object.keys(bo).forEach(k=>{ if(!(k in l) && k in out && _same(s[k],bo[k])) delete out[k]; });
+    return out;
+  }
+  if(Array.isArray(l) && Array.isArray(s) && (_idList(l)||!l.length) && (_idList(s)||!s.length)){
+    const bm=new Map((Array.isArray(b)?b:[]).filter(_isObj).map(x=>[String(x.id),x]));
+    const lm=new Map(l.map(x=>[String(x.id),x])), sm=new Map(s.map(x=>[String(x.id),x]));
+    const out=[];
+    l.forEach(li=>{ const k=String(li.id), si=sm.get(k), bi=bm.get(k);
+      if(si!==undefined) out.push(_merge3(bi, li, si));
+      else if(!bi || !_same(li,bi)) out.push(li);     // neu bei mir ODER von mir geändert (Server hatte gelöscht)
+    });
+    s.forEach((si,idx)=>{ const k=String(si.id); if(lm.has(k)) return; const bi=bm.get(k);
+      if(bi && _same(si,bi)) return;                  // von mir gelöscht, am Server unverändert
+      out.splice(Math.min(idx,out.length),0,si);      // neu am Server (andere Person) → an ähnlicher Stelle einfügen
+    });
+    return out;
+  }
+  return l;                                          // echter Konflikt bei einem Einzelwert: meine Fassung
+}
+function _attachBases(snap, cache){
+  try{ if(!snap || !cache) return;
+    Object.keys(cache).forEach(c=>{ const m=cache[c]; if(!_isObj(m)) return;
+      Object.keys(m).forEach(id=>{ const o=m[id]; if(!_isObj(o)) return;
+        try{ Object.defineProperty(o,'__crmBase',{ value:snap.child(c).child(id), enumerable:false, configurable:true, writable:true }); }catch(e){} }); });
+  }catch(e){}
+}
 function _write(coll, id, val){
   const path = id==null ? coll : coll+'/'+id;
   const tok  = Date.now()+'_'+Math.random().toString(36).slice(2,7);
@@ -63,7 +121,16 @@ function _write(coll, id, val){
   if(!_ref) return Promise.resolve();
   const clear=()=>{ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } if(hist) _pushHistory(hist); };
   let pr;
-  try{ const r=_ref.child(path); pr = val===null ? r.remove() : r.set(val); }catch(e){ return Promise.resolve(); }
+  try{ const r=_ref.child(path);
+    if(val===null) pr=r.remove();
+    else if(id==null || typeof r.transaction!=='function') pr=r.set(val);
+    else {
+      let base; try{ base = (val.__crmBase && typeof val.__crmBase.val==='function') ? val.__crmBase.val() : undefined; }catch(e){ base=undefined; }
+      if(base===null) base=undefined;
+      const mine=JSON.parse(JSON.stringify(val));
+      pr=r.transaction(cur=>_merge3(base, mine, cur===null?undefined:cur));
+    }
+  }catch(e){ return Promise.resolve(); }
   return pr.then(clear).catch(e=>{
     if(_isDenied(e)){ const q=_pendLoad(); if(q[path] && q[path].t===tok){ delete q[path]; _pendSave(q); } _denied(path); }   // verweigert → kein Verlaufseintrag
     console.warn('CRM Firebase-Fehler ('+path+'):', e && e.message);
@@ -211,14 +278,18 @@ export function ensureCrmReady(){
           else if(local[c] && local[c][id]) fb[c][id]=local[c][id];
         });
         _cache = fb;
+        _attachBases(snap, _cache);
         _persistLocal();
         _replayPending(local);
         // Realtime: nur den CRM-Teilbaum beobachten
-        _ref.on('value', s => {
+        let _snapT=null, _lsT=null, _lastS=null;
+        const _applySnap = () => {
+          _snapT=null; const s=_lastS; if(!s) return;
           try{
             const v = s.val();
             _cache = _normalize(v);
-            _persistLocal();
+            _attachBases(s, _cache);
+            if(!_lsT) _lsT=setTimeout(()=>{ _lsT=null; _persistLocal(); }, 3000);   // Gerätespeicher höchstens alle 3 s
             // Re-Render nur, wenn CRM/Kanban aktiv ist und kein Formular offen ist
             // (Kanban teilt sich die Engine mit dem CRM → beide Pfade müssen live nachziehen)
             if((window._activeModule === 'crm' || window._activeModule === 'kanban') && !window._crmModalOpen && _onChange){
@@ -232,7 +303,8 @@ export function ensureCrmReady(){
             // Mitteilungsleiste (Shop-Bestellungen) auffrischen
             try{ window.renderZeNotices && window.renderZeNotices(); }catch(e){}
           }catch(e){ console.warn('CRM Snapshot Fehler (ignoriert):', e); }
-        });
+        };
+        _ref.on('value', s => { _lastS=s; if(!_snapT) _snapT=setTimeout(_applySnap, 400); });   // Änderungen bündeln
       }
     }catch(e){
       console.warn('CRM Firebase nicht erreichbar – lokaler Modus:', e && e.message);
