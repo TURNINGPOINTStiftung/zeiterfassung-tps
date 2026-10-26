@@ -449,8 +449,9 @@ if('serviceWorker' in navigator){
       var lastCheck=0;
       function check(){ lastCheck=Date.now(); try{ reg.update(); }catch(e){} }
       check(); // beim Laden einmal auf neue Version pruefen
-      // Alle 15 Min. auf allen Geräten nach einer neuen Version fragen (offene Tabs/PWA laufen sonst tagelang alt).
-      setInterval(check, 15*60*1000);
+      // Alle 5 Min. auf allen Geräten nach einer neuen Version fragen (offene Tabs/PWA laufen sonst tagelang alt;
+      // alte Fassungen können im CRM gleichzeitige Änderungen anderer überschreiben).
+      setInterval(check, 5*60*1000);
       // Zusätzlich beim Zurückkehren in die App/den Tab (auf dem Handy laufen Timer im
       // Hintergrund nicht zuverlässig) – höchstens einmal pro Minute.
       function onReturn(){ if(!document.hidden && Date.now()-lastCheck>60*1000) check(); }
@@ -458,27 +459,39 @@ if('serviceWorker' in navigator){
       window.addEventListener('focus',onReturn);
     }).catch(function(){});
   });
-  // Neuladen NUR, wenn eine neue Version da ist UND es niemanden stört (kein Aufblitzen mitten
-  // in der Arbeit): Tab im Hintergrund, oder ≥2 Min. keine Eingabe, kein offenes Formular/Modal.
+  // Neuladen, wenn eine neue Version da ist und dabei nichts verloren gehen kann (v485):
+  //  · sofort, wenn der Tab im Hintergrund ist oder seit 60 s nichts getippt/geklickt wurde,
+  //  · spätestens nach 10 Min. auch bei aktiver Arbeit – aber NIE mit offenem Dialog oder angefangener Eingabe.
+  //  Bis dahin oben ein Hinweis „Neue Version – jetzt neu laden“. (Vorher galt schon ein sichtbarer
+  //  Speichern-Knopf, z. B. der Kontaktnotiz, als „beschäftigt“ → im CRM wurde praktisch nie neu geladen.)
   (function(){
     // Neuer SW hat übernommen (alte Caches sind dann gelöscht) → Neuladen vormerken.
     // Nicht bei der Erst-Installation (vorher gab es keinen Controller).
     var hadCtrl=!!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange',function(){ if(hadCtrl) window._tpsUpdatePending=true; hadCtrl=true; });
+    var pendSince=0;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){ if(hadCtrl){ window._tpsUpdatePending=true; pendSince=Date.now(); showBar(); } hadCtrl=true; });
     var lastAct=Date.now();
     ['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){ window.addEventListener(ev,function(){ lastAct=Date.now(); },{passive:true,capture:true}); });
     function busy(){
       var a=document.activeElement;
-      if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable)) return true;
-      var m=document.querySelectorAll('.modal-bg.show, .crm-modal-actions');
+      if(a&&a.type!=='search'&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable)) return true;
+      var m=document.querySelectorAll('.modal-bg.show');                       // offener Dialog
       for(var i=0;i<m.length;i++){ if(m[i].getClientRects().length) return true; }
+      try{ if(window._crmFormDirty && window._crmFormDirty()) return true; }catch(e){}   // angefangene Eingabe im CRM
       return false;
+    }
+    function showBar(){
+      try{ if(document.getElementById('tps-upd-bar')) return; var b=document.createElement('div'); b.id='tps-upd-bar';
+        b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:calc(8px + env(safe-area-inset-top));z-index:400;background:var(--primary,#203869);color:#fff;border-radius:20px;padding:7px 8px 7px 14px;font-size:13px;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center';
+        b.innerHTML='🔄 Neue Version verfügbar <button type="button" onclick="location.reload()" style="background:#fff;color:#203869;border:0;border-radius:14px;padding:4px 12px;font-weight:800;cursor:pointer">Jetzt neu laden</button>';
+        document.body.appendChild(b); }catch(e){}
     }
     function tryReload(){
       if(!window._tpsUpdatePending) return;
-      if(document.hidden || (Date.now()-lastAct>2*60*1000 && !busy())){ window._tpsUpdatePending=false; location.reload(); }
+      var idle=Date.now()-lastAct>60*1000, overdue=pendSince && Date.now()-pendSince>10*60*1000;
+      if(document.hidden || ((idle||overdue) && !busy())){ window._tpsUpdatePending=false; location.reload(); }
     }
-    setInterval(tryReload, 30*1000);
+    setInterval(tryReload, 15*1000);
     document.addEventListener('visibilitychange',tryReload);
   })();
 }
@@ -497,6 +510,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=345"></script>
+<script type="module" src="js/main.js?v=346"></script>
 </body>
 </html>
