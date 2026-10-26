@@ -1,7 +1,7 @@
 // ── Core modules ──────────────────────────────────────────────────
 import { getUser, setDataCache } from './data.js';
 import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY, DATA_EPOCH } from './config.js';
-import { initFirebase, initFirebaseEvents, retrySyncNow } from './firebase.js';
+import { initFirebase, initFirebaseEvents } from './firebase.js';
 import { populateLoginDropdown, doLogin, doLogout, initAuthEvents,
          emergencyReset, doEmergencyReset, resetPasswordsOnly,
          showForgotPassword, sendPasswordReset, requestPwReset,
@@ -94,7 +94,6 @@ window.sendPasswordReset       = sendPasswordReset;
 window.requestPwReset          = requestPwReset;
 window.checkPasswordResetToken = checkPasswordResetToken;
 window.saveResetPassword       = saveResetPassword;
-window.retrySyncNow           = retrySyncNow;
 window.filterLoginUsers        = filterLoginUsers;
 window.hideLoginDropdown       = hideLoginDropdown;
 window.selectLoginUser         = selectLoginUser;

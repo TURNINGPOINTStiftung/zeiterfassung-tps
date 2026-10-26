@@ -240,6 +240,9 @@ export function retrySyncNow(){
   try{ flushPendingWrites(); }catch(e){}
   _pollFirebase();
 }
+// Über window bereitstellen statt als benannter Import in main.js: Lädt ein Gerät nach einem Update
+// kurzzeitig eine ältere firebase.js aus dem Zwischenspeicher, darf main.js nicht an einem fehlenden Export scheitern.
+window.retrySyncNow = retrySyncNow;
 
 export async function _pollFirebase(){
   if(window._offlineMode||!getData()) return;
