@@ -30,7 +30,10 @@ function _num(x){ return Number(x||0); }
 // Statistik-Feld lesen, mit Fallback auf alte Schlüssel (v194-)
 function _sNum(s,key,legacy){ if(!s) return 0; let v=s[key]; if((v==null||v==='')&&legacy) v=s[legacy]; return Number(v||0); }
 // Spalten der Inklusions-Statistik (neue Felder)
-const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['gruppen','Trainingsgruppen',null]];
+const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['tnRegel','davon regelmäßig',null],['tnEinmal','davon einmalig',null],['gruppen','Trainingsgruppen',null],['termine','Termine im Jahr',null]];
+// Laufende Angebote: regelmäßiges Training + regelmäßige Veranstaltung (z. B. monatliche Segelsonntage, v487)
+const _isRun=t=>{ t=t||''; return t===''||t==='training'||t==='reihe'; };
+const _PERSON_COLS={engagierte:1,trainer:1};   // Personen – bei mehreren Angeboten eines Vereins NICHT doppelt zählen
 function _euro(n){ return _num(n).toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 
 // Alle Einträge (Projekte) aus allen Bäumen einsammeln – nur solche mit mindestens einem Eintrag
@@ -70,16 +73,24 @@ function _foerderByYear(entities){
 function _statByYear(entities){
   const by={};
   entities.forEach(x=>{
-    const train={}, trainFirst={}, eventSum={};   // je Jahr: letztes/erstes Training, Summe ALLER Veranstaltungs-TN
+    // je Jahr und je laufendem Angebot (Training / regelmäßige Veranstaltung): letzte + erste Erfassung;
+    // Summe ALLER einmaligen Veranstaltungs-TN; Wintertraining ja/nein
+    const last={}, first={}, eventSum={}, winter={};
     (x.e.stats||[]).forEach(s=>{ const y=_yearOf(s.date); if(y==null) return; const t=s.typ||'';
       if(t==='veranstaltung'){ eventSum[y]=(eventSum[y]||0)+_sNum(s,'tn','tnInkl'); }
-      else if(t===''||t==='training'){ if(!train[y]||String(s.date)>String(train[y].date)) train[y]=s; if(!trainFirst[y]||String(s.date)<String(trainFirst[y].date)) trainFirst[y]=s; }
+      else if(_isRun(t)){ const k=t==='reihe'?'reihe':'training'; last[y]=last[y]||{}; first[y]=first[y]||{};
+        if(!last[y][k]||String(s.date)>String(last[y][k].date)) last[y][k]=s;
+        if(!first[y][k]||String(s.date)<String(first[y][k].date)) first[y][k]=s;
+        if(s.winter) winter[y]=true; }
     });
-    const yset=new Set([...Object.keys(train),...Object.keys(eventSum)]);
-    yset.forEach(y=>{ if(!by[y]) by[y]={engagierte:0,trainer:0,tn:0,gruppen:0,eventTN:0,zuwachs:0};
-      const tr=train[y]; if(tr) STAT_COLS.forEach(([k,,leg])=>{ by[y][k]+=_sNum(tr,k,leg); });
+    const yset=new Set([...Object.keys(last),...Object.keys(eventSum)]);
+    yset.forEach(y=>{ if(!by[y]) by[y]={engagierte:0,trainer:0,tn:0,tnRegel:0,tnEinmal:0,gruppen:0,termine:0,eventTN:0,zuwachs:0,winter:0};
+      const offers=Object.values(last[y]||{});
+      STAT_COLS.forEach(([k,,leg])=>{ const vals=offers.map(tr=>_sNum(tr,k,leg)); if(!vals.length) return;
+        by[y][k] += _PERSON_COLS[k] ? Math.max(...vals) : vals.reduce((a,b)=>a+b,0); });
       by[y].eventTN += (eventSum[y]||0);
-      const trF=trainFirst[y]; if(tr&&trF) by[y].zuwachs += (_sNum(tr,'tn','tnInkl') - _sNum(trF,'tn','tnInkl'));
+      Object.keys(last[y]||{}).forEach(k=>{ const tr=last[y][k], trF=first[y][k]; if(tr&&trF) by[y].zuwachs += (_sNum(tr,'tn','tnInkl') - _sNum(trF,'tn','tnInkl')); });
+      if(winter[y]) by[y].winter++;
     });
   });
   return by;
@@ -138,15 +149,15 @@ function _tblFoerder(entities){
 function _statQuote(r){ return r.eventTN>0 ? Math.round(r.tn/r.eventTN*100)+' %' : '–'; }
 function _sign(n){ n=Number(n||0); return (n>0?'+':'')+n; }
 // letzte laufende Erfassung (Training/Alt, keine Veranstaltung) eines Vereins
-function _lastTrain(e){ return (e.stats||[]).filter(s=>{const t=s.typ||'';return t===''||t==='training';}).sort((a,b)=>String(a.date).localeCompare(String(b.date))).pop()||{}; }
+function _lastTrain(e){ return (e.stats||[]).filter(s=>_isRun(s.typ)).sort((a,b)=>String(a.date).localeCompare(String(b.date))).pop()||{}; }
 function _tblStat(entities){
   const by=_applyYear(_statByYear(entities)); const years=Object.keys(by).sort();
-  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.eventTN||'–'}</td><td>${_sign(r.zuwachs)}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
-  const cols=STAT_COLS.length+4;
+  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.winter||'–'}</td><td>${r.eventTN||'–'}</td><td>${_sign(r.zuwachs)}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
+  const cols=STAT_COLS.length+5;
   return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>TN Veranstaltungen</th><th>Zuwachs Training</th><th>Weitermach-Quote</th></tr></thead>
+    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN Veranstaltungen</th><th>Zuwachs Training</th><th>Weitermach-Quote</th></tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}</tbody></table></div>
-    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letztes Training je Verein (über die Auswahl summiert). Weitermach-Quote = Inklusive TN (letztes Training) ÷ Summe der Veranstaltungs-TN des Jahres.</div></div>`;
+    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. „davon regelmäßig/einmalig“ nur, soweit aufgeteilt erfasst. Weitermach-Quote = Inklusive TN (laufend) ÷ Summe der TN einmaliger Veranstaltungen des Jahres.</div></div>`;
 }
 function _tblVeranst(entities){
   const {by:byAll}=_veranstByYear(entities); const by=_applyYear(byAll); const years=Object.keys(by).sort();
@@ -164,11 +175,11 @@ function _tblProProjekt(entities){
     const bea=f.filter(v=>v.status==='beantragt').reduce((s,v)=>s+_num(v.betrag),0);
     const {total:va}=_veranstByYear([x]);
     const last=_lastTrain(x.e);   // aktueller Stand = letztes Training
-    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${_euro(bew)}</td><td>${_euro(bea)}</td><td>${va}</td><td>${_sNum(last,'engagierte',null)}</td><td>${_sNum(last,'tn','tnInkl')}</td></tr>`;
+    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${_euro(bew)}</td><td>${_euro(bea)}</td><td>${va}</td><td>${_sNum(last,'engagierte',null)}</td><td>${_sNum(last,'tn','tnInkl')}</td><td>${last.tnRegel==null?'–':_sNum(last,'tnRegel',null)}</td><td>${last.tnEinmal==null?'–':_sNum(last,'tnEinmal',null)}</td><td>${last.termine==null?'–':_sNum(last,'termine',null)}</td><td>${last.winter?'🧊':''}</td></tr>`;
   }).join('');
   return `<div class="aus-card"><h3>📁 Pro Projekt (Einzelübersicht)</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Projekt</th><th>Baum</th><th>Förderung bewilligt</th><th>offen beantragt</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
+    <thead><tr><th>Projekt</th><th>Baum</th><th>Förderung bewilligt</th><th>offen beantragt</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th><th>davon regelm.</th><th>davon einmalig</th><th>Termine/Jahr</th><th>Winter</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="11" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
 }
 
 function _filterBar(){
@@ -243,8 +254,8 @@ export function ausExport(){
       XLSX.utils.book_append_sheet(wb, fRows.length?XLSX.utils.json_to_sheet(fRows,{header:fHead}):XLSX.utils.aoa_to_sheet([fHead]), 'Förderungen');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
-      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['TN Veranstaltungen']=r.eventTN; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
-      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'TN Veranstaltungen','Zuwachs Training','Weitermach-Quote'];
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o['TN Veranstaltungen']=r.eventTN; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
+      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining','TN Veranstaltungen','Zuwachs Training','Weitermach-Quote'];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
@@ -258,9 +269,9 @@ export function ausExport(){
         const bea=f.filter(v=>v.status==='beantragt').reduce((s,v)=>s+_num(v.betrag),0);
         const {total:va}=_veranstByYear([x]);
         const last=_lastTrain(x.e);
-        return {Projekt:x.name,Baum:x.treeLabel||'','Förderung bewilligt':bew,'offen beantragt':bea,Veranstaltungen:va,'Engagierte (aktuell)':_sNum(last,'engagierte',null),'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl')};
+        return {Projekt:x.name,Baum:x.treeLabel||'','Förderung bewilligt':bew,'offen beantragt':bea,Veranstaltungen:va,'Engagierte (aktuell)':_sNum(last,'engagierte',null),'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl'),'davon regelmäßig':last.tnRegel==null?'':_sNum(last,'tnRegel',null),'davon einmalig':last.tnEinmal==null?'':_sNum(last,'tnEinmal',null),'Termine im Jahr':last.termine==null?'':_sNum(last,'termine',null),'Wintertraining':last.winter?'ja':''};
       });
-      const pHead=['Projekt','Baum','Förderung bewilligt','offen beantragt','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)'];
+      const pHead=['Projekt','Baum','Förderung bewilligt','offen beantragt','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)','davon regelmäßig','davon einmalig','Termine im Jahr','Wintertraining'];
       XLSX.utils.book_append_sheet(wb, pRows.length?XLSX.utils.json_to_sheet(pRows,{header:pHead}):XLSX.utils.aoa_to_sheet([pHead]), 'Pro Projekt');
       const d=new Date();
       XLSX.writeFile(wb, `Auswertung-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.xlsx`);
