@@ -842,6 +842,10 @@ function injectStyles(){
   .crm-sortsel{margin-left:auto;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface,#fff);color:var(--text);cursor:pointer}
   .crm-filter-count{font-size:12px;color:var(--muted)}
   .crm-filter-pop{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 20px);max-height:74vh;overflow-y:auto;background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:8px}
+  .crm-fwrap{display:flex;gap:16px;align-items:flex-start}
+  .crm-fside{flex:0 0 270px;position:sticky;top:8px;max-height:calc(100vh - 170px);overflow-y:auto;background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:8px}
+  .crm-fmain{flex:1;min-width:0}
+  @media(max-width:700px){ .crm-fwrap{flex-direction:column;gap:10px} .crm-fside{flex:none;width:100%;box-sizing:border-box;position:static;max-height:none} }
   .crm-fpop-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
   .crm-fpop-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13.5px}
   .crm-fpop-item:hover{background:var(--surface-2,#f5f8fd)}
@@ -1337,9 +1341,10 @@ function paintList(){
   }).join('');
   root.innerHTML = barHtml() + `<div class="crm-body">
     ${filterBar}
+    ${(unified && window._crmFilterOpen)?`<div class="crm-fwrap"><aside class="crm-fside" aria-label="Filter">${_filterPanelHtml()}</aside><div class="crm-fmain">`:''}
     ${ items.length ? `<div class="crm-list">${cards}</div>`
                  : `<div class="crm-empty">${anyFilter?'Keine Kontakte mit dieser Auswahl.':'Noch keine Kontakte.'}<br><br>${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">Filter zurücksetzen</button>`:(crmFull()?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Kontakt anlegen</button>`:'')}</div>`
-  }</div>`;
+  }${(unified && window._crmFilterOpen)?'</div></div>':''}</div>`;
 }
 // Häkchen-Filter (Mehrfachauswahl). Status und Kategorie sind unabhängige Gruppen.
 // Nach jeder Änderung: Liste neu zeichnen UND (falls offen) das Popover aktualisieren.
@@ -1352,9 +1357,10 @@ function crmSetStatusFilter(v){ window._crmStatusFilter = v?[v]:[]; paintList();
 function crmShowKontakte(){ window._crmMode='kontakte'; window._crmSelId=null; window._crmSearch=''; crmCloseFilterPop(); paintList(); }
 function crmSetSort(v){ window._crmSort = v==='za'?'za':'az'; paintList(); }
 
-// ── Filter als Popup-Menü (an document.body, überlebt Listen-Repaint) ──
-function _refreshFilterPop(){ if(document.getElementById('crm-filter-pop')) _renderFilterPop(); }
-function _renderFilterPop(){
+// ── Filter als Seitenleiste links neben der Kontaktliste (v486) – die Karten rücken zur Seite statt
+// verdeckt zu werden. Die Leiste ist Teil von paintList() (window._crmFilterOpen); Handy: über der Liste.
+function _refreshFilterPop(){}   // Leiste wird mit paintList() neu gezeichnet
+function _filterPanelHtml(){
   const base = crmCanView()?allEntitiesWithTree():listEntities(window._crmTree);
   const q=(window._crmSearch||'').toLowerCase().trim();
   const matchQ=e=>{ if(!q) return true; const s=e.stamm||{}; const koopTxt=(e.kooperationen||[]).map(k=>k.art+' '+_entityName(k.tree,k.eid)).join(' '); const hay=(Object.values(s).join(' ')+' '+koopTxt).toLowerCase(); const ctxt=(e.kontakte||[]).map(k=>k.name+' '+k.funktion).join(' ').toLowerCase(); return (hay+' '+ctxt).includes(q); };
@@ -1365,17 +1371,14 @@ function _renderFilterPop(){
   const ctCount=k=>baseQ.filter(e=>_catsOf(e,e.tree||window._crmTree).includes(k)).length;
   const stRows=CRM_STATUS.map(s=>{const on=stf.includes(s.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleStatusFilter(${jsq(s.key)})"><span class="crm-fpop-dot" style="background:${cssColor(s.color)}"></span><span class="crm-fpop-lbl">${esc(s.label)}</span><span class="crm-fpop-n">${stCount(s.key)}</span></label>`;}).join('');
   const ctRows=getCategories().map(c=>{const on=ctf.includes(c.key);return `<label class="crm-fpop-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="crmToggleCatFilter(${jsq(c.key)})"><span class="crm-fpop-dot" style="background:${cssColor(c.color)}"></span><span class="crm-fpop-lbl">${esc(c.label)}</span><span class="crm-fpop-n">${ctCount(c.key)}</span></label>`;}).join('')||'<div class="crm-fpop-empty">Noch keine Kategorien angelegt.</div>';
-  let pop=document.getElementById('crm-filter-pop');
-  if(!pop){ pop=document.createElement('div'); pop.id='crm-filter-pop'; pop.className='crm-filter-pop'; document.body.appendChild(pop);
-    setTimeout(()=>document.addEventListener('click', _crmFilterOutside, true),0);
-  }
-  pop.innerHTML=`<div class="crm-fpop-head">Status</div>${stRows}<div class="crm-fpop-head">Kategorie</div>${ctRows}<div class="crm-fpop-foot">${(stf.length||ctf.length)?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ Zurücksetzen</button>`:'<span></span>'}<button class="btn-sm-crm primary" onclick="crmCloseFilterPop()">Fertig</button></div>`;
-  _positionFilterPop(pop);
+  return `<div class="crm-fpop-head">Status</div>${stRows}<div class="crm-fpop-head">Kategorie</div>${ctRows}<div class="crm-fpop-foot">${(stf.length||ctf.length)?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ Zurücksetzen</button>`:'<span></span>'}<button class="btn-sm-crm primary" onclick="crmCloseFilterPop()">Fertig</button></div>`;
 }
 function _positionFilterPop(pop){ try{ const btn=document.getElementById('crm-filter-btn'); if(!btn) return; const r=btn.getBoundingClientRect(); pop.style.top=(r.bottom+8)+'px'; const w=pop.offsetWidth||300; let left=r.left; if(left+w>window.innerWidth-10) left=window.innerWidth-10-w; if(left<10) left=10; pop.style.left=left+'px'; }catch(e){} }
 function _crmFilterOutside(ev){ const pop=document.getElementById('crm-filter-pop'); if(!pop) return; if(pop.contains(ev.target)) return; const btn=document.getElementById('crm-filter-btn'); if(btn&&btn.contains(ev.target)) return; crmCloseFilterPop(); }
-function crmCloseFilterPop(){ const pop=document.getElementById('crm-filter-pop'); if(pop) pop.remove(); document.removeEventListener('click', _crmFilterOutside, true); }
-function crmToggleFilterPop(ev){ if(ev){ ev.stopPropagation(); } if(document.getElementById('crm-filter-pop')){ crmCloseFilterPop(); return; } _renderFilterPop(); }
+function crmCloseFilterPop(){ const was=!!window._crmFilterOpen; window._crmFilterOpen=false;
+  const pop=document.getElementById('crm-filter-pop'); if(pop) pop.remove(); document.removeEventListener('click', _crmFilterOutside, true);
+  if(was && (window._crmMode||'kontakte')==='kontakte' && !window._crmSelId) paintList(); }
+function crmToggleFilterPop(ev){ if(ev){ ev.stopPropagation(); } if(window._crmFilterOpen){ crmCloseFilterPop(); return; } window._crmFilterOpen=true; paintList(); }
 
 // ── Aufgaben: hierarchisch (Hauptaufgabe + Unterpunkte) + Abhängigkeiten
 // Datenmodell je Eintrag:
