@@ -567,7 +567,17 @@ function injectStyles(){
   .crm-modal-field input:focus,.crm-modal-field select:focus,.crm-modal-field textarea:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
   .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
-  .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb)} .crm-ac-tree{color:var(--muted);font-size:11px}
+  .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:11px;font-weight:400}
+  .ss-wrap{position:relative;flex:1 1 200px;min-width:160px}
+  .crm-kn-folge .ss-wrap{flex:1 1 200px}
+  .ss-grp{padding:6px 12px 3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface-2,#f7f9fc)}
+  .sp-list{display:flex;flex-wrap:wrap;gap:5px;max-height:150px;overflow:auto}
+  .sp-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;cursor:pointer;border:1px solid var(--border);border-radius:999px}
+  .sp-item:has(input:checked){background:var(--info-bg,#e8f0fe);border-color:var(--primary);font-weight:600}
+  .sp-wrap:not(.sp-all) .sp-item:not(:has(input:checked)){display:none}
+  .sp-wrap:not(.sp-all) .sp-list:not(:has(input:checked))::before{content:'Noch niemand ausgewählt – oben suchen oder „Liste“.';font-size:12.5px;color:var(--muted)}
+  .crm-kp-in{width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface,#fff);color:var(--text)}
+  .crm-ac-dd{max-height:260px;overflow-y:auto}
   .crm-ac-empty{padding:10px 13px;color:var(--muted);font-size:13px}
   .crm-type-toggle{display:flex;gap:8px;margin:0 0 8px}
   .crm-tt-btn{flex:1;padding:11px 12px;border:1.5px solid var(--border);border-radius:11px;background:var(--surface,#fff);color:var(--text);font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:all .12s}
@@ -1044,7 +1054,7 @@ function _crmRenderNow(label){
 function _crmFormDirty(){
   try{
     const root=document.getElementById('crm-root'); if(!root) return false;
-    const skip=el=>el.type==='search' || /search|filter/i.test(el.id||'') || /crm-search/.test(el.className||'');
+    const skip=el=>el.type==='search' || /search|filter|-spin$/i.test(el.id||'') || /crm-search|ss-in|crm-kp-in/.test(el.className||'');
     const a=document.activeElement;
     if(a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !skip(a) && a.type!=='checkbox' && a.type!=='radio') return true;
     for(const el of root.querySelectorAll('input,textarea,select')){
@@ -2006,7 +2016,7 @@ function crmNewAufgabeDialog(){
       <div id="crm-na-newcol-wrap" style="display:${cols.length?'none':'block'};margin-top:6px"><input id="crm-na-newcol" placeholder="Name der neuen Spalte (z. B. Vorbereitung)"></div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig (optional)</label><select id="crm-na-assignee">${assigneeOptsHtml([],'')}</select></div>
+      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Zuständig (optional)</label><select id="crm-na-assignee" class="crm-ss">${assigneeOptsHtml([],'')}</select></div>
       <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Frist bis (optional)</label><input type="date" id="crm-na-due"></div>
     </div>
     <div class="crm-modal-field"><label>Notiz (optional)</label><input id="crm-na-note"></div>
@@ -2613,15 +2623,69 @@ function _kpName(o){ try{ const e=getEntity(o.tree,o.eid); return (e&&e.stamm&&e
 function crmKpChips(idp,ro){ const l=_kpList(idp); if(!l.length) return '<span class="small" style="color:var(--muted)">Noch keine ausgewählt.</span>'; return l.map((o,i)=>`<span class="crm-chip">${esc(_kpName(o))}${ro?'':` <span onclick="crmKpRemove(${jsq(idp)},${i})" title="Entfernen" style="cursor:pointer;font-weight:800;margin-left:4px">✕</span>`}</span>`).join(''); }
 function crmKpHtml(idp,label,hint,ro){ return `<div class="crm-modal-field" style="position:relative"><label>${label}${hint?` <span style="font-size:11px;color:var(--muted)">${hint}</span>`:''}</label>
    <div id="${idp}-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${crmKpChips(idp,ro)}</div>
-   ${ro?'':`<input id="${idp}-in" autocomplete="off" placeholder="Kontakt suchen … (mehrere möglich)" oninput="crmKpSearch(${jsq(idp)},this.value)" onfocus="crmKpSearch(${jsq(idp)},this.value)">
-   <div id="${idp}-dd" class="crm-ac-dd" style="display:none"></div>`}</div>`; }
-function crmKpSearch(idp,v){ const dd=document.getElementById(idp+'-dd'); if(!dd) return; const q=(v||'').trim().toLowerCase(); if(!q){ dd.style.display='none'; return; }
+   ${ro?'':`<input id="${idp}-in" class="crm-kp-in" type="text" autocomplete="off" placeholder="🔎 Name eingeben … (mehrere möglich)" oninput="crmKpSearch(${jsq(idp)},this.value)" onfocus="crmKpSearch(${jsq(idp)},this.value)" onkeydown="crmKpKey(event,${jsq(idp)})" onblur="setTimeout(()=>crmKpHide(${jsq(idp)}),150)">
+   <div id="${idp}-dd" class="crm-ac-dd" style="display:none" onmousedown="event.preventDefault()"></div>`}</div>`; }
+// Suche wie bei der Anmeldung (v490): Tippen → Vorschläge (Treffer am Wortanfang zuerst, Getipptes fett),
+// ↑/↓ wählen, Enter übernimmt (ohne Markierung den ersten), Esc schließt. Ort hilft bei gleichen Namen.
+function _kpHl(name,q){ const i=name.toLowerCase().indexOf(q); if(i<0) return esc(name); return esc(name.slice(0,i))+'<b>'+esc(name.slice(i,i+q.length))+'</b>'+esc(name.slice(i+q.length)); }
+function crmKpSearch(idp,v){ const dd=document.getElementById(idp+'-dd'); if(!dd) return; const q=(v||'').trim().toLowerCase(); window._kpIdx=-1; if(!q){ dd.style.display='none'; return; }
    const has=new Set(_kpList(idp).map(o=>o.tree+'::'+o.eid));
-   const list=_kalContacts().filter(c=>c.name.toLowerCase().includes(q)&&!has.has(c.tree+'::'+c.eid)).slice(0,60);
+   const rank=c=>{ const n=c.name.toLowerCase(); if(n.startsWith(q)) return 0; if(n.split(/[\s\-–.()\/]+/).some(w=>w.startsWith(q))) return 1; if(n.includes(q)) return 2; return 3; };
+   const list=_kalContacts().filter(c=>!has.has(c.tree+'::'+c.eid)).map(c=>{ let r=rank(c); let ort='';
+       try{ const e=getEntity(c.tree,c.eid); ort=(e&&e.stamm&&(e.stamm.sitz||''))||''; if(r===3 && ort.toLowerCase().includes(q)) r=4; }catch(_){}
+       return {c,r,ort}; })
+     .filter(x=>x.r<5 && (x.r<3 || x.r===4)).sort((a,b)=>a.r-b.r||a.c.name.localeCompare(b.c.name,'de')).slice(0,30);
    if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
-   dd.innerHTML=list.map(c=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd(${jsq(idp)},this.dataset.t,this.dataset.e)">${esc(c.name)} <span class="crm-ac-tree">· ${esc(lbl)}</span></div>`; }).join('');
+   dd.innerHTML=list.map(({c,ort})=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd(${jsq(idp)},this.dataset.t,this.dataset.e)">${_kpHl(c.name,q)} <span class="crm-ac-tree">· ${esc(lbl)}${ort?' · '+esc(ort):''}</span></div>`; }).join('');
    dd.style.display='block'; }
-function crmKpAdd(idp,tree,eid){ const l=_kpList(idp); if(!l.some(o=>o.tree===tree&&o.eid===eid)) l.push({tree,eid}); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); const i=document.getElementById(idp+'-in'); if(i) i.value=''; const dd=document.getElementById(idp+'-dd'); if(dd) dd.style.display='none'; }
+function _ssLabel(sel){ const o=sel.options[sel.selectedIndex]; return (o && o.value!=='') ? (o.textContent||'').trim() : ''; }
+function _ssSync(sel){ const w=sel.parentNode; if(!w||!w.classList||!w.classList.contains('ss-wrap')) return; const inp=w.querySelector('.ss-in'); if(!inp) return;
+  inp.value=_ssLabel(sel); const first=sel.options[0]; inp.placeholder='🔎 '+((first&&first.value==='')?(first.textContent||'').replace(/^[–\s-]+|[–\s-]+$/g,'')||'suchen …':'suchen …'); inp.disabled=sel.disabled; }
+function _ssEnhance(sel){
+  if(!sel || sel.dataset.ss) return; sel.dataset.ss='1';
+  const w=document.createElement('div'); w.className='ss-wrap'; if(sel.style.flex) w.style.flex=sel.style.flex;
+  sel.parentNode.insertBefore(w, sel); w.appendChild(sel); sel.style.display='none';
+  const inp=document.createElement('input'); inp.type='text'; inp.className='ss-in crm-kp-in'; inp.autocomplete='off';
+  const dd=document.createElement('div'); dd.className='crm-ac-dd'; dd.style.display='none'; dd.addEventListener('mousedown',e=>e.preventDefault());
+  w.appendChild(inp); w.appendChild(dd); _ssSync(sel);
+  let idx=-1;
+  const show=q=>{ q=(q||'').trim().toLowerCase(); idx=-1; const out=[]; let grp=null;
+    Array.from(sel.querySelectorAll('option')).forEach(o=>{ const t=(o.textContent||'').trim(); const g=o.parentNode.tagName==='OPTGROUP'?o.parentNode.label:null;
+      if(q && !t.toLowerCase().includes(q)) return;
+      if(g!==grp){ grp=g; if(g) out.push(`<div class="ss-grp">${esc(g)}</div>`); }
+      out.push(`<div class="crm-ac-item${o.value===sel.value&&o.value!==''?' on':''}" data-v="${esc(o.value)}">${o.value===''?'<span style="color:var(--muted)">'+esc(t)+'</span>':(q?_kpHl(t,q):esc(t))}</div>`); });
+    dd.innerHTML=out.join('')||'<div class="crm-ac-empty">Nichts gefunden</div>'; dd.style.display='block'; };
+  const pick=v=>{ sel.value=v; sel.dispatchEvent(new Event('change',{bubbles:true})); dd.style.display='none'; setTimeout(()=>_ssSync(sel),0); };
+  dd.addEventListener('click',e=>{ const it=e.target.closest('.crm-ac-item'); if(it) pick(it.dataset.v); });
+  inp.addEventListener('focus',()=>{ inp.select(); show(''); });
+  inp.addEventListener('input',()=>show(inp.value));
+  inp.addEventListener('blur',()=>setTimeout(()=>{ dd.style.display='none'; _ssSync(sel); },150));
+  inp.addEventListener('keydown',ev=>{ const items=Array.from(dd.querySelectorAll('.crm-ac-item'));
+    const mark=()=>items.forEach((el,i)=>{ el.classList.toggle('on',i===idx); if(i===idx) el.scrollIntoView({block:'nearest'}); });
+    if(ev.key==='ArrowDown'){ ev.preventDefault(); if(dd.style.display!=='block'){ show(inp.value); return; } idx=Math.min(idx+1,items.length-1); mark(); }
+    else if(ev.key==='ArrowUp'){ ev.preventDefault(); idx=Math.max(idx-1,-1); mark(); }
+    else if(ev.key==='Enter'){ ev.preventDefault(); if(!items.length) return; const t=items[idx>=0?idx:items.findIndex(x=>x.dataset.v!=='')>=0&&inp.value.trim()?items.findIndex(x=>x.dataset.v!==''):0]; pick(t.dataset.v); inp.blur(); }
+    else if(ev.key==='Escape'){ dd.style.display='none'; _ssSync(sel); } });
+  sel.addEventListener('change',()=>setTimeout(()=>_ssSync(sel),0));
+}
+// Neue/ersetzte Auswahlfelder automatisch umbauen (Dialoge, neue Ergebnis-Zeilen, neu gefüllte Listen)
+try{ new MutationObserver(ms=>{ ms.forEach(m=>{
+    if(m.target && m.target.tagName==='SELECT' && m.target.classList.contains('crm-ss')){ _ssSync(m.target); return; }
+    m.addedNodes && m.addedNodes.forEach(n=>{ if(n.nodeType!==1) return;
+      if(n.matches && n.matches('select.crm-ss')) _ssEnhance(n);
+      n.querySelectorAll && n.querySelectorAll('select.crm-ss:not([data-ss])').forEach(_ssEnhance); }); }); })
+  .observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
+function crmKpHide(idp){ const dd=document.getElementById(idp+'-dd'); if(dd) dd.style.display='none'; }
+function crmKpKey(ev,idp){
+  const dd=document.getElementById(idp+'-dd'); const open=dd&&dd.style.display==='block';
+  const items=open?Array.from(dd.querySelectorAll('.crm-ac-item')):[];
+  const mark=()=>items.forEach((el,i)=>{ el.classList.toggle('on',i===window._kpIdx); if(i===window._kpIdx) el.scrollIntoView({block:'nearest'}); });
+  if(ev.key==='ArrowDown'){ ev.preventDefault(); if(!open){ crmKpSearch(idp,ev.target.value); return; } window._kpIdx=Math.min((window._kpIdx??-1)+1, items.length-1); mark(); }
+  else if(ev.key==='ArrowUp'){ ev.preventDefault(); if(!open) return; window._kpIdx=Math.max((window._kpIdx??0)-1,-1); mark(); }
+  else if(ev.key==='Enter'){ ev.preventDefault(); if(!items.length) return; const t=items[(window._kpIdx??-1)>=0?window._kpIdx:0]; crmKpAdd(idp,t.dataset.t,t.dataset.e); }
+  else if(ev.key==='Escape'){ crmKpHide(idp); }
+}
+function crmKpAdd(idp,tree,eid){ const l=_kpList(idp); if(!l.some(o=>o.tree===tree&&o.eid===eid)) l.push({tree,eid}); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); const i=document.getElementById(idp+'-in'); if(i){ i.value=''; try{ i.focus(); }catch(_){} } const dd=document.getElementById(idp+'-dd'); if(dd) dd.style.display='none'; window._kpIdx=-1; }
 function crmKpRemove(idp,i){ const l=_kpList(idp); l.splice(i,1); const c=document.getElementById(idp+'-chips'); if(c) c.innerHTML=crmKpChips(idp); }
 function readMultiKontakt(idp){ return _kpList(idp).map(o=>({tree:o.tree,eid:o.eid})); }
 function crmAddTermin(){ crmNewItem('termin'); }   // → Einheits-Fenster (Termin vorgewählt)
@@ -2851,7 +2915,7 @@ function _knMoreHtml(e){
     <div class="crm-kn-sub">👥 Teilnehmende TPS</div>
     ${staffPickerHtml([(window.cu&&window.cu.id)||''], 'crm-kn')}
     <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
-    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kn-ext" value="${esc(k.id)}"> ${esc(k.name||'(Kontakt)')}${k.funktion?` <span class="small" style="color:var(--muted)">(${esc(k.funktion)})</span>`:''}</label>`).join('')}</div>`:''}
+    ${kontakte.length?_cbPickerHtml('crm-knx','crm-kn-ext', kontakte.map(k=>({id:k.id, name:k.name||'(Kontakt)', sub:k.funktion||''})), 'Kontakt des Eintrags suchen …', false):''}
     <input type="text" class="crm-kn-in" id="crm-kn-extfree" oninput="crmKnWerRefresh('crm-kn-folgen','crm-kn-extfree')" placeholder="weitere Personen, mit Komma getrennt (z. B. Kassiererin Schmidt)">`;
 }
 function _knFolgenFormHtml(){
@@ -2877,7 +2941,7 @@ function crmKnAddFolge(boxId){
     <input type="text" class="kf-text" placeholder="Was? (z. B. Rückruf an den Vorstand)">
     <input type="date" class="kf-datum" title="Datum / fällig am">
     <input type="time" class="kf-uhr" title="Uhrzeit" style="display:none">
-    <select class="kf-wer" onchange="crmKnTypChg(this.closest('.crm-kn-folge').querySelector('.kf-typ'))">${_knWerOptions(e, freeId)}</select>
+    <select class="kf-wer crm-ss" onchange="crmKnTypChg(this.closest('.crm-kn-folge').querySelector('.kf-typ'))">${_knWerOptions(e, freeId)}</select>
     <select class="kf-proj" title="In welches Projekt?">${_knProjOptions(e)}</select>
     <button type="button" class="crm-x" title="Zeile entfernen" onclick="this.parentNode.remove()">✕</button>`;
   box.appendChild(row);
@@ -2887,7 +2951,7 @@ function crmKnTypChg(sel){
   row.querySelector('.kf-uhr').style.display=(t==='termin')?'':'none';
   const ext=/^[kx]:/.test(row.querySelector('.kf-wer').value||'');   // Verein/Kontakt verantwortlich → kein Kanban, kein Projekt
   row.querySelector('.kf-proj').style.display=((t==='aufgabe'||t==='frist') && !ext)?'':'none';
-  row.querySelector('.kf-wer').style.display=(t==='info')?'none':'';
+  { const ws=row.querySelector('.kf-wer'); (ws.closest('.ss-wrap')||ws).style.display=(t==='info')?'none':''; }
   row.querySelector('.kf-datum').style.display=(t==='info')?'none':'';
 }
 // Formular → Zusatzfelder lesen (null, wenn der Bereich nicht genutzt wurde)
@@ -3083,7 +3147,7 @@ function crmEditKontaktnotiz(id){
     <div class="crm-kn-sub">👥 Teilnehmende TPS</div>
     ${staffPickerHtml(n.tps||[], 'crm-kne')}
     <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
-    ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kne-ext" value="${esc(k.id)}"${extIds.has(k.id)?' checked':''}> ${esc(k.name||'(Kontakt)')}</label>`).join('')}</div>`:''}
+    ${kontakte.length?_cbPickerHtml('crm-knex','crm-kne-ext', kontakte.map(k=>({id:k.id, name:k.name||'(Kontakt)', sub:k.funktion||'', on:extIds.has(k.id)})), 'Kontakt des Eintrags suchen …', false):''}
     <input type="text" class="crm-kn-in" id="crm-kne-extfree" oninput="crmKnWerRefresh('crm-kne-folgen','crm-kne-extfree')" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
     <div class="crm-kn-step"><span>2</span> Kontaktnotiz</div>
     <textarea class="crm-ta" id="crm-kn-edit" rows="7">${esc(n.text||'')}</textarea>
@@ -3612,12 +3676,12 @@ function nodeModal(o){
     const preTeams = (Array.isArray(n.teams)&&n.teams.length)?n.teams:ctxTeam;
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${preTeams.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
-     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
+     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
   } else if(vo){ teamRow=''; }   // Vorlage-Unterpunkt: keine Einzel-Zuweisung
   else {
     const it = tp ? (e.team?[e.team]:[]) : (o.inheritTeam||[]);
     const itLabel = it.join(', ');
-    teamRow=`<div class="crm-modal-field"><label>Zuständig${itLabel?' ('+esc(itLabel)+')':''}</label><select id="crm-task-assignee">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
+    teamRow=`<div class="crm-modal-field"><label>Zuständig${itLabel?' ('+esc(itLabel)+')':''}</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(it, n.assigneeId||'')}</select></div>`;
   }
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(o.titel)}</h3>
    <div class="crm-modal-field"><label>${o.isTop?'Aufgabe':'Unterpunkt'} *</label><input id="crm-task-text" value="${esc(n.text||'')}"></div>
@@ -4070,7 +4134,7 @@ function teamProjektFormHtml(p, isNew){
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Team-Projekt':'✎ Projekt'}</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-tp-name" value="${esc(p.name||'')}"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team"${(isNew||_kbMayManage(p))?'':' disabled title="Team ändern: nur mit Projektmanagement „Verwaltend\"'}>${teamOpts}</select></div>
-   <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link">${entityLinkOptions(linkSel)}</select></div>
+   <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link" class="crm-ss">${entityLinkOptions(linkSel)}</select></div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-tp-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -4321,10 +4385,48 @@ function _canManageEvents(){ try{ return crmModuleAccess(window.cu).crm==='verwa
 // Hat der Nutzer CRM/PM-Zugang? (für den „Zum Termin/Zur Veranstaltung ↗"-Sprung aus dem Kalender-Modal)
 function _kalHasCrm(){ try{ const ma=crmModuleAccess(window.cu); return (ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'); }catch(e){ return false; } }
 function staffNames(ids){ const us=getData().users||[]; return (ids||[]).map(id=>{ const u=us.find(x=>x&&x.id===id); return u?u.name:id; }); }
+// Mitarbeitende zuweisen (v490): Suche wie bei der Anmeldung (Tippen → Vorschläge, ↑/↓, Enter) statt langer
+// Häkchen-Reihe. Die Häkchen bleiben die Datenquelle (readStaffPicker), angezeigt werden nur die gewählten;
+// „Liste“ blendet alle ein, „Alle“/„Keine“ wie bisher.
+function _cbPickerHtml(idp, cls, items, ph, allNone, emptyTxt){
+  const rows=items.map(x=>`<label class="sp-item" data-n="${esc(String(x.name||'').toLowerCase())}"><input type="checkbox" class="${esc(cls)}" value="${esc(x.id)}"${x.on?' checked':''} style="width:auto"> ${esc(x.name)}${x.sub?` <span class="small" style="color:var(--muted)">(${esc(x.sub)})</span>`:''}</label>`).join('') || `<span class="small" style="color:var(--muted)">${esc(emptyTxt||'Keine Einträge.')}</span>`;
+  return `<div class="sp-wrap" id="${idp}-sp" data-cls="${esc(cls)}" style="position:relative">
+    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+      <input id="${idp}-spin" class="crm-kp-in" style="flex:1;min-width:180px" type="text" autocomplete="off" placeholder="🔎 ${esc(ph)}" oninput="crmSpSearch(${jsq(idp)},this.value)" onkeydown="crmSpKey(event,${jsq(idp)})" onblur="setTimeout(()=>crmKpHide(${jsq(idp)}+'-sp'),150)">
+      <button type="button" class="btn-sm-crm" onclick="document.getElementById(${jsq(idp+'-sp')}).classList.toggle('sp-all')" title="Alle zum Anklicken zeigen">Liste ▾</button>
+      ${allNone?`<button type="button" class="btn-sm-crm" onclick="crmSpAll(${jsq(idp)},true)">Alle</button><button type="button" class="btn-sm-crm" onclick="crmSpAll(${jsq(idp)},false)">Keine</button>`:''}
+    </div>
+    <div id="${idp}-sp-dd" class="crm-ac-dd" style="display:none;top:46px" onmousedown="event.preventDefault()"></div>
+    <div class="sp-list">${rows}</div></div>`;
+}
+function _spCls(idp){ const w=document.getElementById(idp+'-sp'); return (w&&w.dataset.cls)||(idp+'-ma'); }
+function crmSpAll(idp,on){ document.querySelectorAll('.'+_spCls(idp)).forEach(cb=>{ cb.checked=!!on; }); }
 function staffPickerHtml(selIds, idp){
   const sel=new Set(selIds||[]);
-  const rows=_assignableStaff().map(u=>`<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;cursor:pointer;border:1px solid var(--border);border-radius:999px"><input type="checkbox" class="${idp}-ma" value="${esc(u.id)}"${sel.has(u.id)?' checked':''} style="width:auto"> ${esc(u.name)}</label>`).join('') || '<span class="small" style="color:var(--muted)">Keine Mitarbeiter vorhanden.</span>';
-  return `<div style="display:flex;gap:8px;margin-bottom:6px"><button type="button" class="btn-sm-crm" onclick="crmStaffAll(${jsq(idp)},true)">Alle</button><button type="button" class="btn-sm-crm" onclick="crmStaffAll(${jsq(idp)},false)">Keine</button></div><div style="max-height:150px;overflow:auto;display:flex;flex-wrap:wrap;gap:5px">${rows}</div>`;
+  return _cbPickerHtml(idp, idp+'-ma', _assignableStaff().map(u=>({id:u.id, name:u.name, on:sel.has(u.id)})), 'Mitarbeitende suchen …', true, 'Keine Mitarbeitenden.');
+}
+function crmSpSearch(idp,v){
+  const dd=document.getElementById(idp+'-sp-dd'); if(!dd) return; const q=(v||'').trim().toLowerCase(); window._kpIdx=-1; if(!q){ dd.style.display='none'; return; }
+  const cbs=Array.from(document.querySelectorAll('.'+_spCls(idp))).filter(cb=>!cb.checked);
+  const rank=n=>n.startsWith(q)?0:(n.split(/[\s\-]+/).some(w=>w.startsWith(q))?1:(n.includes(q)?2:3));
+  const list=cbs.map(cb=>{ const lab=cb.closest('.sp-item'); const n=lab?lab.dataset.n:''; const name=(lab?lab.textContent:'').trim(); return {id:cb.value,name,r:rank(n)}; })
+    .filter(x=>x.r<3).sort((a,b)=>a.r-b.r||a.name.localeCompare(b.name,'de'));
+  dd.innerHTML=list.length?list.map(x=>`<div class="crm-ac-item" data-u="${esc(x.id)}" onclick="crmSpAdd(${jsq(idp)},this.dataset.u)">${_kpHl(x.name,q)}</div>`).join(''):'<div class="crm-ac-empty">Niemand gefunden</div>';
+  dd.style.display='block';
+}
+function crmSpAdd(idp,uid){
+  document.querySelectorAll('.'+_spCls(idp)).forEach(cb=>{ if(cb.value===uid){ cb.checked=true; cb.dispatchEvent(new Event('change',{bubbles:true})); } });
+  const i=document.getElementById(idp+'-spin'); if(i){ i.value=''; try{ i.focus(); }catch(_){} }
+  crmKpHide(idp+'-sp'); window._kpIdx=-1;
+}
+function crmSpKey(ev,idp){
+  const dd=document.getElementById(idp+'-sp-dd'); const open=dd&&dd.style.display==='block';
+  const items=open?Array.from(dd.querySelectorAll('.crm-ac-item')):[];
+  const mark=()=>items.forEach((el,i)=>{ el.classList.toggle('on',i===window._kpIdx); if(i===window._kpIdx) el.scrollIntoView({block:'nearest'}); });
+  if(ev.key==='ArrowDown'){ ev.preventDefault(); if(!open){ crmSpSearch(idp,ev.target.value); return; } window._kpIdx=Math.min((window._kpIdx??-1)+1, items.length-1); mark(); }
+  else if(ev.key==='ArrowUp'){ ev.preventDefault(); if(!open) return; window._kpIdx=Math.max((window._kpIdx??0)-1,-1); mark(); }
+  else if(ev.key==='Enter'){ ev.preventDefault(); if(!items.length) return; const t=items[(window._kpIdx??-1)>=0?window._kpIdx:0]; crmSpAdd(idp,t.dataset.u); }
+  else if(ev.key==='Escape'){ crmKpHide(idp+'-sp'); }
 }
 function readStaffPicker(idp){ return Array.from(document.querySelectorAll('.'+idp+'-ma:checked')).map(x=>x.value); }
 function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(cb=>{ cb.checked=!!on; }); }
@@ -4606,8 +4708,8 @@ function _verteilerModal(v){
      <div id="crm-vt-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
-   <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
-   <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
+   <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" class="crm-ss" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
+   <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" class="crm-ss" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVerteiler(${jsq(v.id||'')})">Speichern</button></div>`);
   _vtPaintList();
@@ -4838,7 +4940,7 @@ function _pvModal(v){
   }).join('')).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📮 Adressverteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
-   <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
+   <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" class="crm-ss" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
    <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:11px;color:var(--muted)"></span></label>
      <div id="crm-pv-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Eintrag anklicken = korrigieren · 🔗 = mit Kontakt verknüpft (bleibt aktuell)</span>
@@ -6243,7 +6345,7 @@ Object.assign(window, {
   crmMfAddRow, crmMfDelRow,
   crmExportContactsVcf, crmImportContactsFile,
   crmAddTermin, crmSaveTermin, crmDeleteTermin, crmEditTermin, crmSaveTerminEdit, crmStaffAll,
-  crmKpSearch, crmKpAdd, crmKpRemove, crmCanCreateItems,
+  crmKpSearch, crmKpAdd, crmKpRemove, crmKpKey, crmKpHide, crmSpSearch, crmSpAdd, crmSpKey, crmSpAll, crmCanCreateItems,
   crmNewItem, crmNewType, crmSaveNewItem, crmTerminToVa,
   crmAddKontaktnotiz, crmDeleteKontaktnotiz, crmCloseBoard, crmReopenBoard,
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,

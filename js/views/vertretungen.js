@@ -60,7 +60,7 @@ export function renderVertretungen(){
     <div style="background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:22px">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         <label style="font-size:12px;color:var(--muted)">Team<br><select id="vt-team" style="min-width:160px">${teamOpts}</select></label>
-        <label style="font-size:12px;color:var(--muted)">Vertreter:in<br><select id="vt-deputy" style="min-width:180px">${depOpts}</select></label>
+        <label style="font-size:12px;color:var(--muted)">Vertreter:in<br><select id="vt-deputy" class="crm-ss" style="min-width:180px">${depOpts}</select></label>
         <label style="font-size:12px;color:var(--muted)">ab<br><input type="date" id="vt-von" value="${today}"></label>
         <label style="font-size:12px;color:var(--muted)">bis (optional)<br><input type="date" id="vt-bis"></label>
         <button class="btn btn-ok btn-sm" onclick="addVertretung()">＋ Vertretung anlegen</button>

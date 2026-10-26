@@ -72,7 +72,7 @@ export function showVacRequestForm(editId){
     : [];
   const empSelector=isMgr&&teamEmps.length
     ? `<div class="form-group"><label>Für wen?</label>
-        <select id="vr-emp" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="calcVrDays()">
+        <select id="vr-emp" class="crm-ss" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" onchange="calcVrDays()">
           <option value=""${(!editing||editing.userId===cu.id)?' selected':''}>– Mich selbst –</option>
           ${teamEmps.map(u=>`<option value="${esc(u.id)}"${editing&&editing.userId===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}
         </select></div>`

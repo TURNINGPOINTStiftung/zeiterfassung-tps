@@ -962,8 +962,8 @@ function shopOrderNew(itemId){
       ${ents.length?'<option value="crm">🏛️ Für einen Verein / Partner</option>':''}
       ${pls.length?'<option value="place">🏢 Ins Büro / an einen Ort</option>':''}
       <option value="other">✏️ Andere Adresse / Person</option></select></div>
-    <div class="shop-f2" id="so-crm-w" style="display:none"><div class="shop-f"><label>Welcher Verein / Partner? *</label><select id="so-crm" onchange="shopOrderCrmChg()">${vOpts}</select></div>
-      <div class="shop-f" id="so-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="so-k" onchange="shopOrderZielChg(true)"></select></div></div>
+    <div class="shop-f2" id="so-crm-w" style="display:none"><div class="shop-f"><label>Welcher Verein / Partner? *</label><select id="so-crm" class="crm-ss" onchange="shopOrderCrmChg()">${vOpts}</select></div>
+      <div class="shop-f" id="so-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="so-k" class="crm-ss" onchange="shopOrderZielChg(true)"></select></div></div>
     <div class="shop-f" id="so-place-w" style="display:none"><label>Welcher Ort? *</label><select id="so-place">${plOpts}</select></div>
     <div class="shop-f" id="so-name-w" style="display:none"><label>Empfänger * <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label>
       <input id="so-name" list="so-people" autocomplete="off" placeholder="Name eingeben … z. B. Kollege, Schule XY" oninput="shopOrderNameChg()">${_peopleDatalist('so-people')}</div>
@@ -1264,13 +1264,13 @@ function _whoPickerHtml(px){
   ents.forEach(x=>{ (byTree[x.tree]=byTree[x.tree]||{label:x.treeLabel,icon:x.icon,list:[]}).list.push(x); });
   const crmGroups=Object.keys(byTree).map(k=>{ const g=byTree[k];
     return `<optgroup label="${esc(g.icon+' '+g.label)}">${g.list.sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})).map(x=>`<option value="c:${esc(x.tree)}::${esc(x.eid)}">${esc(x.name)}</option>`).join('')}</optgroup>`; }).join('');
-  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" onchange="shopWhoChg(${jsq(px)})">
+  return `<div class="shop-f2"><div class="shop-f"><label>An wen? *</label><select id="${px}-who" class="crm-ss" onchange="shopWhoChg(${jsq(px)})">
         <option value="">– bitte wählen –</option>
         ${ppl.length?`<optgroup label="👤 Mitarbeiter">${ppl.map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('')}</optgroup>`:''}
         ${crmGroups}
         <option value="__other">✏️ Andere Person / Organisation …</option></select></div>
       <div class="shop-f" id="${px}-other-w" style="display:none"><label>Name <span style="font-weight:400;color:var(--muted)">(Mitarbeiter werden vorgeschlagen)</span></label><input id="${px}-other" list="${px}-people" autocomplete="off" placeholder="z. B. Max Muster, Schule XY" oninput="shopWhoChg(${jsq(px)},true)">${_peopleDatalist(px+'-people')}</div>
-      <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" onchange="shopWhoChg(${jsq(px)},true)"></select></div></div>
+      <div class="shop-f" id="${px}-k-w" style="display:none"><label>An Person <span style="font-weight:400;color:var(--muted)">(Mitglied / Kontakt, optional)</span></label><select id="${px}-k" class="crm-ss" onchange="shopWhoChg(${jsq(px)},true)"></select></div></div>
       <div class="shop-f" id="${px}-adr-w" style="display:none;font-size:12px;color:var(--muted);margin-top:-4px"></div>`;
 }
 // Empfänger gewechselt: freies Namensfeld bzw. Kontaktliste des Vereins zeigen + Adresse anzeigen
@@ -1397,7 +1397,7 @@ function shopReassign(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
   const ppl=people().filter(u=>u.id!==l.borrowerId);
   openModal(`<h3>👤 Zuordnung übergeben</h3><p style="font-size:13px;margin:0 0 10px">${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>${l.unitId||l.placeId?'':' · '+_num(l.qty)+'×'} · bisher bei <b>${esc(bName(l))}</b></p>
-    <div class="shop-f"><label>Neu zuständig *</label><select id="sra-who"><option value="">– bitte wählen –</option>${ppl.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}</select></div>
+    <div class="shop-f"><label>Neu zuständig *</label><select id="sra-who" class="crm-ss"><option value="">– bitte wählen –</option>${ppl.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}</select></div>
     <div class="shop-f"><label>Notiz</label><input id="sra-note" placeholder="z. B. Übergabe beim Saisonstart"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopReassignSave(${jsq(loanId)})">Übergeben</button></div>`);
@@ -1427,7 +1427,7 @@ function shopPickItem(mode){
     const us=items().filter(isEinzeln).flatMap(it=>unitsOf(it).filter(u=>u.placeId && !unitLoan(u.id)).map(u=>({it,u})));
     if(!its.length && !pls.length && !us.length){ toast('Nichts zum Zuordnen verfügbar.','err'); return; }
     openModal(`<h3>🔁 Zuordnen / Verleihen – was?</h3>
-      <div class="shop-f"><label>Was?</label><select id="spi-item">
+      <div class="shop-f"><label>Was?</label><select id="spi-item" class="crm-ss">
         ${pls.length?`<optgroup label="🚩 Fahrzeuge, Boote, Anhänger (mit Inhalt)">${pls.map(p=>`<option value="${esc('p|'+p.id)}">${esc(placeLabel(p.id))}</option>`).join('')}</optgroup>`:''}
         ${its.length?`<optgroup label="🔁 Leihmaterial & 🧰 Ausstattung">${its.map(i=>`<option value="${esc('i|'+i.id)}">${esc(itemLabel(i))} (${inPlaces(i)} verfügbar)</option>`).join('')}</optgroup>`:''}
         ${us.length?`<optgroup label="🏷️ Einzelne Stücke">${us.map(x=>`<option value="${esc('u|'+x.it.id+'|'+x.u.id)}">${esc(_unitTitle(x.it,x.u))} – ${esc(placeLabel(x.u.placeId))}</option>`).join('')}</optgroup>`:''}
@@ -1439,7 +1439,7 @@ function shopPickItem(mode){
   const list=items().filter(i=>inPlaces(i)>0);
   if(!list.length){ toast('Kein Artikel mit Bestand.','err'); return; }
   openModal(`<h3>📤 Direkt verschicken – welcher Artikel?</h3>
-    <div class="shop-f"><label>Artikel</label><select id="spi-item">${list.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''} (${inPlaces(i)} verfügbar)</option>`).join('')}</select></div>
+    <div class="shop-f"><label>Artikel</label><select id="spi-item" class="crm-ss">${list.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''} (${inPlaces(i)} verfügbar)</option>`).join('')}</select></div>
     <p style="font-size:12px;color:var(--muted);margin:0">Leihmaterial, das zurückkommen soll, besser über „🔁 Ausleihen" → „Verleihen".</p>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopSend(document.getElementById('spi-item').value)">Weiter</button></div>`);
