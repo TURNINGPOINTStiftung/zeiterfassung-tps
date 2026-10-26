@@ -2754,16 +2754,16 @@ function kontaktnotizenSecHtml(e){
     </div>`; };
   const latest=notes[0], older=notes.slice(1);
   const partners=_koopPartners(window._crmTree, e.id);
-  const sharePicker = partners.length ? `<div class="crm-share-opts" style="margin:6px 0"><span class="small" style="color:var(--muted)">Gemeinsam mit:</span>${partners.map(p=>`<label><input type="checkbox" class="crm-kn-shareopt" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}"> ${esc(_entityName(p.tree,p.eid))}</label>`).join('')}</div>` : '';
+  const sharePicker = partners.length ? `<div class="crm-kn-sub">🤝 Gemeinsam mit Kooperationspartner</div><div class="crm-share-opts" style="margin:2px 0 6px">${partners.map(p=>`<label><input type="checkbox" class="crm-kn-shareopt" data-tree="${esc(p.tree)}" data-eid="${esc(p.eid)}"> ${esc(_entityName(p.tree,p.eid))}</label>`).join('')}</div>` : '';
   const input=canEdit?`<div class="crm-kn-more crm-kn-form">
       <div class="crm-kn-step"><span>1</span> Gespräch</div>
       ${_knMoreHtml(e)}
+      ${sharePicker}
       <div class="crm-kn-step"><span>2</span> Kontaktnotiz</div>
       ${getAiEndpoint()?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="btn-sm-crm" onclick="crmCleanNote(this)">🧠 Aufbereiten</button></div>`:''}
       <textarea class="crm-ta" id="crm-kn-new" rows="5" placeholder="Was wurde besprochen?"></textarea>
       <div class="crm-kn-step"><span>3</span> Was folgt daraus?</div>
       ${_knFolgenFormHtml()}
-      ${sharePicker}
       <div class="crm-modal-actions"><button class="btn-sm-crm primary" onclick="crmAddKontaktnotiz()">＋ Notiz speichern</button></div>
     </div>`:'';
   const latestHtml = latest ? `<div class="crm-kn-latest">${noteHtml(latest)}</div>`
@@ -2814,10 +2814,29 @@ function crmDeleteKontaktnotiz(id){
 // („📌 Mir zugewiesen") bzw. auf der Team-Seite im Projektmanagement angezeigt.
 const KN_ARTEN={ telefon:'📞 Telefon', video:'💻 Video-Call', treffen:'🤝 Treffen', mail:'✉️ Mail', messe:'🎪 Messe', sonst:'🗒 Sonstiges' };
 const KN_TYP={ aufgabe:'Aufgabe', frist:'Frist / Wiedervorlage', termin:'Termin', info:'nur Info' };
-function _knWerOptions(){
-  const us=_assignableStaff().map(u=>`<option value="u:${esc(u.id)}">${esc(u.name)}</option>`).join('');
-  const ts=((getData().teams)||[]).map(t=>`<option value="t:${esc(t)}">👥 Team ${esc(t)}</option>`).join('');
-  return `<option value="">– verantwortlich –</option>${us}${ts}`;
+function _knExtNames(freeId){ return String((document.getElementById(freeId||'crm-kn-extfree')||{}).value||'').split(',').map(s=>s.trim()).filter(Boolean).slice(0,30); }
+function _knWerOptions(e, freeId, sel){
+  const o=(v,l)=>`<option value="${esc(v)}"${v===sel?' selected':''}>${esc(l)}</option>`;
+  const us=_assignableStaff().map(u=>o('u:'+u.id, u.name)).join('');
+  const ts=((getData().teams)||[]).map(t=>o('t:'+t, '👥 Team '+t)).join('');
+  const ks=((e&&e.kontakte)||[]).filter(k=>k&&k.id).map(k=>o('k:'+k.id, (k.name||'(Kontakt)')+(k.funktion?' ('+k.funktion+')':''))).join('');
+  const xs=_knExtNames(freeId).map(n=>o('x:'+n, n)).join('');
+  return `<option value="">– verantwortlich –</option><optgroup label="TPS (→ Aufgabe im Kanban)">${us}${ts}</optgroup>`
+    +((ks||xs)?`<optgroup label="Verein / Kontakte (nur in der Notiz)">${ks}${xs}</optgroup>`:'');
+}
+// Liste „weitere Personen“ geändert → Auswahl in den Ergebnis-Zeilen nachziehen (Wahl bleibt erhalten)
+function crmKnWerRefresh(boxId, freeId){
+  const box=document.getElementById(boxId); if(!box) return; const e=curEntity();
+  box.querySelectorAll('.kf-wer').forEach(s=>{ const v=s.value; s.innerHTML=_knWerOptions(e, freeId, v); });
+}
+// gewählten Wert → {kind,id,name}: u = TPS-Person, t = Team, k = Kontakt des Eintrags, x = weitere Person (Freitext)
+function _knWerOf(w){
+  if(!w) return null;
+  if(w.startsWith('u:')){ const id=w.slice(2); const u=(getData().users||[]).find(x=>x&&x.id===id); return { kind:'u', id, name:(u&&u.name)||id }; }
+  if(w.startsWith('t:')) return { kind:'t', id:w.slice(2), name:w.slice(2) };
+  if(w.startsWith('k:')){ const id=w.slice(2); const e=curEntity(); const k=((e&&e.kontakte)||[]).find(x=>x&&x.id===id); return { kind:'k', id, name:(k&&k.name)||'(Kontakt)' }; }
+  if(w.startsWith('x:')) return { kind:'x', id:'', name:w.slice(2).slice(0,80) };
+  return null;
 }
 function _knProjOptions(e){
   const ps=(e&&Array.isArray(e.projekte)?e.projekte:[]).filter(p=>!p.closed);
@@ -2833,12 +2852,12 @@ function _knMoreHtml(e){
     ${staffPickerHtml([(window.cu&&window.cu.id)||''], 'crm-kn')}
     <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
     ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kn-ext" value="${esc(k.id)}"> ${esc(k.name||'(Kontakt)')}${k.funktion?` <span class="small" style="color:var(--muted)">(${esc(k.funktion)})</span>`:''}</label>`).join('')}</div>`:''}
-    <input type="text" class="crm-kn-in" id="crm-kn-extfree" placeholder="weitere Personen, mit Komma getrennt (z. B. Kassiererin Schmidt)">`;
+    <input type="text" class="crm-kn-in" id="crm-kn-extfree" oninput="crmKnWerRefresh('crm-kn-folgen','crm-kn-extfree')" placeholder="weitere Personen, mit Komma getrennt (z. B. Kassiererin Schmidt)">`;
 }
 function _knFolgenFormHtml(){
   return `<div id="crm-kn-folgen"></div>
     <button type="button" class="btn-sm-crm" onclick="crmKnAddFolge()">＋ Aufgabe / Frist / Termin</button>
-    <div class="small" style="color:var(--muted);margin-top:4px">Aufgaben und Fristen landen im Projekt dieses Eintrags und bei der verantwortlichen Person bzw. dem Team im Projektmanagement; Termine im Kalender.</div>`;
+    <div class="small" style="color:var(--muted);margin-top:4px">Aufgaben und Fristen für TPS-Personen/Teams landen im Projekt dieses Eintrags und im Projektmanagement; für Vereinskontakte und weitere Personen stehen sie nur in der Notiz. Termine kommen in den Kalender.</div>`;
 }
 // Datum (ohne Uhrzeit): Feldwert ↔ Zeitstempel. Gleicher Tag → bisherigen Zeitpunkt behalten,
 // heute → jetzt, sonst 12:00 Uhr (damit es in keiner Zeitzone auf den Vortag rutscht).
@@ -2851,13 +2870,14 @@ function _knDayToTs(val, keepTs){
 }
 function crmKnAddFolge(boxId){
   const box=document.getElementById(boxId||'crm-kn-folgen'); if(!box) return;
+  const freeId=(boxId==='crm-kne-folgen')?'crm-kne-extfree':'crm-kn-extfree';
   const e=curEntity(); if(e) migEntityProjekte(e);
   const row=document.createElement('div'); row.className='crm-kn-folge';
   row.innerHTML=`<select class="kf-typ" onchange="crmKnTypChg(this)">${Object.entries(KN_TYP).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select>
     <input type="text" class="kf-text" placeholder="Was? (z. B. Rückruf an den Vorstand)">
     <input type="date" class="kf-datum" title="Datum / fällig am">
     <input type="time" class="kf-uhr" title="Uhrzeit" style="display:none">
-    <select class="kf-wer">${_knWerOptions()}</select>
+    <select class="kf-wer" onchange="crmKnTypChg(this.closest('.crm-kn-folge').querySelector('.kf-typ'))">${_knWerOptions(e, freeId)}</select>
     <select class="kf-proj" title="In welches Projekt?">${_knProjOptions(e)}</select>
     <button type="button" class="crm-x" title="Zeile entfernen" onclick="this.parentNode.remove()">✕</button>`;
   box.appendChild(row);
@@ -2865,7 +2885,8 @@ function crmKnAddFolge(boxId){
 function crmKnTypChg(sel){
   const row=sel.closest('.crm-kn-folge'); if(!row) return; const t=sel.value;
   row.querySelector('.kf-uhr').style.display=(t==='termin')?'':'none';
-  row.querySelector('.kf-proj').style.display=(t==='aufgabe'||t==='frist')?'':'none';
+  const ext=/^[kx]:/.test(row.querySelector('.kf-wer').value||'');   // Verein/Kontakt verantwortlich → kein Kanban, kein Projekt
+  row.querySelector('.kf-proj').style.display=((t==='aufgabe'||t==='frist') && !ext)?'':'none';
   row.querySelector('.kf-wer').style.display=(t==='info')?'none':'';
   row.querySelector('.kf-datum').style.display=(t==='info')?'none':'';
 }
@@ -2881,9 +2902,7 @@ function _knReadMore(){
   const folgen=Array.from(more.querySelectorAll('.crm-kn-folge')).map(r=>{
     const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim();
     if(!text) return null;
-    const w=r.querySelector('.kf-wer').value||''; let wer=null;
-    if(w.startsWith('u:')){ const id=w.slice(2); const u=us.find(x=>x&&x.id===id); wer={ kind:'u', id, name:(u&&u.name)||id }; }
-    else if(w.startsWith('t:')) wer={ kind:'t', id:w.slice(2), name:w.slice(2) };
+    const wer=_knWerOf(r.querySelector('.kf-wer').value||'');
     return { id:newId(), typ, text:text.slice(0,300), datum:r.querySelector('.kf-datum').value||'', uhr:r.querySelector('.kf-uhr').value||'',
       wer, proj:r.querySelector('.kf-proj').value||'' };
   }).filter(Boolean);
@@ -2895,6 +2914,8 @@ function _knApplyFolgen(e, note){
   const whenTxt=fmtDate(note.when||note.ts)+(note.art&&KN_ARTEN[note.art]?' ('+KN_ARTEN[note.art].replace(/^\S+\s/,'')+')':'');
   const me=(window.cu&&window.cu.id)||'';
   (note.folgen||[]).forEach(f=>{
+    const extern = f.wer && (f.wer.kind==='k' || f.wer.kind==='x');
+    if((f.typ==='aufgabe' || f.typ==='frist') && extern){ delete f.proj; return; }   // nur in der Notiz (kein Kanban)
     if(f.typ==='aufgabe' || f.typ==='frist'){
       // gewähltes Projekt; „neues Projekt Nachverfolgung“ bzw. nichts gewählt → EIN gemeinsames Projekt „Nachverfolgung“
       let p=(f.proj && f.proj!=='__new__') ? e.projekte.find(x=>x.id===f.proj && !x.closed) : null;
@@ -2915,7 +2936,7 @@ function _knApplyFolgen(e, note){
       if(!Array.isArray(e.termine)) e.termine=[];
       const staff = (f.wer&&f.wer.kind==='u') ? ((_canAssignStaff()||f.wer.id===me)?[f.wer.id]:[]) : [];
       const t={ id:newId(), titel:f.text, datum:f.datum||'', bis:'', uhr:f.uhr||'', datumTs:f.datum?Date.parse(f.datum):null, ort:'',
-        note:'Aus Kontaktnotiz vom '+whenTxt, mitarbeiter:staff, teilnehmer:[], fromNote:{ nid:note.id, ts:note.when||note.ts } };
+        note:'Aus Kontaktnotiz vom '+whenTxt+(extern?' – verantwortlich: '+f.wer.name:''), mitarbeiter:staff, teilnehmer:[], fromNote:{ nid:note.id, ts:note.when||note.ts } };
       e.termine.push(t); e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
       f.ref={ kind:'termin', tid:t.id };
     }
@@ -2975,7 +2996,8 @@ function _knExtraHtml(n, e, part){
   if(part!=='folgen' && (tps.length||ext.length)) out.push(`<div class="crm-kn-who">${tps.length?`<span class="crm-kn-wl">👥 TPS</span>${tps.map(x=>`<span class="crm-kn-chip">${esc(x)}</span>`).join('')}`:''}${ext.length?`<span class="crm-kn-wl">🏟️ Verein/Sonstige</span>${ext.map(x=>`<span class="crm-kn-chip ext">${esc(x)}</span>`).join('')}`:''}</div>`);
   const rows=(n.folgen||[]).map(f=>{
     let stand='', open='';
-    const live={ text:f.text, datum:f.datum, uhr:f.uhr, wer:f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:f.wer.name):'' };
+    const live={ text:f.text, datum:f.datum, uhr:f.uhr, wer:f.wer?(f.wer.kind==='t'?'👥 '+f.wer.name:((f.wer.kind==='k'||f.wer.kind==='x')?'🏟️ '+f.wer.name:f.wer.name)):'' };
+    if(!f.ref && f.wer && (f.wer.kind==='k'||f.wer.kind==='x') && (f.typ==='aufgabe'||f.typ==='frist')) stand='<span class="crm-kn-st" title="Verantwortlich ist eine Person außerhalb von TPS – keine Aufgabe im Kanban">📝 nur in der Notiz</span>';
     if(f.ref && f.ref.kind==='task' && e){
       const p=(e.projekte||[]).find(x=>x.id===f.ref.pid); const hit=p?findNodeIn(p.todos||[], f.ref.tid):null; const t=hit&&hit.node;
       if(t){ live.text=String(t.text||f.text).replace(/^⏰\s*/,''); live.datum=t.due||''; live.uhr='';
@@ -3036,7 +3058,7 @@ function crmOpenTerminFromHome(tree, eid, tid){
   try{ window.switchModule && window.switchModule('crm'); }catch(e){}
   setTimeout(()=>{ try{ window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmDetailTab='aufgaben'; paint(); crmEditTermin(tid); }catch(e){} }, 400);
 }
-Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmNoteAssignments, crmOpenAssignedFromHome, crmHomeItems, crmOpenTerminFromHome });
+Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmKnWerRefresh, crmNoteAssignments, crmOpenAssignedFromHome, crmHomeItems, crmOpenTerminFromHome });
 // ── Korrigieren statt Löschen (v461) ──────────────────────────────────
 // Bearbeiten: eigene Notiz bzw. mit CRM „voll“ jede; jede Fassung wird in n.versionen festgehalten.
 // Zurückziehen statt löschen: n.withdrawn={ts,by} – bleibt sichtbar (grau, wiederherstellbar).
@@ -3062,7 +3084,7 @@ function crmEditKontaktnotiz(id){
     ${staffPickerHtml(n.tps||[], 'crm-kne')}
     <div class="crm-kn-sub">🏟️ Teilnehmende Verein / Sonstige</div>
     ${kontakte.length?`<div class="crm-share-opts">${kontakte.map(k=>`<label><input type="checkbox" class="crm-kne-ext" value="${esc(k.id)}"${extIds.has(k.id)?' checked':''}> ${esc(k.name||'(Kontakt)')}</label>`).join('')}</div>`:''}
-    <input type="text" class="crm-kn-in" id="crm-kne-extfree" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
+    <input type="text" class="crm-kn-in" id="crm-kne-extfree" oninput="crmKnWerRefresh('crm-kne-folgen','crm-kne-extfree')" value="${esc(extFree)}" placeholder="weitere Personen, mit Komma getrennt">
     <div class="crm-kn-step"><span>2</span> Kontaktnotiz</div>
     <textarea class="crm-ta" id="crm-kn-edit" rows="7">${esc(n.text||'')}</textarea>
     <div class="crm-kn-step"><span>3</span> Weitere Ergebnisse hinzufügen</div>
@@ -3096,9 +3118,7 @@ function _knReadMoreFolgenOnly(boxId){
   const us=getData().users||[]; const box=document.getElementById(boxId||'crm-kne-folgen'); if(!box) return [];
   return Array.from(box.querySelectorAll('.crm-kn-folge')).map(r=>{
     const typ=r.querySelector('.kf-typ').value, text=r.querySelector('.kf-text').value.trim(); if(!text) return null;
-    const w=r.querySelector('.kf-wer').value||''; let wer=null;
-    if(w.startsWith('u:')){ const uid=w.slice(2); const u=us.find(x=>x&&x.id===uid); wer={ kind:'u', id:uid, name:(u&&u.name)||uid }; }
-    else if(w.startsWith('t:')) wer={ kind:'t', id:w.slice(2), name:w.slice(2) };
+    const wer=_knWerOf(r.querySelector('.kf-wer').value||'');
     return { id:newId(), typ, text:text.slice(0,300), datum:r.querySelector('.kf-datum').value||'', uhr:r.querySelector('.kf-uhr').value||'', wer, proj:r.querySelector('.kf-proj').value||'' };
   }).filter(Boolean);
 }
