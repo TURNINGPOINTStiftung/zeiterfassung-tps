@@ -25,8 +25,10 @@ export const DEFAULT_STAMM_FIELDS = [
   { key:'email',   label:'E-Mail',          type:'text' },
   { key:'tel',     label:'Telefon',         type:'text' },
   { key:'tags',    label:'Schlagworte',     type:'text',     hint:'kommagetrennt' },
-  { key:'statStart', label:'Statistik ab',  type:'date',     hint:'ab wann zählt die Statistik' },
 ];
+// „Statistik ab“ (statStart) entfällt seit v489 (User 26.10.2026: vergessen/falsch gesetzt → Erfassungen verschwanden).
+// Die Statistik zählt jetzt alles, was eingetragen ist; alte Werte in den Daten werden ignoriert.
+const _noStatStart=a=>a.filter(f=>f && f.key!=='statStart');
 
 // ── Standard-Kontaktfunktionen (Fallback) ──────────────────────────
 export const DEFAULT_MEMBER_FUNCTIONS = [
@@ -68,8 +70,8 @@ export function stammFields(tree){
   const c=_cfg();
   const sf = c && c.stammFields;
   if(sf && typeof sf==='object'){
-    if(Array.isArray(sf[tree]) && sf[tree].length) return sf[tree];
-    if(Array.isArray(sf.__default) && sf.__default.length) return sf.__default;
+    if(Array.isArray(sf[tree]) && sf[tree].length) return _noStatStart(sf[tree]);
+    if(Array.isArray(sf.__default) && sf.__default.length) return _noStatStart(sf.__default);
   }
   return DEFAULT_STAMM_FIELDS;
 }

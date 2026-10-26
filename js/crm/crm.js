@@ -3376,9 +3376,8 @@ function _statsForEntity(tree,eid){
   return own.concat(shared);
 }
 function statsSecHtml(e){
-  const start=(e.stamm&&e.stamm.statStart)||'';
-  let stats=_statsForEntity(window._crmTree, e.id).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-  if(start) stats=stats.filter(s=>String(s.date)>=start);
+  // Alles Eingetragene zählt (früheres Feld „Statistik ab“ entfällt seit v489)
+  const stats=_statsForEntity(window._crmTree, e.id).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   // vorheriger Eintrag GLEICHER Art (chronologisch) → Δ pro Art
   const prevOf=new Map(), lastByTyp={};
   stats.forEach(s=>{ const t=s.typ||'_'; prevOf.set(s.id, lastByTyp[t]||null); lastByTyp[t]=s; });
@@ -3425,14 +3424,14 @@ function statsSecHtml(e){
     <h4><span class="ttl">📊 Statistik · Inklusion</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button>`:''}</h4>
     <div class="small" style="color:var(--muted);margin-bottom:8px">Pro Erfassung Art wählen (Training/Veranstaltung). ▲▼ zeigt die Veränderung zur vorigen Erfassung gleicher Art.</div>
     ${stats.length ? yearBlocks
-      : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.${start?` (ab ${esc(fmtDate(Date.parse(start)))})`:''}</div>`}
+      : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.</div>`}
   </div>`;
 }
 function crmStatModal(s){
   const e=curEntity(); if(!e) return;
   const isEdit=!!s; s=s||{};
   crmOpenModalShell();
-  const def=s.date||(e.stamm&&e.stamm.statStart)||localISODate();
+  const def=s.date||localISODate();
   const typOpts=STAT_TYPES.map(([k,l])=>`<option value="${k}"${(s.typ||'training')===k?' selected':''}>${esc(l)}</option>`).join('');
   const M=k=>STAT_METRICS.find(m=>m.key===k);
   const f=(m,oninput)=>{ const pre=isEdit?statNum(s,m):0; return `<div class="crm-modal-field" style="flex:1;min-width:150px"><label title="${esc(m.title||m.label)}">${esc(m.label)}</label><input id="crm-stat-${m.key}" type="number" min="0" inputmode="numeric" value="${pre?pre:''}"${oninput?` oninput="${oninput}"`:''}></div>`; };
