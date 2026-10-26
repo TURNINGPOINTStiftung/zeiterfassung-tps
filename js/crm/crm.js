@@ -2985,7 +2985,8 @@ function crmOpenAssignedFromHome(tree, eid, tid){
 }
 // Für die Startseite „Was ansteht“ (User 26.10.2026): offene Aufgaben/Fristen aus den Projekten aller
 // Vereine/Kontakte, die MIR oder MEINEM Team zugewiesen sind, + CRM-Termine, denen ich zugewiesen bin (bis in7).
-function crmHomeItems(today, in7){
+// all=true (Übersichts-Modus, z. B. Stiftungsleitung ohne Zeiterfassung): ALLE künftigen Termine, ohne Zuweisung/Zeitgrenze.
+function crmHomeItems(today, in7, all){
   const cu=window.cu||{}; const me=cu.id||''; if(!me) return { tasks:[], termine:[] };
   const myTeams=new Set([cu.team].concat(Array.isArray(cu.teams)?cu.teams:[]).filter(Boolean));
   const tasks=_entityAssignedTasks(n=>n && n.status!=='erledigt' && !(Array.isArray(n.children)&&n.children.length) &&
@@ -2993,8 +2994,9 @@ function crmHomeItems(today, in7){
     .map(a=>({ tree:a.tree, eid:a.id, tid:a.node.id, text:a.node.text||'Aufgabe', name:a.name, due:a.node.due||'', team:!a.node.assigneeId }));
   const termine=[];
   try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{
-    (e.termine||[]).forEach(t=>{ if(!t||!t.datum||!(Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(me))) return;
-      const s=t.datum, en=t.bis||t.datum; if(en<today||s>in7) return;
+    (e.termine||[]).forEach(t=>{ if(!t||!t.datum) return;
+      if(!all && !(Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(me))) return;
+      const s=t.datum, en=t.bis||t.datum; if(en<today||(!all && s>in7)) return;
       termine.push({ tree:tr.key, eid:e.id, tid:t.id, titel:t.titel||'Termin', datum:s, uhr:t.uhr||'', name:(e.stamm&&e.stamm.name)||'' }); }); })); }catch(err){}
   return { tasks, termine };
 }
