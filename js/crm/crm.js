@@ -2629,8 +2629,10 @@ function crmSaveTermin(){
   // Mehrere CRM-Kontakte möglich: der ERSTE ist der Ablageort (dort liegt der Termin),
   // die weiteren werden als Beteiligte (teilnehmer) mitgeführt.
   const kontakte=readMultiKontakt('crm-tf');
-  if(kontakte.length){ const home=kontakte[0]; window._crmMode='kontakte'; window._crmTree=home.tree; window._crmSelId=home.eid; }
-  else if(!curEntity()){ toast('Bitte mindestens einen CRM-Kontakt wählen.','err'); return; }
+  // Ohne gewählten Kontakt NICHT beim zuletzt geöffneten Eintrag ablegen (v483, User 26.10.2026: aus dem
+  // Kalender angelegte Termine landeten still bei einem anderen Verein und fehlten beim richtigen).
+  if(!kontakte.length){ toast('Bitte einen CRM-Kontakt wählen – dort wird der Termin abgelegt.','err'); return; }
+  { const home=kontakte[0]; window._crmMode='kontakte'; window._crmTree=home.tree; window._crmSelId=home.eid; }
   const datum=val('crm-tf-datum'); let bis=val('crm-tf-bis');
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
