@@ -3958,16 +3958,20 @@ function teamCardHtml(tm, view){
 function paintTeamsList(){
   const root=document.getElementById('crm-root'); if(!root) return;
   window._crmTaskCtx=null;
+  // Jeder Bereich für sich (v491): ein Fehler in einem Bereich darf die anderen nicht mitreißen – und wird sichtbar gemeldet.
+  const _safe=(label,fn)=>{ try{ return fn(); }catch(e){ console.error('Projektmanagement „'+label+'“:', e);
+    return `<div class="crm-sec"><h4><span class="ttl">⚠ ${esc(label)}</span></h4><div class="small" style="color:var(--danger)">Konnte nicht angezeigt werden: ${esc((e&&e.message)||String(e))}${e&&e.stack?' · '+esc(String(e.stack).split(String.fromCharCode(10)).slice(1,3).join(' ').trim().slice(0,200)):''}</div></div>`; } };
   // „Meine Aufgaben" oben – für alle
-  const meine = meineSectionsHtml();
+  const meine = _safe('Mir zugewiesen / Meine Projekte', meineSectionsHtml);
   // Veranstaltungen direkt GANZ OBEN in der Teams-Ansicht (kein eigener Reiter mehr)
-  const vaBlock = crmCanView() ? veranstaltungenListHtml() : '';
+  const vaBlock = _safe('Veranstaltungen', ()=>crmCanView() ? veranstaltungenListHtml() : '');
   // Team-Kacheln: für CRM-Betrachter ODER reine Kanban-Nutzer. Sichtbare Teams = visibleKanbanTeams
   // (voll/admin/kanban-verwaltend sehen alle; sonst nur eigene Teams, sanft). Reine Kanban-Nutzer
   // sehen Projekt-Zählung statt CRM-Veranstaltungen. „Ohne Team" nur für Sieht-alle.
   let teamsBlock='';
   const _cu=window.cu;
   const _view=crmCanView();
+  teamsBlock=_safe('Teams', ()=>{ let teamsBlock='';
   if(_view || _kanbanAccess(_cu)){
     const cards=visibleKanbanTeams(_cu).map(tm=>teamCardHtml(tm, _view));
     if(_kanbanSeesAll(_cu)){ const cNo=teamCounts('Ohne Team'); if(cNo.total) cards.push(teamCardHtml('Ohne Team', _view)); }
@@ -3977,6 +3981,7 @@ function paintTeamsList(){
       <div class="small" style="color:var(--muted);margin-top:10px">${_view?'Pro Team: Veranstaltungen und eigene Projekte.':'Pro Team: eigene Projekte.'}</div>
     </div>`;
   }
+  return teamsBlock; });
   root.innerHTML = barHtml() + `<div class="crm-body">${vaBlock}${meine}${teamsBlock}</div>`;
 }
 function paintTeamDetail(){
