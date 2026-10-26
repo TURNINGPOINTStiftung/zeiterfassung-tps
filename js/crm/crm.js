@@ -2727,8 +2727,8 @@ function kontaktnotizenSecHtml(e){
       <div class="crm-kn-step"><span>1</span> Gespräch</div>
       ${_knMoreHtml(e)}
       <div class="crm-kn-step"><span>2</span> Kontaktnotiz</div>
-      <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="crm-mic" id="crm-mic-btn" onclick="crmDictate('crm-kn-new',this)">🎤 Diktat starten</button>${getAiEndpoint()?`<button type="button" class="btn-sm-crm" onclick="crmCleanNote(this)">🧠 Aufbereiten</button>`:''}</div>
-      <textarea class="crm-ta" id="crm-kn-new" rows="5" placeholder="Was wurde besprochen? (tippen oder diktieren)"></textarea>
+      ${getAiEndpoint()?`<div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap"><button type="button" class="btn-sm-crm" onclick="crmCleanNote(this)">🧠 Aufbereiten</button></div>`:''}
+      <textarea class="crm-ta" id="crm-kn-new" rows="5" placeholder="Was wurde besprochen?"></textarea>
       <div class="crm-kn-step"><span>3</span> Was folgt daraus?</div>
       ${_knFolgenFormHtml()}
       ${sharePicker}
