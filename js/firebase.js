@@ -217,9 +217,28 @@ function _applyFirebaseSnap(val){
   }catch(e){}
 }
 
+let _rtOn=false, _connWatch=false, _wasConnected=false;
 function _setupRealtimeSync(){
-  if(window._offlineMode) return;
-  window._fbRef.on('value', snap=>{ _applyFirebaseSnap(snap.val()); });
+  // Live-Listener IMMER anmelden (auch nach Timeout/Offline-Start) – Firebase verbindet selbst neu und
+  // liefert den Stand, sobald er da ist. Ein echter Snapshot beendet den Offline-Modus.
+  if(!_rtOn && window._fbRef){ _rtOn=true;
+    window._fbRef.on('value', snap=>{ const v=snap.val(); if(v&&Array.isArray(v.users)&&v.users.length) window._offlineMode=false; _applyFirebaseSnap(v); }); }
+  _watchConnection();
+}
+// Echte Verbindung zum Server beobachten (.info/connected) statt nur auf das „online“-Ereignis des Geräts zu warten.
+function _watchConnection(){
+  if(_connWatch) return; _connWatch=true;
+  try{ firebase.database().ref('.info/connected').on('value', s=>{
+    if(s.val()===true){ _wasConnected=true; window._offlineMode=false; try{ flushPendingWrites(); }catch(e){} }
+    else if(_wasConnected){ window._offlineMode=true; }   // erst nach einer echten Verbindung als „offline“ werten
+  }); }catch(e){}
+}
+// Für den Klick auf das „nicht synchronisiert“-Kärtchen: Offline-Annahme verwerfen und sofort neu versuchen.
+export function retrySyncNow(){
+  window._offlineMode=false;
+  _setupRealtimeSync();
+  try{ flushPendingWrites(); }catch(e){}
+  _pollFirebase();
 }
 
 export async function _pollFirebase(){
@@ -235,6 +254,7 @@ export function initFirebaseEvents(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
+    _setupRealtimeSync();   // falls nach einem Offline-Start noch kein Live-Listener läuft
     // Gezielt nur die offline eingereihten Pfade nachholen (kein Voll-Bestand mehr).
     flushPendingWrites();
     // Voll-Schreibvorgang (Fallback aus saveRaw) nur noch als Administrator-Account –
