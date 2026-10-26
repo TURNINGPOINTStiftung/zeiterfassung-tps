@@ -2983,7 +2983,26 @@ function crmOpenAssignedFromHome(tree, eid, tid){
   try{ window.switchModule && window.switchModule('crm'); }catch(e){}
   setTimeout(()=>{ try{ window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; paint(); crmMeineOpen('entity', tree, eid, tid); }catch(e){} }, 400);
 }
-Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmNoteAssignments, crmOpenAssignedFromHome });
+// Für die Startseite „Was ansteht“ (User 26.10.2026): offene Aufgaben/Fristen aus den Projekten aller
+// Vereine/Kontakte, die MIR oder MEINEM Team zugewiesen sind, + CRM-Termine, denen ich zugewiesen bin (bis in7).
+function crmHomeItems(today, in7){
+  const cu=window.cu||{}; const me=cu.id||''; if(!me) return { tasks:[], termine:[] };
+  const myTeams=new Set([cu.team].concat(Array.isArray(cu.teams)?cu.teams:[]).filter(Boolean));
+  const tasks=_entityAssignedTasks(n=>n && n.status!=='erledigt' && !(Array.isArray(n.children)&&n.children.length) &&
+      (n.assigneeId===me || (!n.assigneeId && Array.isArray(n.teams) && n.teams.some(t=>myTeams.has(t)))))
+    .map(a=>({ tree:a.tree, eid:a.id, tid:a.node.id, text:a.node.text||'Aufgabe', name:a.name, due:a.node.due||'', team:!a.node.assigneeId }));
+  const termine=[];
+  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{
+    (e.termine||[]).forEach(t=>{ if(!t||!t.datum||!(Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(me))) return;
+      const s=t.datum, en=t.bis||t.datum; if(en<today||s>in7) return;
+      termine.push({ tree:tr.key, eid:e.id, tid:t.id, titel:t.titel||'Termin', datum:s, uhr:t.uhr||'', name:(e.stamm&&e.stamm.name)||'' }); }); })); }catch(err){}
+  return { tasks, termine };
+}
+function crmOpenTerminFromHome(tree, eid, tid){
+  try{ window.switchModule && window.switchModule('crm'); }catch(e){}
+  setTimeout(()=>{ try{ window._crmMode='kontakte'; window._crmTree=tree; window._crmSelId=eid; window._crmDetailTab='aufgaben'; paint(); crmEditTermin(tid); }catch(e){} }, 400);
+}
+Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmNoteAssignments, crmOpenAssignedFromHome, crmHomeItems, crmOpenTerminFromHome });
 // ── Korrigieren statt Löschen (v461) ──────────────────────────────────
 // Bearbeiten: eigene Notiz bzw. mit CRM „voll“ jede; jede Fassung wird in n.versionen festgehalten.
 // Zurückziehen statt löschen: n.withdrawn={ts,by} – bleibt sichtbar (grau, wiederherstellbar).

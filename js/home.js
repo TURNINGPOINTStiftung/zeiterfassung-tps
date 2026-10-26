@@ -427,6 +427,14 @@ async function _fillTodo(){
       if(!(Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me))) return;
       rows.push({ sort:s, html:`<div class="home-row" onclick="homeOpenVa(${jsq(v.id)})"><span>📅</span><span class="tx">${esc(v.titel||'Veranstaltung')}</span><span class="home-pill green">${s<=today?'heute':fmtD(s)}</span></div>` });
     });
+    // Vereine/Kontakte: Aufgaben + Fristen (auch aus Kontaktnotizen) und Termine, denen ich zugewiesen bin
+    const ci=window.crmHomeItems?window.crmHomeItems(today,in7):null;
+    if(ci){
+      ci.tasks.forEach(a=>{ const over=a.due&&a.due<today;
+        rows.push({ sort:a.due||'9999', html:`<div class="home-row" onclick="crmOpenAssignedFromHome(${jsq(a.tree)},${jsq(a.eid)},${jsq(a.tid)})"><span>${/^⏰/.test(a.text)?'⏰':'☑️'}</span><span class="tx">${esc(String(a.text).replace(/^⏰\s*/,''))} <span class="home-sub">· ${esc(a.name)}${a.team?' · 👥 Team':''}</span></span>${a.due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(a.due)}</span>`:''}</div>` }); });
+      ci.termine.forEach(t=>{
+        rows.push({ sort:t.datum, html:`<div class="home-row" onclick="crmOpenTerminFromHome(${jsq(t.tree)},${jsq(t.eid)},${jsq(t.tid)})"><span>🗓️</span><span class="tx">${esc(t.titel)} <span class="home-sub">· ${esc(t.name)}${t.uhr?' · '+esc(t.uhr):''}</span></span><span class="home-pill green">${t.datum<=today?'heute':fmtD(t.datum)}</span></div>` }); });
+    }
   }catch(e){}
   rows.sort((a,b)=>String(a.sort).localeCompare(String(b.sort)));
   const more=rows.length>8?`<div class="home-sub" style="padding-top:6px">… und ${rows.length-8} weitere</div>`:'';
