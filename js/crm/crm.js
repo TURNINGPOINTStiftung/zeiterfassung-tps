@@ -2997,7 +2997,7 @@ function crmHomeItems(today, in7, all){
     (e.termine||[]).forEach(t=>{ if(!t||!t.datum) return;
       if(!all && !(Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(me))) return;
       const s=t.datum, en=t.bis||t.datum; if(en<today||(!all && s>in7)) return;
-      termine.push({ tree:tr.key, eid:e.id, tid:t.id, titel:t.titel||'Termin', datum:s, uhr:t.uhr||'', name:(e.stamm&&e.stamm.name)||'' }); }); })); }catch(err){}
+      termine.push({ tree:tr.key, eid:e.id, tid:t.id, titel:t.titel||'Termin', datum:s, uhr:t.uhr||'', name:(e.stamm&&e.stamm.name)||'', mine:Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(me) }); }); })); }catch(err){}
   return { tasks, termine };
 }
 function crmOpenTerminFromHome(tree, eid, tid){

@@ -37,7 +37,7 @@ const CARDS=[
   { k:'wx',     l:'🌤️ Wetter & Wind' },
   { k:'stamp',  l:'⏱️ Stempeln', hint:'nur wer die Zeiterfassung nutzt und stempeln darf' },
   { k:'sys',    l:'🛠️ System', hint:'nur Admin bzw. System-Verwaltung' },
-  { k:'todo',   l:'📌 Was ansteht' },
+  { k:'todo',   l:'📌 Was in der Stiftung ansteht' },
   { k:'notes',  l:'🔔 Neuigkeiten' },
   { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf – nur wer die Zeiterfassung nutzt' },
   { k:'favs',   l:'⭐ Favoriten' },
@@ -126,6 +126,8 @@ function _styles(){
   .home-tray button{border:1px solid var(--border);background:var(--surface,#fff);border-radius:16px;padding:3px 10px;cursor:pointer;font-size:13px}
   .home-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:6px}
   .home-row{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
+  #home-todo .home-row.mine{border-left:4px solid var(--primary,#203869);padding-left:8px;background:var(--info-bg,#eef3fb);border-radius:6px;margin-top:2px}
+  .home-mine{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--primary,#203869);color:var(--on-primary,#fff);vertical-align:1px}
   .home-row:first-of-type{border-top:none}.home-row:hover{color:var(--primary,#203869)}
   .home-row .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .home-pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;background:#e8eef8;color:var(--primary,#203869)}
@@ -402,9 +404,10 @@ function homeNewsAllSeen(){
 
 // ── Was ansteht: CRM-Aufgaben (mir zugewiesen) + meine Termine (7 Tage) + Shop ──
 function _flat(arr,out){ (arr||[]).forEach(t=>{ if(!t) return; out.push(t); _flat(t.children,out); }); return out; }
-// Übersichts-Modus (User 26.10.2026): Leitung OHNE Zeiterfassung (Stifter o. ä., nicht aktiv mitarbeitend)
-// sieht in „Was ansteht“ ALLE künftigen CRM-Termine + Veranstaltungen der Stiftung – egal wem zugewiesen, ohne Zeitgrenze.
-function _overviewMode(cu){ return !!cu && cu.role==='leitung' && !_zeModuleOn(cu); }
+// „Was in der Stiftung ansteht“ (User 26.10.2026, für alle): ALLE künftigen CRM-Termine + Veranstaltungen,
+// egal wem zugewiesen, ohne Zeitgrenze; Eigenes ist markiert. Aufgaben/Fristen bleiben die eigenen.
+function _overviewMode(cu){ return !!cu; }
+const _MINE='<span class="home-mine">👤 du</span>';
 function _crmOpenOk(){ try{ const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null; return !ma || ma.crm!=='kein' || ma.kanban!=='kein'; }catch(e){ return false; } }
 async function _fillTodo(){
   const box=_el('home-todo'); if(!box) return;
@@ -425,26 +428,27 @@ async function _fillTodo(){
     (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
     (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
     tasks.forEach(a=>{ const due=a.t.due||''; const over=due&&due<today;
-      rows.push({ sort:due||'9999', html:`<div class="home-row" onclick="crmMeineOpen(${jsq(a.kind)},'',${jsq(a.id)},${jsq(a.t.id)})"><span>☑️</span><span class="tx">${esc(a.t.text||'Aufgabe')} <span class="home-sub">· ${esc(a.name)}</span></span>${due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(due)}</span>`:''}</div>` }); });
+      rows.push({ sort:due||'9999', html:`<div class="home-row mine" onclick="crmMeineOpen(${jsq(a.kind)},'',${jsq(a.id)},${jsq(a.t.id)})"><span>☑️</span><span class="tx">${esc(a.t.text||'Aufgabe')} <span class="home-sub">· ${esc(a.name)}</span></span>${due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(due)}</span>`:''}</div>` }); });
     (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>{
       if(v.closed||!v.start) return; const s=String(v.start).slice(0,10), e=String(v.ende||v.start).slice(0,10);
       if(e<today||(!ov && s>in7)) return;
       if(!ov && !(Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me))) return;
-      rows.push({ sort:s, html:`<div class="home-row"${canOpen?` onclick="homeOpenVa(${jsq(v.id)})"`:''}><span>📅</span><span class="tx">${esc(v.titel||'Veranstaltung')}</span><span class="home-pill green">${s<=today?'heute':fmtD(s)}</span></div>` });
+      const mineV=Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me);
+      rows.push({ sort:s, html:`<div class="home-row${mineV?' mine':''}"${canOpen?` onclick="homeOpenVa(${jsq(v.id)})"`:''}><span>📅</span><span class="tx">${esc(v.titel||'Veranstaltung')}${mineV?' '+_MINE:''}</span><span class="home-pill green">${s<=today?'heute':fmtD(s)}</span></div>` });
     });
     // Vereine/Kontakte: Aufgaben + Fristen (auch aus Kontaktnotizen) und Termine, denen ich zugewiesen bin
     const ci=window.crmHomeItems?window.crmHomeItems(today,in7,ov):null;
     if(ci){
       ci.tasks.forEach(a=>{ const over=a.due&&a.due<today;
-        rows.push({ sort:a.due||'9999', html:`<div class="home-row" onclick="crmOpenAssignedFromHome(${jsq(a.tree)},${jsq(a.eid)},${jsq(a.tid)})"><span>${/^⏰/.test(a.text)?'⏰':'☑️'}</span><span class="tx">${esc(String(a.text).replace(/^⏰\s*/,''))} <span class="home-sub">· ${esc(a.name)}${a.team?' · 👥 Team':''}</span></span>${a.due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(a.due)}</span>`:''}</div>` }); });
+        rows.push({ sort:a.due||'9999', html:`<div class="home-row mine" onclick="crmOpenAssignedFromHome(${jsq(a.tree)},${jsq(a.eid)},${jsq(a.tid)})"><span>${/^⏰/.test(a.text)?'⏰':'☑️'}</span><span class="tx">${esc(String(a.text).replace(/^⏰\s*/,''))} <span class="home-sub">· ${esc(a.name)}${a.team?' · 👥 Team':''}</span></span>${a.due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(a.due)}</span>`:''}</div>` }); });
       ci.termine.forEach(t=>{
-        rows.push({ sort:t.datum, html:`<div class="home-row"${canOpen?` onclick="crmOpenTerminFromHome(${jsq(t.tree)},${jsq(t.eid)},${jsq(t.tid)})"`:''}><span>🗓️</span><span class="tx">${esc(t.titel)} <span class="home-sub">· ${esc(t.name)}${t.uhr?' · '+esc(t.uhr):''}</span></span><span class="home-pill green">${t.datum<=today?'heute':fmtD(t.datum)}</span></div>` }); });
+        rows.push({ sort:t.datum, html:`<div class="home-row${t.mine?' mine':''}"${canOpen?` onclick="crmOpenTerminFromHome(${jsq(t.tree)},${jsq(t.eid)},${jsq(t.tid)})"`:''}><span>🗓️</span><span class="tx">${esc(t.titel)}${t.mine?' '+_MINE:''} <span class="home-sub">· ${esc(t.name)}${t.uhr?' · '+esc(t.uhr):''}</span></span><span class="home-pill green">${t.datum<=today?'heute':fmtD(t.datum)}</span></div>` }); });
     }
   }catch(e){}
   rows.sort((a,b)=>String(a.sort).localeCompare(String(b.sort)));
   const LIM=ov?10:8;
   const more=rows.length>LIM?`<details class="home-more"><summary class="home-sub" style="padding-top:6px;cursor:pointer">… und ${rows.length-LIM} weitere anzeigen</summary>${rows.slice(LIM).map(r=>r.html).join('')}</details>`:'';
-  box.innerHTML='<p class="home-h">📌 '+(ov?'Was in der Stiftung ansteht':'Was ansteht')+'</p>'+(rows.length?rows.slice(0,LIM).map(r=>r.html).join('')+more:'<div class="home-empty">Gerade steht nichts an. ✓</div>');
+  box.innerHTML='<p class="home-h">📌 Was in der Stiftung ansteht</p>'+(rows.length?rows.slice(0,LIM).map(r=>r.html).join('')+more:'<div class="home-empty">Gerade steht nichts an. ✓</div>');
 }
 function homeOpenVa(id){ try{ window._crmMode='veranstaltungen'; window._crmVaSel=id; window.switchModule&&window.switchModule('crm'); }catch(e){} }
 
