@@ -33,10 +33,12 @@ function _sNum(s,key,legacy){ if(!s) return 0; let v=s[key]; if((v==null||v===''
 const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['gruppen','Trainingsgruppen',null]];
 function _euro(n){ return _num(n).toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 
-// Alle Einträge (Projekte) aus allen Bäumen einsammeln
+// Alle Einträge (Projekte) aus allen Bäumen einsammeln – nur solche mit mindestens einem Eintrag
+// in Statistik oder Förderungen (User 26.10.2026: sonst ist die Auswahlliste voller leerer Vereine)
+function _hasData(e){ return (Array.isArray(e.stats)&&e.stats.length>0) || (Array.isArray(e.foerderungen)&&e.foerderungen.length>0); }
 function _allEntities(){
   const out=[];
-  try{ (getTrees()||[]).forEach(t=>{ (listEntities(t.key)||[]).forEach(e=>{ if(e&&e.id) out.push({ tree:t.key, treeLabel:t.label, id:e.id, name:_eName(e), e }); }); }); }catch(err){ console.error('Auswertung _allEntities:',err); }
+  try{ (getTrees()||[]).forEach(t=>{ (listEntities(t.key)||[]).forEach(e=>{ if(e&&e.id&&_hasData(e)) out.push({ tree:t.key, treeLabel:t.label, id:e.id, name:_eName(e), e }); }); }); }catch(err){ console.error('Auswertung _allEntities:',err); }
   out.sort((a,b)=>a.name.localeCompare(b.name,'de'));
   return out;
 }
@@ -192,7 +194,7 @@ function _filterBar(){
         </div>
         <div style="margin-top:12px"><button class="aus-btn" onclick="ausExport()">⬇ Als Excel herunterladen</button></div>
       </div>
-      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Projekte im CRM.</div>'}</div>
+      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Einträge mit Statistik oder Förderungen.</div>'}<div class="aus-sub" style="margin:8px 0 0;font-size:11.5px">Es erscheinen nur Einträge mit Statistik oder Förderungen.</div></div>
     </div></div>`;
 }
 
