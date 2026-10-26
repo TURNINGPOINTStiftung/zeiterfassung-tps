@@ -407,7 +407,7 @@ function _flat(arr,out){ (arr||[]).forEach(t=>{ if(!t) return; out.push(t); _fla
 // „Was in der Stiftung ansteht“ (User 26.10.2026, für alle): ALLE künftigen CRM-Termine + Veranstaltungen,
 // egal wem zugewiesen, ohne Zeitgrenze; Eigenes ist markiert. Aufgaben/Fristen bleiben die eigenen.
 function _overviewMode(cu){ return !!cu; }
-const _MINE='<span class="home-mine">👤 du</span>';
+const _MINE='';   // „du“-Kärtchen entfernt (User 26.10.2026: zu auffällig) – Markierung nur über die blaue Hinterlegung
 function _crmOpenOk(){ try{ const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null; return !ma || ma.crm!=='kein' || ma.kanban!=='kein'; }catch(e){ return false; } }
 async function _fillTodo(){
   const box=_el('home-todo'); if(!box) return;
