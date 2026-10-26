@@ -4331,9 +4331,12 @@ function veranstaltungFormHtml(v,isNew){
 // Termin = kurzer Eintrag an einem Kontakt. Veranstaltung = großes Vorhaben mit eigenem Kanban.
 // Beim Umschalten bleiben gemeinsame Felder (Titel/Von/Bis) erhalten → Termin leicht „hochstufbar".
 function crmNewItem(initialType){ injectStyles(); window._crmNewType=(initialType==='veranstaltung')?'veranstaltung':'termin'; window._crmVaReturn=null;
-  _kpSet('crm-va', []);
   const fromKal=(window._crmModalReturn==='kalender');
-  _kpSet('crm-tf', (!fromKal && window._crmTree && window._crmSelId && curEntity())?[{tree:window._crmTree,eid:window._crmSelId}]:[]);   // im CRM mit aktuellem Kontakt vorbelegen
+  // Im geöffneten Kontakt mit diesem Kontakt vorbelegen – für Termin UND Veranstaltung (v484, User 26.10.2026:
+  // im Kontakt angelegte Veranstaltungen standen nur im Kalender, weil der Kontakt nicht als Beteiligter eingetragen war).
+  const here=(!fromKal && (window._crmMode||'kontakte')==='kontakte' && window._crmTree && window._crmSelId && curEntity())?[{tree:window._crmTree,eid:window._crmSelId}]:[];
+  _kpSet('crm-va', here);
+  _kpSet('crm-tf', here);
   crmOpenModalShell(); openModal(_newItemHtml()); }
 function _newItemHtml(){
   const type=window._crmNewType||'termin';
