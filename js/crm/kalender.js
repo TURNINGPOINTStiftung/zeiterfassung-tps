@@ -35,8 +35,8 @@ function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von)
 // ── Abwesenheits-Typen ──
 // Krankheit (AU) wird im Kalender BEWUSST NICHT gezeigt (sensibel, für alle sichtbar).
 // Urlaub + AZA sind im Kalender EINE Kategorie „Abwesend" (egal warum man nicht arbeitet) → beide Blau.
-// lbl bleibt spezifisch (für Tooltip/Detail), Farbe + Legende sind vereinheitlicht.
-const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Urlaub'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'AZA'} };
+// Seit v472 (User 26.10.2026) auch in Beschriftung/Tooltip nur noch „Abwesend“ – der Grund geht niemanden an.
+const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
 const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
 
 // ── Zustand ──
@@ -616,7 +616,7 @@ function _agenda(){
         +(away.length?'<div class="cf">⚠ abwesend: '+away.map(a=>esc(empName(a.emp))).join(', ')+'</div>':'')+'</div>';
     });
     if(ab.length) h+='<div class="kal-ag-abs"><span class="kal-ag-al">🏖 Abwesend</span>'+ab.map(a=>{ const m=KMETA[a.type]||{lbl:'',c:'#2563eb'};
-      const nm=personal?m.lbl:empName(a.emp); const sub=[personal?'':m.lbl+(a.half?' ½':''), rng(a)].filter(Boolean).join(' · ');
+      const nm=personal?m.lbl:empName(a.emp); const sub=[a.half?'½ Tag':'', rng(a)].filter(Boolean).join(' · ');
       return '<span class="kal-ag-ac"><i style="background:'+m.c+'"></i>'+esc(nm)+(sub?' <span class="ty">'+esc(sub)+'</span>':'')+'</span>'; }).join('')+'</div>';
     if(!its.length && !ab.length) h+='<div class="kal-ag-none">Nichts eingetragen.</div>';
     h+='</div></div>';
@@ -666,7 +666,7 @@ export function renderKalender(){
       <div class="kal-legend"${V==='liste'||V==='konflikt'?' style="display:none"':''}>
         <span class="kal-lg"><span class="kal-sw" style="background:var(--danger,#dc2626)"></span>Veranstaltung</span>
         <span class="kal-lg"><span class="kal-sw" style="background:var(--warn,#d97706);border:1.5px dashed #fff"></span>Termin</span>
-        <span class="kal-lg"><span class="kal-sw" style="background:var(--info,#2563eb)"></span>Abwesend (Urlaub/AZA)</span>
+        <span class="kal-lg"><span class="kal-sw" style="background:var(--info,#2563eb)"></span>Abwesend</span>
         ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (heller Balken auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid var(--warn,#f0a92e)"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
       </div>
