@@ -39,7 +39,7 @@ const CARDS=[
   { k:'sys',    l:'🛠️ System', hint:'nur Admin bzw. System-Verwaltung' },
   { k:'todo',   l:'📌 Was ansteht' },
   { k:'notes',  l:'🔔 Neuigkeiten' },
-  { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf' },
+  { k:'team',   l:'👥 Team', hint:'zeigt die Mitarbeiter, die man sehen darf – nur wer die Zeiterfassung nutzt' },
   { k:'favs',   l:'⭐ Favoriten' },
   { k:'recent', l:'🕘 Zuletzt geöffnet', hint:'Standard aus – bei Bedarf pro Rolle einschalten' },
   { k:'tiles',  l:'🧩 Kacheln (Module, Website, Forum)' },
@@ -183,7 +183,7 @@ export function renderHome(){
       sys:  ()=>_sysAllowed(cu)?'<div class="home-card" id="home-sys"><p class="home-h">🛠️ System</p><div class="home-empty">Lädt …</div></div>':'',
       todo: ()=>'<div class="home-card" id="home-todo"><p class="home-h">📌 Was ansteht</p><div class="home-empty">Lädt …</div></div>',
       notes:()=>'<div class="home-card" id="home-notes"><div class="home-news-h"><p class="home-h">🔔 Neuigkeiten</p><button class="home-news-all" onclick="homeNewsAllSeen()">✓ Alle gelesen</button></div><div class="home-notes"></div></div>',
-      team: ()=>'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>',
+      team: ()=>_zeModuleOn(cu)?'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>':'',
       favs:  ()=>'<div class="home-card" id="home-favs" style="display:none"></div>',
       recent:()=>'<div class="home-card" id="home-recent" style="display:none"></div>',
     };
@@ -279,12 +279,21 @@ function _armDrag(){
 let _rsT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_rsT); _rsT=setTimeout(()=>{ if(window._activeModule==='start' && _colCount()!==_renderedN) renderHome(); },250); });
 
+// Modul Zeiterfassung für die Person freigeschaltet? (Team-Karte; GF ohne eigenen Stundenzettel behält sie)
+function _zeModuleOn(cu){
+  try{
+    if(!cu || cu.role==='admin') return false;
+    const ma = window.crmModuleAccess ? window.crmModuleAccess(cu) : null;
+    if(ma && ma.zeiterfassung) return ma.zeiterfassung!=='kein';
+    return !cu.crmOnly;
+  }catch(e){ return false; }
+}
+// Eigene Zeiterfassung aktiv? (Stempeln) – zusätzlich: GF mit noTimesheet erfasst selbst nichts
+function _zeOn(cu){ return _zeModuleOn(cu) && !(cu.role==='geschaeftsfuehrer' && cu.noTimesheet); }
 // ── Stempeln ───────────────────────────────────────────────────────
 function _stampAllowed(cu){
   try{
-    if(cu.role==='admin') return false;
-    const zeBtn=document.querySelector('.mb-mod[data-mod="zeiterfassung"]');
-    if(zeBtn && zeBtn.style.display==='none') return false;
+    if(!_zeOn(cu)) return false;
     return !(R.hasPermission && !R.hasPermission('stempel',cu));
   }catch(e){ return false; }
 }
