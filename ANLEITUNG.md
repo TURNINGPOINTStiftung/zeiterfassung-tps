@@ -47,7 +47,7 @@ Gerät gelöscht – wichtig auf geteilten Geräten.
 2. Die Anfrage landet beim **Administrator**. Er vergibt dir ein **Einmal-Passwort** und gibt es dir
    persönlich oder telefonisch weiter.
 3. Mit **Name + Einmal-Passwort** anmelden und danach im **Profil** ein eigenes Passwort festlegen
-   (mindestens 8 Zeichen).
+   (mindestens 12 Zeichen).
 
 ### Passwort ändern
 **Profil** (Klick auf deinen Namen oben rechts) → **„🔒 Passwort ändern"**: aktuelles und neues Passwort

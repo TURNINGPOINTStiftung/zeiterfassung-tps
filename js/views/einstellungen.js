@@ -654,7 +654,7 @@ function userForm(u={}){
     </div>
     <div class="uf-grid2">
       <div class="form-group"><label>E-Mail</label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
-      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben'}" autocomplete="new-password"></div>
+      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben (mind. 12 Zeichen)'}" autocomplete="new-password"></div>
     </div>
     <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
     ${isAdminUser
@@ -1009,7 +1009,7 @@ export async function saveNewUser(){
   if(u.id==='admin'||u.role==='admin'){ toast('Es kann nur einen Admin-Account geben.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
   const _plainPw=u.pw;  // Startpasswort für das Firebase-Konto (wird NICHT in der Datenbank gespeichert)
-  if(String(_plainPw).length<8){ toast('Startpasswort: mindestens 8 Zeichen.','err'); return; }
+  if(String(_plainPw).length<12){ toast('Startpasswort: mindestens 12 Zeichen.','err'); return; }
   delete u.pw;          // seit v429 keine App-Hashes mehr – das Passwort prüft nur Firebase
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
   const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
@@ -1036,7 +1036,7 @@ async function _saveNewUserDelegated(){
   if(!u.name||!u.id||!u.pw){ toast('Bitte alle Pflichtfelder ausfüllen.','err'); return; }
   if(!(_isPlus(cu)?_ALL_ROLES:['mitarbeiter','berater','freiberuflich']).includes(u.role)){ toast('Diese Rolle vergibt nur der Administrator.','err'); return; }
   if(getUser(u.id)){ toast('Login-ID bereits vergeben.','err'); return; }
-  if(String(u.pw).length<8){ toast('Startpasswort: mindestens 8 Zeichen.','err'); return; }
+  if(String(u.pw).length<12){ toast('Startpasswort: mindestens 12 Zeichen.','err'); return; }
   const pw=u.pw; delete u.pw;
   if(u.perms){ delete u.perms.zugriff_verwaltung; delete u.perms.zugriff_verwaltung_plus; }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
@@ -1067,7 +1067,7 @@ export async function saveEditUser(id){
   // Passwort im Bearbeiten-Dialog: direkt am Firebase-Konto setzen (Cloud Function), nie als Hash speichern.
   const _newPw=u.pw; delete u.pw;
   if(_newPw && !_deleg){
-    if(String(_newPw).length<8){ toast('Passwort: mindestens 8 Zeichen.','err'); return; }
+    if(String(_newPw).length<12){ toast('Passwort: mindestens 12 Zeichen.','err'); return; }
     try{ await _adminSetFirebasePw(id,_newPw); }
     catch(e){ toast('Passwort konnte nicht gesetzt werden: '+((e&&e.message)||e),'err'); return; }
   }

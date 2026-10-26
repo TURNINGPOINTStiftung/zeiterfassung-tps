@@ -65,7 +65,7 @@ export function openProfileModal(){
     <div class="form-group"><label>Aktuelles Passwort</label>
       <input type="password" id="prof-pw-cur" placeholder="Aktuelles Passwort" autocomplete="current-password"></div>
     <div class="form-group"><label>Neues Passwort</label>
-      <input type="password" id="prof-pw-new" placeholder="Neues Passwort" autocomplete="new-password"></div>
+      <input type="password" id="prof-pw-new" placeholder="Neues Passwort (mind. 12 Zeichen)" autocomplete="new-password"></div>
     <div class="form-group"><label>Neues Passwort bestätigen</label>
       <input type="password" id="prof-pw-confirm" placeholder="Bestätigung" autocomplete="new-password"></div>
     ${mfaProfileHtml(cu)}
@@ -93,7 +93,7 @@ export async function saveProfile(){
     if(!pwCur){ toast('Bitte aktuelles Passwort eingeben.','err'); return; }
     if(!pwNew){ toast('Bitte neues Passwort eingeben.','err'); return; }
     if(pwNew!==pwConfirm){ toast('Neue Passwörter stimmen nicht überein.','err'); return; }
-    if(pwNew.length<8){ toast('Neues Passwort zu kurz (min. 8 Zeichen).','err'); return; }
+    if(pwNew.length<12){ toast('Neues Passwort zu kurz (min. 12 Zeichen).','err'); return; }
     // Maßgeblich für die Anmeldung ist das Passwort des Firebase-Kontos (js/firebase.js
     // authenticate). Deshalb: aktuelles Passwort DORT prüfen (Re-Auth) und das neue ZUERST dort
     // setzen – erst danach den App-Hash. Früher wurde nur der Hash geändert: das alte Passwort

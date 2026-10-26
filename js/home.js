@@ -396,7 +396,8 @@ function homeNewsAllSeen(){
   const items=_newsItems(); const crm=[];
   items.forEach(n=>{
     if(n.area==='crm'){ const [,c,id]=String(n.key).split('|'); crm.push([c,id,n.ts]); return; }
-    try{ new Function(n.ack)(); }catch(e){ console.warn('Neuigkeit quittieren:', e&&e.message); }   // eigener, intern erzeugter Aufruf
+    // eigener, intern erzeugter Aufruf – als Klick-Handler ausgeführt statt new Function (CSP ohne 'unsafe-eval')
+    try{ const b=document.createElement('button'); b.setAttribute('onclick', n.ack); b.click(); }catch(e){ console.warn('Neuigkeit quittieren:', e&&e.message); }
   });
   _markCrmSeen(crm);
   setTimeout(_fillNotes,250);

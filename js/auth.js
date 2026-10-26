@@ -419,7 +419,7 @@ export async function checkPasswordResetToken(){
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Hallo <strong>${esc(user?.name||'')}</strong>! Bitte wähle ein neues Passwort.</p>
       <div class="form-group">
         <label>Neues Passwort</label>
-        <input type="password" id="new-pw-1" placeholder="Mindestens 8 Zeichen" autocomplete="new-password"
+        <input type="password" id="new-pw-1" placeholder="Mindestens 12 Zeichen" autocomplete="new-password"
                onkeydown="if(event.key==='Enter') saveResetPassword(${jsq(token)},${jsq(data.uid)})">
       </div>
       <div class="form-group">
@@ -439,7 +439,7 @@ export async function saveResetPassword(token,uid){
   const pw1=document.getElementById('new-pw-1')?.value||'';
   const pw2=document.getElementById('new-pw-2')?.value||'';
   const msgEl=document.getElementById('new-pw-msg');
-  if(pw1.length<8){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 8 Zeichen.</div>'; return; }
+  if(pw1.length<12){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Mindestens 12 Zeichen.</div>'; return; }
   if(pw1!==pw2){ msgEl.innerHTML='<div style="color:var(--danger);font-size:13px">Passwörter stimmen nicht überein.</div>'; return; }
   // Alter E-Mail-Link-Weg: Seit v429 prüft nur Firebase das Passwort, ein App-Hash würde nichts
   // bewirken. Der Link wird entwertet und auf den heutigen Weg (Anfrage → Einmal-Passwort) verwiesen.

@@ -153,7 +153,7 @@ export async function reprovisionUser(id, tempPw){
   if(!u) throw new Error('Nutzer nicht gefunden.');
   if(!firebase.auth().currentUser) throw new Error('Bitte zuerst als Admin anmelden.');
   const sec=_secApp();
-  if(!tempPw||String(tempPw).length<8) throw new Error('Einmal-Passwort fehlt.');
+  if(!tempPw||String(tempPw).length<12) throw new Error('Einmal-Passwort fehlt.');
   const em=_accountEmail(id);
   let uid=null, note='';
   // Konto direkt mit dem Einmal-Passwort anlegen (seit v429 kein Stabil-Passwort mehr).
@@ -205,7 +205,7 @@ export async function checkStableAccounts(opts){
 }
 export async function secureStableAccount(id, newPw){
   if(!window.cu||window.cu.role!=='admin') throw new Error('Nur der Administrator-Account.');
-  if(!newPw||String(newPw).length<8) throw new Error('Startpasswort zu kurz.');
+  if(!newPw||String(newPw).length<12) throw new Error('Startpasswort zu kurz.');
   const sec=_secApp();
   try{
     const c=await sec.auth().signInWithEmailAndPassword(_accountEmail(id), _stableAuthPw(id));

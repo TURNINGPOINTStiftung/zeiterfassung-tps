@@ -15,7 +15,7 @@ function loadXLSX(){
   if(_xlsxP) return _xlsxP;
   _xlsxP=new Promise((res,rej)=>{
     const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.src='js/vendor/xlsx.full.min.js';
     s.onload=()=>res(window.XLSX);
     s.onerror=()=>{ _xlsxP=null; rej(new Error('Excel-Bibliothek konnte nicht geladen werden (Internetverbindung nötig).')); };
     document.head.appendChild(s);
