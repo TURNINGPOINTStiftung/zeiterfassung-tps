@@ -166,7 +166,7 @@ exports.tpsPw = async (req, res) => {
       if (!hasMfa(c.tok)) return mfaRequired(res);
       const newPw = String(body.newPw || '');
       if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
-      if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      if (newPw.length < 12 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
       if (!c.isAdmin) {
         // „System-Verwaltung erweitert": nur aktive Mitarbeitende, nicht Admin, nicht sich selbst, nicht andere „erweitert"
         if (id === 'admin' || id === c.callerId) return res.status(403).json({ ok: false, error: 'protected' });
@@ -196,7 +196,7 @@ exports.tpsPw = async (req, res) => {
       if (!hasMfa(tok)) return mfaRequired(res);
       const newPw = String(body.newPw || '');
       if (!ID_RE.test(id)) return res.status(400).json({ ok: false, error: 'id' });
-      if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      if (newPw.length < 12 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
       try {
         const u = await admin.auth().createUser({ email: accountEmail(id), password: newPw });
         const lu = {}; logTo(lu, { callerId: (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '', tok }, 'Anmeldekonto angelegt', id);
@@ -230,7 +230,7 @@ exports.tpsPw = async (req, res) => {
       const newPw = String(body.newPw || '');
       const uid0 = String(inU.id || '');
       if (!ID_RE.test(uid0) || uid0 === 'admin') return res.status(400).json({ ok: false, error: 'id' });
-      if (newPw.length < 8 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
+      if (newPw.length < 12 || newPw.length > 128) return res.status(400).json({ ok: false, error: 'pw' });
       const ROLES = (isAdmin || isPlus) ? ALL_ROLES : BASIC_ROLES;   // Leitung/GF nur Admin und „erweitert"
       const role = String(inU.role || 'mitarbeiter');
       if (!ROLES.includes(role)) return res.status(400).json({ ok: false, error: 'role' });
