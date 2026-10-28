@@ -568,6 +568,8 @@ function injectStyles(){
   .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
   .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:11px;font-weight:400}
+  .vt-imp{margin:4px 0 12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--surface,#fff)}
+  .vt-imp>summary{cursor:pointer;font-weight:700;color:var(--primary);font-size:14px}
   .ss-wrap{position:relative;flex:1 1 200px;min-width:160px}
   .crm-kn-folge .ss-wrap{flex:1 1 200px}
   .ss-grp{padding:6px 12px 3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface-2,#f7f9fc)}
@@ -4751,8 +4753,10 @@ function _verteilerModal(v){
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" class="crm-ss" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" class="crm-ss" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
+   ${_vtImpHtml('mail')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVerteiler(${jsq(v.id||'')})">Speichern</button></div>`);
+  crmVtImpPreview('mail');
   _vtPaintList();
 }
 function _vtPaintList(){
@@ -4921,6 +4925,64 @@ function crmSaveVerteiler(id){
   crmCloseModal(); paintVerteiler(); toast('Verteiler gespeichert ✓','ok');
 }
 function crmDeleteVerteilerC(id){ const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
+// ── Massen-Übernahme aus dem CRM in einen Verteiler (v493, User 28.10.2026) ──────────────
+// Was: Eintrags-Adresse (Vereins-E-Mail / Vereinsanschrift) und/oder Adressen der Kontakte/Mitglieder.
+// Eingrenzen (optional, leer = alle): Bereich, Status, Kategorie, Funktion des Kontakts.
+function _vtImpHtml(kind){
+  const cb=(cls,val,lbl,on)=>`<label><input type="checkbox" class="${cls}" value="${esc(val)}"${on?' checked':''} onchange="crmVtImpPreview(${jsq(kind)})"> ${esc(lbl)}</label>`;
+  const trees=getTrees().map(t=>cb('vti-tree',t.key,(t.icon||'')+' '+(t.label||t.key),true)).join('');
+  const sts=CRM_STATUS.map(s=>cb('vti-st',s.key,s.label,false)).join('');
+  const cats=getCategories().map(c=>cb('vti-cat',c.key,c.label,false)).join('');
+  const fnSet=new Set((memberFunctions()||[]).map(x=>String(x))); getTrees().forEach(t=>listEntities(t.key).forEach(e=>(e.kontakte||[]).forEach(k=>{ if(k&&k.funktion) fnSet.add(String(k.funktion).trim()); })));
+  const fns=[...fnSet].filter(Boolean).sort((a,b)=>a.localeCompare(b,'de')).map(x=>cb('vti-fn',x,x,false)).join('');
+  const mail=kind==='mail';
+  return `<details class="vt-imp"><summary>📥 Aus dem CRM übernehmen <span class="small" style="color:var(--muted);font-weight:400">– alle oder gefiltert</span></summary>
+    <div class="crm-kn-sub">Was übernehmen?</div>
+    <div class="crm-share-opts">${cb('vti-org','1',mail?'🏛️ E-Mail des Eintrags (z. B. Vereins-E-Mail)':'🏛️ Anschrift des Eintrags (z. B. Vereinsadresse)',true)}${cb('vti-k','1',mail?'👥 E-Mails der Kontakte / Mitglieder':'👥 Kontakte / Mitglieder (ohne eigene Anschrift: Vereinsadresse)',true)}</div>
+    <div class="crm-kn-sub">Bereiche</div><div class="crm-share-opts">${trees}</div>
+    <details style="margin-top:6px"><summary class="small" style="cursor:pointer;color:var(--primary);font-weight:600">Weiter eingrenzen (optional)</summary>
+      <div class="crm-kn-sub">Status <span class="small" style="font-weight:400;color:var(--muted)">(nichts angehakt = alle)</span></div><div class="crm-share-opts">${sts}</div>
+      ${cats?`<div class="crm-kn-sub">Kategorie <span class="small" style="font-weight:400;color:var(--muted)">(nichts angehakt = alle)</span></div><div class="crm-share-opts">${cats}</div>`:''}
+      ${fns?`<div class="crm-kn-sub">Nur Kontakte mit Funktion <span class="small" style="font-weight:400;color:var(--muted)">(nichts angehakt = alle)</span></div><div class="crm-share-opts">${fns}</div>`:''}
+    </details>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn-sm-crm primary" onclick="crmVtImpApply(${jsq(kind)})">📥 Übernehmen</button><span id="vti-prev-${kind}" class="small" style="color:var(--muted)"></span></div>
+  </details>`;
+}
+function _vtImpOpts(){ const g=c=>Array.from(document.querySelectorAll('.'+c+':checked')).map(x=>x.value);
+  return { org:!!document.querySelector('.vti-org:checked'), k:!!document.querySelector('.vti-k:checked'), trees:g('vti-tree'), st:g('vti-st'), cat:g('vti-cat'), fn:g('vti-fn').map(x=>x.toLowerCase()) }; }
+// → [{tree,eid,e,ks:[kontakte]}] nach den Häkchen
+function _vtImpCollect(){
+  const o=_vtImpOpts(); const out=[];
+  getTrees().filter(t=>o.trees.includes(t.key)).forEach(t=>listEntities(t.key).forEach(e=>{
+    if(o.st.length && !_statusArr(e).some(k=>o.st.includes(k))) return;
+    if(o.cat.length && !_catsOf(e,t.key).some(k=>o.cat.includes(k))) return;
+    const ks=(e.kontakte||[]).filter(k=>k && (!o.fn.length || o.fn.includes(String(k.funktion||'').trim().toLowerCase())));
+    out.push({tree:t.key, eid:e.id, e, ks});
+  }));
+  return { o, list:out };
+}
+function _vtImpMails(){ const {o,list}=_vtImpCollect(); const m=[];
+  list.forEach(x=>{ if(o.org && !o.fn.length && x.e.stamm && x.e.stamm.email) m.push(x.e.stamm.email); if(o.k) x.ks.forEach(k=>kEmails(k).forEach(a=>a&&m.push(a))); });
+  return _normEmails(m); }
+function _vtImpPostItems(){ const {o,list}=_vtImpCollect(); const items=[];
+  list.forEach(x=>{ if(o.org && !o.fn.length && x.e.stamm && x.e.stamm.adresse) items.push({src:{tree:x.tree,eid:x.eid,kid:null}}); if(o.k) x.ks.forEach(k=>items.push({src:{tree:x.tree,eid:x.eid,kid:k.id}})); });
+  return items; }
+function crmVtImpPreview(kind){
+  const el=document.getElementById('vti-prev-'+kind); if(!el) return;
+  try{
+    if(kind==='mail'){ const m=_vtImpMails(); const have=new Set((window._vtEmails||[]).map(x=>x.toLowerCase())); const neu=m.filter(x=>!have.has(x.toLowerCase())).length;
+      el.textContent=`${m.length} Adresse${m.length===1?'':'n'} gefunden · ${neu} neu`; }
+    else { const it=_vtImpPostItems(); el.textContent=`${it.length} Empfänger gefunden (doppelte und solche ohne Anschrift werden beim Übernehmen übersprungen)`; }
+  }catch(e){ el.textContent=''; }
+}
+function crmVtImpApply(kind){
+  if(kind==='mail'){ const m=_vtImpMails(); if(!m.length){ toast('Keine Adressen mit dieser Auswahl.','err'); return; }
+    const r=_vtAdd(m); toast(r.added?`${r.added} Adresse(n) übernommen ✓${r.dup?` · ${r.dup} schon vorhanden`:''}`:'Alle Adressen sind schon im Verteiler.', r.added?'ok':'err'); }
+  else { const it=_vtImpPostItems(); if(!it.length){ toast('Keine Empfänger mit dieser Auswahl.','err'); return; }
+    const r=_pvAdd(it); const parts=[]; if(r.added) parts.push(`${r.added} übernommen ✓`); if(r.dup) parts.push(`${r.dup} schon drin`); if(r.noAdr) parts.push(`${r.noAdr} ohne Anschrift`);
+    toast(parts.join(' · ')||'Nichts übernommen', r.added?'ok':'err'); }
+  crmVtImpPreview(kind);
+}
 function crmVerteilerMail(id){ const v=getVerteiler(id); if(v) _openBcc(v.emails); }
 function crmCopyVerteiler(id){ const v=getVerteiler(id); if(v) _copyEmails(v.emails); }
 
@@ -4982,6 +5044,7 @@ function _pvModal(v){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📮 Adressverteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
    <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" class="crm-ss" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
+   ${_vtImpHtml('post')}
    <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:11px;color:var(--muted)"></span></label>
      <div id="crm-pv-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Eintrag anklicken = korrigieren · 🔗 = mit Kontakt verknüpft (bleibt aktuell)</span>
@@ -4989,6 +5052,7 @@ function _pvModal(v){
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSavePv(${jsq(v.id||'')})">Speichern</button></div>`);
   _pvPaint();
+  crmVtImpPreview('post');
 }
 function _pvPaint(){
   const box=document.getElementById('crm-pv-list'); if(!box) return;
@@ -6392,7 +6456,7 @@ Object.assign(window, {
   crmNewEntityProjekt, crmSaveEntityProjekt, crmSelProjekt, crmRenameProjekt, crmSaveProjektName, crmDeleteProjekt,
   // E-Mail-Verteiler
   crmShowVerteiler, crmNewVerteiler, crmEditVerteiler, crmSaveVerteiler, crmDeleteVerteilerC,
-  crmVerteilerAddVerein, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerMail,
+  crmVerteilerAddVerein, crmVtImpPreview, crmVtImpApply, crmVerteilerAddUser, crmVerteilerAddInput, crmVerteilerRemove, crmVerteilerEdit, crmVerteilerEditSave, crmVerteilerEditCancel, crmVerteilerFix, crmVerteilerMail,
   crmNewAdressverteiler, crmPvAddPick, crmPvAddManual, crmPvEdit, crmPvEditCancel, crmPvEditSave, crmPvRemove, crmSavePv,
   crmPvExcel, crmPvLabels, crmPvPrint, crmCopyVerteiler, crmMailKontakte,
   // Veranstaltungen
