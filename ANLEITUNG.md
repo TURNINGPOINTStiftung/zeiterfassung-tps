@@ -10,7 +10,7 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 
 ## Inhalt
 
-1. [Anmelden & Passwort](#1-anmelden--passwort)
+1. [Anmelden, Passwort & Zwei-Faktor](#1-anmelden-passwort--zwei-faktor)
 2. [Rollen & Zugriffe – wer darf was](#2-rollen--zugriffe--wer-darf-was)
 3. [Startseite & Navigation](#3-startseite--navigation)
 4. [Zeiten erfassen](#4-zeiten-erfassen)
@@ -19,6 +19,7 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 7. [Monat einreichen](#7-monat-einreichen)
 8. [Abwesenheiten (Urlaub, Krank …)](#8-abwesenheiten-urlaub-krank-)
 9. [Weitere Bereiche: CRM, Projekte, Kalender, Lager](#9-weitere-bereiche-crm-projekte-kalender-lager)
+   - [Kalender & Abo in Outlook / am Handy](#kalender--abo-in-outlook--am-handy)
 10. [Für Leitung & Geschäftsführung](#10-für-leitung--geschäftsführung)
 11. [Für Administratoren & System-Verwaltung](#11-für-administratoren--system-verwaltung)
 12. [Mein Profil: Darstellung, Startseite, Sicherungen](#12-mein-profil-darstellung-startseite-sicherungen)
@@ -27,13 +28,15 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 
 ---
 
-## 1. Anmelden & Passwort
+## 1. Anmelden, Passwort & Zwei-Faktor
 
 1. App öffnen → die **Anmeldemaske** erscheint.
 2. **Namen eintippen** – schon nach den ersten Buchstaben erscheinen Vorschläge
    (Groß-/Kleinschreibung egal). Passenden Namen auswählen.
 3. **Passwort** eingeben.
 4. Mit **Enter** oder Klick auf **Anmelden** bestätigen.
+5. Hast du die **Zwei-Faktor-Anmeldung** eingeschaltet, fragt die App jetzt noch den **6-stelligen Code**
+   aus deiner Authenticator-App ab (siehe unten).
 
 **Tastatur-Bedienung:** Du kannst dich komplett mit **Tab / Pfeiltasten / Enter** durch die
 Anmeldung bewegen – die Maus ist nicht nötig.
@@ -52,6 +55,34 @@ Gerät gelöscht – wichtig auf geteilten Geräten.
 ### Passwort ändern
 **Profil** (Klick auf deinen Namen oben rechts) → **„🔒 Passwort ändern"**: aktuelles und neues Passwort
 eingeben, **Speichern**. Das neue Passwort gilt sofort auf allen Geräten.
+
+### Zwei-Faktor-Anmeldung (2FA)
+Zusätzlich zum Passwort fragt die App beim Anmelden einen **6-stelligen Code** ab, den eine
+**Authenticator-App** auf deinem Handy erzeugt (z. B. Microsoft Authenticator, Google Authenticator,
+Proton Pass). Wer nur dein Passwort kennt, kommt so nicht in dein Konto.
+
+**Wer braucht das?**
+- **Alle:** freiwillig, aber empfohlen.
+- **Administrator:** Pflicht – Admin-Aktionen (Passwort setzen, Konten anlegen/sperren, Zwei-Faktor
+  zurücksetzen, Backup einspielen …) funktionieren nur nach einer Anmeldung **mit Code**.
+- **System-Verwaltung:** Pflicht – Änderungen an Mitarbeitenden, Archiv und Organisation sind nur nach
+  Anmeldung mit Code möglich. Ohne Code zeigt die App einen gelben Hinweis und sperrt das Speichern.
+
+**Einrichten (einmalig, ca. 2 Minuten):**
+1. Authenticator-App auf dem Handy installieren.
+2. In der Zeiterfassung **Profil** (Name oben rechts) → **🔐 Zwei-Faktor-Anmeldung** → **„Jetzt einrichten"**.
+3. Mit der Authenticator-App den angezeigten **QR-Code scannen** (oder den Schlüssel abtippen).
+4. Den 6-stelligen Code aus der App eingeben → **Einschalten**.
+5. Für Admin/System-Verwaltung: einmal **ab- und wieder anmelden** – erst diese Anmeldung „mit Code"
+   schaltet die geschützten Funktionen frei.
+
+**Anmelden mit 2FA:** Name + Passwort wie gewohnt, danach den aktuellen Code aus der App eingeben.
+Der Code wechselt alle 30 Sekunden – einfach den gerade angezeigten nehmen.
+
+**Neues Handy?** Vorher im Profil unter **„Verwalten"** entfernen und auf dem neuen Handy neu einrichten.
+**Handy verloren?** Den Administrator ansprechen: er setzt die Zwei-Faktor-Anmeldung im
+Mitarbeiter-Dialog zurück (**„🔐 2FA zurücksetzen"**); danach gilt wieder nur das Passwort und du kannst
+neu einrichten.
 
 ---
 
@@ -256,6 +287,7 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 - **Projektmanagement:** Team-Boards mit Aufgaben (offen / in Arbeit / erledigt) und Veranstaltungen.
 - **Kalender:** Veranstaltungen und Termine neben den Abwesenheiten aller Mitarbeitenden – Konflikte
   auf einen Blick. **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.
+  Ausführlich: [Kalender & Abo](#kalender--abo-in-outlook--am-handy).
 - **Lager:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
   **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
   „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
@@ -267,6 +299,53 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
   einmal angemeldet gewesen sein („Angemeldet bleiben“). Das Personal öffnet mit der **PIN der Veranstaltung**
   (gilt auf allen Geräten) die Liste und **überträgt ins CRM** – danach werden die Besucherdaten im Messemodus gelöscht
   und stehen nur noch im CRM. Freigabe: Verwaltung → Mitarbeiter → Zugriffe → Messemodus „Nutzen“.
+
+### Kalender & Abo in Outlook / am Handy
+
+**Ansichten** (Reiter oben): **Liste** (am Handy Standard), **Woche**, **Monat**, **Jahr** und
+**Konflikte** (Termine, bei denen zugewiesene Personen abwesend sind). Über die Auswahl daneben
+filterst du nach **Team** oder **„👤 Nur ich"** – dann sind deine eigenen Termine hervorgehoben.
+
+**Was steht drin?**
+- **Veranstaltungen und Termine** aus dem CRM – jede mit eigener **Farbe** (beim Anlegen wählbar).
+- **Abwesenheiten** aller Mitarbeitenden, einheitlich als **„Abwesend"** (blau) – der Grund
+  (Urlaub, Ausgleich …) wird nicht angezeigt. Krankmeldungen erscheinen im Kalender gar nicht.
+- Hat eine Person mehrere Termine am Tag oder Termin und Abwesenheit gleichzeitig, stehen sie
+  **untereinander** in ihrer Zeile.
+- Mehrtägige Einträge zeigen in der Liste **„↳ Tag x/y"**; ab einer Woche Dauer nur noch montags,
+  damit die Liste übersichtlich bleibt.
+
+**Anlegen** (nur mit Zugriff „Verwaltend"): **＋ Neu** → Termin oder Veranstaltung. Das Fenster gleitet
+von rechts herein und bleibt offen, bis du **Speichern** oder **✕** klickst. CRM-Kontakte und
+Mitarbeitende wählst du über die **Suchfelder** (tippen, mit ↑/↓ und Enter auswählen). Ein Termin
+braucht mindestens einen CRM-Kontakt.
+
+**📲 Kalender-Abo – Termine in Outlook, Google oder am Handy:**
+Im Kalender oben **„📲 In Outlook / Handy"** (oder **Profil → 📲 Kalender-Abo einrichten**) →
+**„Abo-Link erstellen"**. Du bekommst zwei persönliche Links:
+
+1. **Meine Termine** – alle Termine und Veranstaltungen, denen **du zugewiesen** bist.
+2. **Weitere Termine der Stiftung** (optional) – alle übrigen, ohne deine eigenen.
+
+Beide getrennt abonnieren und in Outlook **unterschiedliche Farben** geben (z. B. „TPS" kräftig,
+„TPS – weitere" grau) – Outlook färbt pro Kalender, nicht pro Termin.
+
+**So abonnieren:** Link mit **📋 Kopieren** übernehmen, dann …
+- **Outlook (Web / neues Outlook):** Kalender → **„Kalender hinzufügen"** → **„Aus dem Internet
+  abonnieren"** → Link einfügen → Namen vergeben (z. B. „TPS").
+- **Outlook (klassisch, Windows):** Kalender → **„Kalender öffnen"/„Kalender hinzufügen"** →
+  **„Aus dem Internet …"** → Link einfügen.
+- **Google Kalender:** „Weitere Kalender" **＋** → **„Per URL"** → Link einfügen.
+- **iPhone/iPad:** im Abo-Fenster den Link **antippen** oder Einstellungen → Kalender → Accounts →
+  Account hinzufügen → Andere → **Kalenderabo**.
+
+**Gut zu wissen:**
+- Neue und geänderte Termine kommen **automatisch** dazu – Outlook aktualisiert allerdings nur
+  **alle paar Stunden**, nicht sofort.
+- Das Abo geht **nur in eine Richtung**: Änderungen bitte in der App machen, nicht in Outlook.
+- Der Link ist **persönlich und geheim** – wer ihn kennt, sieht deine Termine. Bei Verdacht im
+  Abo-Fenster **„🔄 Neuen Link erzeugen"** (der alte funktioniert dann nicht mehr; im Kalender neu
+  abonnieren) oder **„Abo beenden"**.
 
 ---
 
@@ -335,13 +414,11 @@ Klick auf deinen **Namen** oben rechts öffnet dein Profil:
 - **🌓 Darstellung:** **Automatisch** (folgt Hell/Dunkel des Geräts), **Hell** oder **Dunkel**.
   Gilt für das jeweilige Gerät.
 - **🔒 Passwort ändern.**
-- **🔐 Zwei-Faktor-Anmeldung** (freiwillig, für alle empfohlen): Zusätzlich zum Passwort
-  fragt die App beim Anmelden einen 6-stelligen Code aus einer Authenticator-App ab (z. B. Microsoft
-  oder Google Authenticator, Proton Pass). Einrichten: **„Jetzt einrichten"** → QR-Code mit der App scannen → Code
-  eingeben → **Einschalten**. Bei Handy-Wechsel vorher unter **„Verwalten"** entfernen und neu einrichten.
-  **Handy verloren?** Der Administrator kann die Zwei-Faktor-Anmeldung im Mitarbeiter-Dialog
-  zurücksetzen (**„🔐 2FA zurücksetzen"**); danach gilt wieder nur das Passwort. In der Mitarbeiterliste
-  zeigt **🔐 2FA**, wer sie eingeschaltet hat.
+- **🔐 Zwei-Faktor-Anmeldung** (freiwillig, für Admin und System-Verwaltung Pflicht) – Einrichten und
+  Handy-Wechsel siehe [Abschnitt 1](#zwei-faktor-anmeldung-2fa). In der Mitarbeiterliste zeigt **🔐 2FA**,
+  wer sie eingeschaltet hat.
+- **📲 Kalender-Abo einrichten:** eigene Termine in Outlook / am Handy, siehe
+  [Kalender & Abo](#kalender--abo-in-outlook--am-handy).
 - **Eigene Sicherung:** **„⬇ Backup herunterladen"** sichert deine Zeiterfassung als Datei,
   **„⬆ Backup wiederherstellen"** spielt sie wieder ein (fehlende Tage werden ergänzt, nichts geht
   verloren). Optional legt die App **am 10. jeden Monats** automatisch einen Schnappschuss in der Cloud ab.
@@ -381,6 +458,14 @@ Er ist vermutlich **eingereicht**. Mit **„↩ Zurückziehen"** wieder öffnen 
 
 **Ich habe mein Passwort vergessen.**
 Auf der Anmeldeseite **„Passwort vergessen?"** – der Administrator gibt dir ein Einmal-Passwort.
+
+**Der Zwei-Faktor-Code wird nicht angenommen.**
+Den **gerade angezeigten** Code nehmen (er wechselt alle 30 Sekunden). Prüfen, ob Uhrzeit und Datum
+am Handy automatisch gestellt sind. Handy weg oder gewechselt? Administrator setzt 2FA zurück.
+
+**Ein Termin fehlt in Outlook.**
+Outlook holt Abo-Kalender nur **alle paar Stunden** neu – etwas Geduld. In „Meine Termine" stehen nur
+Termine, denen du **zugewiesen** bist; alle anderen stehen im zweiten Abo „Weitere Termine".
 
 **Keine Erinnerungs-Mail erhalten.**
 Ist eine **E-Mail-Adresse** hinterlegt? **Spam-Ordner** prüfen. Sonst Admin informieren.

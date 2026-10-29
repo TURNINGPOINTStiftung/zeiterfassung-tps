@@ -127,6 +127,10 @@ async function _migrateOld(){
   if(!L.activeId && old.activeId) { L.activeId=old.activeId; _save(L); }
   try{ localStorage.removeItem(LS_OLD); }catch(e){}
 }
+// Ort (v505): wird ohne neue Datenbank-Regel in der Adresse als letzte Zeile „Ort: …" mitgespeichert
+// und beim Übertrag ins CRM wieder herausgelöst (→ Sitz/Standort).
+function _joinOrt(adr, ort){ adr=String(adr||'').trim(); ort=String(ort||'').trim(); return ort ? (adr?adr+'\n':'')+'Ort: '+ort : adr; }
+function _splitOrt(adr){ const s=String(adr||''); const mm=s.match(/(?:^|\n)Ort: ([^\n]*)$/); return mm ? { adresse:s.slice(0,mm.index).trim(), ort:mm[1].trim() } : { adresse:s.trim(), ort:'' }; }
 function _entryData(e){
   const c=(v,n)=>String(v==null?'':v).trim().slice(0,n);
   return { vorname:c(e.vorname,100), nachname:c(e.nachname,100), org:c(e.org,200), email:c(e.email,200), tel:c(e.tel,60),
@@ -334,7 +338,10 @@ function _renderForm(msg){
         <div class="me-field"><label for="me-email">E-Mail <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder Telefon)</span></label><input id="me-email" type="email" maxlength="200" autocomplete="off"></div>
         <div class="me-field"><label for="me-tel">Telefon <span class="me-req">*</span> <span style="font-weight:400;color:var(--muted,#5b6b7d)">(oder E-Mail)</span></label><input id="me-tel" type="tel" maxlength="60" autocomplete="off"></div>
       </div>
-      <div class="me-field"><label for="me-adresse">Adresse</label><input id="me-adresse" maxlength="300" autocomplete="off"></div>
+      <div class="me-row2">
+        <div class="me-field"><label for="me-ort">Ort</label><input id="me-ort" maxlength="100" autocomplete="off" placeholder="optional, z. B. Kiel"></div>
+        <div class="me-field"><label for="me-adresse">Adresse</label><input id="me-adresse" maxlength="190" autocomplete="off" placeholder="optional, Straße / PLZ"></div>
+      </div>
       <div class="me-field"><label for="me-note">Notiz / Interesse</label><textarea id="me-note" maxlength="2000" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
       <button class="me-btn" onclick="messeSaveEntry(this)">✓ Speichern</button>
       <div class="me-ok" id="me-ok" role="status">${msg?_esc(msg):''}</div>
@@ -348,7 +355,7 @@ function messeSaveEntry(btn){
   if(!email && !tel){ toast('Bitte E-Mail ODER Telefon angeben.','err'); return; }
   const ev=_active(); if(!ev){ _renderPicker(); return; }
   if(btn){ btn.disabled=true; }
-  _queue({ t:'en', ev:ev.id, id:_newMid(), data:_entryData({ vorname, nachname, org:g('me-org'), email, tel, adresse:g('me-adresse'), note:g('me-note'), ts:Date.now() }) });
+  _queue({ t:'en', ev:ev.id, id:_newMid(), data:_entryData({ vorname, nachname, org:g('me-org'), email, tel, adresse:_joinOrt(g('me-adresse'), g('me-ort')), note:g('me-note'), ts:Date.now() }) });
   _renderForm('✓ Gespeichert – danke!');
 }
 
@@ -381,7 +388,7 @@ function _renderStaff(){
   const list=_entries(ev.id); const pend=list.filter(e=>e.pending).length; const ready=list.length-pend;
   const items = list.length
     ? list.slice().reverse().map(e=>`<div class="me-list-item">
-        <div><div class="nm">${_esc(_pName(e))}${e.org?` · ${_esc(e.org)}`:''}</div>
+        <div><div class="nm">${_esc(_pName(e))}${e.org?` · ${_esc(e.org)}`:''}${_splitOrt(e.adresse).ort?` · ${_esc(_splitOrt(e.adresse).ort)}`:''}</div>
           <div class="dt">${_esc(new Date(e.ts||0).toLocaleString('de-DE'))}${e.pending?' · ⏳ wartet auf Netz':''}${e.email?' · '+_esc(e.email):(e.tel?' · '+_esc(e.tel):'')}</div></div>
         <button class="me-x" onclick="messeDeleteEntry(${_jsq(e.id)})">Löschen</button></div>`).join('')
     : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:8px 0">Keine offenen Kontakte.</div>';
@@ -417,10 +424,12 @@ function _toEntity(m, cats){
   const person = _pName(m);
   const org=(m.org||'').trim();
   const name = org || person || '(Messe-Kontakt)';
+  const sp=_splitOrt(m.adresse);
+  const stamm={ name }; if(sp.ort) stamm.sitz=sp.ort;
   const ent={ id:newId(), tree, createdAt:m.ts||Date.now(), createdByKuerzel:'Messe', createdByName:'Messemodus',
-    stamm:{ name }, categories:(cats||[]).slice(), status:[], statusLog:[],
+    stamm, categories:(cats||[]).slice(), status:[], statusLog:[],
     kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
-  ent.kontakte.push({ id:newId(), name:person, funktion:'', emails:m.email?[m.email]:[], tels:m.tel?[m.tel]:[], adresse:m.adresse||'', note:'' });
+  ent.kontakte.push({ id:newId(), name:person, funktion:'', emails:m.email?[m.email]:[], tels:m.tel?[m.tel]:[], adresse:[sp.adresse, sp.ort].filter(Boolean).join('\n'), note:'' });
   if((m.note||'').trim()) ent.kontaktnotizen.push({ id:newId(), ts:m.ts||Date.now(), text:m.note.trim(), byKuerzel:'Messe', byName:'Messemodus' });
   return { tree, ent };
 }
