@@ -119,8 +119,17 @@ function curContainer(){
   const p=(ent.projekte||[]).find(x=>x.id===ctx.pid); if(!p) return null;
   normTasks(p); return p;
 }
+// Darf die angemeldete Person Aufgaben in diesem Container ändern? (feine Rechte v510)
+// Eintrag: CRM-Aufgaben ODER Projektmanagement-Aufgaben · Vorlage: Vorlagen verwalten · sonst PM-Aufgaben.
+function _ctxMay(ctx, neu){
+  ctx=ctx||window._crmTaskCtx; if(!ctx) return false;
+  if(ctx.kind==='vorlage') return _R('pm_vorlagen');
+  if(ctx.kind==='entity') return _R('crm_aufgaben') || (neu ? _R('pm_aufg_neu') : _R('pm_aufg_bearb'));
+  return neu ? _R('pm_aufg_neu') : _R('pm_aufg_bearb');
+}
 function mutateContainer(fn){
   const ctx=window._crmTaskCtx; if(!ctx) return;
+  if(!_ctxMay(ctx)){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
   if(ctx.kind==='teamprojekt'){
     const p=getTeamProjekt(ctx.id); if(!p) return; normTasks(p);
     try{ fn(p); }catch(e){ console.error('CRM mutateContainer:',e); return; }
@@ -296,6 +305,9 @@ function _findDuplicates(stamm, skipId){
 function allEntitiesWithTree(){
   const out=[];
   try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ if(!e.tree) e.tree=tr.key; out.push(e); })); }catch(err){}
+  // Recht „Kontakte ansehen: nur bestimmte Kategorien" (v510) → nur Einträge mit einer dieser Kategorien
+  try{ const u=window.cu; if(_hasNeu(u) && window.tpsRechteOf(u).crm_ansehen==='kat'){ const ks=(u.rechte&&Array.isArray(u.rechte.kats))?u.rechte.kats:[];
+    return out.filter(e=>_catsOf(e, e.tree).some(c=>ks.includes(c))); } }catch(err){}
   return out;
 }
 // Einzelne Kategorie am Eintrag an-/abwählen (Detail „Allgemeines"). Setzt e.categories
@@ -314,6 +326,7 @@ function crmToggleCat(key, on){
 function accessLevel(){
   const cu=window.cu; if(!cu) return 'none';
   if(cu.role==='admin') return 'admin';
+  if(_hasNeu(cu)){ try{ return window.tpsCrmStufeAus(window.tpsRechteOf(cu)); }catch(e){} }   // feine Rechte → passende Stufe
   const a=getAccess(cu.id);
   return (a && a.level) || 'none';
 }
@@ -327,6 +340,10 @@ function accessVereine(){
 function accessVerein(){ const v=accessVereine(); return v[0]||''; }  // Kompat (erster Verein)
 function crmRestricted(){ return accessLevel()==='verein'; }
 function crmFull(){ const l=accessLevel(); return l==='admin'||l==='full'; }
+// Feine Rechte (v510, js/rechte.js) der angemeldeten Person. Ohne gespeicherte neue Rechte leitet rechte.js
+// sie aus den bisherigen Stufen ab (Verhalten unverändert). Fallback, falls rechte.js fehlt: alte Logik.
+function _R(k,opt){ try{ if(window.tpsRecht) return window.tpsRecht(k, window.cu, opt); }catch(e){} return crmFull(); }
+function _hasNeu(u){ try{ return !!(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)); }catch(e){ return false; } }
 // Sieht alles (alle Bäume/Teams/Verteiler), aber 'readonly' darf nichts Strukturelles
 // anlegen/löschen (Einträge, Projekte, Vorlagen, Verteiler) – nur Aufgaben bearbeiten.
 function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l==='readonly'; }
@@ -340,9 +357,11 @@ function crmCanView(){ const l=accessLevel(); return l==='admin'||l==='full'||l=
 function _kanbanAccess(u){ u=u||window.cu; if(!u) return false; try{ return !!canUsePath('kanban', u); }catch(e){ return false; } }
 // Projektmanagement „Verwaltend" (verw_kanban): Team-Projekte anlegen, löschen, einem anderen Team zuordnen.
 // Eigene (persönliche) Projekte (owner = ich) darf jede:r selbst anlegen/löschen. Serverseitig: Regeln v7.
-function _kbManage(){ const u=window.cu; if(!u) return false; if(u.role==='admin') return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+function _kbManage(){ const u=window.cu; if(!u) return false; if(u.role==='admin') return true; if(_hasNeu(u)) return _R('pm_proj_team'); try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
 function _kbMayManage(p){ const u=window.cu; return _kbManage() || !!(u && p && p.owner && p.owner===u.id); }
-function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+// Projekt löschen: eigenes persönliches Projekt immer, sonst Recht „Projekte löschen" (v510)
+function _kbMayDelete(p){ const u=window.cu; if(u && p && p.owner && p.owner===u.id) return true; return _hasNeu(u) ? _R('pm_proj_loeschen') : _kbManage(); }
+function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(_hasNeu(u)){ try{ return window.tpsRechteOf(u).pm_ansehen==='alle'; }catch(e){ return false; } } if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
 function kanbanTeamsFor(u){
   u=u||window.cu; if(!u) return [];
   const set=new Set();
@@ -361,7 +380,7 @@ function visibleKanbanTeams(u){
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5) darf das Verwaltungs-Modul nutzen.
 function _canVerw(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true; try{ return !!(window.hasPermission && window.hasPermission('zugriff_verwaltung', cu)); }catch(e){ return false; } }
 // Teil-Recht: darf NUR die CRM-Einstellungen verwalten (öffnet die Verwaltung, sieht dort nur den CRM-Reiter).
-function _canVerwCrm(){ if(_canVerw()) return true; const cu=window.cu; try{ return !!(cu && window.hasPermission && window.hasPermission('zugriff_verwaltung_crm', cu)); }catch(e){ return false; } }
+function _canVerwCrm(){ if(_canVerw()) return true; const cu=window.cu; if(_hasNeu(cu)) return _R('crm_einst')||_R('crm_export')||_R('crm_import'); try{ return !!(cu && window.hasPermission && window.hasPermission('zugriff_verwaltung_crm', cu)); }catch(e){ return false; } }
 // Teil-Recht „Zeiterfassung: Verwaltend" (zugriff_verwaltung_ze, System-Verwaltung schließt es ein):
 // Teams + Zuordnungskategorien pflegen (Verwaltung → Reiter „Zeiterfassung"). Serverseitig: Regeln v7.
 function _canVerwZe(){ const cu=window.cu; if(!cu) return false; if(cu.role==='admin') return true;
@@ -389,7 +408,7 @@ const _ROLE_COLS=[
   {key:'freiberuflich',     label:'Freib.'},
 ];
 // Zugriffsstufe für EINEN beliebigen Nutzer (nicht nur window.cu) – wie accessLevel(), aber parametrisch.
-function _accessLevelOf(u){ if(!u) return 'none'; if(u.role==='admin') return 'admin'; try{ const a=getAccess(u.id); return (a&&a.level)||'none'; }catch(e){ return 'none'; } }
+function _accessLevelOf(u){ if(!u) return 'none'; if(u.role==='admin') return 'admin'; if(_hasNeu(u)){ try{ return window.tpsCrmStufeAus(window.tpsRechteOf(u)); }catch(e){} } try{ const a=getAccess(u.id); return (a&&a.level)||'none'; }catch(e){ return 'none'; } }
 // STANDARD-Verhalten (exakt wie bisher hartkodiert) – gilt, solange die Matrix „Standard" sagt.
 function _defaultPathAccess(key, cu){
   const isAdmin=cu.role==='admin';
@@ -415,6 +434,8 @@ function _defaultPathAccess(key, cu){
 function canUsePath(key, cu){
   if(!cu) return false;
   if(cu.role==='admin') return true;
+  // 0. Feine Rechte (v510): Bereich sichtbar = sein „ansehen"-Recht.
+  if(_hasNeu(cu)){ const vk=(window.TPS_AREA_VIEW||{})[key]; if(vk) return !!window.tpsRecht(vk, cu); }
   // 1. Persönliche Ausnahme (Mitarbeiter-Dialog) übersteuert alles.
   if(cu.perms && Object.prototype.hasOwnProperty.call(cu.perms, 'path_'+key)) return !!cu.perms['path_'+key];
   // 2. Rollen-Matrix (Verwaltung → Zugriffe).
@@ -430,6 +451,8 @@ function canUsePath(key, cu){
 function _canAdminFor(key, u){
   if(!u) return false;
   if(u.role==='admin') return true;
+  if(_hasNeu(u)){ const m={ crm:'crm_einst', kanban:'pm_proj_team', kalender:'kal_va', verteiler:'vt_anlegen', messe:'me_va', shop:'la_einst' }[key];
+    if(m) return !!window.tpsRecht(m, u); }
   const p=u.perms||{};
   // Ausdrücklich im Mitarbeiter-Dialog gesetzte Modul-Stufe hat Vorrang vor der Voll-Verwaltung:
   // „Shop: Nutzen" bei einer Person mit System-Verwaltung bleibt dann auch wirklich „Nutzen".
@@ -456,6 +479,8 @@ function crmModuleAccess(u){
   return out;
 }
 window.crmModuleAccess = crmModuleAccess;
+window._crmKanbanSeesAll = _kanbanSeesAll;
+window.crmCategoryList = ()=>{ try{ return getCategories(); }catch(e){ return []; } };
 
 function crmSetupModuleBar(){
   try{
@@ -1396,7 +1421,7 @@ function paintList(){
       ${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">✕ zurücksetzen</button>`:''}
       <select class="crm-sortsel" aria-label="Sortierung" onchange="crmSetSort(this.value)"><option value="az"${sort==='az'?' selected':''}>Name A–Z</option><option value="za"${sort==='za'?' selected':''}>Name Z–A</option></select>
       <span class="crm-filter-count">${items.length} Kontakt${items.length===1?'':'e'}</span>
-      ${crmFull()?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
+      ${_R('crm_anlegen')?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmOpenNew()">＋<span class="btn-lbl"> Neu</span></button>`:''}
     </div>` : '';
   const cards = items.map(e=>{
     const s=e.stamm||{};
@@ -1418,7 +1443,7 @@ function paintList(){
     ${filterBar}
     ${(unified && window._crmFilterOpen)?`<div class="crm-fwrap"><aside class="crm-fside" aria-label="Filter">${_filterPanelHtml()}</aside><div class="crm-fmain">`:''}
     ${ items.length ? `<div class="crm-list">${cards}</div>`
-                 : `<div class="crm-empty">${anyFilter?'Keine Kontakte mit dieser Auswahl.':'Noch keine Kontakte.'}<br><br>${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">Filter zurücksetzen</button>`:(crmFull()?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Kontakt anlegen</button>`:'')}</div>`
+                 : `<div class="crm-empty">${anyFilter?'Keine Kontakte mit dieser Auswahl.':'Noch keine Kontakte.'}<br><br>${anyFilter?`<button class="btn-sm-crm" onclick="crmClearFilters()">Filter zurücksetzen</button>`:(_R('crm_anlegen')?`<button class="btn-sm-crm primary" onclick="crmOpenNew()">＋ Kontakt anlegen</button>`:'')}</div>`
   }${(unified && window._crmFilterOpen)?'</div></div>':''}</div>`;
 }
 // Häkchen-Filter (Mehrfachauswahl). Status und Kategorie sind unabhängige Gruppen.
@@ -1849,8 +1874,8 @@ function paintDetail(){
   window._crmAfterTask='detail';
   const s=e.stamm||{};
   const tree=treeByKey(window._crmTree);
-  const canCfg=crmFull()||crmRestricted();     // Feld-Bezeichnung (pro Eintrag) per Doppelklick umbenennen
-  const canEditK=crmFull()||crmRestricted();   // Kontakt-Rolle per Doppelklick ändern
+  const canCfg=_R('crm_stamm');     // Feld-Bezeichnung (pro Eintrag) per Doppelklick umbenennen
+  const canEditK=_R('crm_personen');   // Kontakt-Rolle per Doppelklick ändern
   const flbls=e.fieldLabels||{};               // pro-Eintrag umbenannte Feld-Bezeichnungen
 
   const fields = stammFields(window._crmTree)
@@ -1884,7 +1909,7 @@ function paintDetail(){
         ${t.note?`<div class="small">${linkify(t.note)}</div>`:''}
         ${asg}
       </div>
-      <button class="crm-x" title="Entfernen" onclick="event.stopPropagation();crmDeleteTermin(${jsq(t.id)})">✕</button>
+      ${_mayDelTermin(t)?`<button class="crm-x" title="Entfernen" onclick="event.stopPropagation();crmDeleteTermin(${jsq(t.id)})">✕</button>`:''}
     </div>`;
   };
   const allTermine=(e.termine||[]).slice().sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
@@ -1921,9 +1946,9 @@ function paintDetail(){
     return `<div class="crm-sec"><h4><span class="ttl"><span class="crm-catbadge" style="background:${cssColor(c.color||'#5b6b7d')}">${esc(c.label)}</span></span></h4>${rows?`<div class="crm-fields">${rows}</div>`:`<div class="small" style="color:var(--muted)">Noch nichts eingetragen – über „✎ Stammdaten“ ergänzen.</div>`}</div>`; }).join('');
   const stammSec = (fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'') + catFSec;
   const aufgabenSec = entityProjekteSectionHtml(e);
-  const _kEdit=crmFull()||crmRestricted();
+  const _kEdit=_R('crm_personen');
   const kontakteSec = `<div class="crm-sec">
-      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(()=>{ const em=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean); const h=_mailtoHref(em,'to'); return h?`<a class="btn-sm-crm" style="text-decoration:none" title="Mail an alle Kontakte" href="${esc(h)}">✉️ Mail an alle</a>`:''; })()}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button></span></h4>
+      <h4><span class="ttl">👥 Kontakte / Mitglieder</span><span class="hbtns">${(()=>{ const em=(e.kontakte||[]).flatMap(k=>kEmails(k)).filter(Boolean); const h=_mailtoHref(em,'to'); return h?`<a class="btn-sm-crm" style="text-decoration:none" title="Mail an alle Kontakte" href="${esc(h)}">✉️ Mail an alle</a>`:''; })()}${(e.kontakte||[]).length?`<button class="btn-sm-crm" title="Kontakte als vCard für Outlook exportieren" onclick="crmExportContactsVcf()">📇 Outlook-Export</button>`:''}${_kEdit?`<label class="btn-sm-crm" style="cursor:pointer" title="Kontakte aus Outlook (vCard/CSV) importieren">📥 Outlook-Import<input type="file" accept=".vcf,.csv,text/vcard,text/csv" style="display:none" onchange="crmImportContactsFile(this)"></label>`:''}${_mayPersonen()?`<button class="btn-sm-crm" onclick="crmAddMember()">＋ Kontakt</button>`:''}</span></h4>
       ${kontakte}
     </div>`;
   const termineSec = `<div class="crm-sec">
@@ -1942,10 +1967,10 @@ function paintDetail(){
   tabs.push(['foerderungen','Förderungen']);
   let dt=window._crmDetailTab; if(!tabs.some(t=>t[0]===dt)) dt='allgemeines';
   const subbar=`<div class="crm-subtabs">${tabs.map(([k,l])=>`<button class="crm-subtab${k===dt?' active':''}" onclick="crmDetailTab(${jsq(k)})">${esc(l)}</button>`).join('')}</div>`;
-  const canCreate=crmFull()||crmRestricted();
+  const canCreate=(_R('crm_aufgaben'));
   // EIN Anlege-Knopf mit Auswahl (Aufgabe/Termin/Veranstaltung) – bündelt die Wege,
   // ohne Funktionen zu entfernen (Board + Inline-Anlegen bleiben voll erhalten).
-  const canEvents=_canManageEvents();   // Termine/Veranstaltungen anlegen = CRM „verwaltend"
+  const canEvents=(_R('crm_termine')||_R('kal_va'));   // Termine/Veranstaltungen anlegen = CRM „verwaltend"
   const neuBtn = (canCreate||canEvents) ? `<div class="crm-neu-bar"><div class="crm-neu-wrap">
       <button class="btn-sm-crm primary" onclick="crmNeuToggle(event)">＋ Neu ▾</button>
       <div class="crm-neu-menu" id="crm-neu-menu">
@@ -1971,8 +1996,8 @@ function paintDetail(){
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?'Kontakte':'Meine Aufgaben'}</button>
       <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)} ${_incompleteChip(_entMissing(e))}</h2>
-      ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
-      ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
+      ${_R('crm_stamm')?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
+      ${_R('crm_loeschen')?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
     </div>
     ${(e.createdAt||e.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 12px">${
         e.createdAt?`angelegt ${e.createdByKuerzel?'von '+esc(e.createdByKuerzel)+' ':''}am ${esc(fmtDate(e.createdAt))}`:''
@@ -2349,6 +2374,7 @@ function crmSaveStamm(isNew){
   }
 }
 function crmDeleteEntity(){
+  if(!_R('crm_loeschen')){ toast('Dafür fehlt das Recht „Kontakte löschen“.','err'); return; }
   const e=curEntity(); if(!e) return;
   if(!confirm(`„${(e.stamm&&e.stamm.name)||''}" wirklich löschen?`)) return;
   deleteEntity(window._crmTree, e.id);
@@ -2387,7 +2413,7 @@ function _koopDateChip(k){
   return '';
 }
 function kooperationenSecHtml(e){
-  const canEdit=crmFull()||crmRestricted();
+  const canEdit=_R('crm_koop');
   const list=_koopList(window._crmTree, e.id);
   const active=list.filter(k=>!_koopEnded(k)), ended=list.filter(k=>_koopEnded(k));
   const row=(k,isEnded)=>{
@@ -2494,11 +2520,11 @@ function memberFormHtml(k){
   const emails=kEmails(k), tels=kTels(k);
   const myMail=String(emails[0]||'').toLowerCase().trim();
   const ce=curEntity();
-  const pBlock = postLists.length ? `<div class="crm-modal-field"><label>📮 Zu Adressverteiler hinzufügen</label>
+  const pBlock = (postLists.length && _R('vt_eintragen')) ? `<div class="crm-modal-field"><label>📮 Zu Adressverteiler hinzufügen</label>
      <div class="vw-vpick">${postLists.map(v=>{ const inIt = k.id && ce && (v.adressen||[]).some(a=>a.src&&a.src.eid===ce.id&&a.src.kid===k.id);
         return `<label><input type="checkbox" class="crm-mf-pv" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
      <div class="small" style="color:var(--muted);margin-top:3px">Ohne eigene Adresse wird die Adresse des Eintrags verwendet.</div></div>` : '';
-  const vBlock = lists.length ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
+  const vBlock = (lists.length && _R('vt_eintragen')) ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
      <div class="vw-vpick">${lists.map(v=>{ const inIt = myMail && _normEmails(v.emails).some(e=>e.toLowerCase()===myMail);
         return `<label><input type="checkbox" class="crm-mf-vt" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
      <div class="small" style="color:var(--muted);margin-top:3px">Wirkt nur mit hinterlegter E-Mail.</div></div>` : '';
@@ -2515,7 +2541,10 @@ function memberFormHtml(k){
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-mf-note" value="${esc(k.note||'')}"></div>
    ${vBlock}${pBlock}`;
 }
+// Personen beim Kontakt anlegen/bearbeiten: mit neuen Rechten „1.4", sonst wie bisher (Knopf für alle sichtbar)
+function _mayPersonen(){ return _hasNeu(window.cu) ? _R('crm_personen') : true; }
 function crmAddMember(){
+  if(!_mayPersonen()){ toast('Dafür fehlt das Recht „Personen anlegen/bearbeiten“.','err'); return; }
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Kontakt</h3>${memberFormHtml({})}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -2530,6 +2559,7 @@ function crmEditMember(mid){
    <button class="btn-sm-crm primary" onclick="crmSaveMember(${jsq(mid)})">Speichern</button></div>`);
 }
 function crmSaveMember(mid){
+  if(!_mayPersonen()){ toast('Dafür fehlt das Recht „Personen anlegen/bearbeiten“.','err'); return; }
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const emails=Array.from(document.querySelectorAll('.crm-mf-email')).map(x=>x.value.trim()).filter(Boolean);
   const tels=Array.from(document.querySelectorAll('.crm-mf-tel')).map(x=>x.value.trim()).filter(Boolean);
@@ -2570,6 +2600,7 @@ function crmSaveMember(mid){
   toast(added?`Kontakt gespeichert · zu ${added} Verteiler${added===1?'':'n'} hinzugefügt ✓`:'Kontakt gespeichert ✓','ok');
 }
 function crmDeleteMember(mid){
+  if(!_mayPersonen()){ toast('Dafür fehlt das Recht „Personen anlegen/bearbeiten“.','err'); return; }
   mutateEntity(e=>{ e.kontakte=(e.kontakte||[]).filter(x=>x.id!==mid); });
   paintDetail();
 }
@@ -2584,7 +2615,7 @@ function crmDeleteMemberConfirm(mid){
 function crmMemberDetail(mid){
   const e=curEntity(); if(!e) return;
   const k=(e.kontakte||[]).find(x=>x.id===mid); if(!k) return;
-  const canEdit=crmFull()||crmRestricted();
+  const canEdit=_R('crm_personen');
   const det=(label,inner)=>inner?`<div class="crm-field" style="margin-bottom:10px"><label>${esc(label)}</label><div class="v">${inner}</div></div>`:'';
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 12px">👤 ${esc(k.name||'(Kontakt)')}</h3>
@@ -2675,7 +2706,7 @@ function _parseContactsCsv(txt){
 }
 function crmImportContactsFile(inp){
   const file=inp&&inp.files&&inp.files[0]; if(!file) return;
-  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung.','err'); inp.value=''; return; }
+  if(!_R('crm_dateien')){ toast('Keine Berechtigung.','err'); inp.value=''; return; }
   if(!curEntity()){ inp.value=''; return; }
   const reader=new FileReader();
   reader.onload=ev=>{
@@ -2705,7 +2736,7 @@ function crmImportContactsFile(inp){
 
 // ── Termine ────────────────────────────────────────────────────────
 // Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
-function crmCanCreateItems(){ return { termin: (crmFull()||crmRestricted()), va: crmFull() }; }
+function crmCanCreateItems(){ return { termin: (_R('crm_termine')||_R('kal_eigene')), va: _R('kal_va') }; }
 // Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
 const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
 function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
@@ -2803,7 +2834,7 @@ function crmSaveTermin(){
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, uhr:_joinUhr(val('crm-tf-uhrvon'),val('crm-tf-uhrbis')), datumTs:datum?Date.parse(datum):null, farbe:_farbVal('crm-tf'), ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[], teilnehmer:kontakte.slice(1) });
+    e.termine.push({ id:newId(), titel, datum, bis, uhr:_joinUhr(val('crm-tf-uhrvon'),val('crm-tf-uhrbis')), datumTs:datum?Date.parse(datum):null, farbe:_farbVal('crm-tf'), ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[], teilnehmer:kontakte.slice(1), createdById:(window.cu&&window.cu.id)||'', createdByKuerzel:curKuerzel() });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal();
@@ -2812,6 +2843,8 @@ function crmSaveTermin(){
   toast('Termin angelegt ✓','ok');
 }
 function crmDeleteTermin(tid){
+  const _e=curEntity(); const _t=_e&&(_e.termine||[]).find(x=>x.id===tid);
+  if(!_mayDelTermin(_t)){ toast('Dafür fehlt das Recht „Termine löschen“.','err'); return; }
   mutateEntity(e=>{ e.termine=(e.termine||[]).filter(x=>x.id!==tid); });
   paintDetail();
 }
@@ -2821,7 +2854,7 @@ function crmEditTermin(tid){
   const e=curEntity(); if(!e){ toast('Kein Kontakt geöffnet.','err'); return; }
   const t=(e.termine||[]).find(x=>x.id===tid); if(!t){ toast('Termin nicht gefunden.','err'); return; }
   const canAsg=_canAssignStaff();
-  const canEdit=_canManageEvents();     // CRM „nutzen" darf nur ansehen (read-only)
+  const canEdit=(_R('crm_termine')||_R('kal_fremde'));     // CRM „nutzen" darf nur ansehen (read-only)
   const ro = canEdit?'':' disabled';
   _kpSet('crm-te', Array.isArray(t.teilnehmer)?t.teilnehmer:[]);   // weitere beteiligte Kontakte
   crmOpenModalShell();
@@ -2901,7 +2934,7 @@ function _notesForEntity(tree,eid){
 }
 function kontaktnotizenSecHtml(e){
   migKontaktnotizen(e);
-  const canEdit=crmFull()||crmRestricted();
+  const canEdit=_R('crm_notizen');
   const allNotes=_notesForEntity(window._crmTree, e.id).slice().sort((a,b)=>((b.when||b.ts)||0)-((a.when||a.ts)||0));
   const notes=allNotes.filter(n=>!n.withdrawn), withdrawn=allNotes.filter(n=>n.withdrawn && n._own!==false);
   const noteHtml=n=>{ const shared=n._own===false;
@@ -3229,8 +3262,8 @@ Object.assign(window, { crmKnAddFolge, crmKnTypChg, crmKnWerRefresh, crmNoteAssi
 // Zurückziehen statt löschen: n.withdrawn={ts,by} – bleibt sichtbar (grau, wiederherstellbar).
 // Endgültig löschen nur Admin/CRM-Verwaltung und nur bereits zurückgezogene Notizen.
 function _knIsMine(n){ const nm=curName(), kz=curKuerzel(); return !!n && ((n.byName && n.byName===nm) || (!n.byName && n.byKuerzel && n.byKuerzel===kz)); }
-function _knMayEdit(n){ return (crmFull()||crmRestricted()) && (_knIsMine(n) || crmFull()); }
-function _knMayPurge(){ try{ return _canAdminFor('crm', window.cu); }catch(e){ return false; } }
+function _knMayEdit(n){ return _R('crm_notizen') && (_knIsMine(n) || _R('crm_notizen_fremd')); }
+function _knMayPurge(){ return _R('crm_notiz_purge'); }
 function crmEditKontaktnotiz(id){
   const e=curEntity(); if(!e) return; migKontaktnotizen(e);
   const n=(e.kontaktnotizen||[]).find(x=>x.id===id); if(!n) return;
@@ -3333,13 +3366,13 @@ function entityProjekteSectionHtml(e){
     return `<button class="crm-projtab${p.id===selPid?' active':''}" onclick="crmSelProjekt(${jsq(p.id)})">${esc(p.name||'Projekt')}${(!p.closed&&open)?` <span class="cnt">${open}</span>`:''}</button>`; };
   const openTabs = openP.length ? `<div class="crm-projtabs">${openP.map(tab).join('')}</div>` : '';
   const board = sel ? entityProjBoardHtml(sel)
-    : (openP.length ? '' : `<div class="small" style="color:var(--muted);margin-bottom:8px">Noch keine Aufgaben.${closedP.length?' (Unten gibt es abgeschlossene Projekte.)':''}</div>${(crmFull()||crmRestricted())?`<input class="kb-qadd" id="kb-qa-col" placeholder="Erste Spalte anlegen + Enter – z. B. „Vorbereitung"" onkeydown="crmQaKey(event,'col','')">`:''}`);
+    : (openP.length ? '' : `<div class="small" style="color:var(--muted);margin-bottom:8px">Noch keine Aufgaben.${closedP.length?' (Unten gibt es abgeschlossene Projekte.)':''}</div>${_R('crm_aufgaben')?`<input class="kb-qadd" id="kb-qa-col" placeholder="Erste Spalte anlegen + Enter – z. B. „Vorbereitung"" onkeydown="crmQaKey(event,'col','')">`:''}`);
   const history = closedP.length ? `<details class="crm-projhist" ${(sel&&sel.closed)?'open':''}>
       <summary>🏁 Abgeschlossene Projekte (${closedP.length})</summary>
       <div class="crm-projtabs" style="margin-top:8px">${closedP.map(tab).join('')}</div>
     </details>` : '';
   return `<div class="crm-sec">
-    <h4><span class="ttl">📋 Projekte</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewEntityProjekt()">＋ Neues Projekt</button>`:''}</h4>
+    <h4><span class="ttl">📋 Projekte</span>${_R('crm_aufgaben')?`<button class="btn-sm-crm primary" onclick="crmNewEntityProjekt()">＋ Neues Projekt</button>`:''}</h4>
     ${openTabs}
     ${board}
     ${history}
@@ -3350,10 +3383,10 @@ function entityProjBoardHtml(p){
   return `<div class="crm-projhead">
       ${closed?`<span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>`:''}
       <span class="hbtns" style="margin-left:auto">
-        ${crmFull()?`<button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt(${jsq(p.id)})">✎ Umbenennen</button>`:''}
+        ${_R('crm_aufgaben')?`<button class="btn-sm-crm" title="Projekt umbenennen" onclick="crmRenameProjekt(${jsq(p.id)})">✎ Umbenennen</button>`:''}
         <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
-        ${crmFull()?`<button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>`:''}
-        ${crmFull()?`<button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt(${jsq(p.id)})">✕</button>`:''}
+        ${_R('crm_aufgaben')?`<button class="btn-sm-crm" onclick="${closed?'crmReopenBoard':'crmCloseBoard'}()">${closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>`:''}
+        ${_R('crm_aufgaben')?`<button class="crm-x" title="Projekt löschen" onclick="crmDeleteProjekt(${jsq(p.id)})">✕</button>`:''}
       </span>
     </div>
     ${closed?`<div class="small" style="color:var(--muted);margin:-2px 0 10px">🏁 Abgeschlossen am ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' von '+esc(p.closedByKuerzel):''}.</div>`:''}
@@ -3551,7 +3584,7 @@ function statsSecHtml(e){
   // vorheriger Eintrag GLEICHER Art (chronologisch) → Δ pro Art
   const prevOf=new Map(), lastByTyp={};
   stats.forEach(s=>{ const t=s.typ||'_'; prevOf.set(s.id, lastByTyp[t]||null); lastByTyp[t]=s; });
-  const canEdit=crmFull()||crmRestricted();
+  const canEdit=_R('crm_statistik');
   const metricHead=STAT_METRICS.map(m=>`<th title="${esc(m.title||m.label)}">${esc(m.label)}</th>`).join('');
   // nach Jahr gruppieren (neueste zuerst)
   const byYear={}; stats.forEach(s=>{ const y=(String(s.date).match(/^(\d{4})/)||[])[1]||'—'; (byYear[y]=byYear[y]||[]).push(s); });
@@ -3715,7 +3748,7 @@ function _foerderLogHtml(f){
 // ihre früheren Felder (Datum, Summe, Status) in den Daten – angezeigt wird das Jahr (aus jahr bzw. dem alten Datum).
 function _foerderJahr(f){ const j=Number(f&&f.jahr); if(j>1900&&j<3000) return j; const m=String((f&&f.date)||'').match(/^(\d{4})/); return m?Number(m[1]):null; }
 function foerderungenSecHtml(e){
-  const canEdit=crmFull()||crmRestricted();
+  const canEdit=_R('crm_foerder');
   const list=(e.foerderungen||[]).slice().sort((a,b)=>(_foerderJahr(b)||0)-(_foerderJahr(a)||0));
   const rows=list.map(f=>`<tr>
       <td style="white-space:nowrap">${_foerderJahr(f)||'–'}</td>
@@ -3914,11 +3947,13 @@ function crmQuickAddColumn(text, focusId){
       window._crmAfterTask='detail';
     }
   }
+  if(!_ctxMay(null, true)){ toast('Dafür fehlt die Berechtigung (Aufgaben anlegen).','err'); return; }
   mutateContainer(en=>{ if(!Array.isArray(en.todos)) en.todos=[]; en.todos.push({ id:newId(), text, status:'offen', children:[], teams:[] }); });
   window._crmFocusAfter=focusId||'kb-qa-col';
   repaintContainer();
 }
 function crmQuickAddChildInline(parentId, text, focusId, prepend){
+  if(!_ctxMay(null, true)){ toast('Dafür fehlt die Berechtigung (Aufgaben anlegen).','err'); return; }
   mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; const node={ id:newId(), text, status:'offen', children:[] }; if(prepend) f.node.children.unshift(node); else f.node.children.push(node); });
   window._crmFocusAfter=focusId;
   repaintContainer();
@@ -4126,7 +4161,7 @@ function paintTeamDetail(){
     </div>`;
   const vaUpc=vs.filter(v=>!vaIsPast(v)&&!v.closed), vaPast=vs.filter(v=>vaIsPast(v)||v.closed);
   const vaSec=`<div class="crm-sec">
-    <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</h4>
+    <h4><span class="ttl">📅 Veranstaltungen</span>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</h4>
     ${vaUpc.length?`<div class="crm-list">${vaUpc.map(vaCard).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen für dieses Team.</div>`}
     ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div class="crm-list" style="margin-top:8px">${vaPast.map(vaCard).join('')}</div></details>`:''}
   </div>`;
@@ -4213,7 +4248,7 @@ function paintTeamProjektDetail(){
       <h2>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
       <button class="btn-sm-crm" onclick="${p.closed?'crmReopenProjekt':'crmCloseProjekt'}()">${p.closed?'↺ Wieder öffnen':'✓ Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditTeamProjekt()">✎ Bearbeiten</button>
-      ${_kbMayManage(p)?`<button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>`:''}
+      ${_kbMayDelete(p)?`<button class="btn-sm-crm danger" onclick="crmDeleteTeamProjekt()">Löschen</button>`:''}
     </div>
     ${(p.createdAt||p.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${p.createdAt?`angelegt ${p.createdByKuerzel?'von '+esc(p.createdByKuerzel)+' ':''}am ${esc(fmtDate(p.createdAt))}`:''}${p.updatedByKuerzel?` · zuletzt von ${esc(p.updatedByKuerzel)}${p.updatedAt?' am '+esc(fmtDateTime(p.updatedAt)):''}`:''}</div>`:''}
     ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity(${jsq(p.linkTree)},${jsq(p.linkEid)})">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
@@ -4268,7 +4303,7 @@ function teamProjektFormHtml(p, isNew){
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
 }
 function crmNewTeamProjekt(){
-  if(!_kbManage()){ toast('Team-Projekte anlegen: nur mit Projektmanagement „Verwaltend".','err'); return; }
+  if(!_kbManage()){ toast('Team-Projekte anlegen: dafür fehlt das Recht „Team-Projekte anlegen“.','err'); return; }
   crmOpenModalShell();
   const team=window._crmTeamSel==='Ohne Team'?'':(window._crmTeamSel||'');
   openModal(teamProjektFormHtml({ team }, true));
@@ -4299,7 +4334,7 @@ function crmSaveTeamProjekt(isNew){
 }
 function crmDeleteTeamProjekt(){
   const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
-  if(!_kbMayManage(p)){ toast('Löschen: nur mit Projektmanagement „Verwaltend".','err'); return; }
+  if(!_kbMayDelete(p)){ toast('Löschen: dafür fehlt das Recht „Projekte löschen“.','err'); return; }
   if(!confirm(`Projekt „${p.name||''}" wirklich löschen?`)) return;
   const ret=window._crmProjReturn;
   deleteTeamProjekt(p.id); window._crmTeamProjSel=null;
@@ -4353,7 +4388,7 @@ function meineSectionsHtml(){
       ${arows}
     </div>
     <div class="crm-sec">
-      <h4><span class="ttl">📂 Meine Projekte</span><button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button></h4>
+      <h4><span class="ttl">📂 Meine Projekte</span>${_R('pm_proj_eigen')?`<button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button>`:''}</h4>
       ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="empty-state"><span class="es-icon">🗂️</span><span>Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</span></div>`}
       ${closedMine.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedMine.length})</summary><div class="crm-list" style="margin-top:8px">${closedMine.map(pcard).join('')}</div></details>`:''}
     </div>`;
@@ -4372,6 +4407,7 @@ function crmMeineToggle(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmToggl
 function crmMeineOpen(kind,tree,id,tid){ _meSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
 function crmOpenMeinProjekt(id){ window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id; paintTeamProjektDetail(); }
 function crmNewMeinProjekt(){
+  if(!_R('pm_proj_eigen')){ toast('Dafür fehlt das Recht „Eigene Projekte anlegen“.','err'); return; }
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Eigenes Projekt</h3>
     <div class="crm-modal-field"><label>Name *</label><input id="crm-mp-name"></div>
@@ -4418,7 +4454,7 @@ function veranstaltungenListHtml(){
   const upcoming=all.filter(v=>!vaIsPast(v)&&!v.closed);
   const past=all.filter(v=>vaIsPast(v)||v.closed);
   return `<div class="crm-sec">
-      <h4><span class="ttl">📅 Veranstaltungen</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltung()">＋ Veranstaltung</button>`:''}</h4>
+      <h4><span class="ttl">📅 Veranstaltungen</span>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltung()">＋ Veranstaltung</button>`:''}</h4>
       <div class="small" style="color:var(--muted);margin-bottom:10px">Übergreifende Termine & Online-Treffen – mit beliebig vielen beteiligten Einträgen (Vereine, Sozialakteure …) oder ganz ohne (übergeordnet).</div>
       ${upcoming.length?`<div class="crm-list">${upcoming.map(card).join('')}</div>`:`<div class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen.</div>`}
       ${past.length?`<details style="margin-top:14px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${past.length})</summary><div class="crm-list" style="margin-top:10px">${past.map(card).join('')}</div></details>`:''}
@@ -4451,9 +4487,9 @@ function paintVeranstaltungDetail(){
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Zurück</button>
       <h2>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
-      ${_canManageEvents()?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
+      ${_R('kal_va')?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditVeranstaltung()">✎ Bearbeiten</button>
-      <button class="btn-sm-crm danger" onclick="crmDeleteVeranstaltungC()">Löschen</button>`:''}
+      ${_R('kal_va_loeschen')?`<button class="btn-sm-crm danger" onclick="crmDeleteVeranstaltungC()">Löschen</button>`:''}`:''}
     </div>
     <div class="crm-sec">
       <div class="crm-fields">
@@ -4505,7 +4541,10 @@ function crmVaRemoveTeiln(idx){ if(Array.isArray(window._vaTeiln)) window._vaTei
 // Zuweisbar = interne Mitarbeiter (kein Admin, keine externen crmOnly). Mehrfach/alle möglich.
 function _assignableStaff(){ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
 // Zuweisen dürfen nur Leitung/GF (+ Admin). Andere sehen die Zuweisung nur als Chips (read-only).
-function _canAssignStaff(){ const r=(window.cu&&window.cu.role)||''; return r==='admin'||r==='leitung'||r==='geschaeftsfuehrer'; }
+function _canAssignStaff(){ const u=window.cu; if(_hasNeu(u)) return _R('kal_zuweisen'); const r=(u&&u.role)||''; return r==='admin'||r==='leitung'||r==='geschaeftsfuehrer'; }
+// Termin löschen: Recht „Termine löschen" alle – oder „eigene" (selbst angelegt bzw. selbst zugewiesen). Ohne neue Rechte wie bisher.
+function _mayDelTermin(t){ const u=window.cu; if(!_hasNeu(u)) return true; const v=window.tpsRechteOf(u).kal_loeschen; if(v==='alle') return true;
+  if(v!=='eigene' || !t) return false; return t.createdById===u.id || (Array.isArray(t.mitarbeiter)&&t.mitarbeiter.includes(u.id)); }
 // Neue Termine/Veranstaltungen anlegen UND deren Infos bearbeiten = CRM-Zugriff „verwaltend".
 // (CRM „nutzen" darf ansehen + Kanban voll nutzen, aber die Termin-/VA-Infos NICHT bearbeiten.)
 function _canManageEvents(){ try{ return crmModuleAccess(window.cu).crm==='verwaltend'; }catch(e){ return false; } }
@@ -4651,7 +4690,7 @@ function crmNewType(t){
   const bv=document.getElementById('crm-tt-va'); if(bv) bv.classList.toggle('on',t==='veranstaltung');
   const hint=document.getElementById('crm-tt-hint'); if(hint) hint.textContent=(t==='termin')?'Kurzer Termin/Training – wird an einem CRM-Kontakt geführt. Kann später zur Veranstaltung (mit Kanban) umgewandelt werden.':'Größeres Vorhaben mit Beteiligten, Team und eigenem Kanban-Board.';
 }
-function crmSaveNewItem(){ if(!_canManageEvents()){ toast('Dafür fehlt die Berechtigung (CRM „verwaltend").','err'); return; } if((window._crmNewType||'termin')==='veranstaltung') crmSaveVeranstaltung(true); else crmSaveTermin(); }
+function crmSaveNewItem(){ const _va=(window._crmNewType||'termin')==='veranstaltung'; if(_va?!_R('kal_va'):!(_R('crm_termine')||_R('kal_eigene'))){ toast('Dafür fehlt die Berechtigung.','err'); return; } if((window._crmNewType||'termin')==='veranstaltung') crmSaveVeranstaltung(true); else crmSaveTermin(); }
 // Termin → Veranstaltung (mit Kanban) umwandeln: neue Veranstaltung aus den Termindaten
 // anlegen (Kontakt als Beteiligter), dann den Termin am Kontakt entfernen.
 function crmTerminToVa(tid){
@@ -4670,7 +4709,7 @@ function crmTerminToVa(tid){
 function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); _crmSide(); }
 function crmEditVeranstaltung(){
   injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
-  if(!_canManageEvents()){ toast('Nur ansehen – Bearbeiten braucht CRM „verwaltend".','err'); return; }
+  if(!_R('kal_va')){ toast('Nur ansehen – Bearbeiten braucht das Recht „Veranstaltungen anlegen/bearbeiten“.','err'); return; }
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
   crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false)); _crmSide();
@@ -4701,6 +4740,7 @@ function crmSaveVeranstaltung(isNew){
   }
 }
 function crmDeleteVeranstaltungC(){
+  if(!_R('kal_va_loeschen')){ toast('Dafür fehlt das Recht „Veranstaltungen löschen“.','err'); return; }
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   if(!window.confirm(`Veranstaltung „${v.titel||''}" wirklich löschen?`)) return;
   deleteVeranstaltung(v.id); window._crmVaSel=null; paintVeranstaltungen(); toast('Gelöscht.','');
@@ -4787,9 +4827,9 @@ function paintVerteiler(){
       <div class="meta"><span class="crm-chip">${n} Empfänger</span></div>
       <div class="vt-actions">
         <button class="btn-sm-crm primary" ${n?'':'disabled'} onclick="crmPvLabels(${jsq(v.id)})">🏷️ Etiketten</button>
-        <button class="btn-sm-crm" ${n?'':'disabled'} onclick="crmPvExcel(${jsq(v.id)})">📊 Excel</button>
-        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>
-        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
+        ${_R('vt_export')?`<button class="btn-sm-crm" ${n?'':'disabled'} onclick="crmPvExcel(${jsq(v.id)})">📊 Excel</button>`:''}
+        ${_R('vt_anlegen')?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>`:''}
+        ${_R('vt_loeschen')?`<button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
       </div>
     </div>`;
   }).join('') || `<div class="small" style="color:var(--muted)">Noch keine Adressverteiler. Lege einen an und übernimm Postadressen aus Kontakten und Vereinen.</div>`;
@@ -4801,19 +4841,19 @@ function paintVerteiler(){
       <div class="vt-actions">
         ${(()=>{ const h=_mailtoHref(v.emails,'bcc'); return h?`<a class="btn-sm-crm primary" style="text-decoration:none" href="${esc(h)}">✉️ Mail (BCC)</a>`:`<button class="btn-sm-crm" disabled title="Keine Adressen">✉️ Mail (BCC)</button>`; })()}
         <button class="btn-sm-crm" onclick="crmCopyVerteiler(${jsq(v.id)})">⧉ Kopieren</button>
-        ${crmFull()?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>
-        <button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
+        ${_R('vt_anlegen')?`<button class="btn-sm-crm" onclick="crmEditVerteiler(${jsq(v.id)})">Bearbeiten</button>`:''}
+        ${_R('vt_loeschen')?`<button class="crm-x" title="Löschen" onclick="crmDeleteVerteilerC(${jsq(v.id)})">✕</button>`:''}
       </div>
     </div>`;
   }).join('') || `<div class="empty-state"><span class="es-icon">✉️</span><span class="es-title">Noch keine Verteiler</span><span>Lege einen an und füge Adressen hinzu – manuell oder per Klick aus den Kontakten eines Vereins.</span></div>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-sec">
-      <h4><span class="ttl">✉️ E-Mail-Verteiler</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button>`:''}</h4>
+      <h4><span class="ttl">✉️ E-Mail-Verteiler</span>${_R('vt_anlegen')?`<button class="btn-sm-crm primary" onclick="crmNewVerteiler()">＋ Verteiler</button>`:''}</h4>
       <div class="small" style="color:var(--muted);margin-bottom:10px">„Mail (BCC)" öffnet Outlook mit allen Adressen im <b>BCC</b>-Feld – die Empfänger sehen einander nicht.</div>
       <div class="crm-list">${cards}</div>
     </div>
     <div class="crm-sec">
-      <h4><span class="ttl">📮 Adressverteiler (Post)</span>${crmFull()?`<button class="btn-sm-crm primary" onclick="crmNewAdressverteiler()">＋ Adressverteiler</button>`:''}</h4>
+      <h4><span class="ttl">📮 Adressverteiler (Post)</span>${_R('vt_anlegen')?`<button class="btn-sm-crm primary" onclick="crmNewAdressverteiler()">＋ Adressverteiler</button>`:''}</h4>
       <div class="small" style="color:var(--muted);margin-bottom:10px">Für Briefe: „Etiketten" druckt auf A4-Klebeetiketten-Bögen, „Excel" liefert die Liste (z. B. für einen Word-Serienbrief).</div>
       <div class="crm-list">${postCards}</div>
     </div>
@@ -4846,7 +4886,7 @@ function _verteilerModal(v){
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
    <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" class="crm-ss" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" class="crm-ss" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
-   ${_vtImpHtml('mail')}
+   ${_R('vt_import')?_vtImpHtml('mail'):''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveVerteiler(${jsq(v.id||'')})">Speichern</button></div>`);
   crmVtImpPreview('mail');
@@ -5017,7 +5057,7 @@ function crmSaveVerteiler(id){
     updatedByKuerzel:curKuerzel(), updatedByName:curName() });
   crmCloseModal(); paintVerteiler(); toast('Verteiler gespeichert ✓','ok');
 }
-function crmDeleteVerteilerC(id){ const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
+function crmDeleteVerteilerC(id){ if(!_R('vt_loeschen')){ toast('Dafür fehlt das Recht „Verteiler löschen“.','err'); return; } const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
 // ── Massen-Übernahme aus dem CRM in einen Verteiler (v493, User 28.10.2026) ──────────────
 // Was: Eintrags-Adresse (Vereins-E-Mail / Vereinsanschrift) und/oder Adressen der Kontakte/Mitglieder.
 // Eingrenzen (optional, leer = alle): Status, Kategorie, Funktion des Kontakts.
@@ -5067,6 +5107,7 @@ function crmVtImpPreview(kind){
   }catch(e){ el.textContent=''; }
 }
 function crmVtImpApply(kind){
+  if(!_R('vt_import')){ toast('Dafür fehlt das Recht „Massen-Übernahme aus dem CRM“.','err'); return; }
   if(kind==='mail'){ const m=_vtImpMails(); if(!m.length){ toast('Keine Adressen mit dieser Auswahl.','err'); return; }
     const r=_vtAdd(m); toast(r.added?`${r.added} Adresse(n) übernommen ✓${r.dup?` · ${r.dup} schon vorhanden`:''}`:'Alle Adressen sind schon im Verteiler.', r.added?'ok':'err'); }
   else { const it=_vtImpPostItems(); if(!it.length){ toast('Keine Empfänger mit dieser Auswahl.','err'); return; }
@@ -5135,7 +5176,7 @@ function _pvModal(v){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📮 Adressverteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
    <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" class="crm-ss" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
-   ${_vtImpHtml('post')}
+   ${_R('vt_import')?_vtImpHtml('post'):''}
    <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:11px;color:var(--muted)"></span></label>
      <div id="crm-pv-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Eintrag anklicken = korrigieren · 🔗 = mit Kontakt verknüpft (bleibt aktuell)</span>
@@ -5333,8 +5374,8 @@ function crmOpenVorlagen(){
   const vs=listVorlagen();
   const rows=vs.length ? vs.map(v=>`<div class="crm-row">
       <div class="grow"><span class="name">${esc(v.name)}</span> <span class="small">${_vCount(v)} Hauptaufgaben</span></div>
-      <button class="btn-sm-crm" onclick="crmEditVorlage(${jsq(v.id)})">Bearbeiten</button>
-      <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage(${jsq(v.id)})">✕</button>
+      ${_R('pm_vorlagen')?`<button class="btn-sm-crm" onclick="crmEditVorlage(${jsq(v.id)})">Bearbeiten</button>
+      <button class="crm-x" title="Löschen" onclick="crmDeleteVorlage(${jsq(v.id)})">✕</button>`:''}
     </div>`).join('') : `<div class="small" style="color:var(--muted)">Noch keine Vorlagen.</div>`;
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📋 Aufgaben-Vorlagen</h3>
    ${rows}
@@ -5345,6 +5386,7 @@ function crmOpenVorlagen(){
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button></div>`, true);
 }
 function crmCreateVorlage(){
+  if(!_R('pm_vorlagen')){ toast('Dafür fehlt das Recht „Vorlagen verwalten“.','err'); return; }
   const name=val('crm-vorlage-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const id=newId();
   saveVorlage({ id, name, todos:[] });
@@ -5352,6 +5394,7 @@ function crmCreateVorlage(){
 }
 // Vorlage bearbeiten = großer Board-Editor (dieselbe Kanban-Bedienung wie ein Projekt).
 function crmEditVorlage(id){
+  if(!_R('pm_vorlagen')){ toast('Dafür fehlt das Recht „Vorlagen verwalten“.','err'); return; }
   const v=getVorlage(id); if(!v) return;
   crmCloseModal();            // Listen-Modal zu, großer Editor auf
   paintVorlageEditor(id);
@@ -5412,6 +5455,7 @@ function crmVorlageRename(id, name){
 // (Der frühere verschachtelte Vorlagen-Editor – crmVNodeAdd/…/crmVAtt*/crmVNodeDeps* – ist
 //  entfallen: Vorlagen werden jetzt im großen Board-Editor gebaut, siehe paintVorlageEditor.)
 function crmDeleteVorlage(id){
+  if(!_R('pm_vorlagen')){ toast('Dafür fehlt das Recht „Vorlagen verwalten“.','err'); return; }
   const v=getVorlage(id); if(!v) return;
   if(!confirm(`Vorlage „${v.name}" löschen?`)) return;
   deleteVorlage(id); crmOpenVorlagen();
@@ -6171,7 +6215,7 @@ function crmCfgFieldSave(origKey){
 // (pro Verein/Sozialakteur individuell, gespeichert an e.fieldLabels). Interner Schlüssel
 // bleibt unverändert → bestehende Werte bleiben erhalten. Andere Einträge sind nicht betroffen.
 function crmQuickRenameField(key){
-  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung zum Ändern.','err'); return; }
+  if(!_R('crm_stamm')){ toast('Keine Berechtigung zum Ändern.','err'); return; }
   const e=curEntity(); if(!e) return;
   const def=(stammFields(window._crmTree).find(x=>x.key===key)||{}).label||key;
   const cur=(e.fieldLabels&&e.fieldLabels[key])||def;
@@ -6188,7 +6232,7 @@ function crmQuickRenameField(key){
 }
 // Doppelklick auf die Rolle eines Kontakts: frei umbenennen (pro Kontakt).
 function crmQuickRenameFunktion(mid){
-  if(!(crmFull()||crmRestricted())){ toast('Keine Berechtigung zum Ändern.','err'); return; }
+  if(!_R('crm_stamm')){ toast('Keine Berechtigung zum Ändern.','err'); return; }
   const e=curEntity(); if(!e) return;
   const k=(e.kontakte||[]).find(x=>x.id===mid); if(!k) return;
   const nf=window.prompt('Rolle / Funktion ändern:', k.funktion||'');
@@ -6487,6 +6531,7 @@ async function crmMigrateUmlautIds(btn){
 }
 function _ieStatus(t){ const el=document.getElementById('crm-ie-status'); if(el) el.textContent=t||''; }
 async function crmExportXlsx(){
+  if(!_R('crm_export')){ toast('Dafür fehlt das Recht „Excel-Export“.','err'); return; }
   const keys=Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value);
   if(!keys.length){ toast('Bitte mindestens eine Datenart auswählen.','err'); return; }
   _ieStatus('Excel-Datei wird erstellt …');
@@ -6507,6 +6552,7 @@ async function crmExportXlsx(){
   }catch(e){ console.error('CRM-Export:',e); _ieStatus(''); toast('Export fehlgeschlagen: '+((e&&e.message)||e),'err'); }
 }
 async function crmImportXlsx(input){
+  if(!_R('crm_import')){ toast('Dafür fehlt das Recht „Excel-Import“.','err'); if(input) input.value=''; return; }
   const file=input && input.files && input.files[0]; if(!file){ return; }
   if(!confirm('Import jetzt starten?\n\nVorhandene Einträge mit derselben id werden überschrieben, neue Zeilen (ohne id) angelegt. Nur die oben angehakten Datenarten werden importiert.')){ input.value=''; return; }
   const allowed=new Set(Array.from(document.querySelectorAll('.crm-ie-col:checked')).map(x=>x.value));

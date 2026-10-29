@@ -50,6 +50,66 @@ window.ufSetMod=function(key){
   if(key==='zeiterfassung'){ try{ window.toggleFreelancerFields&&window.toggleFreelancerFields(); }catch(e){} }
 };
 
+// ── Feine Rechte (v510, js/rechte.js): Vorlage + Häkchen je Bereich ──────────────────────────────
+// „Bisherige Einstellung" = keine neuen Rechte gespeichert → die alten Stufen (unten) gelten weiter.
+function _ufRechteHtml(u, isNew, vereinDiv, kanbanBody){
+  const AREAS=window.TPS_RECHTE||[], TPLS=window.TPS_VORLAGEN||[];
+  if(!AREAS.length) return '';
+  const hasNeu=!!(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u));
+  const tpl = isNew ? 'keine' : (hasNeu ? u.rechte.tpl : '');
+  const vals = isNew ? ((TPLS.find(t=>t.key==='keine')||{}).vals||{}) : ((window.tpsRechteOf&&window.tpsRechteOf(u))||{});
+  const dis = tpl==='' ? ' disabled' : '';
+  const kats=(u.rechte&&Array.isArray(u.rechte.kats))?u.rechte.kats:[];
+  let cats=[]; try{ cats=(window.crmCategoryList&&window.crmCategoryList())||[]; }catch(e){}
+  const item=it=>{ const v=vals[it.k];
+    if(it.opts) return `<div class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><span class="uf-r-lbl">${esc(it.label)}</span><select class="uf-r" data-k="${esc(it.k)}" onchange="ufRchg()"${dis}><option value="">– nein –</option>${it.opts.map(([o,l])=>`<option value="${esc(o)}"${v===o?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+    return `<label class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><input type="checkbox" class="uf-r" data-k="${esc(it.k)}"${v?' checked':''} onchange="ufRchg()"${dis}><span class="uf-r-lbl">${esc(it.label)}</span></label>`; };
+  const katBox=`<div id="uf-rkat-wrap" style="display:${vals.crm_ansehen==='kat'?'':'none'};margin:4px 0 8px 34px"><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Welche Kategorien?</div>${cats.length?cats.map(c=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="uf-rkat" value="${esc(c.key)}"${kats.includes(c.key)?' checked':''}${dis}> ${esc(c.label)}</label>`).join(''):'<span style="font-size:12px;color:var(--muted)">Keine Kategorien angelegt.</span>'}</div>`;
+  const areaHtml=a=>{ const n=a.items.filter(it=>vals[it.k]).length;
+    return `<details class="uf-r-area"><summary><span>${a.icon} ${esc(a.label)}</span><span class="uf-r-cnt" data-area="${esc(a.area)}">${n}/${a.items.length}</span></summary><div class="uf-r-body">
+      ${a.items.map(it=>item(it)+(it.k==='crm_ansehen'?katBox+`<div style="margin-left:34px">${vereinDiv}</div>`:'')).join('')}
+      ${a.area==='kanban'?`<div style="margin:8px 0 0 34px">${kanbanBody}</div>`:''}
+    </div></details>`; };
+  return `<style>.uf-r-wrap{border:1.5px solid var(--primary);border-radius:8px;padding:10px 12px;margin-bottom:10px}.uf-r-area{border:1px solid var(--border);border-radius:7px;margin:6px 0}.uf-r-area>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:7px 10px;font-weight:600;font-size:13px}.uf-r-body{padding:4px 10px 8px}.uf-r-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer}.uf-r-row input{width:auto;margin:0;cursor:pointer}.uf-r-row select{width:auto;margin-left:auto;font-size:12px;padding:3px 6px}.uf-r-nr{display:inline-block;min-width:26px;color:var(--muted);font-size:11px}.uf-r-cnt{font-size:11px;color:var(--muted);font-weight:500}</style>
+    <div class="uf-r-wrap" id="uf-r-wrap">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px"><b style="font-size:13px">🎛️ Rechte: CRM, Kalender, Projekte, Verteiler, Messe, Lager</b></div>
+      <div class="form-group" style="margin:6px 0"><label style="font-size:12px">Vorlage</label>
+        <select id="uf-rtpl" onchange="ufRtpl(this.value)">${isNew?'':`<option value=""${tpl===''?' selected':''}>Bisherige Einstellung (alte Stufen)</option>`}${TPLS.map(t=>`<option value="${esc(t.key)}"${tpl===t.key?' selected':''}>${esc(t.label)} – ${esc(t.hint)}</option>`).join('')}</select></div>
+      <div id="uf-r-hint" style="font-size:12px;color:var(--muted);margin-bottom:4px">${tpl===''?'Es gelten noch die bisherigen Stufen (unten). Wähle eine Vorlage, um auf die feinen Rechte umzustellen – danach lassen sich einzelne Häkchen anpassen.':'Vorlage gewählt – einzelne Häkchen kannst du anpassen.'}</div>
+      ${AREAS.map(areaHtml).join('')}
+    </div>`;
+}
+window.ufRtpl=function(v){
+  const t=(window.TPS_VORLAGEN||[]).find(x=>x.key===v);
+  document.querySelectorAll('#uf-r-wrap .uf-r, #uf-r-wrap .uf-rkat').forEach(el=>{ el.disabled=!t;
+    if(!t || !el.classList.contains('uf-r')) return; const val=t.vals[el.dataset.k];
+    if(el.tagName==='SELECT') el.value=val||''; else el.checked=!!val; });
+  const alt=document.getElementById('uf-alt-rechte'); if(alt) alt.style.display=t?'none':'';
+  const h=document.getElementById('uf-r-hint'); if(h) h.textContent=t?'Vorlage gewählt – einzelne Häkchen kannst du anpassen.':'Es gelten die bisherigen Stufen (unten).';
+  window.ufRchg();
+};
+window.ufRchg=function(){
+  const tplOn=!!(document.getElementById('uf-rtpl')||{}).value;
+  const sel=document.querySelector('#uf-r-wrap .uf-r[data-k="crm_ansehen"]'); const sc=sel?sel.value:'';
+  const kw=document.getElementById('uf-rkat-wrap'); if(kw) kw.style.display=(tplOn&&sc==='kat')?'':'none';
+  if(tplOn){ const vw=document.getElementById('uf-crmverein'); if(vw) vw.style.display=(sc==='verein')?'':'none'; }
+  (window.TPS_RECHTE||[]).forEach(a=>{ const c=document.querySelector('.uf-r-cnt[data-area="'+a.area+'"]'); if(!c) return;
+    const n=a.items.filter(it=>{ const el=document.querySelector('#uf-r-wrap .uf-r[data-k="'+it.k+'"]'); return el && (el.tagName==='SELECT'?!!el.value:el.checked); }).length;
+    c.textContent=n+'/'+a.items.length; });
+};
+// Rechte aus dem Dialog lesen → null = „Bisherige Einstellung"
+function _ufReadRechte(){
+  const ts=document.getElementById('uf-rtpl'); if(!ts || !ts.value) return null;
+  const vals={}; document.querySelectorAll('#uf-r-wrap .uf-r').forEach(el=>{ vals[el.dataset.k] = el.tagName==='SELECT' ? (el.value||false) : !!el.checked; });
+  const kats=Array.from(document.querySelectorAll('#uf-r-wrap .uf-rkat:checked')).map(x=>x.value);
+  return { tpl:ts.value, vals, kats };
+}
+// CRM-Stufe (crm/access) passend zum Dialog: neue Rechte → abgeleitet, sonst die alte Auswahl
+function _ufCrmLevel(_crmState){
+  const r=_ufReadRechte(); if(r && window.tpsCrmStufeAus) return window.tpsCrmStufeAus(r.vals);
+  return _crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+}
+
 export function renderSettings(){
   const cu=window.cu;
   const d=getData();
@@ -422,8 +482,8 @@ function _lockAdminOnlyFields(target){
   const cu=window.cu, plus=_plusMay(cu,target);
   const permsOk=!!(target && (plus || (_DELEG_ROLES.includes(target.role) && !_isPlusUser(target))));
   const sel=permsOk
-    ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
-    : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet';
+    ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet,#uf-rtpl,.uf-r,.uf-rkat'
+    : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet,#uf-rtpl,.uf-r,.uf-rkat';
   box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
   // Rollenwahl für „erweitert": alles außer Administrator
   if(plus){ const rs=document.getElementById('uf-role'); if(rs && rs.tagName==='SELECT') [...rs.options].forEach(o=>{ if(!_ALL_ROLES.includes(o.value)) o.remove(); }); }
@@ -756,11 +816,12 @@ function userForm(u={}){
       const NOADM=new Set(['ki','messe','auswertung','anleitung']);
       const seg=(key,cur)=>{ const opts=NOADM.has(key)?TRI.slice(0,2):TRI; if(NOADM.has(key)&&cur==='verwaltend') cur='nutzen'; return `<div class="uf-seg">${opts.map(o=>`<label class="uf-seg-opt${cur===o[0]?' on':''}"><input type="radio" name="ufmod-${key}" value="${o[0]}"${cur===o[0]?' checked':''} onchange="ufSetMod(${jsq(key)})" style="display:none">${o[1]}</label>`).join('')}</div>` };
       const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${(key!=='crm'&&!NOADM.has(key))?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${key==='kalender'?'🛠️ Darf Termine und Veranstaltungen anlegen und bearbeiten.':'🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).'}</div>`:''}</div></div>`;
+      const vereinDiv=`<div class="form-group" id="uf-crmverein" style="display:${(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)) ? ((window.tpsRechteOf(u).crm_ansehen==='verein')?'':'none') : ((st('crm')!=='kein'&&acc.crmLevel==='verein')?'':'none')}"><label style="font-size:12px">Zugeordnete Vereine</label>
+          <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:120px;overflow-y:auto">${vChecks}</div></div>`;
       const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
       const crmBody=`<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">Umfang</label>
           <select id="uf-crmlevel" onchange="ufSetMod('crm')">${LV.map(([L,t])=>`<option value="${L}"${acc.crmLevel===L?' selected':''}>${t}</option>`).join('')}</select></div>
-        <div class="form-group" id="uf-crmverein" style="display:${(st('crm')!=='kein'&&acc.crmLevel==='verein')?'':'none'}"><label style="font-size:12px">Zugeordnete Vereine</label>
-          <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:120px;overflow-y:auto">${vChecks}</div></div>
+
         <div id="ufadm-crm" style="display:${st('crm')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf CRM-Einstellungen (Kategorien, Felder, Funktionen …) verwalten.</div>`;
       const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen']];
       const zeOn=k=>(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,k))?!!u.perms[k]:(DEFAULT_PERMISSIONS[k]?.includes(u.role||'mitarbeiter')??false);
@@ -811,17 +872,21 @@ function userForm(u={}){
       return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
+        ${_ufRechteHtml(u, isNewUser, vereinDiv, kanbanBody)}
+        <div id="uf-alt-rechte" style="display:${(isNewUser||(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)))?'none':''}">
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 6px">Bisherige Stufen (gelten, solange oben „Bisherige Einstellung“ gewählt ist):</div>
         ${modBlock('crm','📇','CRM (Kontakte)',crmBody)}
-        ${modBlock('kanban','🗂️','Projektmanagement',kanbanBody)}
+        ${modBlock('kanban','🗂️','Projektmanagement','<div style="font-size:12px;color:var(--muted)">Team-Boards: siehe oben bei den Rechten.</div>')}
         ${modBlock('verteiler','✉️','Verteiler')}
-        ${modBlock('ki','🧠','KI')}
         ${modBlock('messe','🎪','Messemodus')}
-        ${modBlock('auswertung','📊','Auswertung')}
         ${modBlock('kalender','📅','Kalender','<div style="font-size:12px;color:var(--muted)">Darf den Kalender ansehen.</div>')}
+        ${modBlock('shop','📦','Lager (Bestand, Bestellungen &amp; Ausleihe)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen.</div>')}
+        </div>
+        ${modBlock('ki','🧠','KI')}
+        ${modBlock('auswertung','📊','Auswertung')}
         ${(()=>{ const hp=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'startseite'))?!!u.perms.startseite:(u.role==='admin');
           const o=(v,l,on)=>`<label class="uf-seg-opt${on?' on':''}"><input type="radio" name="ufmod-start" value="${v}"${on?' checked':''} onchange="ufSetMod('start')" style="display:none">${l}</label>`;
           return `<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🏠 Startseite</span><div class="uf-seg">${o('aus','Aus',!hp)}${o('ein','Ein',hp)}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)">Startet mit der Übersicht (Wetter, Stempeln, Was ansteht, Mitteilungen, Kacheln) statt mit dem zuletzt benutzten Modul.</div></div>`; })()}
-        ${modBlock('shop','📦','Lager (Bestand, Bestellungen &amp; Ausleihe)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen/umlagern und Bestellungen bearbeiten.</div>')}
         ${modBlock('anleitung','📖','Anleitung','<div style="font-size:12px;color:var(--muted)">Sieht die Bedienungsanleitung im Menü und als Kachel auf der Startseite.</div>')}
         <div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">⚙️ System-Verwaltung</span><div class="uf-seg">${(()=>{ const sv=acc.system!=='ja'?'kein':(_isPlusUser(u)?'plus':'ja');
           return [['kein','Kein'],['ja','Ja'],['plus','Erweitert']].map(([v,l])=>`<label class="uf-seg-opt${sv===v?' on':''}"><input type="radio" name="ufmod-system" value="${v}"${sv===v?' checked':''} onchange="ufSetMod('system')" style="display:none">${l}</label>`).join(''); })()}</div></div><div class="uf-mod-body" style="font-size:12px;color:var(--muted)"><b>Ja:</b> Stammdaten, Mitarbeitende anlegen, Zugriffe (ohne Sonderrollen), Archivieren, Export – alles nur mit Zwei-Faktor. <b>Erweitert:</b> zusätzlich Einmal-Passwörter setzen und die Rollen Leitung/GF vergeben (nicht für das Administrator-Konto und andere „Erweitert“).</div></div>`;
@@ -952,7 +1017,10 @@ function collectUserForm(){
   // (Admin) → leer.
   const kanbanTeams=Array.from(document.querySelectorAll('.uf-kbteam:checked'))
     .filter(cb=>cb.dataset.ze!=='1').map(cb=>cb.value);
+  const _rr=_ufReadRechte();
+  const rechte = _rr ? { tpl:_rr.tpl, x:(window.tpsDiffZuVorlage?window.tpsDiffZuVorlage(_rr.tpl,_rr.vals):{}), kats:_rr.kats } : (document.getElementById('uf-rtpl')?null:undefined);
   return {
+    rechte,
     perms,
     crmOnly,
     gfCountersign,
@@ -1011,8 +1079,9 @@ export async function saveNewUser(){
   const _plainPw=u.pw;  // Startpasswort für das Firebase-Konto (wird NICHT in der Datenbank gespeichert)
   if(String(_plainPw).length<12){ toast('Startpasswort: mindestens 12 Zeichen.','err'); return; }
   delete u.pw;          // seit v429 keine App-Hashes mehr – das Passwort prüft nur Firebase
+  if(!u.rechte) delete u.rechte;
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
-  const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+  const _crmLvl=_ufCrmLevel(_crmState);
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(u.id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>d.users.push(u)); }
@@ -1040,7 +1109,7 @@ async function _saveNewUserDelegated(){
   const pw=u.pw; delete u.pw;
   if(u.perms){ delete u.perms.zugriff_verwaltung; delete u.perms.zugriff_verwaltung_plus; }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
-  const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+  const level=_ufCrmLevel(_crmState);
   const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ await _adminFn({ action:'staffCreate', user:u, newPw:pw, crm:{ level, vereinIds } }); }
   catch(e){
@@ -1056,6 +1125,9 @@ export async function saveEditUser(id){
   const cu=window.cu;
   if(!_canStamm(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
   const u=collectUserForm(); u.id=id;
+  if(u.rechte===undefined) delete u.rechte;
+  // Feine Rechte speichert bis zum Server-Update nur das Administrator-Konto (tpsPw staffPerms kennt sie noch nicht)
+  if(_isDelegated(cu)) delete u.rechte;
   const _deleg=_isDelegated(cu);
   let _newRole=null;
   if(_deleg){ const ex0=getUser(id);
@@ -1118,7 +1190,7 @@ export async function saveEditUser(id){
     if(ex1 && (_plusMay(cu,ex1) || (_DELEG_ROLES.includes(_r1) && !_isPlusUser(ex1)))){
       const perms=Object.assign({}, u.perms||{}); delete perms.zugriff_verwaltung; delete perms.zugriff_verwaltung_plus;
       const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
-      const level=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+      const level=_ufCrmLevel(_crmState);
       const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
       try{ await _adminFn({ action:'staffPerms', id, perms, crm:{ level, vereinIds }, crmOnly:!!u.crmOnly, kanbanTeams:Array.isArray(u.kanbanTeams)?u.kanbanTeams:[] }); }
       catch(e){ toast('Stammdaten gespeichert, Zugriffe NICHT: '+((e&&e.message)||e),'err'); return; }
@@ -1127,7 +1199,7 @@ export async function saveEditUser(id){
     return;
   }
   const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
-  const _crmLvl=_crmState==='kein'?'none':(_crmState==='verwaltend'?'full':(document.getElementById('uf-crmlevel')?.value||'full'));
+  const _crmLvl=_ufCrmLevel(_crmState);
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }

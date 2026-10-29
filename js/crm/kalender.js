@@ -62,12 +62,18 @@ let curY=_now.getFullYear(), curM=_now.getMonth()+1;   // Monat
 let weekStart=_mondayOf(_now);                          // Woche
 
 // ── Daten sammeln (aus echten Quellen) ──
+// Feine Rechte (v510, js/rechte.js): Wert eines Kalender-Rechts der angemeldeten Person.
+// Admin/ohne rechte.js: alles wie bisher.
+function _kr(k){ try{ const u=window.cu; if(!u||u.role==='admin'||!window.tpsRechteOf) return k==='kal_ansehen'?'alle':true; return window.tpsRechteOf(u)[k]; }catch(e){ return k==='kal_ansehen'?'alle':true; } }
+function _myTeams(){ const u=window.cu||{}; return [u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); }
+const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray(it.mitarbeiter)&&it.mitarbeiter.includes(me); };
 function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{};
   Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved') return; const m=AB[r.type]; if(!m||!r.startDate) return;
     out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay, note:r.note||''}); });
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
-  return vs.filter(v=>v&&v.start).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||'', farbe:v.farbe||'', mitarbeiter:Array.isArray(v.mitarbeiter)?v.mitarbeiter:[]})); }
+  const _own=_kr('kal_ansehen')==='eigene';
+  return vs.filter(v=>v&&v.start).filter(v=>!_own||(Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes((window.cu&&window.cu.id)||''))).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||'', farbe:v.farbe||'', mitarbeiter:Array.isArray(v.mitarbeiter)?v.mitarbeiter:[]})); }
 // CRM-Termine (auf Kontakten: e.termine) einsammeln – über alle Bäume/Einträge.
 function _termine(){ const out=[]; try{
     const crm=getCrm()||{};
@@ -77,7 +83,7 @@ function _termine(){ const out=[]; try{
       });
     });
   }catch(e){}
-  return out; }
+  return _kr('kal_ansehen')==='eigene' ? out.filter(_mineIt) : out; }
 // Klick auf Veranstaltung im Kalender → kleines Bearbeiten-Modal ÜBER dem Kalender (Daten
 // ändern + Mitarbeiter zuweisen); Speichern bleibt im Kalender. Der „Zur Veranstaltung ↗"-
 // Button im Modal (nur bei Kalender-Herkunft) springt erst wirklich ins Projektmanagement/CRM.
@@ -124,7 +130,9 @@ function kalGotoTermin(tree,eid){
 function _kalAccess(){
   let ma={}; try{ if(window.crmModuleAccess) ma=window.crmModuleAccess(window.cu)||{}; }catch(e){}
   const hasCrm=((ma.crm&&ma.crm!=='kein')||(ma.kanban&&ma.kanban!=='kein'));
-  return { verwaltend: ma.kalender==='verwaltend', hasCrm:!!hasCrm };
+  let neu=false; try{ neu=!!(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(window.cu)); }catch(e){}
+  if(neu) return { verwaltend: !!(_kr('kal_fremde')||_kr('kal_va')), anlegen: !!(_kr('kal_eigene')||_kr('kal_va')), hasCrm:!!hasCrm };
+  return { verwaltend: ma.kalender==='verwaltend', anlegen: ma.kalender==='verwaltend', hasCrm:!!hasCrm };
 }
 // „+ Neu" im Kalender: EIN Fenster mit Umschalter Termin/Veranstaltung (Termin vorgewählt),
 // bleibt im Kalender. Beim Termin wird der CRM-Kontakt per Such-Dropdown gewählt.
@@ -165,7 +173,12 @@ function _bindTips(root){
 // Wer erscheint im Kalender: interne Mitarbeiter. Raus fliegen nur Admin und EXTERNE
 // „nur CRM"-Nutzer (crmOnly). Die GF (noTimesheet = keine EIGENE Zeiterfassung) bleibt
 // bewusst drin – sie nimmt Urlaub/Abwesenheiten, die für die Planung relevant sind.
-function _emps(){ const d=getData()||{}; return (d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly); }
+function _emps(){ const d=getData()||{}; let l=(d.users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly);
+  // Rechte: „Abwesenheiten anderer sehen" aus bzw. „nur eigene" → nur ich; „eigenes Team" → nur Teamkolleg:innen
+  const me=(window.cu&&window.cu.id)||'', sc=_kr('kal_ansehen');
+  if(!_kr('kal_abw') || sc==='eigene') return l.filter(u=>u.id===me);
+  if(sc==='team'){ const mt=_myTeams(); l=l.filter(u=>u.id===me || [u.team].concat(Array.isArray(u.teams)?u.teams:[]).some(t=>t&&mt.includes(t))); }
+  return l; }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
 // Handy (schmal): schmale Namensspalte mit Kurznamen („Mia M."), Standardansicht „Liste" (User 14.10.2026)
@@ -681,9 +694,14 @@ export function renderKalender(){
     _bindTips(root);
     if(!_vChosen && _mobile()) V='liste';   // Handy: beim ersten Öffnen mit der Liste starten
     const tabs=[['liste','Liste'],['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
+    const _sc=_kr('kal_ansehen');
+    if(_sc==='eigene') curTeam='@me';
+    else if(_sc==='team' && (curTeam==='' || (curTeam!=='@me' && !_myTeams().includes(curTeam)))) curTeam=_myTeams()[0]||'@me';
     const emps=_emps(); const personal=curTeam==='@me';
-    const kalCanManage=_kalAccess().verwaltend;   // nur „Verwaltend" darf anlegen
-    const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>','<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>'].concat(_teamsOrdered(emps).map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
+    const kalCanManage=_kalAccess().anlegen;   // Recht „Termine anlegen" bzw. „Veranstaltungen anlegen"
+    const _tl=_sc==='team' ? _teamsOrdered(emps).filter(t=>_myTeams().includes(t)) : _teamsOrdered(emps);
+    const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>'].concat(_sc==='alle'?['<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>']:[])
+      .concat(_sc==='eigene'?[]:_tl.map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=`<div class="kal-wrap">
       <div class="kal-h">📅 Kalender</div>
       <p class="kal-sub">${personal?'Deine persönliche Ansicht: alle Veranstaltungen &amp; Termine (deine hervorgehoben) plus deine Abwesenheiten.':'Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.'}</p>
@@ -693,7 +711,7 @@ export function renderKalender(){
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
-        <button class="kal-sel" style="cursor:pointer" onclick="kalAboOpen()" title="Eigene Termine in Outlook, Google oder am Handy anzeigen">📲 In Outlook / Handy</button>
+        ${_kr('kal_abo')?`<button class="kal-sel" style="cursor:pointer" onclick="kalAboOpen()" title="Eigene Termine in Outlook, Google oder am Handy anzeigen">📲 In Outlook / Handy</button>`:''}
         <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend"${V==='liste'||V==='konflikt'?' style="display:none"':''}>

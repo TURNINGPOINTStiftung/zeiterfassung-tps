@@ -55,8 +55,12 @@ function _acc(){
   let ma={}; try{ ma=(window.crmModuleAccess&&window.crmModuleAccess(cu))||{}; }catch(e){}
   return ma.shop||'kein';
 }
-const canManage=()=>_acc()==='verwaltend';
-const canUse=()=>_acc()!=='kein';
+// Feine Rechte (v510, js/rechte.js): ohne gespeicherte neue Rechte gilt die bisherige Stufe.
+const _neu=()=>{ try{ return !!(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(window.cu)); }catch(e){ return false; } };
+const _r=k=>{ try{ return !!window.tpsRecht(k, window.cu); }catch(e){ return false; } };
+const canManage=()=>{ const cu=window.cu; if(cu&&cu.role==='admin') return true; if(_neu()) return _r('la_bestand')||_r('la_artikel')||_r('la_best_bearb')||_r('la_einst'); return _acc()==='verwaltend'; };
+const _can=k=>{ const cu=window.cu; if(cu&&cu.role==='admin') return true; return _neu() ? _r(k) : _acc()==='verwaltend'; };
+const canUse=()=>{ const cu=window.cu; if(cu&&cu.role==='admin') return true; return _neu() ? _r('la_ansehen') : _acc()!=='kein'; };
 const _me=()=>window.cu||{};
 
 // ── Daten-Helfer ───────────────────────────────────────────────────
@@ -169,7 +173,7 @@ function shopSaveAddr(uid, adresse){
 }
 // Verwalter: eigene Organisation im CRM festlegen
 function shopSetOrg(v){
-  if(!canManage()) return;
+  if(!_can('la_einst')) return;
   if(!v){ deleteShop('shopConfig','org'); toast('Automatische Erkennung aktiv.','ok'); renderShop(); return; }
   const [tree,eid]=v.split('::'); saveShop('shopConfig',{id:'org',tree,eid}); toast('Eigene Organisation gespeichert ✓','ok'); renderShop();
 }
@@ -438,7 +442,7 @@ function _loadXLSX(){
 const _IE_FIX=['ID','Name','Variante','Kategorie','Art','Einheit','Mindestbestand','Team','Notiz'];
 const _IE_INFO=['Einzeln erfasst','Verliehen','Gesamt'];   // nur zur Info, beim Import ignoriert
 async function shopExport(){
-  if(!canManage()) return;
+  if(!_can('la_artikel')) return;
   let X; try{ X=await _loadXLSX(); }catch(e){ toast(e.message,'err'); return; }
   const pls=places();
   const head=_IE_FIX.concat(pls.map(p=>p.name), _IE_INFO);
@@ -453,7 +457,7 @@ async function shopExport(){
   toast('Excel-Datei erstellt ✓ – zum Zählen ausdrucken oder ausfüllen und über „⬆ Import" wieder einlesen.','ok');
 }
 function shopImportPick(){
-  if(!canManage()) return;
+  if(!_can('la_artikel')) return;
   const inp=document.createElement('input'); inp.type='file'; inp.accept='.xlsx,.xls,.csv';
   inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(f) _shopImportRead(f); };
   inp.click();
@@ -536,7 +540,7 @@ function _shopImportPreview(){
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>${nothing?'':`<button class="btn btn-primary" onclick="shopImportApply()">Übernehmen</button>`}</div>`, true);
 }
 function shopImportApply(){
-  const pl=window._shopImportPlan; if(!pl || !canManage()) return;
+  const pl=window._shopImportPlan; if(!pl || !_can('la_artikel')) return;
   const cu=_me(); let nNew=0, nCh=0;
   pl.neu.forEach(n=>{
     const it={ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'',
@@ -613,7 +617,7 @@ function shopSetPlace(v){ fPlace=v; renderShop(); }
 // ── Artikel anlegen / bearbeiten ───────────────────────────────────
 function shopItemEdit(id){
   // Neu anlegen dürfen alle mit Shop-Zugang, Bearbeiten/Löschen nur Verwalter
-  if(id ? !canManage() : !canUse()) return;
+  if(id ? !_can('la_artikel') : !canUse()) return;
   const it=id?getShop('shopItems',id):null;
   const v=it||{name:'',kategorie:'',variante:'',einheit:'Stück',min:'',note:'',foto:''};
   window._shopPhoto=v.foto||'';
@@ -669,7 +673,7 @@ function shopPhotoPick(inp){
 function shopPhotoClear(){ window._shopPhoto=''; const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=''; ph.textContent='kein Foto'; } }
 function _val(id){ const el=document.getElementById(id); return el?String(el.value||'').trim():''; }
 function shopItemSave(id){
-  if(id ? !canManage() : !canUse()) return;
+  if(id ? !_can('la_artikel') : !canUse()) return;
   const name=_val('si-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const ex=id?getShop('shopItems',id):null; const cu=_me();
   const it=Object.assign({}, ex||{ id:newId(), stock:{}, createdAt:Date.now(), createdById:cu.id||'', createdByName:cu.name||'' }, {
@@ -698,7 +702,7 @@ function shopItemSave(id){
   if(wantEinzeln && made) shopUnits(it.id); else renderShop();
 }
 function shopItemDelete(id){
-  if(!canManage()) return;
+  if(!_can('la_artikel')) return;
   const it=getShop('shopItems',id); if(!it) return;
   const tot=total(it);
   if(activeLoans(id).length){ toast('Dieser Artikel ist noch verliehen – erst zurückgeben lassen.','err'); return; }
@@ -712,7 +716,7 @@ function _placeSelect(id, sel, withQty, it){
 }
 function shopBook(id, preType, prePl, preQty){
 { const _it=getShop('shopItems',id); if(isEinzeln(_it)){ toast('Einzeln erfasster Artikel – Bestand über „🏷️ Stücke" (anlegen / ausmustern).','ok'); shopUnits(id); return; } }
-  if(!canManage()) return;
+  if(!_can('la_bestand')) return;
   const it=getShop('shopItems',id); if(!it) return;
   if(!places().length){ toast('Bitte zuerst unter „📍 Orte" einen Ort anlegen.','err'); return; }
   openModal(`<h3>± Bestand buchen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · gesamt ${total(it)} ${esc(it.einheit||'Stück')}</p>
@@ -744,7 +748,7 @@ function shopBookSave(id){
 // ── Umlagern ───────────────────────────────────────────────────────
 function shopMove(id, preFrom, preTo, preQty){
 { const _it=getShop('shopItems',id); if(isEinzeln(_it)){ toast('Einzeln erfasster Artikel – Stücke unter „🏷️ Stücke" verschieben.','ok'); shopUnits(id); return; } }
-  if(!canManage()) return;
+  if(!_can('la_bestand')) return;
   const it=getShop('shopItems',id); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
   if(!from.length){ toast('Kein Bestand zum Umlagern.','err'); return; }
@@ -869,7 +873,7 @@ function cartGet(){ try{ const a=JSON.parse(localStorage.getItem(_cartKey())||'[
 function cartSet(a){ try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} _cartPaint(); _posPaint(); }
 function _posLabel(p){ const it=p.itemId?getShop('shopItems',p.itemId):null; return it?itemLabel(it):(p.freitext||'?'); }
 function shopCartAdd(itemId, qty){
-  if(!canUse()) return;
+  if(!(canUse() && (!_neu() || _r('la_bestellen')))){ try{ U.toast('Dafür fehlt das Recht „Bestellen“.','err'); }catch(e){} return; }
   const it=getShop('shopItems',itemId); if(!it) return;
   if(isEinzeln(it)){ toast('Einzeln erfasste Artikel laufen über „🏷️ Stücke", nicht über den Korb.','err'); return; }
   if(itemArt(it)==='ausstattung'){ toast('Ausstattung ist fest am Ort und nicht bestellbar – fehlt etwas, bitte „➖ Verbrauch" melden.','err'); return; }
@@ -943,7 +947,7 @@ function _posPaint(){
 
 // ── Bestellen (mehrere Positionen aus dem Korb, EIN Ziel) ──────────
 function shopOrderNew(itemId){
-  if(!canUse()) return;
+  if(!(canUse() && (!_neu() || _r('la_bestellen')))){ try{ U.toast('Dafür fehlt das Recht „Bestellen“.','err'); }catch(e){} return; }
   if(itemId) { const a=cartGet(); if(!a.some(p=>p.itemId===itemId)) { a.push({key:newId(), itemId, menge:1}); try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} } }
   const pls=places();
   const plOpts=pls.map(p=>`<option value="${esc(p.id)}">${esc(placeLabel(p.id))}</option>`).join('');
@@ -1141,11 +1145,11 @@ function _handled(o,status,extra){
   saveShop('shopOrders', o);
 }
 function shopOrderStatus(id,status){
-  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
   _handled(o,status); toast('Status: '+STATUS[status].l,'ok'); renderShop();
 }
 function shopOrderDone(id,status){
-  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
   const isRej=status==='abgelehnt';
   openModal(`<h3>${isRej?'✕ Bestellung ablehnen':'✓ Als erledigt markieren'}</h3>
     <p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · von <b>${esc(o.byName||'')}</b></p>
@@ -1164,7 +1168,7 @@ function shopOrderDoneSave(id,status){
 // Ausgeben: Bestand am Quell-Ort abziehen ODER an den Lieferort umlagern (z. B. Werkzeug aufs Boot)
 // Ausgeben – PRO POSITION: Quell-Ort, Menge, Art (umlagern / verleihen / verschicken / abziehen / nicht)
 function shopOrderIssue(id){
-  const o=getShop('shopOrders',id); if(!o||!canManage()) return;
+  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
   const canMoveTo=!!(o.ortId && placeOf(o.ortId));
   const rc=_orderRecipient(o);
   const ps=_pos(o);
@@ -1302,7 +1306,7 @@ function _whoRead(px){
   toast('Bitte auswählen, wer es bekommt.','err'); return null;
 }
 function shopLend(itemId){
-  if(!canManage()) return;
+  if(!_can('la_ausleihen')) return;
   const it=getShop('shopItems',itemId); if(!it) return;
   if(isEinzeln(it)){ shopUnits(itemId); toast('Einzelne Stücke über „🔁" in der Stückliste zuordnen.','ok'); return; }
   if(!it.leihbar && itemArt(it)!=='ausstattung'){ toast('Verbrauchsmaterial wird nicht verliehen – bitte „📤 Verschicken" nutzen (oder den Artikel als Leihmaterial markieren).','err'); return; }
@@ -1354,7 +1358,7 @@ function _newLoan(extra, c){
 const _lendTxt=c=>(c.zuord?'zugeordnet an ':'an ')+c.bName+(c.zuord?'':(c.due?' bis '+_fmtDate(c.due):' (Dauerleihe)'))+(c.anlass?' · '+c.anlass:'');
 // Beweglicher Ort (Bus, Boot, Anhänger): EINE Zuordnung + daneben EINE Ausleihe möglich – Inhalt fährt mit
 function shopLendPlace(pid, art){
-  if(!canManage()) return;
+  if(!_can('la_ausleihen')) return;
   const p=placeOf(pid); if(!p) return;
   const z=placeZuord(pid), le=placeLeihe(pid);
   if(z && le){ toast(`${p.name} ist zugeordnet und gerade ausgeliehen – erst zurückgeben.`,'err'); return; }
@@ -1363,20 +1367,20 @@ function shopLendPlace(pid, art){
     {zuord:!z, leihe:!le, def:art||(z?'leihe':'zuord')}));
 }
 function shopLendPlaceSave(pid){
-  const p=placeOf(pid); if(!p||!canManage()) return; const c=_lendCommon(); if(!c) return;
+  const p=placeOf(pid); if(!p||!_can('la_ausleihen')) return; const c=_lendCommon(); if(!c) return;
   if(c.zuord?placeZuord(pid):placeLeihe(pid)){ toast('Ist schon '+(c.zuord?'zugeordnet':'ausgeliehen')+'.','err'); return; }
   _newLoan({ placeId:pid, itemId:null, itemName:placeLabel(pid) }, c); _logPlace(p,c.zuord?'zuordnung':'verleih',_lendTxt(c));
   closeModal(); toast(`${p.name} ${c.zuord?'zugeordnet an':'ausgeliehen an'} ${c.bName} ✓`,'ok'); renderShop();
 }
 // Einzelnes Stück (z. B. Rettungsweste „Anna") – liegt dann an keinem Ort, behält seine Termine
 function shopLendUnit(itemId, unitId){
-  if(!canManage()) return;
+  if(!_can('la_ausleihen')) return;
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   if(unitLoan(unitId)){ toast('Dieses Stück ist schon vergeben – erst zurückgeben bzw. „Übergeben".','err'); return; }
   openModal(_lendModalHtml('🏷️ Stück zuordnen / ausleihen', `<b>${esc(_unitTitle(it,u))}</b> · liegt ${esc(placeLabel(u.placeId))}`, '', `shopLendUnitSave(${jsq(itemId)},${jsq(unitId)})`, {zuord:true,leihe:true,def:'zuord'}));
 }
 function shopLendUnitSave(itemId, unitId){
-  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u||!canManage()) return;
+  const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u||!_can('la_ausleihen')) return;
   const c=_lendCommon(); if(!c) return;
   const from=u.placeId||null; u.placeId=''; _syncStock(it); saveShop('shopItems', it);
   _newLoan({ itemId, unitId, itemName:_unitTitle(it,u), fromPlace:from }, c); _log(it,c.zuord?'zuordnung':'verleih',1,from,null,u.nr+' '+_lendTxt(c));
@@ -1394,7 +1398,7 @@ function shopLendSave(itemId){
 }
 // Zuordnung an einen anderen Mitarbeiter übergeben (alte endet, neue beginnt – Verlauf bleibt erhalten)
 function shopReassign(loanId){
-  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!_can('la_ausleihen')) return;
   const ppl=people().filter(u=>u.id!==l.borrowerId);
   openModal(`<h3>👤 Zuordnung übergeben</h3><p style="font-size:13px;margin:0 0 10px">${loanIcon(l)} <b>${esc(l.placeId?placeLabel(l.placeId):(l.itemName||''))}</b>${l.unitId||l.placeId?'':' · '+_num(l.qty)+'×'} · bisher bei <b>${esc(bName(l))}</b></p>
     <div class="shop-f"><label>Neu zuständig *</label><select id="sra-who" class="crm-ss"><option value="">– bitte wählen –</option>${ppl.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('')}</select></div>
@@ -1403,7 +1407,7 @@ function shopReassign(loanId){
     <button class="btn btn-primary" onclick="shopReassignSave(${jsq(loanId)})">Übergeben</button></div>`);
 }
 function shopReassignSave(loanId){
-  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!_can('la_ausleihen')) return;
   const id=_val('sra-who'); const u=people().find(x=>x.id===id); if(!u){ toast('Bitte einen Mitarbeiter wählen.','err'); return; }
   const note=_val('sra-note'), cu=_me();
   if(!Array.isArray(l.returns)) l.returns=[];
@@ -1418,7 +1422,7 @@ function shopReassignSave(loanId){
 }
 // Verwalter: erst Artikel wählen, dann Verschicken bzw. Verleihen (ohne vorherige Bestellung)
 function shopPickItem(mode){
-  if(!canManage()) return;
+  if(!_can('la_ausleihen')) return;
   const lend=mode==='lend';
   if(lend){
     // Zuordnen/Verleihen: Leihmaterial + Ausstattung (Mengen) · bewegliche Orte · einzelne Stücke
@@ -1448,7 +1452,7 @@ function shopPickLendGo(v){ const [k,a,b]=String(v||'').split('|');
   if(k==='p') shopLendPlace(a); else if(k==='u') shopLendUnit(a,b); else if(k==='i') shopLend(a); }
 // ── Direkt verschicken – MEHRERE Artikel aus dem Korb an EIN Ziel (Verwalter) ──
 function shopCartSend(){
-  if(!canManage()) return;
+  if(!_can('la_best_bearb')) return;
   openModal(`<h3>📤 Direkt verschicken</h3>
     <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ohne Bestellung – die Sachen bleiben beim Empfänger (werden vom Bestand abgezogen). Erscheint danach auch unter „Bestellungen".</p>
     ${_whoPickerHtml('ss')}
@@ -1492,7 +1496,7 @@ function shopCartSendSave(){
 // ── Verschicken / abgeben (Verbrauch MIT Empfänger: Flyer an Verein, Visitenkarten an Mitarbeiter …)
 // Einzelner Artikel: legt ihn in den Korb und öffnet „Direkt verschicken" (eine Bedienung für alles)
 function shopSend(itemId){
-  if(!canManage()) return;
+  if(!_can('la_best_bearb')) return;
   if(itemId && getShop('shopItems',itemId)){ const a=cartGet(); if(!a.some(p=>p.itemId===itemId)){ a.push({key:newId(), itemId, menge:1}); try{ localStorage.setItem(_cartKey(), JSON.stringify(a)); }catch(e){} } shopCartSend(); return; }
   const it=getShop('shopItems',itemId); if(!it) return;
   const from=Object.keys(it.stock||{}).filter(p=>_num(it.stock[p])>0);
@@ -1542,7 +1546,7 @@ function _directOrder(log, it, how, anlass, note, adr){
 }
 // Einmalig nachtragen: frühere Direkt-Versendungen (Log ohne orderId) als Bestell-Eintrag anlegen
 function _backfillDirectOrders(){
-  if(!canManage()) return;
+  if(!_can('la_bestand')) return;
   listShop('shopLog').filter(l=>l.type==='versand' && !l.orderId).forEach(l=>{
     const it=getShop('shopItems',l.itemId);
     const o=_directOrder(l, it, '', '', l.note||'', '');
@@ -1553,7 +1557,7 @@ function _backfillDirectOrders(){
 function _recipLabel(l){ if(!l.recipientName) return ''; return bLabel({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
 function shopReturn(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
-  const me=_me(); if(!canManage() && l.borrowerId!==me.id) return;
+  const me=_me(); if(!_can('la_ausleihen') && l.borrowerId!==me.id) return;
   if(l.placeId){   // beweglicher Ort: einfach zurück (Inhalt war ja die ganze Zeit am Ort gebucht)
     openModal(`<h3>${isZuord(l)?"👤 Zuordnung aufheben":"↩ Zurückgeben"}</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(placeLabel(l.placeId))}</b> · bei ${esc(bLabel(l))}${l.due?' · bis '+_fmtDate(l.due):''}</p>
       <div class="shop-f"><label>Zustand / Notiz</label><input id="sr-note" placeholder="z. B. alles ok, Kilometerstand, Schaden am Rücklicht"></div>
@@ -1593,7 +1597,7 @@ function shopReturnSave(loanId){
   closeModal(); toast(l.status==='zurueck'?'Zurückgegeben ✓':`${q} zurück – ${l.qty} noch ausgeliehen.`,'ok'); renderShop();
 }
 function shopLoanDue(loanId){
-  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!canManage()) return;
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!_can('la_ausleihen')) return;
   openModal(`<h3>📅 Rückgabedatum</h3><p style="font-size:13px;margin:0 0 10px">${_num(l.qty)}× ${esc(l.itemName||'')} · ${esc(bLabel(l))}</p>
     <div class="shop-f"><label>Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="sld-due" type="date" value="${esc(l.due||'')}"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -1722,7 +1726,7 @@ function shopUnitSelAll(itemId,on){
   shopUnits(itemId);
 }
 function shopUnits(itemId){
-  if(!canManage()) return;
+  if(!_can('la_artikel')) return;
   const it=getShop('shopItems',itemId); if(!it) return;
   if(!isEinzeln(it)){ toast('Dieser Artikel wird nicht einzeln erfasst (✎ → „Einzeln erfassen").','err'); return; }
   const all=unitsOf(it);
@@ -1812,7 +1816,7 @@ function shopUnitRetire(itemId, unitId, fromUse){
   const it=getShop('shopItems',itemId); const u=it&&it.units&&it.units[unitId]; if(!u) return;
   const ul=unitLoan(unitId);   // war zugeordnet → Zuordnung mit beenden
   // Eine fremde Zuordnung/Ausleihe beenden darf nur „Verwaltend“ (Regeln v11) – sonst vorher abbrechen
-  if(ul && !canManage() && ul.borrowerId!==_me().id){ toast('Dieses Stück ist jemandem zugeordnet – bitte das Lager-Team ausmustern lassen.','err'); return; }
+  if(ul && !_can('la_artikel') && ul.borrowerId!==_me().id){ toast('Dieses Stück ist jemandem zugeordnet – bitte das Lager-Team ausmustern lassen.','err'); return; }
   const why=prompt(`„${u.nr}" ausmustern / als verbraucht melden?\nGrund (optional):`, fromUse?'verbraucht':''); if(why===null) return;
   if(ul){ ul.status='zurueck'; ul.qty=0; ul.returnedTs=Date.now(); ul.note=(ul.note?ul.note+' · ':'')+'ausgemustert'; saveShop('shopLoans', ul); }
   const pl=u.placeId||(ul&&ul.fromPlace)||''; delete it.units[unitId]; _syncStock(it); saveShop('shopItems', it);
@@ -1857,7 +1861,7 @@ function _dueFind(key){
   const p=getShop('shopPlaces',a); const t=p&&(p.termine||[]).find(x=>x.id===b); return t?{kind:'place',p,t}:null;
 }
 function shopDueDone(key){
-  if(!canManage()) return;
+  if(!_can('la_bestand')) return;
   const f=_dueFind(key); if(!f){ toast('Termin nicht gefunden.','err'); return; }
   const t=f.t, title=f.kind==='unit'?_unitTitle(f.it,f.u):placeLabel(f.p.id);
   const iv=_num(t.intervall);
@@ -1952,7 +1956,7 @@ function shopLoansForEntity(tree, eid){
 }
 function shopOpenBorrower(key){ fPlace=key; TAB='bestand'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 function shopPlaceEdit(id){
-  if(!canManage()) return;
+  if(!_can('la_artikel')) return;
   const p=id?getShop('shopPlaces',id):null; const v=p||{name:'',typ:'buero',note:''};
   openModal(`<h3>${p?'✎ Ort bearbeiten':'＋ Neuer Ort'}</h3>
     <div class="shop-f2"><div class="shop-f"><label>Name *</label><input id="sp-name" value="${esc(v.name)}" placeholder="z. B. Boot 1, Bus, Büro Kiel"></div>

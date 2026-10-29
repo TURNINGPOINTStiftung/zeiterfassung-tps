@@ -390,7 +390,12 @@ Menü ☰ → **Verwaltung**:
   **richtigen Team** zugeordnet. Admin kann die Historie einsehen und ändern.
 - **Berechtigungen:** je Rolle steuern, wer welche Buttons/Funktionen sieht
   (z. B. „An GF senden", „Erinnerungen senden", Abwesenheiten genehmigen, Zeitstempel nutzen).
-- **Zugriffe pro Person** (Kein / Nutzen / Verwaltend je Bereich) – nur das Administrator-Konto.
+- **Zugriffe pro Person** – nur das Administrator-Konto. Zeiterfassung, KI, Auswertung, Startseite und Anleitung
+  über Kein / Nutzen / Verwaltend. Für **CRM, Kalender, Projektmanagement, Verteiler, Messemodus und Lager** gibt es
+  **feine Rechte**: oben im Block „🎛️ Rechte“ eine **Vorlage** wählen (Team, Leitung, Verwaltung, Nur lesen,
+  Verein, Keine) und danach bei Bedarf einzelne Häkchen ändern (z. B. „Kontakte löschen“, „Termine löschen: eigene/alle“,
+  „Kontakte ansehen: nur bestimmte Kategorien“). Solange „Bisherige Einstellung“ gewählt ist, gelten die alten Stufen.
+  Nach dem Ändern einmal die App als Administrator neu öffnen – dann werden die Freigaben für den Server neu berechnet.
 - **🔑 Einmal-Passwort:** bei vergessenem Passwort; offene Anfragen erscheinen unter „Mitarbeiter".
 - **Archivieren (✕):** Person verlässt die Stiftung → Zugang wird sofort gesperrt, die Zeitdaten bleiben
   erhalten. Unter „Archivierte Mitarbeiter" wiederherstellbar.

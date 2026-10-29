@@ -213,6 +213,10 @@ function _statusLine(){
 }
 
 // ── Einstiegspunkt (Personal, aus dem ☰-Modulmenü) ──
+// Feine Rechte (v510, js/rechte.js). Ohne Anmeldung (Offline-Fortsetzen am Stand) nicht sperren –
+// der Server prüft beim Nachsenden ohnehin.
+function _mr(k){ try{ if(!window.cu) return true; return window.tpsRecht ? !!window.tpsRecht(k, window.cu) : true; }catch(e){ return true; } }
+function _noR(t){ toast('Dafür fehlt das Recht „'+t+'“.','err'); }
 function messeStart(){ _ensureOverlay(); _subscribe(); _migrateOld().catch(e=>console.warn('Messe-Übernahme:',e)); _renderPicker(); _prepareOffline(); }
 // Offline-fest (v503): beim Start (mit Netz) alle bisher geladenen App-Dateien einmal abrufen, damit der Service
 // Worker sie sicher im Gerätespeicher hat – auf der Messe fehlt dann ohne Netz nichts.
@@ -246,8 +250,8 @@ function _renderPicker(){
         <div class="mt">${list.length} offen · ${_doneCount(ev.id)} übertragen${pend?` · ${pend} wartet auf Netz`:''} · ${_esc((ev.cats||[]).map(k=>(ev.catLabels||{})[k]||k).join(', ')||'keine Kategorie')}</div></div>
       <div class="me-ev-btns">
         <button class="me-mini go" onclick="messeOpenEvent(${_jsq(ev.id)})">Öffnen</button>
-        <button class="me-mini" onclick="messeEditEvent(${_jsq(ev.id)})" aria-label="Bearbeiten">✎</button>
-        <button class="me-mini del" onclick="messeDeleteEvent(${_jsq(ev.id)})" aria-label="Löschen">🗑</button>
+        ${_mr('me_va')?`<button class="me-mini" onclick="messeEditEvent(${_jsq(ev.id)})" aria-label="Bearbeiten">✎</button>`:''}
+        ${_mr('me_va_loeschen')?`<button class="me-mini del" onclick="messeDeleteEvent(${_jsq(ev.id)})" aria-label="Löschen">🗑</button>`:''}
       </div></div>`;
   }).join('') : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung. Lege eine an (z. B. „Messe 26").</div>';
   const noAccess = _srv.events===null && _online();
@@ -258,12 +262,13 @@ function _renderPicker(){
     <div class="me-sub">Gilt für alle Messe-Geräte gemeinsam. Wähle eine Veranstaltung zum Erfassen – oder lege eine neue an.</div>
     ${noAccess?'<div style="background:var(--warn-bg,#fff4e0);color:var(--warn-text,#7a4a00);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px">Kein Zugriff auf die gemeinsame Messe-Ablage. Bitte den Administrator, „Messemodus: Nutzen" freizuschalten.</div>':''}
     ${rows}
-    <button class="me-btn" onclick="messeEditEvent('')">＋ Neue Veranstaltung</button>
+    ${_mr('me_va')?`<button class="me-btn" onclick="messeEditEvent('')">＋ Neue Veranstaltung</button>`:''}
     <button class="me-btn warn" onclick="messeEnd()">Messemodus beenden</button>
   </div></div>`;
 }
 // Event anlegen/bearbeiten
 function messeEditEvent(id){
+  if(!_mr('me_va')){ _noR('Messe-Veranstaltungen anlegen/ändern'); return; }
   _view='edit';
   const o=_ensureOverlay();
   const ev = id ? _event(id) : null;
@@ -283,6 +288,7 @@ function messeEditEvent(id){
   </div></div>`;
 }
 async function messeSaveEvent(id){
+  if(!_mr('me_va')){ _noR('Messe-Veranstaltungen anlegen/ändern'); return; }
   const name=(document.getElementById('me-evname')?.value||'').trim().slice(0,100);
   if(!name){ toast('Bitte einen Namen für die Veranstaltung eingeben.','err'); return; }
   const pin=(document.getElementById('me-evpin')?.value||'').trim();
@@ -301,6 +307,7 @@ async function messeSaveEvent(id){
   _renderPicker();
 }
 async function messeDeleteEvent(id){
+  if(!_mr('me_va_loeschen')){ _noR('Messe-Veranstaltungen löschen'); return; }
   const ev=_event(id); if(!ev) return;
   const n=_entries(id).length;
   if(!window.confirm(`Veranstaltung „${ev.name}" auf ALLEN Geräten löschen?`+(n?`\n\nAchtung: ${n} noch nicht übertragene(r) Kontakt(e) gehen dabei verloren.`:''))) return;
@@ -360,7 +367,7 @@ function messeSaveEntry(btn){
 }
 
 // ── Personal-Bereich (per PIN): Liste, Übertragen, Events, Beenden ──
-function messeStaff(){ const ev=_active(); if(!ev || !ev.pinHash){ _renderStaff(); return; } _renderPinCheck(); }
+function messeStaff(){ if(!_mr('me_liste')){ _noR('Erfasste Liste ansehen'); return; } const ev=_active(); if(!ev || !ev.pinHash){ _renderStaff(); return; } _renderPinCheck(); }
 function _renderPinCheck(){
   _view='pin';
   const o=_ensureOverlay();
@@ -390,7 +397,7 @@ function _renderStaff(){
     ? list.slice().reverse().map(e=>`<div class="me-list-item">
         <div><div class="nm">${_esc(_pName(e))}${e.org?` · ${_esc(e.org)}`:''}${_splitOrt(e.adresse).ort?` · ${_esc(_splitOrt(e.adresse).ort)}`:''}</div>
           <div class="dt">${_esc(new Date(e.ts||0).toLocaleString('de-DE'))}${e.pending?' · ⏳ wartet auf Netz':''}${e.email?' · '+_esc(e.email):(e.tel?' · '+_esc(e.tel):'')}</div></div>
-        <button class="me-x" onclick="messeDeleteEntry(${_jsq(e.id)})">Löschen</button></div>`).join('')
+        ${_mr('me_eintrag_loeschen')?`<button class="me-x" onclick="messeDeleteEntry(${_jsq(e.id)})">Löschen</button>`:''}</div>`).join('')
     : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:8px 0">Keine offenen Kontakte.</div>';
   o.innerHTML=`<div class="me-wrap">
     <div class="me-top"><span class="cnt">${_statusLine()}</span></div>
@@ -398,7 +405,7 @@ function _renderStaff(){
     <div class="me-h">🔒 ${_esc(ev.name)}</div>
     <div class="me-sub">${list.length} offen (alle Geräte) · ${_doneCount(ev.id)} bereits ins CRM übertragen · Kategorien: ${_esc((ev.cats||[]).map(k=>(ev.catLabels||{})[k]||k).join(', ')||'–')}</div>
     ${ev.pinHash?'':'<div style="background:var(--warn-bg,#fff4e0);color:var(--warn-text,#7a4a00);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px">Diese Veranstaltung hat noch keine PIN – bitte unter „Veranstaltungen verwalten" → ✎ eine PIN setzen.</div>'}
-    <button class="me-btn" onclick="messeTransfer(this)" ${(!_online()||!ready)?'disabled style="opacity:.55"':''}>⬆ ${ready} Kontakt(e) ins CRM übertragen${_online()?'':' (nur online)'}</button>
+    <button class="me-btn" onclick="messeTransfer(this)" ${_mr('me_uebertragen')?'':'hidden'} ${(!_online()||!ready)?'disabled style="opacity:.55"':''}>⬆ ${ready} Kontakt(e) ins CRM übertragen${_online()?'':' (nur online)'}</button>
     <div style="font-size:12px;color:var(--muted,#5b6b7d);margin-top:6px">Nach dem Übertragen werden die Besucherdaten hier gelöscht – sie stehen dann nur noch im CRM.</div>
     <div style="max-height:44vh;overflow:auto;margin:14px 0">${items}</div>
     <button class="me-btn sec" onclick="messeBackToForm()">← Zurück zum Formular</button>
@@ -407,6 +414,7 @@ function _renderStaff(){
   </div></div>`;
 }
 async function messeDeleteEntry(id){
+  if(!_mr('me_eintrag_loeschen')){ _noR('Erfasste Einträge löschen'); return; }
   if(!window.confirm('Diesen Kontakt löschen?')) return;
   const ev=_active(); if(!ev) return;
   const inBox=L.outbox.some(x=>x.t==='en'&&x.id===id);
@@ -434,6 +442,7 @@ function _toEntity(m, cats){
   return { tree, ent };
 }
 async function messeTransfer(btn){
+  if(!_mr('me_uebertragen')){ _noR('Ins CRM übertragen'); return; }
   if(!_online()){ toast('Zum Übertragen bitte online gehen (WLAN/Daten).','err'); return; }
   const ev=_active(); if(!ev) return;
   await _flush();

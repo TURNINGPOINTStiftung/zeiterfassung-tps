@@ -53,6 +53,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
          _openPerEmpPrint, _teamReportStyle, renderBuchhaltungHTML } from './print.js';
 
 import { hasPermission } from './roles.js';
+import './rechte.js';  // 🎚️ Feine Rechte je Bereich (window.tpsRecht …) – vor allen Modulen, die sie prüfen
 import './messe.js';   // Messemodus (registriert window.messeStart etc.)
 import { exportData, exportAllData, exportCrmOnly, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,

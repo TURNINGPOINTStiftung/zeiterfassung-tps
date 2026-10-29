@@ -266,20 +266,25 @@ export async function refreshPermissionAllowlists(opts){
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id]; if(!u || _isAdminUser(u)) continue;
     const sys=!!hasPermission('zugriff_verwaltung',u);
+    // Feine Rechte (v510, js/rechte.js): wer eine Vorlage hat, bekommt die Server-Freigaben aus diesen Rechten.
+    let R=null; try{ if(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)) R=window.tpsRechteOf(u); }catch(_){ R=null; }
+    const _NEU_MAP={ zugriff_verwaltung_crm: r=>!!r.crm_einst, verw_kanban: r=>!!r.pm_proj_team, verw_kalender: r=>!!r.kal_va };
     GRANT_KEYS.forEach(k=>{
-      const on = AREA_ADMIN_KEYS.includes(k) ? (sys || !!hasPermission(k,u)) : !!hasPermission(k,u);
+      const on = (R && _NEU_MAP[k]) ? (sys || _NEU_MAP[k](R))
+        : AREA_ADMIN_KEYS.includes(k) ? (sys || !!hasPermission(k,u)) : !!hasPermission(k,u);
       if(on){ (grants[k]=grants[k]||{})[uid]=true; }
     });
     // „System-Verwaltung erweitert“ (tpsPw prüft grants/zugriff_verwaltung_plus) – nur zusammen mit System-Verwaltung
     if(sys && u.perms && u.perms.zugriff_verwaltung_plus===true) (grants.zugriff_verwaltung_plus=grants.zugriff_verwaltung_plus||{})[uid]=true;
     const _own=u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_shop');
-    const shopUse=_own ? !!u.perms.path_shop : !!(_paShop&&_paShop[u.role]);
+    const shopUse=R ? !!R.la_ansehen : (_own ? !!u.perms.path_shop : !!(_paShop&&_paShop[u.role]));
+    const shopAdm=R ? !!(R.la_bestand||R.la_artikel||R.la_best_bearb||R.la_einst) : (sys || hasPermission('verw_shop',u));
     if(shopUse){ (grants.shop_nutzen=grants.shop_nutzen||{})[uid]=true;
-      if(sys || hasPermission('verw_shop',u)) (grants.verw_shop=grants.verw_shop||{})[uid]=true; }
+      if(shopAdm) (grants.verw_shop=grants.verw_shop||{})[uid]=true; }
     const _ownM=u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'path_messe');
     const _rowM=_paMesse&&Object.prototype.hasOwnProperty.call(_paMesse,u.role);
     const _lvl=(_crmAcc[id]&&_crmAcc[id].level)||'none';
-    const messeUse=_ownM ? !!u.perms.path_messe : (_rowM ? !!_paMesse[u.role] : (_lvl==='full'||_lvl==='admin'));
+    const messeUse=R ? !!R.me_formular : (_ownM ? !!u.perms.path_messe : (_rowM ? !!_paMesse[u.role] : (_lvl==='full'||_lvl==='admin')));
     if(messeUse) (grants.messe_nutzen=grants.messe_nutzen||{})[uid]=true;
   }
   await db.ref('zeiterfassung/grants').set(grants);
