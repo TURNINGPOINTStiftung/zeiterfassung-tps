@@ -3630,60 +3630,46 @@ function _foerderLogHtml(f){
   const tip=log.slice().reverse().map(r=>`${foerderStatusLabel(r.status)} — ${r.ts?fmtDate(Date.parse(r.ts)):''}${r.by?' ('+r.by+')':''}`).join('\n');
   return ` <span title="${esc(tip)}" style="cursor:help">🕘</span>`;
 }
+// Förderungen vereinfacht (v501, User 29.10.2026): nur noch Jahr + was gefördert wurde. Ältere Einträge behalten
+// ihre früheren Felder (Datum, Summe, Status) in den Daten – angezeigt wird das Jahr (aus jahr bzw. dem alten Datum).
+function _foerderJahr(f){ const j=Number(f&&f.jahr); if(j>1900&&j<3000) return j; const m=String((f&&f.date)||'').match(/^(\d{4})/); return m?Number(m[1]):null; }
 function foerderungenSecHtml(e){
   const canEdit=crmFull()||crmRestricted();
-  const list=(e.foerderungen||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const list=(e.foerderungen||[]).slice().sort((a,b)=>(_foerderJahr(b)||0)-(_foerderJahr(a)||0));
   const rows=list.map(f=>`<tr>
-      <td>${f.date?esc(fmtDate(Date.parse(f.date))):'–'}</td>
-      <td style="text-align:right;white-space:nowrap">${fmtEuro(f.betrag)}</td>
+      <td style="white-space:nowrap">${_foerderJahr(f)||'–'}</td>
       <td>${esc(f.was||'')}</td>
-      <td>${foerderBadge(f.status)}${_foerderLogHtml(f)}</td>
       <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung(${jsq(f.id)})">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung(${jsq(f.id)})">✕</button>`:''}</td>
     </tr>`).join('');
-  const sum=pred=>list.filter(pred).reduce((s,f)=>s+Number(f.betrag||0),0);
-  const bewilligt=sum(f=>f.status==='genehmigt'||f.status==='abgeschlossen');
-  const beantragt=sum(f=>f.status==='beantragt');
   return `<div class="crm-sec">
     <h4><span class="ttl">💶 Förderungen</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddFoerderung()">＋ Förderung</button>`:''}</h4>
     ${list.length
-      ? `<div style="overflow-x:auto"><table class="crm-stats"><tr><th>Wann</th><th style="text-align:right">Fördersumme</th><th>Was</th><th>Status</th><th></th></tr>${rows}</table></div>
-         <div class="small" style="color:var(--muted);margin-top:8px">Bewilligt (genehmigt/abgeschlossen): <b>${fmtEuro(bewilligt)}</b> &nbsp;·&nbsp; offen beantragt: <b>${fmtEuro(beantragt)}</b> &nbsp;·&nbsp; ${list.length} Eintrag/Einträge</div>`
+      ? `<div style="overflow-x:auto"><table class="crm-stats"><tr><th>Jahr</th><th>Was wurde gefördert</th><th></th></tr>${rows}</table></div>`
       : `<div class="small" style="color:var(--muted)">Noch keine Förderungen erfasst.</div>`}
   </div>`;
 }
 function crmFoerderModal(f){
   crmOpenModalShell();
-  const isEdit=!!f;
-  const statusOpts=FOERDER_STATUS.map(([k,l])=>`<option value="${k}"${f&&f.status===k?' selected':''}>${esc(l)}</option>`).join('');
+  const isEdit=!!f; const jahr=(isEdit&&_foerderJahr(f))||new Date().getFullYear();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎ Förderung bearbeiten':'＋ Förderung'}</h3>
    <input type="hidden" id="crm-foerder-id" value="${isEdit?esc(f.id):''}">
-   <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Wann?</label><input id="crm-foerder-date" type="date" value="${isEdit&&f.date?esc(f.date):localISODate()}"></div>
-     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fördersumme (€)</label><input id="crm-foerder-betrag" type="number" min="0" step="0.01" inputmode="decimal" value="${isEdit&&f.betrag!=null?esc(String(f.betrag)):''}"></div>
-   </div>
-   <div class="crm-modal-field"><label>Was? (Zweck / Programm)</label><input id="crm-foerder-was" type="text" value="${isEdit?esc(f.was||''):''}" placeholder="z. B. Vereinsheim-Sanierung, Landesprogramm …"></div>
-   <div class="crm-modal-field"><label>Status</label><select id="crm-foerder-status">${statusOpts}</select></div>
+   <div class="crm-modal-field" style="max-width:180px"><label>Jahr der Förderung</label><input id="crm-foerder-jahr" type="number" min="1990" max="2100" step="1" inputmode="numeric" value="${esc(String(jahr))}"></div>
+   <div class="crm-modal-field"><label>Was wurde gefördert?</label><input id="crm-foerder-was" type="text" value="${isEdit?esc(f.was||''):''}" placeholder="z. B. Vereinsheim-Sanierung, Inklusionsboot, Landesprogramm …"></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveFoerderung()">Speichern</button></div>`);
 }
 function crmAddFoerderung(){ if(!curEntity()) return; crmFoerderModal(null); }
 function crmEditFoerderung(id){ const e=curEntity(); if(!e) return; const f=(e.foerderungen||[]).find(x=>x.id===id); if(f) crmFoerderModal(f); }
 function crmSaveFoerderung(){
-  const date=val('crm-foerder-date');
-  const betrag=Math.max(0, Number(document.getElementById('crm-foerder-betrag')?.value)||0);
+  const jahr=Math.round(Number(val('crm-foerder-jahr'))||0);
   const was=(val('crm-foerder-was')||'').trim();
-  const status=val('crm-foerder-status')||'beantragt';
   const id=val('crm-foerder-id');
-  if(!date&&!was){ toast('Bitte Datum oder Zweck angeben.','err'); return; }
-  const ts=new Date().toISOString(), by=curKuerzel();
+  if(!(jahr>1900&&jahr<3000)){ toast('Bitte ein gültiges Jahr angeben.','err'); return; }
+  if(!was){ toast('Bitte angeben, was gefördert wurde.','err'); return; }
   mutateEntity(e=>{
     if(!Array.isArray(e.foerderungen)) e.foerderungen=[];
-    if(id){ const f=e.foerderungen.find(x=>x.id===id); if(f){
-      const prev=f.status;
-      f.date=date; f.betrag=betrag; f.was=was; f.status=status;
-      if(prev!==status){ if(!Array.isArray(f.statusLog)) f.statusLog=[]; f.statusLog.push({status, ts, by}); } // Status-Wechsel protokollieren
-    } }
-    else { e.foerderungen.push({ id:newId(), date, betrag, was, status, statusLog:[{status, ts, by}] }); }
+    if(id){ const f=e.foerderungen.find(x=>x.id===id); if(f){ f.jahr=jahr; f.was=was; } }   // frühere Felder bleiben unangetastet
+    else { e.foerderungen.push({ id:newId(), jahr, was, createdAt:Date.now(), createdByKuerzel:curKuerzel() }); }
   });
   crmCloseModal(); paintDetail(); toast('Förderung gespeichert ✓','ok');
 }

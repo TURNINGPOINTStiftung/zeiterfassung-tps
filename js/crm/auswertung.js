@@ -1,6 +1,6 @@
 // ── Modul „Auswertung" (für Leitung & GF) ─────────────────────────
 // Eigenes Top-Modul neben Zeiterfassung/CRM. Wertet die CRM-Daten aus:
-// Förderungen, Statistik (Mitglieder/TN…) und Veranstaltungen – pro Jahr und
+// Statistik (Mitglieder/TN…) und Veranstaltungen – pro Jahr und
 // gesamt, je Projekt einzeln auswählbar, mit Excel-Download.
 // ISOLIERT: liest nur über die crm-data-Accessoren; fasst weder ZE noch
 // window._fbRef an. Alles in try/catch, damit ein Fehler nichts anderes stört.
@@ -37,14 +37,14 @@ const _PERSON_COLS={engagierte:1,trainer:1};   // Personen – bei mehreren Ange
 function _euro(n){ return _num(n).toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 
 // Alle Einträge (Projekte) aus allen Bäumen einsammeln – nur solche mit mindestens einem Eintrag
-// in Statistik oder Förderungen (User 26.10.2026: sonst ist die Auswahlliste voller leerer Vereine)
+// in der Statistik (eigen oder per Kooperation). Förderungen gehören seit v501 nicht mehr zur Auswertung.
 // Gemeinsame Erfassungen (Kooperation, v492): liegen beim Anlegenden, gelten für alle in sharedWith.
 // Index: '<tree>|<eid>' → Liste der mit diesem Eintrag geteilten Erfassungen anderer.
 function _sharedIndex(){ const idx={};
   try{ (getTrees()||[]).forEach(t=>(listEntities(t.key)||[]).forEach(e=>(e&&Array.isArray(e.stats)?e.stats:[]).forEach(s=>{
     (Array.isArray(s.sharedWith)?s.sharedWith:[]).forEach(w=>{ if(!w||!w.tree||!w.eid) return; const k=w.tree+'|'+w.eid; (idx[k]=idx[k]||[]).push(s); }); }))); }catch(err){}
   return idx; }
-function _hasData(e, key, sidx){ return (Array.isArray(e.stats)&&e.stats.length>0) || (Array.isArray(e.foerderungen)&&e.foerderungen.length>0) || !!(sidx && (sidx[key]||[]).length); }
+function _hasData(e, key, sidx){ return (Array.isArray(e.stats)&&e.stats.length>0) || !!(sidx && (sidx[key]||[]).length); }
 function _allEntities(){
   const out=[]; const sidx=_sharedIndex();
   try{ (getTrees()||[]).forEach(t=>{ (listEntities(t.key)||[]).forEach(e=>{ if(e&&e.id&&_hasData(e, t.key+'|'+e.id, sidx)) out.push({ tree:t.key, treeLabel:t.label, id:e.id, name:_eName(e), e }); }); }); }catch(err){ console.error('Auswertung _allEntities:',err); }
@@ -183,18 +183,15 @@ function _tblVeranst(entities){
     <tbody>${rows||''}${years.length?totalRow:'<tr><td colspan="2" style="text-align:center;color:var(--muted)">Keine Veranstaltungen im Auswahlbereich.</td></tr>'}</tbody></table></div></div>`;
 }
 function _tblProProjekt(entities){
-  // Pro Projekt: bewilligte Förderung gesamt, Anzahl Veranstaltungen, aktuelle Mitglieder/TN
+  // Pro Projekt: Anzahl Veranstaltungen, aktuelle Mitglieder/TN
   const rows=entities.map(x=>{
-    const f=(x.e.foerderungen||[]);
-    const bew=f.filter(v=>v.status==='genehmigt'||v.status==='abgeschlossen').reduce((s,v)=>s+_num(v.betrag),0);
-    const bea=f.filter(v=>v.status==='beantragt').reduce((s,v)=>s+_num(v.betrag),0);
     const {total:va}=_veranstByYear([x]);
     const LX=_lastTrainX(x), last=LX.rec;   // aktueller Stand = letzte laufende Erfassung (inkl. Kooperation)
-    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${_euro(bew)}</td><td>${_euro(bea)}</td><td>${va}</td><td>${LX.eng}</td><td>${_sNum(last,'tn','tnInkl')}</td><td>${last.tnRegel==null?'–':_sNum(last,'tnRegel',null)}</td><td>${last.tnEinmal==null?'–':_sNum(last,'tnEinmal',null)}</td><td>${last.termine==null?'–':_sNum(last,'termine',null)}</td><td>${last.winter?'🧊':''}</td></tr>`;
+    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${va}</td><td>${LX.eng}</td><td>${_sNum(last,'tn','tnInkl')}</td><td>${last.tnRegel==null?'–':_sNum(last,'tnRegel',null)}</td><td>${last.tnEinmal==null?'–':_sNum(last,'tnEinmal',null)}</td><td>${last.termine==null?'–':_sNum(last,'termine',null)}</td><td>${last.winter?'🧊':''}</td></tr>`;
   }).join('');
   return `<div class="aus-card"><h3>📁 Pro Projekt (Einzelübersicht)</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Projekt</th><th>Baum</th><th>Förderung bewilligt</th><th>offen beantragt</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th><th>davon regelm.</th><th>davon einmalig</th><th>Termine/Jahr</th><th>Winter</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="11" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
+    <thead><tr><th>Projekt</th><th>Baum</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th><th>davon regelm.</th><th>davon einmalig</th><th>Termine/Jahr</th><th>Winter</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
 }
 
 function _filterBar(){
@@ -202,7 +199,7 @@ function _filterBar(){
   const isSel=x=> !sel || sel.has(_key(x.tree,x.id));
   // Jahre für Dropdown
   const yset=new Set();
-  all.forEach(x=>{ (x.e.foerderungen||[]).forEach(f=>{const y=_yearOf(f.date); if(y)yset.add(y);}); (x.e.stats||[]).forEach(s=>{const y=_yearOf(s.date); if(y)yset.add(y);}); });
+  all.forEach(x=>{ (x.e.stats||[]).forEach(s=>{const y=_yearOf(s.date); if(y)yset.add(y);}); });
   try{ (listVeranstaltungen()||[]).forEach(v=>{const y=_yearOf(v.start); if(y)yset.add(y);}); }catch(e){}
   const years=[...yset].sort();
   const yearOpts=`<option value="">Alle Jahre</option>`+years.map(y=>`<option value="${y}"${String(_yearsFilter())===String(y)?' selected':''}>${y}</option>`).join('');
@@ -220,7 +217,7 @@ function _filterBar(){
         </div>
         <div style="margin-top:12px"><button class="aus-btn" onclick="ausExport()">⬇ Als Excel herunterladen</button></div>
       </div>
-      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Einträge mit Statistik oder Förderungen.</div>'}<div class="aus-sub" style="margin:8px 0 0;font-size:11.5px">Es erscheinen nur Einträge mit Statistik oder Förderungen.</div></div>
+      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Einträge mit Statistik.</div>'}<div class="aus-sub" style="margin:8px 0 0;font-size:11.5px">Es erscheinen nur Einträge mit Statistik.</div></div>
     </div></div>`;
 }
 
@@ -234,9 +231,8 @@ export function renderAuswertung(){
       const ents=_selectedEntities();
       root.innerHTML=`
         <div class="aus-h1">📈 Auswertung</div>
-        <div class="aus-sub">Förderungen, Statistik und Veranstaltungen über die gewählten Projekte – pro Jahr und gesamt. ${ents.length} Projekt(e) gewählt.</div>
+        <div class="aus-sub">Statistik und Veranstaltungen über die gewählten Projekte – pro Jahr und gesamt. ${ents.length} Projekt(e) gewählt.</div>
         ${_filterBar()}
-        ${_tblFoerder(ents)}
         ${_tblStat(ents)}
         ${_tblVeranst(ents)}
         ${_tblProProjekt(ents)}`;
@@ -259,14 +255,6 @@ export function ausExport(){
     try{
       const wb=XLSX.utils.book_new();
       const p=n=>String(n).padStart(2,'0');
-      // Förderungen
-      const fBy=_applyYear(_foerderByYear(ents)); const fYears=Object.keys(fBy).sort();
-      const fRows=fYears.map(y=>{const r=fBy[y]; return {Jahr:y,Beantragt:r.beantragt,Genehmigt:r.genehmigt,Abgelehnt:r.abgelehnt,Abgeschlossen:r.abgeschlossen,'Bewilligt (gen.+abg.)':r.genehmigt+r.abgeschlossen,Anzahl:r.count};});
-      const fTot={Jahr:'Gesamt',Beantragt:0,Genehmigt:0,Abgelehnt:0,Abgeschlossen:0,'Bewilligt (gen.+abg.)':0,Anzahl:0};
-      fRows.forEach(r=>{fTot.Beantragt+=r.Beantragt;fTot.Genehmigt+=r.Genehmigt;fTot.Abgelehnt+=r.Abgelehnt;fTot.Abgeschlossen+=r.Abgeschlossen;fTot['Bewilligt (gen.+abg.)']+=r['Bewilligt (gen.+abg.)'];fTot.Anzahl+=r.Anzahl;});
-      if(fRows.length) fRows.push(fTot);
-      const fHead=['Jahr','Beantragt','Genehmigt','Abgelehnt','Abgeschlossen','Bewilligt (gen.+abg.)','Anzahl'];
-      XLSX.utils.book_append_sheet(wb, fRows.length?XLSX.utils.json_to_sheet(fRows,{header:fHead}):XLSX.utils.aoa_to_sheet([fHead]), 'Förderungen');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
       const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o['TN Veranstaltungen']=r.eventTN; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
@@ -279,14 +267,11 @@ export function ausExport(){
       XLSX.utils.book_append_sheet(wb, vRows.length?XLSX.utils.json_to_sheet(vRows,{header:['Jahr','Anzahl Veranstaltungen']}):XLSX.utils.aoa_to_sheet([['Jahr','Anzahl Veranstaltungen']]), 'Veranstaltungen');
       // Pro Projekt
       const pRows=ents.map(x=>{
-        const f=(x.e.foerderungen||[]);
-        const bew=f.filter(v=>v.status==='genehmigt'||v.status==='abgeschlossen').reduce((s,v)=>s+_num(v.betrag),0);
-        const bea=f.filter(v=>v.status==='beantragt').reduce((s,v)=>s+_num(v.betrag),0);
         const {total:va}=_veranstByYear([x]);
         const LX=_lastTrainX(x), last=LX.rec;
-        return {Projekt:x.name,Baum:x.treeLabel||'','Förderung bewilligt':bew,'offen beantragt':bea,Veranstaltungen:va,'Engagierte (aktuell)':LX.eng,'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl'),'davon regelmäßig':last.tnRegel==null?'':_sNum(last,'tnRegel',null),'davon einmalig':last.tnEinmal==null?'':_sNum(last,'tnEinmal',null),'Termine im Jahr':last.termine==null?'':_sNum(last,'termine',null),'Wintertraining':last.winter?'ja':''};
+        return {Projekt:x.name,Baum:x.treeLabel||'',Veranstaltungen:va,'Engagierte (aktuell)':LX.eng,'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl'),'davon regelmäßig':last.tnRegel==null?'':_sNum(last,'tnRegel',null),'davon einmalig':last.tnEinmal==null?'':_sNum(last,'tnEinmal',null),'Termine im Jahr':last.termine==null?'':_sNum(last,'termine',null),'Wintertraining':last.winter?'ja':''};
       });
-      const pHead=['Projekt','Baum','Förderung bewilligt','offen beantragt','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)','davon regelmäßig','davon einmalig','Termine im Jahr','Wintertraining'];
+      const pHead=['Projekt','Baum','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)','davon regelmäßig','davon einmalig','Termine im Jahr','Wintertraining'];
       XLSX.utils.book_append_sheet(wb, pRows.length?XLSX.utils.json_to_sheet(pRows,{header:pHead}):XLSX.utils.aoa_to_sheet([pHead]), 'Pro Projekt');
       const d=new Date();
       XLSX.writeFile(wb, `Auswertung-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.xlsx`);
