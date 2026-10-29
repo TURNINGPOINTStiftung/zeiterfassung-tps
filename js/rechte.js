@@ -176,5 +176,26 @@ export function crmStufeAus(vals){
   return 'readonly';
 }
 
+// ── Server-Freigaben (Regeln CANDIDATE-v12): grobe Schreib-Erlaubnisse je Datensatz, aus den Einzelrechten.
+// zeiterfassung/grants/r_<name>/<authUid>. GLEICHE Logik steht in functions/index.js (fineGrants) – beide ändern!
+export const SERVER_GRANTS = {
+  r_crm_anlegen:   v=>!!v.crm_anlegen,
+  r_crm_bearbeiten:v=>!!(v.crm_anlegen||v.crm_stamm||v.crm_personen||v.crm_notizen||v.crm_aufgaben||v.crm_termine||v.crm_statistik||v.crm_foerder||v.crm_koop||v.crm_dateien||v.kal_eigene||v.kal_fremde||v.pm_aufg_bearb),
+  r_crm_loeschen:  v=>!!v.crm_loeschen,
+  r_kal_va:        v=>!!v.kal_va,
+  r_kal_va_loeschen:v=>!!v.kal_va_loeschen,
+  r_vt_anlegen:    v=>!!v.vt_anlegen,
+  r_vt_bearbeiten: v=>!!(v.vt_anlegen||v.vt_eintragen||v.vt_import),
+  r_vt_loeschen:   v=>!!v.vt_loeschen,
+  r_pm_vorlagen:   v=>!!v.pm_vorlagen,
+  r_pm_aufg_bearb: v=>!!v.pm_aufg_bearb,
+  r_me_va:         v=>!!v.me_va,
+  r_me_va_loeschen:v=>!!v.me_va_loeschen,
+  r_me_eintrag_loeschen:v=>!!v.me_eintrag_loeschen,
+  r_me_uebertragen:v=>!!v.me_uebertragen,
+};
+export function serverGrantsOf(u){ const v=rechteOf(u); const o={}; Object.keys(SERVER_GRANTS).forEach(k=>{ o[k]=SERVER_GRANTS[k](v); }); return o; }
+
+try{ Object.assign(window, { tpsServerGrantsOf:serverGrantsOf, TPS_SERVER_GRANT_KEYS:Object.keys(SERVER_GRANTS) }); }catch(e){}
 try{ Object.assign(window, { TPS_RECHTE:RECHTE, TPS_VORLAGEN:VORLAGEN, TPS_AREA_VIEW:AREA_VIEW, tpsRecht:recht, tpsRechteOf:rechteOf,
   tpsHatNeueRechte:hatNeueRechte, tpsVorlageVon:vorlageVon, tpsDiffZuVorlage:diffZuVorlage, tpsCrmStufeAus:crmStufeAus }); }catch(e){}

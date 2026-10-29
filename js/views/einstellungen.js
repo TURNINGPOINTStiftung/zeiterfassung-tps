@@ -482,7 +482,7 @@ function _lockAdminOnlyFields(target){
   const cu=window.cu, plus=_plusMay(cu,target);
   const permsOk=!!(target && (plus || (_DELEG_ROLES.includes(target.role) && !_isPlusUser(target))));
   const sel=permsOk
-    ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet,#uf-rtpl,.uf-r,.uf-rkat'
+    ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
     : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet,#uf-rtpl,.uf-r,.uf-rkat';
   box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
   // Rollenwahl für „erweitert": alles außer Administrator
@@ -1125,9 +1125,8 @@ export async function saveEditUser(id){
   const cu=window.cu;
   if(!_canStamm(cu)){ toast('Nur der Administrator-Account darf Mitarbeiter bearbeiten.','err'); return; }
   const u=collectUserForm(); u.id=id;
+  const _rechteIn=u.rechte;   // null = zurück auf „Bisherige Einstellung", undefined = kein Rechte-Block
   if(u.rechte===undefined) delete u.rechte;
-  // Feine Rechte speichert bis zum Server-Update nur das Administrator-Konto (tpsPw staffPerms kennt sie noch nicht)
-  if(_isDelegated(cu)) delete u.rechte;
   const _deleg=_isDelegated(cu);
   let _newRole=null;
   if(_deleg){ const ex0=getUser(id);
@@ -1192,7 +1191,7 @@ export async function saveEditUser(id){
       const _crmState=document.querySelector('input[name="ufmod-crm"]:checked')?.value||'kein';
       const level=_ufCrmLevel(_crmState);
       const vereinIds=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
-      try{ await _adminFn({ action:'staffPerms', id, perms, crm:{ level, vereinIds }, crmOnly:!!u.crmOnly, kanbanTeams:Array.isArray(u.kanbanTeams)?u.kanbanTeams:[] }); }
+      try{ await _adminFn({ action:'staffPerms', id, perms, crm:{ level, vereinIds }, crmOnly:!!u.crmOnly, kanbanTeams:Array.isArray(u.kanbanTeams)?u.kanbanTeams:[], rechte:_rechteIn }); }
       catch(e){ toast('Stammdaten gespeichert, Zugriffe NICHT: '+((e&&e.message)||e),'err'); return; }
     }
     await _ufSaveAdr(u.id); closeModal(); renderSettings(); window.rebuildEmpSelect?.(); toast('Gespeichert. ✓','ok');

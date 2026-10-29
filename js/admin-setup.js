@@ -262,9 +262,17 @@ export async function refreshPermissionAllowlists(opts){
   let _paMesse=null, _crmAcc={};
   try{ _paMesse=((await db.ref('crm/pathAccess/messe').once('value')).val())||null; }catch(_){}
   try{ _crmAcc=((await db.ref('crm/access').once('value')).val())||{}; }catch(_){}
+  // Feine Server-Freigaben r_* (Regeln v12) brauchen den CRM-Stand (Zugriffsstufen, Pfad-Matrix), weil Personen
+  // ohne Vorlage ihre Rechte aus den alten Stufen ableiten. Ist das CRM nicht geladen, bleiben die bisherigen
+  // r_*-Listen unverändert (sonst würden nach v12 Leute ausgesperrt).
+  let _crmOk=false;
+  try{ const CDm=await import('./crm/crm-data.js'); await Promise.race([CDm.ensureCrmReady(), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000))]);
+    _crmOk=!!(window.tpsServerGrantsOf && window.crmUserAccess && CDm.getCrm && Object.keys(CDm.getCrm()||{}).length); }catch(_){ _crmOk=false; }
+  let _oldGrants={}; try{ _oldGrants=((await db.ref('zeiterfassung/grants').once('value')).val())||{}; }catch(_){}
   const grants={};
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id]; if(!u || _isAdminUser(u)) continue;
+    if(_crmOk){ try{ const fg=window.tpsServerGrantsOf(u); Object.keys(fg).forEach(k=>{ if(fg[k]) (grants[k]=grants[k]||{})[uid]=true; }); }catch(_){} }
     const sys=!!hasPermission('zugriff_verwaltung',u);
     // Feine Rechte (v510, js/rechte.js): wer eine Vorlage hat, bekommt die Server-Freigaben aus diesen Rechten.
     let R=null; try{ if(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)) R=window.tpsRechteOf(u); }catch(_){ R=null; }
@@ -287,11 +295,12 @@ export async function refreshPermissionAllowlists(opts){
     const messeUse=R ? !!R.me_formular : (_ownM ? !!u.perms.path_messe : (_rowM ? !!_paMesse[u.role] : (_lvl==='full'||_lvl==='admin')));
     if(messeUse) (grants.messe_nutzen=grants.messe_nutzen||{})[uid]=true;
   }
+  if(!_crmOk) Object.keys(_oldGrants).forEach(k=>{ if(/^r_/.test(k)) grants[k]=_oldGrants[k]; });
   await db.ref('zeiterfassung/grants').set(grants);
   // Freigabe-Markierung (Custom Claim) aller Konten an allowed/admins angleichen – für die Storage-Regeln.
   // Best-effort im Hintergrund (Cloud Function tpsPw claimSync), blockiert nichts.
   try{ window.syncAccessClaims&&window.syncAccessClaims().then(r=>{ if(r) log('Freigabe-Markierung: '+r.on+' Konten frei, '+r.changed+' geändert'); }); }catch(_){}
-  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length, grants:Object.keys(grants).map(k=>k+':'+Object.keys(grants[k]).length).join(' ') };
+  const summary={ mapped, orphan, admins:Object.keys(admins).length, gfAdmins:Object.keys(gfAdmins).length, managers:Object.keys(managers).length, grants:Object.keys(grants).map(k=>k+':'+Object.keys(grants[k]).length).join(' '), feinOk:_crmOk };
   log('Fertig: '+JSON.stringify(summary));
   return summary;
 }

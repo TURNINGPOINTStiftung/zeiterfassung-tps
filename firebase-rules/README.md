@@ -202,6 +202,23 @@ Rückweg: CANDIDATE-v10.json.
 Text mit `uploaderUid`, Löschen nur Admin oder Hochladende. Im Testprojekt nicht prüfbar (Storage braucht dort den
 Blaze-Tarif) → Syntax beim Veröffentlichen in der Konsole; Rückweg: vorherigen Stand aus der Konsolen-Historie.
 
+## Stand 2026-10-29: CANDIDATE-v12.json (noch NICHT live) – feine Rechte (App v510/v511)
+= v11 + Schreibrechte je Datensatz nach Server-Freigaben `grants/r_*` (berechnet aus den Einzelrechten, App `js/rechte.js`
+SERVER_GRANTS bzw. tpsPw `fineGrants` – identisch, Vergleich über 34.720 Kombinationen ohne Abweichung):
+- `crm/$coll/$id` (Kontakte): anlegen `r_crm_anlegen` oder `r_me_uebertragen` (Messe-Übertrag); ändern `r_crm_bearbeiten`
+  oder der Stiftungs-Eintrag aus `crm/shopConfig/org` (Postadresse im Profil); löschen `r_crm_loeschen` oder `zugriff_verwaltung_crm`.
+- `crm/veranstaltungen`: anlegen `r_kal_va`, ändern `r_kal_va` oder `r_pm_aufg_bearb`, löschen `r_kal_va_loeschen`.
+- `crm/verteiler`: anlegen `r_vt_anlegen`, ändern `r_vt_bearbeiten`, löschen `r_vt_loeschen`. `crm/vorlagen`: `r_pm_vorlagen`.
+- `messe/events`: anlegen/ändern `r_me_va`, löschen `r_me_va_loeschen`; `messe/entries/$ev/$id` löschen nur `r_me_eintrag_loeschen`
+  oder wenn schon übertragen; ganze `entries/$ev`/`transferred/$ev` löschen (Veranstaltung löschen) mit `r_me_va_loeschen`;
+  Übertrag-Marker nur mit `r_me_uebertragen`.
+Test im Testprojekt 29.10.2026 (Abschnitte crm+messe auf `ruletest_*`): 38 Fälle (25 CRM, 13 Messe), alle wie erwartet;
+vollständige Datei vom Compiler akzeptiert. Testdaten gelöscht, Original-Regeln zurück (PUT ohne Anmeldung → 401).
+Nicht geprüft: Einschränkung „nur eigener Verein“ bzw. Felder innerhalb eines Kontakts (wirkt nur in der App).
+sha256 (raw @f4c4c61): 256f5d16bd03f2e4037f3f442cbd6f095a5204fcc21e3bddb11144b1558b1f00 · Prüfwort `r_crm_bearbeiten` = 1 Treffer.
+**Reihenfolge:** tpsPw mit `fineGrants` deployen → App v511 live → Administrator öffnet die App (schreibt `grants/r_*`, in der Konsole
+prüfen, dass z. B. `grants/r_crm_bearbeiten` Einträge hat) → v12 veröffentlichen. Rückweg: CANDIDATE-v11.json.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json

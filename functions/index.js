@@ -17,7 +17,8 @@
 //  POST { action:'claimSelf' | 'claimSync' } – Freigabe-Markierung tps:true für Storage (siehe unten).
 //  POST { action:'create', id, newPw } – Anmeldekonto anlegen (nur Admin mit zweitem Faktor; Registrierung ist zu).
 //  POST { action:'staffCreate', user, newPw, crm } – Mitarbeiter anlegen durch System-Verwaltung (siehe unten).
-//  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams } – Zugriffe bestehender Personen (siehe unten).
+//  POST { action:'staffPerms', id, perms, crm, crmOnly, kanbanTeams, rechte } – Zugriffe bestehender Personen (siehe unten).
+//       rechte = feine Rechte {tpl,x,kats} (App v510) bzw. null = zurück auf die alten Stufen.
 //  POST { action:'staffRole', id, role } – Rolle ändern (nur Admin und „System-Verwaltung erweitert“, siehe unten).
 //  POST { action:'backupList' | 'backupGet' | 'restore' | 'adminLog' } – Backups / Protokoll („erweitert“, siehe unten).
 //  POST { action:'autoBackup' } – Tages-Backup durch den Server (jede freigeschaltete Person, siehe unten).
@@ -71,6 +72,68 @@ const BASIC_ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
 // refreshPermissionAllowlists (der Admin-Start rechnet ohnehin alles autoritativ neu).
 // „System-Verwaltung“ (+ „erweitert“) gibt es NUR pro Person – die Rollen-Matrix zählt dafür nicht, sonst
 // ließe sie sich über eine Rolle weitergeben (Audit 14.10.2026). opts.crmLevel: CRM-Stufe, falls gerade erst gesetzt.
+// ── Feine Rechte (App v510, js/rechte.js) – Server-Spiegel ───────────────────────────────────────────────
+// GLEICHE Logik wie js/rechte.js (Vorlagen, Ableitung aus den alten Stufen, SERVER_GRANTS) – bei Änderungen beide anpassen!
+const R_KEYS = ['crm_ansehen', 'crm_anlegen', 'crm_stamm', 'crm_personen', 'crm_notizen', 'crm_notizen_fremd', 'crm_aufgaben', 'crm_termine',
+  'crm_statistik', 'crm_foerder', 'crm_koop', 'crm_dateien', 'crm_loeschen', 'crm_notiz_purge', 'crm_export', 'crm_import', 'crm_einst',
+  'kal_ansehen', 'kal_abw', 'kal_eigene', 'kal_zuweisen', 'kal_fremde', 'kal_loeschen', 'kal_va', 'kal_va_loeschen', 'kal_abo',
+  'pm_ansehen', 'pm_aufg_bearb', 'pm_aufg_neu', 'pm_proj_eigen', 'pm_proj_team', 'pm_proj_loeschen', 'pm_vorlagen',
+  'vt_nutzen', 'vt_eintragen', 'vt_anlegen', 'vt_import', 'vt_loeschen', 'vt_export',
+  'me_formular', 'me_liste', 'me_uebertragen', 'me_eintrag_loeschen', 'me_va', 'me_va_loeschen',
+  'la_ansehen', 'la_bestellen', 'la_ausleihen', 'la_best_bearb', 'la_bestand', 'la_artikel', 'la_einst'];
+const R_OPTS = { crm_ansehen: ['alle', 'kat', 'verein'], kal_ansehen: ['alle', 'team', 'eigene'], kal_loeschen: ['eigene', 'alle'], pm_ansehen: ['teams', 'alle'] };
+const rAll = on => Object.fromEntries(R_KEYS.map(k => [k, on ? (R_OPTS[k] ? R_OPTS[k][(k === 'kal_loeschen' || k === 'pm_ansehen') ? 1 : 0] : true) : false]));
+const rPick = v => Object.assign(rAll(false), v);
+const R_TEAM = { crm_ansehen: 'alle', crm_anlegen: true, crm_stamm: true, crm_personen: true, crm_notizen: true, crm_notizen_fremd: true,
+  crm_aufgaben: true, crm_termine: true, crm_statistik: true, crm_foerder: true, crm_koop: true, crm_dateien: true,
+  kal_ansehen: 'alle', kal_abw: true, kal_eigene: true, kal_zuweisen: true, kal_fremde: true, kal_loeschen: 'eigene', kal_va: true, kal_abo: true,
+  pm_ansehen: 'teams', pm_aufg_bearb: true, pm_aufg_neu: true, pm_proj_eigen: true, vt_nutzen: true, vt_eintragen: true, vt_anlegen: true,
+  me_formular: true, me_liste: true, me_uebertragen: true, la_ansehen: true, la_bestellen: true, la_ausleihen: true };
+const R_LEITUNG = Object.assign({}, R_TEAM, { crm_loeschen: true, crm_notiz_purge: true, crm_export: true, kal_loeschen: 'alle', kal_va_loeschen: true,
+  pm_ansehen: 'alle', pm_proj_team: true, pm_proj_loeschen: true, vt_import: true, vt_loeschen: true, vt_export: true,
+  me_eintrag_loeschen: true, me_va: true, me_va_loeschen: true, la_best_bearb: true });
+const R_TPL = { team: rPick(R_TEAM), leitung: rPick(R_LEITUNG), verwaltung: rAll(true),
+  lesen: rPick({ crm_ansehen: 'alle', kal_ansehen: 'alle', kal_abw: true, kal_abo: true, pm_ansehen: 'teams', vt_nutzen: true, la_ansehen: true }),
+  verein: rPick({ crm_ansehen: 'verein', crm_personen: true, crm_notizen: true, crm_statistik: true }), keine: rAll(false) };
+// Eingabe aus der App prüfen (nur bekannte Vorlagen/Rechte/Werte) → { tpl, x, kats } oder null
+function cleanRechte(r) {
+  if (!r || typeof r !== 'object' || !R_TPL[r.tpl]) return null;
+  const x = {};
+  Object.keys(r.x || {}).forEach(k => { if (!R_KEYS.includes(k)) return; const v = r.x[k];
+    if (typeof v === 'boolean' || (R_OPTS[k] && R_OPTS[k].includes(v))) x[k] = v; });
+  const kats = Array.isArray(r.kats) ? r.kats.filter(s => typeof s === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(s)).slice(0, 50) : [];
+  return { tpl: r.tpl, x, kats };
+}
+// Effektive Einzelrechte: Vorlage+Abweichungen, sonst Ableitung aus den alten Stufen (wie js/rechte.js _legacy)
+function rechteVals(u, lvl, pa) {
+  const c = cleanRechte(u && u.rechte);
+  if (c) return Object.assign({}, R_TPL[c.tpl], c.x);
+  const p = (u && u.perms) || {}; const own = k => Object.prototype.hasOwnProperty.call(p, k);
+  const role = u && u.role; const sys = p.zugriff_verwaltung === true;
+  const DEF = { crm: lvl !== 'none', kanban: lvl !== 'none', verteiler: ['admin', 'full', 'readonly'].includes(lvl), messe: lvl === 'admin' || lvl === 'full', kalender: true, shop: false };
+  const on = k => own('path_' + k) ? !!p['path_' + k] : ((pa[k] && Object.prototype.hasOwnProperty.call(pa[k], role)) ? !!pa[k][role] : !!DEF[k]);
+  const adm = k => { if (!on(k)) return false; if (k !== 'crm' && own('path_' + k) && !p['verw_' + k]) return false; if (sys) return true;
+    return k === 'crm' ? !!p.zugriff_verwaltung_crm : !!p['verw_' + k]; };
+  const crm = on('crm'), full = crm && (lvl === 'full' || lvl === 'admin'), ro = crm && lvl === 'readonly', ver = crm && lvl === 'verein', crmAdm = adm('crm');
+  const edit = full || ver, kalEdit = crmAdm, kb = on('kanban'), kbAdm = adm('kanban'), vt = on('verteiler'), me = on('messe'), sh = on('shop'), shAdm = adm('shop');
+  return { crm_anlegen: full, crm_stamm: edit, crm_personen: edit, crm_notizen: edit, crm_aufgaben: edit || ro, crm_termine: kalEdit,
+    crm_statistik: edit, crm_foerder: edit, crm_koop: edit, crm_dateien: edit, crm_loeschen: full, crm_einst: crmAdm,
+    kal_eigene: kalEdit, kal_fremde: kalEdit, kal_va: kalEdit || full, kal_va_loeschen: kalEdit || full,
+    pm_aufg_bearb: kb, pm_proj_team: kbAdm, pm_vorlagen: kb || crm,
+    vt_eintragen: vt, vt_anlegen: vt && full, vt_import: vt && full, vt_loeschen: vt && full,
+    me_formular: me, me_uebertragen: me, me_eintrag_loeschen: me, me_va: me, me_va_loeschen: me,
+    la_ansehen: sh, la_bestand: shAdm, la_artikel: shAdm, la_best_bearb: shAdm, la_einst: shAdm };
+}
+// Server-Freigaben r_* für die Regeln (CANDIDATE-v12) – wie SERVER_GRANTS in js/rechte.js
+function fineGrants(v) {
+  return {
+    r_crm_anlegen: !!v.crm_anlegen,
+    r_crm_bearbeiten: !!(v.crm_anlegen || v.crm_stamm || v.crm_personen || v.crm_notizen || v.crm_aufgaben || v.crm_termine || v.crm_statistik || v.crm_foerder || v.crm_koop || v.crm_dateien || v.kal_eigene || v.kal_fremde || v.pm_aufg_bearb),
+    r_crm_loeschen: !!v.crm_loeschen, r_kal_va: !!v.kal_va, r_kal_va_loeschen: !!v.kal_va_loeschen,
+    r_vt_anlegen: !!v.vt_anlegen, r_vt_bearbeiten: !!(v.vt_anlegen || v.vt_eintragen || v.vt_import), r_vt_loeschen: !!v.vt_loeschen,
+    r_pm_vorlagen: !!v.pm_vorlagen, r_pm_aufg_bearb: !!v.pm_aufg_bearb,
+    r_me_va: !!v.me_va, r_me_va_loeschen: !!v.me_va_loeschen, r_me_eintrag_loeschen: !!v.me_eintrag_loeschen, r_me_uebertragen: !!v.me_uebertragen };
+}
 async function grantUpdates(authUid, u, opts) {
   const val = async p => (await db.ref(p).once('value')).val();
   const rp = (await val('zeiterfassung/rolePermissions')) || {};
@@ -92,6 +155,17 @@ async function grantUpdates(authUid, u, opts) {
   const messeUse = own('path_messe') ? !!p.path_messe
     : ((pa.messe && Object.prototype.hasOwnProperty.call(pa.messe, u.role)) ? !!pa.messe[u.role] : (lvl === 'full' || lvl === 'admin'));
   g('messe_nutzen', messeUse);
+  // Feine Rechte: Server-Freigaben r_* immer; bei gespeicherter Vorlage auch Lager/Messe/Bereichs-Verwaltung daraus
+  const rv = rechteVals(u, lvl, pa);
+  const fg = fineGrants(rv); Object.keys(fg).forEach(k => g(k, fg[k]));
+  if (cleanRechte(u && u.rechte)) {
+    g('shop_nutzen', !!rv.la_ansehen);
+    g('verw_shop', !!rv.la_ansehen && !!(rv.la_bestand || rv.la_artikel || rv.la_best_bearb || rv.la_einst));
+    g('messe_nutzen', !!rv.me_formular);
+    g('zugriff_verwaltung_crm', sys || !!rv.crm_einst);
+    g('verw_kanban', sys || !!rv.pm_proj_team);
+    g('verw_kalender', sys || !!rv.kal_va);
+  }
   return upd;
 }
 // ── Hilfen für Backups ──
@@ -349,6 +423,7 @@ exports.tpsPw = async (req, res) => {
       const perms = {};
       Object.keys(inU.perms || {}).forEach(k => { if (PERM_OK(k) && typeof inU.perms[k] === 'boolean') perms[k] = inU.perms[k]; });
       rec.perms = perms;
+      const rch = cleanRechte(inU.rechte); if (rch) rec.rechte = rch;   // feine Rechte (App v510)
       const callerId = (await db.ref('zeiterfassung/uidUser/' + tok.uid).once('value')).val() || '';
       rec.createdBy = callerId; rec.createdAt = new Date().toISOString();
       // Login-ID darf es weder aktiv noch im Archiv geben
@@ -430,6 +505,8 @@ exports.tpsPw = async (req, res) => {
           if (u.perms && Object.prototype.hasOwnProperty.call(u.perms, k)) perms[k] = u.perms[k]; else delete perms[k]; });
         list[i] = Object.assign({}, u, { perms, crmOnly });
         if (kanbanTeams) list[i].kanbanTeams = kanbanTeams;
+        if (body.rechte === null) delete list[i].rechte;
+        else if (body.rechte !== undefined) { const rch = cleanRechte(body.rechte); if (rch) list[i].rechte = rch; }
         target = list[i];
         return list;
       });
