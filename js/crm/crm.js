@@ -2236,12 +2236,11 @@ function stammFormHtml(s, flbls){
     }
     const flabel=flbls[f.key]||f.label;
     const keys=stammFields(window._crmTree).map(x=>x.key);
-    const reqHint = f.key==='name' ? ' *'
-      : (f.key==='email'||f.key==='tel') ? (keys.includes('email')&&keys.includes('tel')?(f.key==='email'?' * (oder Telefon)':' * (oder E-Mail)'):' *')
-      : (f.key==='sitz'||f.key==='adresse') ? (keys.includes('sitz')&&keys.includes('adresse')?(f.key==='sitz'?' * (oder Adresse)':' * (oder Ort/Sitz)'):' *')
-      : (f.required?' *':'');
-    return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${esc(reqHint)}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
-  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">* Pflichtangaben. 💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
+    // Paare (E-Mail/Telefon, Adresse/Sitz): eins genügt – steht nur im Satz unter dem Formular (User: keine Zusätze am Feld)
+    const pairs=(keys.includes('email')&&keys.includes('tel')) || (keys.includes('sitz')&&keys.includes('adresse'));
+    const reqHint = (f.key==='name' || (!pairs && ['email','tel','sitz','adresse'].includes(f.key)) || f.required) ? ' *' : '';
+    return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${esc(reqHint)}</label>${inp}</div>`;
+  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">Pflicht: Name, dazu E-Mail <b>oder</b> Telefon und Adresse <b>oder</b> Sitz. 💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
 }
 // Schlagwort-Vorschläge (Token nach letztem Komma gegen vorhandene Tags)
 function crmTagSuggest(inp){
@@ -2506,11 +2505,11 @@ function memberFormHtml(k){
      <div class="small" style="color:var(--muted);margin-top:3px">Wirkt nur mit hinterlegter E-Mail.</div></div>` : '';
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
-   <div class="crm-modal-field"><label>Funktion im Verein <span style="font-size:11px;color:var(--muted)">(empfohlen – wichtig für Verteiler)</span></label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
-   <div class="crm-modal-field"><label>E-Mail-Adressen * <span style="font-size:11px;color:var(--muted)">(E-Mail oder Telefon)</span></label>
+   <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
+   <div class="crm-modal-field"><label>E-Mail-Adressen</label>
      <div id="crm-mf-emails">${(emails.length?emails:['']).map(v=>_mfRow('email',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('email')">＋ E-Mail</button></div>
-   <div class="crm-modal-field"><label>Telefonnummern * <span style="font-size:11px;color:var(--muted)">(E-Mail oder Telefon)</span></label>
+   <div class="crm-modal-field"><label>Telefonnummern</label>
      <div id="crm-mf-tels">${(tels.length?tels:['']).map(v=>_mfRow('tel',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
    <div class="crm-modal-field"><label>Adresse</label><textarea id="crm-mf-adresse" rows="2" placeholder="Straße, PLZ Ort">${esc(k.adresse||'')}</textarea></div>
