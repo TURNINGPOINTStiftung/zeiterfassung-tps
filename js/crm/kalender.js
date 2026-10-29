@@ -728,16 +728,21 @@ async function _aboFn(op){
   const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+await me.getIdToken()}, body:JSON.stringify({ action:'icsToken', op }) });
   const j=await r.json().catch(()=>({})); if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status)); return j.token||'';
 }
-function _aboUrl(t){ return String(PW_FUNCTION_URL).replace(/\/$/,'')+'/kalender/'+t+'.ics'; }
+function _aboUrl(t,alle){ return String(PW_FUNCTION_URL).replace(/\/$/,'')+'/kalender/'+t+(alle?'-alle':'')+'.ics'; }
 function _aboHtml(token, err){
   const head='<h3 style="margin:0 0 10px">📲 Meine Termine in Outlook / am Handy</h3>'
     +'<p style="font-size:13px;color:var(--muted);margin:0 0 12px">Ein persönlicher Abo-Link zeigt alle CRM-Termine und Veranstaltungen, denen Sie zugewiesen sind, in Ihrem Kalender – neue und geänderte kommen automatisch dazu (Outlook aktualisiert alle paar Stunden). Nur in eine Richtung: Änderungen bitte in der App vornehmen.</p>';
   if(err) return head+'<div style="color:var(--danger);font-size:13px;margin-bottom:12px">'+esc(err)+'</div><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
   if(!token) return head+'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="kalAboNew(false)">Abo-Link erstellen</button></div>';
   const url=_aboUrl(token), web=url.replace(/^https:/,'webcal:');
-  return head+'<label style="font-size:12px;font-weight:700">Ihr Abo-Link <span style="font-weight:400;color:var(--muted)">(geheim halten)</span></label>'
+  const url2=_aboUrl(token,true), web2=url2.replace(/^https:/,'webcal:');
+  return head+'<label style="font-size:12px;font-weight:700">1) Meine Termine <span style="font-weight:400;color:var(--muted)">(mir zugewiesen · Link geheim halten)</span></label>'
     +'<div style="display:flex;gap:6px;margin:4px 0 10px"><input id="kal-abo-url" readonly value="'+esc(url)+'" style="flex:1;min-width:0;font-size:12px" onclick="this.select()">'
-    +'<button class="btn btn-primary btn-sm" onclick="kalAboCopy()">📋 Kopieren</button></div>'
+    +'<button class="btn btn-primary btn-sm" onclick="kalAboCopy(\'kal-abo-url\')">📋 Kopieren</button></div>'
+    +'<label style="font-size:12px;font-weight:700">2) Weitere Termine der Stiftung <span style="font-weight:400;color:var(--muted)">(optional – alle übrigen, ohne die eigenen)</span></label>'
+    +'<div style="display:flex;gap:6px;margin:4px 0 6px"><input id="kal-abo-url2" readonly value="'+esc(url2)+'" style="flex:1;min-width:0;font-size:12px" onclick="this.select()">'
+    +'<button class="btn btn-outline btn-sm" onclick="kalAboCopy(\'kal-abo-url2\')">📋 Kopieren</button></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Beide getrennt abonnieren und in Outlook unterschiedliche Farben geben (z. B. „TPS“ kräftig, „TPS – weitere“ grau). Outlook färbt pro Kalender, nicht pro Termin. iPhone: <a href="'+esc(web2)+'">weitere Termine antippen</a>.</div>'
     +'<details open style="font-size:13px;margin-bottom:10px"><summary style="cursor:pointer;font-weight:700">So abonnieren</summary><ul style="margin:6px 0 0 18px;padding:0;line-height:1.55">'
     +'<li><b>Outlook (Web / neues Outlook):</b> Kalender → „Kalender hinzufügen“ → „Aus dem Internet abonnieren“ → Link einfügen → Name z. B. „TPS“.</li>'
     +'<li><b>Outlook (klassisch, Windows):</b> Kalender → „Kalender öffnen“/„Kalender hinzufügen“ → „Aus dem Internet …“ → Link einfügen.</li>'
@@ -754,7 +759,7 @@ function kalAboNew(reset){ if(reset && !confirm('Neuen Link erzeugen? Der bisher
   _aboFn('new').then(t=>{ openModal(_aboHtml(t,'')); toast(reset?'Neuer Abo-Link erzeugt ✓':'Abo-Link erstellt ✓','ok'); }).catch(e=>openModal(_aboHtml('',_aboErr(e)))); }
 function kalAboDelete(){ if(!confirm('Kalender-Abo beenden? Der Link funktioniert danach nicht mehr.')) return;
   _aboFn('delete').then(()=>{ openModal(_aboHtml('','')); toast('Kalender-Abo beendet.','ok'); }).catch(e=>openModal(_aboHtml('',_aboErr(e)))); }
-function kalAboCopy(){ const i=document.getElementById('kal-abo-url'); if(!i) return; i.select();
+function kalAboCopy(id){ const i=document.getElementById(id||'kal-abo-url'); if(!i) return; i.select();
   (navigator.clipboard?navigator.clipboard.writeText(i.value):Promise.reject()).then(()=>toast('Link kopiert ✓','ok')).catch(()=>{ try{ document.execCommand('copy'); toast('Link kopiert ✓','ok'); }catch(_){ toast('Bitte den Link markieren und kopieren.','err'); } }); }
 
 Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
