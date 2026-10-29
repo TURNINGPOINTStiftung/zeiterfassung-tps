@@ -113,12 +113,18 @@ export function openModal(html,wide=false){
   const m=document.getElementById('modal-body');
   m.innerHTML=html;
   m.classList.toggle('modal-wide',!!wide);
-  document.getElementById('modal-bg').classList.add('show');
+  const bg=document.getElementById('modal-bg'); bg.classList.remove('modal-side'); document.body.classList.remove('has-side');   // Seitenleiste setzt der Aufrufer danach
+  bg.classList.add('show');
 }
-export function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
+export function closeModal(){ const bg=document.getElementById('modal-bg'); bg.classList.remove('show','modal-side'); document.body.classList.remove('has-side'); }
 export function initModalClose(){
-  document.getElementById('modal-bg').addEventListener('click',e=>{
-    if(e.target===document.getElementById('modal-bg')) closeModal();
+  // Schließen per Klick auf den Hintergrund NUR, wenn auch der Mausklick dort begann (v494): Text markieren und
+  // außerhalb loslassen schloss sonst das Fenster samt Eingaben. Seitenleisten (modal-side) schließen nie so.
+  const bg=document.getElementById('modal-bg'); let downOnBg=false;
+  bg.addEventListener('mousedown',e=>{ downOnBg=(e.target===bg); });
+  bg.addEventListener('click',e=>{
+    if(e.target===bg && downOnBg && !bg.classList.contains('modal-side')) closeModal();
+    downOnBg=false;
   });
 }
 // Doppelklick-Schutz für Haupt-Knöpfe in Dialogen („Anlegen", „Speichern", „Bestellen" …):

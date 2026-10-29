@@ -568,6 +568,12 @@ function injectStyles(){
   .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
   .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:11px;font-weight:400}
+  /* Seitenleiste (Termin/Veranstaltung): fest rechts, kein Abdunkeln, Seite rückt zur Seite */
+  #modal-bg.modal-side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;justify-content:flex-end;align-items:stretch;padding:0;overflow:visible}
+  #modal-bg.modal-side .modal{pointer-events:auto;width:min(540px,100vw);max-width:none;height:100vh;max-height:100vh;margin:0;border-radius:0;box-shadow:-10px 0 30px rgba(20,30,55,.22);border-left:1px solid var(--border);overflow-y:auto;animation:crmSideIn .2s ease;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+  @keyframes crmSideIn{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
+  @media(min-width:901px){ body.has-side #app{padding-right:540px;box-sizing:border-box;transition:padding-right .2s} }
+  @media(max-width:900px){ #modal-bg.modal-side .modal{width:100vw} }
   .vt-imp{margin:4px 0 12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--surface,#fff)}
   .vt-imp>summary{cursor:pointer;font-weight:700;color:var(--primary);font-size:14px}
   .ss-wrap{position:relative;flex:1 1 200px;min-width:160px}
@@ -2142,7 +2148,11 @@ function crmOpenMyVerein(){ window._crmMode='kontakte'; window._crmTree='vereine
 function crmRestrictedOpen(vid){ window._crmMode='kontakte'; window._crmTree='vereine'; window._crmSelId=vid; paintDetail(); }
 
 function crmOpenModalShell(){ window._crmModalOpen=true; }
-function crmCloseModal(){ window._crmModalOpen=false; window._crmModalReturn=null; closeModal(); }
+function crmCloseModal(){ window._crmModalOpen=false; window._crmModalReturn=null; closeModal();
+  try{ document.getElementById('modal-bg').classList.remove('modal-side'); document.body.classList.remove('has-side'); }catch(e){} }
+// Termine/Veranstaltungen als feste Seitenleiste rechts (v494, User 29.10.2026): schiebt die Seite zur Seite
+// und schließt nur über „Abbrechen“/„Speichern“ (nicht per Klick daneben). Nach openModal() aufrufen.
+function _crmSide(){ try{ injectStyles(); document.getElementById('modal-bg').classList.add('modal-side'); document.body.classList.add('has-side'); const m=document.getElementById('modal-body'); if(m) m.scrollTop=0; }catch(e){} }
 
 // ── Neu anlegen / Stammdaten bearbeiten ────────────────────────────
 function stammFormHtml(s, flbls){
@@ -2746,6 +2756,7 @@ function crmEditTermin(tid){
    ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa(${jsq(tid)})" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
    ${(window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoTermin()">Zum Termin ↗</button>`:''}
    ${canEdit?`<button class="btn-sm-crm primary" onclick="crmSaveTerminEdit(${jsq(tid)})">Speichern</button>`:''}</div>`);
+  _crmSide();
 }
 function crmSaveTerminEdit(tid){
   const backToKal=(window._crmModalReturn==='kalender');
@@ -4087,7 +4098,7 @@ function paintTeamDetail(){
 function crmNewVeranstaltungForTeam(team){
   window._crmVaReturn={ mode:'teams', teamSel:team };
   window._vaTeiln=[];
-  crmOpenModalShell(); openModal(veranstaltungFormHtml({ team:(team==='Ohne Team'?'':team) }, true));
+  crmOpenModalShell(); openModal(veranstaltungFormHtml({ team:(team==='Ohne Team'?'':team) }, true)); _crmSide();
 }
 function crmTeamSetStatus(tree,eid,id,value){
   const e=getEntity(tree,eid); if(!e) return; migEntityProjekte(e);
@@ -4528,7 +4539,7 @@ function crmNewItem(initialType){ injectStyles(); window._crmNewType=(initialTyp
   const here=(!fromKal && (window._crmMode||'kontakte')==='kontakte' && window._crmTree && window._crmSelId && curEntity())?[{tree:window._crmTree,eid:window._crmSelId}]:[];
   _kpSet('crm-va', here);
   _kpSet('crm-tf', here);
-  crmOpenModalShell(); openModal(_newItemHtml()); }
+  crmOpenModalShell(); openModal(_newItemHtml()); _crmSide(); }
 function _newItemHtml(){
   const type=window._crmNewType||'termin';
   const fromKal=(window._crmModalReturn==='kalender');
@@ -4574,13 +4585,13 @@ function crmTerminToVa(tid){
   else { window._crmMode='veranstaltungen'; paintVeranstaltungDetail(); }
   toast('In Veranstaltung umgewandelt ✓','ok');
 }
-function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); }
+function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); _crmSide(); }
 function crmEditVeranstaltung(){
   injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
   if(!_canManageEvents()){ toast('Nur ansehen – Bearbeiten braucht CRM „verwaltend".','err'); return; }
   const v=getVeranstaltung(window._crmVaSel); if(!v) return;
   window._vaTeiln=(v.teilnehmer||[]).map(t=>({tree:t.tree,eid:t.eid}));
-  crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false));
+  crmOpenModalShell(); openModal(veranstaltungFormHtml(v, false)); _crmSide();
 }
 function crmSaveVeranstaltung(isNew){
   const backToKal=(window._crmModalReturn==='kalender');
@@ -4633,7 +4644,7 @@ function crmNewVeranstaltungFor(){
   const teil=[{tree:window._crmTree, eid:e.id}];
   _koopPartners(window._crmTree, e.id).forEach(p=>{ if(!teil.some(x=>x.tree===p.tree&&x.eid===p.eid)) teil.push(p); });
   window._vaTeiln=teil;
-  crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true));
+  crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); _crmSide();
 }
 
 // ══════════════════════════════════════════════════════════════════
