@@ -24,6 +24,8 @@
 //  POST { action:'icsToken', op:'get'|'new'|'delete' } – eigener Kalender-Abo-Link (jede freigeschaltete Person).
 //  GET  /kalender/<schlüssel>.ics – Kalender-Abo (Outlook/Google/iPhone): eigene CRM-Termine + Veranstaltungen,
 //        denen die Person zugewiesen ist. Ohne Anmeldung – der lange Zufallsschlüssel ist die Berechtigung.
+//  GET  /kalender/<schlüssel>-alle.ics – zweiter Kalender: alle übrigen CRM-Termine/Veranstaltungen (ohne die eigenen),
+//        nur wenn die Person den Kalender-Bereich nutzen darf (perms.path_kalender bzw. crm/pathAccess.kalender).
 //        Schlüssel liegen unter kalenderAbo/ (oberste Ebene, für Geräte durch die Regeln gesperrt; nur dieser Server).
 //
 //  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
@@ -144,7 +146,7 @@ function cors(req, res) {
 }
 
 // ── Kalender-Abo (ICS) ───────────────────────────────────────────────
-const ICS_PATH = /^\/kalender\/([A-Za-z0-9_-]{32,64})\.ics$/;
+const ICS_PATH = /^\/kalender\/([A-Za-z0-9_-]{43})(-alle)?\.ics$/;
 const icsHash = t => crypto.createHash('sha256').update(String(t)).digest('hex');
 const CRM_NONTREE = new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess',
   'shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
@@ -183,7 +185,14 @@ const VTZ_BERLIN = ['BEGIN:VTIMEZONE', 'TZID:Europe/Berlin',
   'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST', 'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
   'BEGIN:STANDARD', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET', 'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
   'END:VTIMEZONE'].join('\r\n');
-async function icsServe(token, res) {
+// Darf die Person den Kalender-Bereich sehen? Wie canUsePath('kalender') in crm.js: persönlich > Rollen-Matrix > Standard (ja)
+function canKalender(u, pa) {
+  if (u.role === 'admin') return true;
+  if (u.perms && Object.prototype.hasOwnProperty.call(u.perms, 'path_kalender')) return !!u.perms.path_kalender;
+  const row = pa && pa.kalender; if (row && Object.prototype.hasOwnProperty.call(row, u.role)) return !!row[u.role];
+  return true;
+}
+async function icsServe(token, res, alle) {
   const nf = () => res.status(404).set('Content-Type', 'text/plain; charset=utf-8').send('Kalender-Abo nicht gefunden oder zurückgesetzt.');
   const rec = (await db.ref('kalenderAbo/tokens/' + icsHash(token)).once('value')).val();
   if (!rec || !rec.u) return nf();
@@ -192,24 +201,26 @@ async function icsServe(token, res) {
   const u = (Array.isArray(usersV) ? usersV : Object.values(usersV)).find(x => x && x.id === rec.u);
   if (!u || u.accessRevoked) return nf();
   const crm = await crmSnapshot();
+  if (alle && !canKalender(u, crm.pathAccess || {})) return nf();
+  const want = ma => alle ? !ma.includes(u.id) : ma.includes(u.id);   // eigener Kalender = zugewiesen; „weitere“ = alle anderen
   const cutoff = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
   const ev = [];
   Object.keys(crm).forEach(tk => { if (CRM_NONTREE.has(tk) || tk.startsWith('shop')) return; const ents = crm[tk]; if (!ents || typeof ents !== 'object') return;
     Object.keys(ents).forEach(eid => { const e = ents[eid]; const ts = e && e.termine; if (!ts) return;
       (Array.isArray(ts) ? ts : Object.values(ts)).forEach(t => { if (!t || !t.datum) return;
         const ma = Array.isArray(t.mitarbeiter) ? t.mitarbeiter : Object.values(t.mitarbeiter || {});
-        if (!ma.includes(u.id) || (t.bis || t.datum) < cutoff) return;
+        if (!want(ma) || (t.bis || t.datum) < cutoff) return;
         const name = (e.stamm && e.stamm.name) || '';
         ev.push(icsEvent({ uid: 'termin-' + (t.id || (eid + t.datum)) + '@tps-app', titel: (t.titel || 'Termin') + (name ? ' · ' + name : ''), von: t.datum, bis: t.bis || t.datum, uhr: t.uhr, ort: t.ort, notiz: t.note }));
       }); }); });
   const vas = crm.veranstaltungen || {};
   Object.keys(vas).forEach(id => { const v = vas[id]; if (!v || !v.start) return;
     const ma = Array.isArray(v.mitarbeiter) ? v.mitarbeiter : Object.values(v.mitarbeiter || {});
-    if (!ma.includes(u.id) || (v.ende || v.start) < cutoff) return;
+    if (!want(ma) || (v.ende || v.start) < cutoff) return;
     ev.push(icsEvent({ uid: 'va-' + (v.id || id) + '@tps-app', titel: '📅 ' + (v.titel || 'Veranstaltung'), von: v.start, bis: v.ende || v.start, uhr: v.uhrzeit, ort: v.ortOderLink, notiz: v.beschreibung }));
   });
   const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TURNING POINT Stiftung//TPS-App//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    icsFold('X-WR-CALNAME:TPS – Meine Termine'), 'X-WR-TIMEZONE:Europe/Berlin', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
+    icsFold('X-WR-CALNAME:' + (alle ? 'TPS – weitere Termine' : 'TPS – Meine Termine')), 'X-WR-TIMEZONE:Europe/Berlin', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
     VTZ_BERLIN].concat(ev).concat(['END:VCALENDAR']).join('\r\n') + '\r\n';
   res.set('Content-Type', 'text/calendar; charset=utf-8');
   res.set('Content-Disposition', 'inline; filename="tps-termine.ics"');
@@ -223,7 +234,7 @@ exports.tpsPw = async (req, res) => {
   if (req.method === 'GET') {   // Kalender-Abo
     const m = String(req.path || '').match(ICS_PATH);
     if (!m) return res.status(404).send('');
-    try { return await icsServe(m[1], res); } catch (e) { console.error('tpsPw ics', e); return res.status(500).send(''); }
+    try { return await icsServe(m[1], res, !!m[2]); } catch (e) { console.error('tpsPw ics', e); return res.status(500).send(''); }
   }
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'method' });
   const body = req.body || {};
