@@ -334,12 +334,13 @@ function _dayGrid(days){
   };
   // Zuweisungs-Balken auf der Personenzeile (Monat/Woche): volle Zeilenhöhe, HELLER Ton, kein Text
   // (Name steht oben im Band). Vom User bewusst hell gewünscht – nur die Jahres-Gesamtübersicht ist voll.
-  const asgBar=(it,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
+  const asgBar=(it,rowAbs,lanes)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
+    const gr=(lanes>1 && !it._alone)?((it._lane+1)+' / span 1'):'1 / -1';   // eigene Spur nur bei Überschneidung
     const isVa=it.typ==='va'; const col=_colL(it);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
-    return '<div class="kal-asg'+(cfl?' cf':'')+c.cls+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:1 / -1;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
+    return '<div class="kal-asg'+(cfl?' cf':'')+c.cls+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+gr+';background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
   let h='<div class="kal-grid" style="min-width:'+(NW+N*DW)+'px">';
   // Kopf
@@ -361,16 +362,20 @@ function _dayGrid(days){
     h+='<div class="kal-teamrow">'+esc(t)+'</div>';
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       const myAbs=abs.filter(a=>a.emp===u.id);
-      const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0);
+      // Kopien: die Spur (_lane) gilt je Person, die Objekte werden auch fürs Band oben benutzt
+      const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0).map(it=>Object.assign({},it));
       const absLanes=myAbs.length?_laneAssign(myAbs):0;
-      const aRows=Math.max(absLanes,1);
-      const laneH=(42/aRows).toFixed(2);   // alle Zeilen gleich hoch (42px); überlappende Abwesenheiten teilen sich die Höhe
+      const asgLanes=myAsg.length?_laneAssign(myAsg):0;   // mehrere Termine am selben Tag → untereinander
+      myAsg.forEach(it=>{ it._alone=!myAsg.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
+      const aRows=Math.max(absLanes,asgLanes,1);
+      const rowTot=Math.max(42, aRows*20);                // ab 3 Spuren wird die Zeile höher (mind. 20 px je Spur)
+      const laneH=(rowTot/aRows).toFixed(2);
       const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
       const isMe=u.id===myId;
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
-      myAsg.forEach(it=>{ h+=asgBar(it, myAbs); });   // heller Balken (volle Höhe) zuerst – Abwesenheit liegt darüber
-      myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(a._lane+1)+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
+      myAsg.forEach(it=>{ h+=asgBar(it, myAbs, asgLanes); });   // heller Balken zuerst – Abwesenheit liegt darüber
+      myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(absLanes<=1?'1 / -1':(a._lane+1))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
       h+='</div>';
     });
   });
@@ -409,11 +414,12 @@ function _yearGrid(months, title){
   // benannte Abwesenheit auf der Personenzeile
   const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
-  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=_col(it); const w=spanPct(it.von,it.bis);
+  const asgMark=(it,rowH,rowAbs,lanes)=>{ const isVa=it.typ==='va'; const col=_col(it); const w=spanPct(it.von,it.bis);
+    const L=it._alone?1:Math.max(lanes||1,1), segH=(rowH-6)/L, topPx=3+(L>1?it._lane*segH:0), hPx=(L>1?segH-1:rowH-6);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
-    return '<div class="kal-yasg'+(cfl?' cf':'')+c.cls+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:3px;height:'+(rowH-6)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
+    return '<div class="kal-yasg'+(cfl?' cf':'')+c.cls+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+topPx.toFixed(1)+'px;height:'+hPx.toFixed(1)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'></div>';
   };
   let h='<div class="kal-grid" style="min-width:'+(NW+months.length*(months.length<=6?150:110))+'px">';
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+esc(title||'Mitarbeiter')+'</div>';
@@ -435,7 +441,9 @@ function _yearGrid(months, title){
     h+='<div class="kal-teamrow">'+esc(t)+'</div>';
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       const myAbs=abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis));
-      const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0&&inYear(it.von,it.bis));
+      const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0&&inYear(it.von,it.bis)).map(it=>Object.assign({},it));
+      const yAsgL=myAsg.length?_laneAssign(myAsg):0;
+      myAsg.forEach(it=>{ it._alone=!myAsg.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
       const absLanes=myAbs.length?_laneAssign(myAbs):0;
       const aL=Math.max(absLanes,1);
       const rowH=42;                 // alle Zeilen gleich hoch
@@ -443,7 +451,7 @@ function _yearGrid(months, title){
       const isMe=u.id===myId;
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
-      myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs); });   // heller Balken volle Höhe (z1)
+      myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs, yAsgL); });   // heller Balken (z1), bei Überschneidung in Spuren
       myAbs.forEach(a=>{ h+=absMark(a, u.name, segH); });    // Abwesenheit darüber (z2)
       h+='</div></div>';
     });
