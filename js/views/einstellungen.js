@@ -50,59 +50,108 @@ window.ufSetMod=function(key){
   if(key==='zeiterfassung'){ try{ window.toggleFreelancerFields&&window.toggleFreelancerFields(); }catch(e){} }
 };
 
-// ── Feine Rechte (v510, js/rechte.js): Vorlage + Häkchen je Bereich ──────────────────────────────
-// „Bisherige Einstellung" = keine neuen Rechte gespeichert → die alten Stufen (unten) gelten weiter.
-function _ufRechteHtml(u, isNew, vereinDiv, kanbanBody){
-  const AREAS=window.TPS_RECHTE||[], TPLS=window.TPS_VORLAGEN||[];
-  if(!AREAS.length) return '';
-  const hasNeu=!!(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u));
-  const tpl = isNew ? 'keine' : (hasNeu ? u.rechte.tpl : '');
-  const vals = isNew ? ((TPLS.find(t=>t.key==='keine')||{}).vals||{}) : ((window.tpsRechteOf&&window.tpsRechteOf(u))||{});
-  const dis = tpl==='' ? ' disabled' : '';
+// ── Feine Rechte (v512, js/rechte.js): je Modul ein Kasten wie bei der Zeiterfassung ────────────────────────
+// Kopf: Kein / Nutzen / Verwaltend als Schnellwahl („Angepasst", wenn die Häkchen davon abweichen).
+// Nutzen = Standard-Häkchen der ROLLE (Verwaltung → Standard-Rechte je Rolle), Verwaltend = alle Häkchen des Bereichs.
+// Neue Person: alle Module „Kein" (Häkchen trotzdem nach Rolle vorbelegt, bis das Modul eingeschaltet wird).
+const _UF_RTITLE={ crm:'📇 CRM (Kontakte)', kanban:'🗂️ Projektmanagement', kalender:'📅 Kalender', verteiler:'✉️ Verteiler', messe:'🎪 Messemodus', shop:'📦 Lager (Bestand, Bestellungen & Ausleihe)' };
+const _UF_RFEIN={ crm:'innerhalb des CRM', kanban:'im Projektmanagement', kalender:'im Kalender', verteiler:'im Verteiler', messe:'im Messemodus', shop:'im Lager' };
+function _ufArea(a){ return (window.TPS_RECHTE||[]).find(x=>x.area===a); }
+function _ufRoleNow(){ return document.getElementById('uf-role')?.value||'mitarbeiter'; }
+// Häkchen-Werte für „Nutzen" eines Bereichs: Rollen-Standard, „ansehen" immer an
+function _ufNutzenVals(area){
+  const A=_ufArea(area); const t=(window.tpsRoleTplVals?window.tpsRoleTplVals(_ufRoleNow()):{})||{}; const o={};
+  A.items.forEach((it,i)=>{ o[it.k]=t[it.k]; if(i===0 && !o[it.k]) o[it.k]=it.opts?it.opts[0][0]:true; });
+  return o; }
+function _ufAllVals(area){ const A=_ufArea(area); const o={}; A.items.forEach(it=>{ o[it.k]=it.opts?it.opts[(it.k==='kal_loeschen'||it.k==='pm_ansehen')?1:0][0]:true; }); return o; }
+function _ufRechteKopf(u, isNew){
+  if(!(window.TPS_RECHTE||[]).length) return '';
+  const rk=window.tpsRoleTplKey?window.tpsRoleTplKey(u.role||'mitarbeiter'):'team';
+  const lbl=((window.TPS_VORLAGEN||[]).find(t=>t.key===rk)||{}).label||rk;
+  return `<style>.uf-r-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer}.uf-r-row input{width:auto;margin:0;cursor:pointer}.uf-r-row select{width:auto;margin-left:auto;font-size:12px;padding:3px 6px}.uf-r-nr{display:inline-block;min-width:30px;color:var(--muted);font-size:11px}.uf-r-lbl{flex:1}</style>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 8px">
+    <span>Standard der Rolle: <b id="uf-r-rolle">${esc(lbl)}</b> – gilt beim Einschalten eines Moduls („Nutzen").</span>
+    <span style="margin-left:auto">Füllen:</span>
+    <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('rolle')">wie Rolle</button>
+    <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('verein')">Verein (extern)</button>
+    <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('alles')">alles</button>
+    <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('keine')">nichts</button>
+  </div>`;
+}
+function _ufAreaBox(area, u, isNew, vereinDiv, extraBody){
+  const A=_ufArea(area); if(!A) return '';
+  const cur = isNew ? {} : ((window.tpsRechteOf&&window.tpsRechteOf(u))||{});
+  const pre = isNew ? ((window.tpsRoleTplVals&&window.tpsRoleTplVals(u.role||'mitarbeiter'))||{}) : cur;   // neue Person: nach Rolle vorbelegt
+  const on = !isNew && !!cur[A.items[0].k];
   const kats=(u.rechte&&Array.isArray(u.rechte.kats))?u.rechte.kats:[];
   let cats=[]; try{ cats=(window.crmCategoryList&&window.crmCategoryList())||[]; }catch(e){}
-  const item=it=>{ const v=vals[it.k];
-    if(it.opts) return `<div class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><span class="uf-r-lbl">${esc(it.label)}</span><select class="uf-r" data-k="${esc(it.k)}" onchange="ufRchg()"${dis}><option value="">– nein –</option>${it.opts.map(([o,l])=>`<option value="${esc(o)}"${v===o?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
-    return `<label class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><input type="checkbox" class="uf-r" data-k="${esc(it.k)}"${v?' checked':''} onchange="ufRchg()"${dis}><span class="uf-r-lbl">${esc(it.label)}</span></label>`; };
-  const katBox=`<div id="uf-rkat-wrap" style="display:${vals.crm_ansehen==='kat'?'':'none'};margin:4px 0 8px 34px"><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Welche Kategorien?</div>${cats.length?cats.map(c=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="uf-rkat" value="${esc(c.key)}"${kats.includes(c.key)?' checked':''}${dis}> ${esc(c.label)}</label>`).join(''):'<span style="font-size:12px;color:var(--muted)">Keine Kategorien angelegt.</span>'}</div>`;
-  const areaHtml=a=>{ const n=a.items.filter(it=>vals[it.k]).length;
-    return `<details class="uf-r-area"><summary><span>${a.icon} ${esc(a.label)}</span><span class="uf-r-cnt" data-area="${esc(a.area)}">${n}/${a.items.length}</span></summary><div class="uf-r-body">
-      ${a.items.map(it=>item(it)+(it.k==='crm_ansehen'?katBox+`<div style="margin-left:34px">${vereinDiv}</div>`:'')).join('')}
-      ${a.area==='kanban'?`<div style="margin:8px 0 0 34px">${kanbanBody}</div>`:''}
-    </div></details>`; };
-  return `<style>.uf-r-wrap{border:1.5px solid var(--primary);border-radius:8px;padding:10px 12px;margin-bottom:10px}.uf-r-area{border:1px solid var(--border);border-radius:7px;margin:6px 0}.uf-r-area>summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:7px 10px;font-weight:600;font-size:13px}.uf-r-body{padding:4px 10px 8px}.uf-r-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer}.uf-r-row input{width:auto;margin:0;cursor:pointer}.uf-r-row select{width:auto;margin-left:auto;font-size:12px;padding:3px 6px}.uf-r-nr{display:inline-block;min-width:26px;color:var(--muted);font-size:11px}.uf-r-cnt{font-size:11px;color:var(--muted);font-weight:500}</style>
-    <div class="uf-r-wrap" id="uf-r-wrap">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px"><b style="font-size:13px">🎛️ Rechte: CRM, Kalender, Projekte, Verteiler, Messe, Lager</b></div>
-      <div class="form-group" style="margin:6px 0"><label style="font-size:12px">Vorlage</label>
-        <select id="uf-rtpl" onchange="ufRtpl(this.value)">${isNew?'':`<option value=""${tpl===''?' selected':''}>Bisherige Einstellung (alte Stufen)</option>`}${TPLS.map(t=>`<option value="${esc(t.key)}"${tpl===t.key?' selected':''}>${esc(t.label)} – ${esc(t.hint)}</option>`).join('')}</select></div>
-      <div id="uf-r-hint" style="font-size:12px;color:var(--muted);margin-bottom:4px">${tpl===''?'Es gelten noch die bisherigen Stufen (unten). Wähle eine Vorlage, um auf die feinen Rechte umzustellen – danach lassen sich einzelne Häkchen anpassen.':'Vorlage gewählt – einzelne Häkchen kannst du anpassen.'}</div>
-      ${AREAS.map(areaHtml).join('')}
-    </div>`;
+  const item=it=>{ const v=pre[it.k];
+    if(it.opts) return `<div class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><span class="uf-r-lbl">${esc(it.label)}</span><select class="uf-r" data-k="${esc(it.k)}" data-area="${area}" onchange="ufRchg(${jsq(area)})"><option value="">– nein –</option>${it.opts.map(([o,l])=>`<option value="${esc(o)}"${v===o?' selected':''}>${esc(l)}</option>`).join('')}</select></div>`;
+    return `<label class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><input type="checkbox" class="uf-r" data-k="${esc(it.k)}" data-area="${area}"${v?' checked':''} onchange="ufRchg(${jsq(area)})"><span class="uf-r-lbl">${esc(it.label)}</span></label>`; };
+  const katBox=area!=='crm'?'':`<div id="uf-rkat-wrap" style="display:${pre.crm_ansehen==='kat'?'':'none'};margin:4px 0 8px 34px"><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Welche Kategorien?</div>${cats.length?cats.map(c=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="uf-rkat" value="${esc(c.key)}"${kats.includes(c.key)?' checked':''}> ${esc(c.label)}</label>`).join(''):'<span style="font-size:12px;color:var(--muted)">Keine Kategorien angelegt.</span>'}</div><div style="margin-left:34px">${vereinDiv||''}</div>`;
+  const seg=['kein','nutzen','verwaltend','angepasst'].map(v=>`<label class="uf-seg-opt" data-v="${v}"${v==='angepasst'?' style="display:none;cursor:default" title="Einzelne Häkchen weichen von Nutzen/Verwaltend ab"':''}><input type="radio" name="ufr-${area}" value="${v}" onchange="ufRseg(${jsq(area)},this.value)" style="display:none"${v==='angepasst'?' disabled':''}>${{kein:'Kein',nutzen:'Nutzen',verwaltend:'Verwaltend',angepasst:'Angepasst'}[v]}</label>`).join('');
+  return `<div class="uf-mod" data-rarea="${area}" data-on="${on?'1':'0'}"><div class="uf-mod-head"><span class="uf-mod-name">${esc(_UF_RTITLE[area])}</span><div class="uf-seg">${seg}</div></div>
+    <div class="uf-mod-body" id="ufrsub-${area}" style="display:${on?'':'none'}">
+      <div style="font-size:12px;color:var(--muted);margin:0 0 6px">Feinrechte ${_UF_RFEIN[area]}:</div>
+      ${A.items.map(it=>item(it)+(it.k==='crm_ansehen'?katBox:'')).join('')}
+      ${extraBody?`<div style="margin:8px 0 0 34px;border-top:1px dashed var(--border);padding-top:8px">${extraBody}</div>`:''}
+    </div></div>`;
 }
-window.ufRtpl=function(v){
-  const t=(window.TPS_VORLAGEN||[]).find(x=>x.key===v);
-  document.querySelectorAll('#uf-r-wrap .uf-r, #uf-r-wrap .uf-rkat').forEach(el=>{ el.disabled=!t;
-    if(!t || !el.classList.contains('uf-r')) return; const val=t.vals[el.dataset.k];
-    if(el.tagName==='SELECT') el.value=val||''; else el.checked=!!val; });
-  const alt=document.getElementById('uf-alt-rechte'); if(alt) alt.style.display=t?'none':'';
-  const h=document.getElementById('uf-r-hint'); if(h) h.textContent=t?'Vorlage gewählt – einzelne Häkchen kannst du anpassen.':'Es gelten die bisherigen Stufen (unten).';
+const _ufVal=el=>el.tagName==='SELECT'?(el.value||false):!!el.checked;
+function _ufAreaVals(area){ const o={}; document.querySelectorAll('#modal-body .uf-r[data-area="'+area+'"]').forEach(el=>{ o[el.dataset.k]=_ufVal(el); }); return o; }
+function _ufSetAreaVals(area, vals){ document.querySelectorAll('#modal-body .uf-r[data-area="'+area+'"]').forEach(el=>{ const v=vals[el.dataset.k]; if(el.tagName==='SELECT') el.value=v||''; else el.checked=!!v; }); }
+const _ufSame=(a,b)=>Object.keys(a).every(k=>(a[k]||false)===(b[k]||false));
+// Kopf-Zustand + Sichtbarkeit eines Bereichs aus den Häkchen ableiten
+window.ufRchg=function(area){
+  const areas=area?[area]:Object.keys(_UF_RTITLE);
+  areas.forEach(ar=>{
+    const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+ar+'"]'); if(!box) return;
+    const A=_ufArea(ar); const vals=_ufAreaVals(ar); const on=box.dataset.on==='1' && !!vals[A.items[0].k];
+    if(box.dataset.on==='1' && !vals[A.items[0].k]) box.dataset.on='0';   // „ansehen" aus → Modul aus
+    const st=!on?'kein':(_ufSame(vals,_ufAllVals(ar))?'verwaltend':(_ufSame(vals,_ufNutzenVals(ar))?'nutzen':'angepasst'));
+    box.querySelectorAll('.uf-seg-opt').forEach(l=>{ const r=l.querySelector('input'); const is=l.dataset.v===st; r.checked=is; l.classList.toggle('on',is); if(l.dataset.v==='angepasst') l.style.display=is?'':'none'; });
+    const sub=document.getElementById('ufrsub-'+ar); if(sub) sub.style.display=on?'':'none';
+    // übrige Häkchen ausgrauen, solange „ansehen" aus ist
+    box.querySelectorAll('.uf-r').forEach((el,i)=>{ if(i>0){ el.disabled=!on; const r=el.closest('.uf-r-row'); if(r) r.style.opacity=on?'':'.5'; } });
+    if(ar==='crm'){ const sc=vals.crm_ansehen||''; const kw=document.getElementById('uf-rkat-wrap'); if(kw) kw.style.display=(on&&sc==='kat')?'':'none';
+      const vw=document.getElementById('uf-crmverein'); if(vw) vw.style.display=(on&&sc==='verein')?'':'none'; }
+  });
+};
+window.ufRseg=function(area, v){
+  const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+area+'"]'); if(!box) return;
+  if(v==='kein'){ box.dataset.on='0'; const A=_ufArea(area); _ufSetAreaVals(area, Object.assign(_ufNutzenVals(area), { [A.items[0].k]: false })); }
+  else { box.dataset.on='1'; _ufSetAreaVals(area, v==='verwaltend'?_ufAllVals(area):_ufNutzenVals(area)); }
+  window.ufRchg(area);
+};
+// Alle Bereiche füllen: wie Rolle (eingeschaltete Module), Verein (extern), alles, nichts
+window.ufRfill=function(what){
+  const V=window.TPS_VORLAGEN||[];
+  Object.keys(_UF_RTITLE).forEach(ar=>{
+    const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+ar+'"]'); if(!box) return;
+    const A=_ufArea(ar);
+    if(what==='rolle'){ if(box.dataset.on==='1') _ufSetAreaVals(ar, _ufNutzenVals(ar)); return; }
+    const t=what==='alles'?null:(V.find(x=>x.key===(what==='verein'?'verein':'keine'))||{}).vals||{};
+    const vals=what==='alles'?_ufAllVals(ar):t;
+    box.dataset.on=vals[A.items[0].k]?'1':'0'; _ufSetAreaVals(ar, vals);
+  });
   window.ufRchg();
 };
-window.ufRchg=function(){
-  const tplOn=!!(document.getElementById('uf-rtpl')||{}).value;
-  const sel=document.querySelector('#uf-r-wrap .uf-r[data-k="crm_ansehen"]'); const sc=sel?sel.value:'';
-  const kw=document.getElementById('uf-rkat-wrap'); if(kw) kw.style.display=(tplOn&&sc==='kat')?'':'none';
-  if(tplOn){ const vw=document.getElementById('uf-crmverein'); if(vw) vw.style.display=(sc==='verein')?'':'none'; }
-  (window.TPS_RECHTE||[]).forEach(a=>{ const c=document.querySelector('.uf-r-cnt[data-area="'+a.area+'"]'); if(!c) return;
-    const n=a.items.filter(it=>{ const el=document.querySelector('#uf-r-wrap .uf-r[data-k="'+it.k+'"]'); return el && (el.tagName==='SELECT'?!!el.value:el.checked); }).length;
-    c.textContent=n+'/'+a.items.length; });
+// Rolle geändert: neue Person → Vorbelegung nach Rolle (Module bleiben aus); bestehende → nachfragen
+window.ufRoleChg=function(){
+  const rk=window.tpsRoleTplKey?window.tpsRoleTplKey(_ufRoleNow()):''; const lb=document.getElementById('uf-r-rolle');
+  if(lb) lb.textContent=((window.TPS_VORLAGEN||[]).find(t=>t.key===rk)||{}).label||rk;
+  const isNew=!(document.getElementById('uf-id')||{}).disabled;
+  if(isNew){ Object.keys(_UF_RTITLE).forEach(ar=>{ const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+ar+'"]'); if(box && box.dataset.on!=='1') _ufSetAreaVals(ar, Object.assign(_ufNutzenVals(ar))); }); window.ufRchg(); return; }
+  if(confirm('Rechte an die neue Rolle anpassen?\n\nJa = die Häkchen aller eingeschalteten Module werden auf den Standard der neuen Rolle gesetzt.\nAbbrechen = die bisherigen Häkchen bleiben.')) window.ufRfill('rolle');
+  else window.ufRchg();
 };
 // Rechte aus dem Dialog lesen → null = „Bisherige Einstellung"
 function _ufReadRechte(){
-  const ts=document.getElementById('uf-rtpl'); if(!ts || !ts.value) return null;
-  const vals={}; document.querySelectorAll('#uf-r-wrap .uf-r').forEach(el=>{ vals[el.dataset.k] = el.tagName==='SELECT' ? (el.value||false) : !!el.checked; });
-  const kats=Array.from(document.querySelectorAll('#uf-r-wrap .uf-rkat:checked')).map(x=>x.value);
-  return { tpl:ts.value, vals, kats };
+  const boxes=document.querySelectorAll('#modal-body .uf-mod[data-rarea]'); if(!boxes.length) return null;
+  const vals={};
+  boxes.forEach(box=>{ const on=box.dataset.on==='1'; box.querySelectorAll('.uf-r').forEach(el=>{ vals[el.dataset.k] = on ? _ufVal(el) : false; }); });
+  const kats=vals.crm_ansehen==='kat' ? Array.from(document.querySelectorAll('#modal-body .uf-rkat:checked')).map(x=>x.value) : [];
+  return { tpl:'keine', vals, kats };
 }
 // CRM-Stufe (crm/access) passend zum Dialog: neue Rechte → abgeleitet, sonst die alte Auswahl
 function _ufCrmLevel(_crmState){
@@ -307,9 +356,16 @@ function renderPermissionsMatrix(el){
       <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">✓</span></td>
     </tr>`;
   }).join('');
+  // Vorlage je Rolle für CRM, Kalender, Projekte, Verteiler, Messe, Lager (v512, js/rechte.js roleTplKey)
+  const TPL=(window.TPS_VORLAGEN||[]).filter(t=>t.key!=='keine');
+  const tplRow=TPL.length?`<tr style="border-bottom:2px solid var(--border);background:rgba(127,127,127,.05)">
+      <td style="font-size:12px;padding:7px 10px;color:var(--text)"><b>Vorlage</b> für CRM, Kalender, Projekte, Verteiler, Messe, Lager</td>
+      ${PERM_ROLES.map(r=>{ const cur=window.tpsRoleTplKey?window.tpsRoleTplKey(r.key):'';
+        return `<td style="text-align:center;padding:5px"><select style="font-size:11px;padding:2px 4px;width:auto" onchange="saveRoleTemplate(${jsq(r.key)},this.value)">${TPL.map(t=>`<option value="${esc(t.key)}"${cur===t.key?' selected':''}>${esc(t.label)}</option>`).join('')}</select></td>`; }).join('')}
+      <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">alles</span></td></tr>`:'';
   el.innerHTML=`
-    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:20px">🔐 Berechtigungen</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Admin hat immer alle Rechte. Änderungen gelten sofort.</p>
+    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:20px">🔐 Standard-Rechte je Rolle</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Gilt als Vorbelegung für <b>neue Personen</b> und beim <b>Wechsel der Rolle</b>. Was eine Person tatsächlich darf, steht in ihrem Mitarbeiter-Dialog (je Modul). Admin hat immer alle Rechte.</p>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:8px;overflow:hidden">
       <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
@@ -317,9 +373,15 @@ function renderPermissionsMatrix(el){
         ${hdrs}
         <th style="text-align:center;font-size:11px;padding:6px 8px">Admin</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${tplRow}${rows}</tbody>
     </table></div>`;
 }
+// Vorlage einer Rolle speichern (zeiterfassung/roleTemplates, nur Admin – Config-Knoten)
+export function saveRoleTemplate(role, key){
+  mutate(d=>{ if(!d.roleTemplates||typeof d.roleTemplates!=='object') d.roleTemplates={}; d.roleTemplates[role]=key; })
+    .then(()=>toast('Vorlage gespeichert ✓','ok')).catch(e=>toast('Speichern fehlgeschlagen: '+((e&&e.message)||e),'err'));
+}
+window.saveRoleTemplate=saveRoleTemplate;
 
 export function savePermission(permKey,role,checked){
   mutate(d=>{
@@ -435,7 +497,7 @@ export function showAddUser(){
   if(!_canStamm(cu)){ toast('Kein Zugriff – nur Admin/Verwaltung.','err'); return; }
   openModal(`<h3>Mitarbeiter hinzufügen</h3>${userForm()}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveNewUser())">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
-  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
+  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); window.ufRchg&&window.ufRchg(); }catch(e){}
   if(_isDelegated(cu)) _limitDelegatedAdd();
 }
 // System-Verwaltung legt an (über tpsPw „staffCreate“): nur Rollen ohne Sonderrechte, „System-Verwaltung“
@@ -464,7 +526,7 @@ export function showEditUser(id){
   if(_isDelegated(cu) && id===cu.id){ toast('Eigene Stammdaten ändert der Administrator (eigene Adresse/Ort: über „Profil").','err'); return; }
   openModal(`<h3>Mitarbeiter bearbeiten</h3>${userForm(getUser(id))}<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-warn btn-sm" onclick="resetUserPassword(${jsq(id)})">🔑 Einmal-Passwort</button>${cu.role==='admin'?`<button class="btn btn-outline btn-sm" onclick="mfaAdminReset(${jsq(id)},${jsq((_tu&&_tu.name)||id)})" title="Handy verloren? Entfernt den zweiten Faktor – Anmeldung dann wieder nur mit Passwort">🔐 2FA zurücksetzen</button>`:''}<button class="btn btn-outline btn-sm" onclick="reprovisionUserFull(${jsq(id)})" title="Nur wenn Login-Konto kaputt ist (nach Löschung in der Firebase-Konsole)">🔧 Zugang neu aufsetzen</button><button class="btn btn-ok" onclick="submitBtn(this,()=>saveEditUser(${jsq(id)}))">Speichern</button></div>`, true);
   // Inline-<script> im Formular läuft bei innerHTML NICHT → Sichtbarkeit hier explizit setzen.
-  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); }catch(e){}
+  try{ toggleFreelancerFields(); toggleWerkstudentFields(); ufAutoAdjust(); window.ufRchg&&window.ufRchg(); }catch(e){}
   if(_isDelegated(cu)) _lockAdminOnlyFields(_tu);
   // System-Verwaltung ohne Zwei-Faktor-Anmeldung: Speichern sperren (Regeln v9 würden es ablehnen)
   if(_isDelegated(cu) && window._tps2fa===false){
@@ -483,7 +545,7 @@ function _lockAdminOnlyFields(target){
   const permsOk=!!(target && (plus || (_DELEG_ROLES.includes(target.role) && !_isPlusUser(target))));
   const sel=permsOk
     ? '#uf-name,#uf-id,#uf-pw,'+(plus?'':'#uf-role,')+'[name="ufmod-system"],#uf-gfcountersign,#uf-noreport,#uf-notimesheet'
-    : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet,#uf-rtpl,.uf-r,.uf-rkat';
+    : '#uf-name,#uf-id,#uf-pw,#uf-role,[name^="ufmod-"],[name^="ufr-"],[id^="uf-perm-"],#uf-crmlevel,.uf-crmv,.uf-kbteam,#uf-gfcountersign,#uf-noreport,#uf-notimesheet,.uf-r,.uf-rkat,.uf-r-fill';
   box.querySelectorAll(sel).forEach(el=>{ el.disabled=true; const o=el.closest('.uf-seg-opt'); if(o) o.style.pointerEvents='none'; });
   // Rollenwahl für „erweitert": alles außer Administrator
   if(plus){ const rs=document.getElementById('uf-role'); if(rs && rs.tagName==='SELECT') [...rs.options].forEach(o=>{ if(!_ALL_ROLES.includes(o.value)) o.remove(); }); }
@@ -671,7 +733,7 @@ function userForm(u={}){
   // Systemrolle & Team gehören zum Zeiterfassungs-Kontext → sie wandern in den 🕒 ZE-Block und
   // erscheinen nur bei ZE≠Kein. Für Admin bleiben sie oben (Admin hat keinen ZE-Block). Beides
   // hier als String vorbereitet und je nach Fall oben ODER im ZE-Block eingesetzt (einmalige IDs).
-  const roleSelectHtml=`<select id="uf-role" onchange="toggleFreelancerFields()">
+  const roleSelectHtml=`<select id="uf-role" onchange="toggleFreelancerFields();ufRoleChg()">
       <option value="mitarbeiter"${(u.role||'mitarbeiter')==='mitarbeiter'?' selected':''}>Mitarbeiter/in (festangestellt)</option>
       <option value="freiberuflich"${u.role==='freiberuflich'?' selected':''}>★ Freiberuflich</option>
       <option value="berater"${u.role==='berater'?' selected':''}>🧭 Berater/in (AZ→GF)</option>
@@ -704,6 +766,7 @@ function userForm(u={}){
       </div>`;
     })():'';
   const teamPickerHtml=`<div class="form-group"><label>Team(s) <span style="font-size:11px;color:var(--muted)">(aktuell)</span></label>
+      <style>#uf-team-multi label{display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:3px 0;font-size:13px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0}#uf-team-multi input{width:auto;margin:0}</style>
       <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
     </div>${teamHistHtml}`;
   return `
@@ -719,7 +782,7 @@ function userForm(u={}){
     <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
     ${isAdminUser
       ? `<div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
-      : `<div style="font-size:12px;color:var(--muted);margin:-2px 0 12px;padding:8px 10px;background:rgba(0,0,0,.03);border-radius:6px">🕒 <b>Systemrolle &amp; Team</b> legst du unten im Zeiterfassung-Block fest — sie erscheinen, sobald die Zeiterfassung auf „Nutzen" oder „Verwalten" steht.</div>`}
+      : `<div class="uf-grid2"><div class="form-group"><label>Rolle <span style="font-size:11px;color:var(--muted)">(bestimmt auch die Standard-Rechte)</span></label>${roleSelectHtml}</div></div>${teamPickerHtml}`}
     <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
           const crs=getCustomRoles();
@@ -818,11 +881,6 @@ function userForm(u={}){
       const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${(key!=='crm'&&!NOADM.has(key))?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${key==='kalender'?'🛠️ Darf Termine und Veranstaltungen anlegen und bearbeiten.':'🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).'}</div>`:''}</div></div>`;
       const vereinDiv=`<div class="form-group" id="uf-crmverein" style="display:${(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)) ? ((window.tpsRechteOf(u).crm_ansehen==='verein')?'':'none') : ((st('crm')!=='kein'&&acc.crmLevel==='verein')?'':'none')}"><label style="font-size:12px">Zugeordnete Vereine</label>
           <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:120px;overflow-y:auto">${vChecks}</div></div>`;
-      const LV=[['verein','Nur zugeordnete Vereine'],['readonly','Erweitert – alles ansehen (nicht bearbeiten)'],['full','Voller Zugriff']];
-      const crmBody=`<div class="form-group" style="margin-bottom:6px"><label style="font-size:12px">Umfang</label>
-          <select id="uf-crmlevel" onchange="ufSetMod('crm')">${LV.map(([L,t])=>`<option value="${L}"${acc.crmLevel===L?' selected':''}>${t}</option>`).join('')}</select></div>
-
-        <div id="ufadm-crm" style="display:${st('crm')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf CRM-Einstellungen (Kategorien, Felder, Funktionen …) verwalten.</div>`;
       const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen']];
       const zeOn=k=>(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,k))?!!u.perms[k]:(DEFAULT_PERMISSIONS[k]?.includes(u.role||'mitarbeiter')??false);
       // Zeiterfassung ist jetzt ein ECHTES Modul (Kein/Nutzen/Verwaltend) – wie CRM/Kanban.
@@ -851,9 +909,7 @@ function userForm(u={}){
         </div>`;
       const zeBlock=`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">🕒 Zeiterfassung</span>${seg('zeiterfassung',st('zeiterfassung'))}</div>
         <div class="uf-mod-body" id="ufsub-zeiterfassung" style="display:${st('zeiterfassung')==='kein'?'none':''}">
-          <div class="form-group" style="margin-bottom:8px"><label style="font-size:12px">Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label>${roleSelectHtml}</div>
-          ${teamPickerHtml}
-          <div style="font-size:12px;color:var(--muted);margin:10px 0 6px;border-top:1px dashed var(--border);padding-top:8px">Feinrechte innerhalb der Zeiterfassung:</div>
+          <div style="font-size:12px;color:var(--muted);margin:0 0 6px">Feinrechte innerhalb der Zeiterfassung:</div>
           ${zePerms.map(([k,l])=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:13px"><input type="checkbox" id="uf-perm-${k}" ${zeOn(k)?'checked':''} style="width:auto;cursor:pointer"> ${l}</label>`).join('')}
           <div id="ufadm-zeiterfassung" style="display:${st('zeiterfassung')==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">🛠️ Darf die Zeiterfassungs-Einstellungen verwalten (Teams, Rollen, Vorgaben ändern).</div>
           ${zeRoleOpts}
@@ -872,16 +928,13 @@ function userForm(u={}){
       return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
-        ${_ufRechteHtml(u, isNewUser, vereinDiv, kanbanBody)}
-        <div id="uf-alt-rechte" style="display:${(isNewUser||(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)))?'none':''}">
-        <div style="font-size:12px;color:var(--muted);margin:4px 0 6px">Bisherige Stufen (gelten, solange oben „Bisherige Einstellung“ gewählt ist):</div>
-        ${modBlock('crm','📇','CRM (Kontakte)',crmBody)}
-        ${modBlock('kanban','🗂️','Projektmanagement','<div style="font-size:12px;color:var(--muted)">Team-Boards: siehe oben bei den Rechten.</div>')}
-        ${modBlock('verteiler','✉️','Verteiler')}
-        ${modBlock('messe','🎪','Messemodus')}
-        ${modBlock('kalender','📅','Kalender','<div style="font-size:12px;color:var(--muted)">Darf den Kalender ansehen.</div>')}
-        ${modBlock('shop','📦','Lager (Bestand, Bestellungen &amp; Ausleihe)','<div style="font-size:12px;color:var(--muted)"><b>Nutzen</b> = Bestände sehen und Sachen bestellen. <b>Verwaltend</b> = zusätzlich Artikel &amp; Orte anlegen, Bestände buchen.</div>')}
-        </div>
+        ${_ufRechteKopf(u, isNewUser)}
+        ${_ufAreaBox('crm', u, isNewUser, vereinDiv, '')}
+        ${_ufAreaBox('kanban', u, isNewUser, '', kanbanBody)}
+        ${_ufAreaBox('kalender', u, isNewUser, '', '')}
+        ${_ufAreaBox('verteiler', u, isNewUser, '', '')}
+        ${_ufAreaBox('messe', u, isNewUser, '', '')}
+        ${_ufAreaBox('shop', u, isNewUser, '', '')}
         ${modBlock('ki','🧠','KI')}
         ${modBlock('auswertung','📊','Auswertung')}
         ${(()=>{ const hp=(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,'startseite'))?!!u.perms.startseite:(u.role==='admin');
@@ -1018,7 +1071,7 @@ function collectUserForm(){
   const kanbanTeams=Array.from(document.querySelectorAll('.uf-kbteam:checked'))
     .filter(cb=>cb.dataset.ze!=='1').map(cb=>cb.value);
   const _rr=_ufReadRechte();
-  const rechte = _rr ? { tpl:_rr.tpl, x:(window.tpsDiffZuVorlage?window.tpsDiffZuVorlage(_rr.tpl,_rr.vals):{}), kats:_rr.kats } : (document.getElementById('uf-rtpl')?null:undefined);
+  const rechte = _rr ? { tpl:_rr.tpl, x:(window.tpsDiffZuVorlage?window.tpsDiffZuVorlage(_rr.tpl,_rr.vals):{}), kats:_rr.kats } : undefined;
   return {
     rechte,
     perms,

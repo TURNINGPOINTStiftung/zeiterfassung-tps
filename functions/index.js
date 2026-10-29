@@ -116,7 +116,7 @@ function rechteVals(u, lvl, pa) {
     return k === 'crm' ? !!p.zugriff_verwaltung_crm : !!p['verw_' + k]; };
   const crm = on('crm'), full = crm && (lvl === 'full' || lvl === 'admin'), ro = crm && lvl === 'readonly', ver = crm && lvl === 'verein', crmAdm = adm('crm');
   const edit = full || ver, kalEdit = crmAdm, kb = on('kanban'), kbAdm = adm('kanban'), vt = on('verteiler'), me = on('messe'), sh = on('shop'), shAdm = adm('shop');
-  return { crm_anlegen: full, crm_stamm: edit, crm_personen: edit, crm_notizen: edit, crm_aufgaben: edit || ro, crm_termine: kalEdit,
+  return { crm_anlegen: full, crm_stamm: edit, crm_personen: edit || ro, crm_notizen: edit, crm_aufgaben: edit || ro, crm_termine: kalEdit,
     crm_statistik: edit, crm_foerder: edit, crm_koop: edit, crm_dateien: edit, crm_loeschen: full, crm_einst: crmAdm,
     kal_eigene: kalEdit, kal_fremde: kalEdit, kal_va: kalEdit || full, kal_va_loeschen: kalEdit || full,
     pm_aufg_bearb: kb, pm_proj_team: kbAdm, pm_vorlagen: kb || crm,

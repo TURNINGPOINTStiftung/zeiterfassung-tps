@@ -390,11 +390,15 @@ Menü ☰ → **Verwaltung**:
   **richtigen Team** zugeordnet. Admin kann die Historie einsehen und ändern.
 - **Berechtigungen:** je Rolle steuern, wer welche Buttons/Funktionen sieht
   (z. B. „An GF senden", „Erinnerungen senden", Abwesenheiten genehmigen, Zeitstempel nutzen).
-- **Zugriffe pro Person** – nur das Administrator-Konto. Zeiterfassung, KI, Auswertung, Startseite und Anleitung
-  über Kein / Nutzen / Verwaltend. Für **CRM, Kalender, Projektmanagement, Verteiler, Messemodus und Lager** gibt es
-  **feine Rechte**: oben im Block „🎛️ Rechte“ eine **Vorlage** wählen (Team, Leitung, Verwaltung, Nur lesen,
-  Verein, Keine) und danach bei Bedarf einzelne Häkchen ändern (z. B. „Kontakte löschen“, „Termine löschen: eigene/alle“,
-  „Kontakte ansehen: nur bestimmte Kategorien“). Solange „Bisherige Einstellung“ gewählt ist, gelten die alten Stufen.
+- **Rolle** (oben unter „Rolle & Zugehörigkeit“): bestimmt neben Leitung/GF/Freiberuflich auch die **Standard-Rechte**.
+  Welche Vorlage zu welcher Rolle gehört, steht unter Verwaltung → **Standard-Rechte je Rolle** (Zeile „Vorlage“).
+- **Zugriffe pro Person:** Jedes Modul hat einen Kasten mit **Kein / Nutzen / Verwaltend** und darunter den
+  **Feinrechten** als Häkchen (z. B. „Kontakte löschen“, „Termine löschen: eigene/alle“, „Kontakte ansehen: nur
+  bestimmte Kategorien“). **Kein** schaltet das Modul ganz ab, **Nutzen** setzt die Häkchen der Rolle, **Verwaltend**
+  alle. Weichen einzelne Häkchen ab, steht dort **„Angepasst“**. Neue Personen starten mit allen Modulen auf „Kein“;
+  die Häkchen sind nach der Rolle schon vorbelegt und gelten, sobald das Modul eingeschaltet wird. Wird die Rolle
+  einer Person geändert, fragt die App, ob die Häkchen angepasst werden sollen. Knöpfe „Füllen: wie Rolle /
+  Verein (extern) / alles / nichts“ setzen alle Module auf einmal.
   Nach dem Ändern einmal die App als Administrator neu öffnen – dann werden die Freigaben für den Server neu berechnet.
 - **🔑 Einmal-Passwort:** bei vergessenem Passwort; offene Anfragen erscheinen unter „Mitarbeiter".
 - **Archivieren (✕):** Person verlässt die Stiftung → Zugang wird sofort gesperrt, die Zeitdaten bleiben

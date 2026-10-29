@@ -226,6 +226,8 @@ export async function secureStableAccount(id, newPw){
 export async function refreshPermissionAllowlists(opts){
   opts=opts||{}; const log=opts.log||(m=>console.log('[refreshPerms]',m));
   if(!firebase.auth().currentUser) throw new Error('Bitte zuerst als Admin anmelden.');
+  // Einmalige automatische Übernahme der Rechte (v512, js/rechte.js) – nur Admin, nur mit geladenem CRM, abgesichert
+  try{ if(window.tpsMigrateRechte) await window.tpsMigrateRechte(log); }catch(e){ log('Rechte-Übernahme: '+((e&&e.message)||e)); }
   const data=getData();
   if(!data||!Array.isArray(data.users)||!data.users.length) throw new Error('Keine Nutzerdaten geladen.');
   const db=firebase.database();

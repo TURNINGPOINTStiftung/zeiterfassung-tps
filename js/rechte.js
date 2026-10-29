@@ -10,6 +10,9 @@
 // Andere Module nutzen das NUR über window.tpsRecht(key[,u]) / window.TPS_RECHTE (keine benannten Importe,
 // siehe CLAUDE.md – alter Gerätecache).
 
+import { getData, mutate } from './data.js';
+import { hasPermission } from './roles.js';
+
 export const RECHTE = [
   { area:'crm', icon:'📇', label:'CRM-Kontakte', items:[
     { k:'crm_ansehen',       nr:'1.1',  label:'Kontakte ansehen', opts:[['alle','alle'],['kat','nur bestimmte Kategorien'],['verein','nur eigener Verein']] },
@@ -125,7 +128,7 @@ function _legacy(u){
   let seesAll=false; try{ seesAll=!!(window._crmKanbanSeesAll&&window._crmKanbanSeesAll(u)); }catch(e){}
   return {
     crm_ansehen: crm ? (ver?'verein':'alle') : false,
-    crm_anlegen: full, crm_stamm: edit, crm_personen: edit, crm_notizen: edit, crm_notizen_fremd: full,
+    crm_anlegen: full, crm_stamm: edit, crm_personen: edit||ro, crm_notizen: edit, crm_notizen_fremd: full,
     crm_aufgaben: edit||ro, crm_termine: kalEdit, crm_statistik: edit, crm_foerder: edit, crm_koop: edit, crm_dateien: edit,
     crm_loeschen: full, crm_notiz_purge: crmAdm, crm_export: crmAdm, crm_import: crmAdm, crm_einst: crmAdm,
     kal_ansehen: on('kalender') ? 'alle' : false, kal_abw: on('kalender'),
@@ -196,6 +199,56 @@ export const SERVER_GRANTS = {
 };
 export function serverGrantsOf(u){ const v=rechteOf(u); const o={}; Object.keys(SERVER_GRANTS).forEach(k=>{ o[k]=SERVER_GRANTS[k](v); }); return o; }
 
-try{ Object.assign(window, { tpsServerGrantsOf:serverGrantsOf, TPS_SERVER_GRANT_KEYS:Object.keys(SERVER_GRANTS) }); }catch(e){}
+// ── Standard-Vorlage je Rolle (v512, Wunsch Moritz): die Rolle bestimmt die vorbelegten Häkchen.
+// Änderbar in der Verwaltung (zeiterfassung/roleTemplates = { rolle: vorlagenKey }).
+export const ROLE_TPL_DEFAULT = { mitarbeiter:'team', leitung:'leitung', geschaeftsfuehrer:'leitung', berater:'lesen', freiberuflich:'team' };
+export function roleTplKey(role){ let m={}; try{ m=(getData()||{}).roleTemplates||{}; }catch(e){} const k=m[role]||ROLE_TPL_DEFAULT[role]||'team'; return _TPL[k]?k:'team'; }
+export function roleTplVals(role){ return Object.assign({}, _TPL[roleTplKey(role)].vals); }
+
+// ── Einmalige, automatische Übernahme (v512): Personen ohne gespeicherte Rechte bekommen die Häkchen fest
+// gespeichert, die sich heute aus ihren alten Stufen ergeben. Sicherungen: nur Admin, nur mit geladenem CRM,
+// nur wer noch keine Rechte hat, und nur wenn Sichtbarkeit + CRM-Stufe danach exakt gleich sind (sonst ausgelassen
+// und protokolliert). Alte Felder (perms path_*/verw_*, crm/access) bleiben unverändert → Rückweg: rechte löschen.
+const ZE_PERM_KEYS=['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel'];
+const SMALL_PATHS=['zeiterfassung','ki','auswertung','anleitung'];
+export async function migrateRechte(log){
+  log=log||(()=>{});
+  const cu=window.cu; if(!cu || cu.role!=='admin') return { skip:'kein Admin' };
+  try{ const CD=await import('./crm/crm-data.js'); await CD.ensureCrmReady(); if(!Object.keys(CD.getCrm()||{}).length) return { skip:'CRM nicht geladen' }; }
+  catch(e){ return { skip:'CRM nicht geladen' }; }
+  if(!window.crmModuleAccess || !window.crmUserAccess) return { skip:'CRM-Oberfläche nicht geladen' };
+  const d=getData()||{};
+  const todo=(d.users||[]).filter(u=>u && u.id && u.id!=='admin' && u.role!=='admin' && !hatNeueRechte(u));
+  if(!todo.length) return { ok:0, ausgelassen:[] };
+  const plan={}, bad=[];
+  todo.forEach(u=>{
+    try{
+      const acc=window.crmModuleAccess(u)||{};
+      const vals=_legacy(u);
+      const neu={ tpl:'keine', x:diffZuVorlage('keine', vals), kats:[] };
+      const after=rechteOf(Object.assign({}, u, { rechte:neu }));
+      const gleich = RECHTE_ITEMS.every(i=>(after[i.k]||false)===(vals[i.k]||false));
+      const sicht = Object.keys(AREA_VIEW).every(a=>!!after[AREA_VIEW[a]]===(acc[a]&&acc[a]!=='kein'));
+      const a=window.crmUserAccess(u.id); let lvl=(a&&a.level)||'none'; if(lvl==='admin') lvl='full';
+      const stufe = !after.crm_ansehen || crmStufeAus(after)===lvl;
+      if(!(gleich && sicht && stufe)){ bad.push(u.id+(gleich?'':' (Werte)')+(sicht?'':' (Sichtbarkeit)')+(stufe?'':' (CRM-Stufe)')); return; }
+      // Zeiterfassung & kleine Module: heutige Werte (Rolle/Matrix) als feste Häkchen der Person
+      const p=Object.assign({}, u.perms||{});
+      ZE_PERM_KEYS.forEach(k=>{ if(!Object.prototype.hasOwnProperty.call(p,k)) p[k]=!!hasPermission(k,u); });
+      SMALL_PATHS.forEach(k=>{ if(!Object.prototype.hasOwnProperty.call(p,'path_'+k)) p['path_'+k]=!!(acc[k]&&acc[k]!=='kein'); });
+      if(!Object.prototype.hasOwnProperty.call(p,'startseite')) p.startseite=false;
+      plan[u.id]={ rechte:neu, perms:p };
+    }catch(e){ bad.push(u.id+' (Fehler)'); }
+  });
+  const ids=Object.keys(plan);
+  if(ids.length){
+    await mutate(dd=>{ (dd.users||[]).forEach(x=>{ if(x && plan[x.id] && !hatNeueRechte(x)){ x.rechte=plan[x.id].rechte; x.perms=plan[x.id].perms; } }); });
+  }
+  log('Rechte übernommen: '+ids.length+(bad.length?(' · ausgelassen: '+bad.join(', ')):''));
+  return { ok:ids.length, ausgelassen:bad };
+}
+
+try{ Object.assign(window, { tpsServerGrantsOf:serverGrantsOf, TPS_SERVER_GRANT_KEYS:Object.keys(SERVER_GRANTS),
+  tpsRoleTplKey:roleTplKey, tpsRoleTplVals:roleTplVals, TPS_ROLE_TPL_DEFAULT:ROLE_TPL_DEFAULT, tpsMigrateRechte:migrateRechte }); }catch(e){}
 try{ Object.assign(window, { TPS_RECHTE:RECHTE, TPS_VORLAGEN:VORLAGEN, TPS_AREA_VIEW:AREA_VIEW, tpsRecht:recht, tpsRechteOf:rechteOf,
   tpsHatNeueRechte:hatNeueRechte, tpsVorlageVon:vorlageVon, tpsDiffZuVorlage:diffZuVorlage, tpsCrmStufeAus:crmStufeAus }); }catch(e){}
