@@ -284,6 +284,10 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 
 - **CRM (Kontakte):** Vereine, Sozialakteure, Förderer usw. mit Kontaktpersonen, Notizen, Aufgaben und
   Terminen. Suche oben in der Leiste, 🔔 zeigt Änderungen anderer.
+  Jeder Kontakt hat eine oder mehrere **Kategorien** (z. B. Vereine, Sozialakteure, Segelverband,
+  Intern) – alle gleichrangig. Pflichtangaben beim Anlegen: Name, E-Mail oder Telefon, Ort oder Adresse.
+  Kategorien können **eigene Zusatzfelder** haben (Verwaltung → CRM → Kategorie ✎), z. B. bei Fundraising
+  „Antragsfrist“; sie erscheinen beim Kontakt als eigener Block, sobald die Kategorie angehakt ist.
 - **Projektmanagement:** Team-Boards mit Aufgaben (offen / in Arbeit / erledigt) und Veranstaltungen.
 - **Kalender:** Veranstaltungen und Termine neben den Abwesenheiten aller Mitarbeitenden – Konflikte
   auf einen Blick. **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.

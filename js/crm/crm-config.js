@@ -70,8 +70,10 @@ export function stammFields(tree){
   const c=_cfg();
   const sf = c && c.stammFields;
   if(sf && typeof sf==='object'){
-    if(Array.isArray(sf[tree]) && sf[tree].length) return _noStatStart(sf[tree]);
+    // Seit v506: EINE allgemeine Feldliste für alle Kontakte (Bereiche sind nur noch unsichtbare Ablage);
+    // Zusatzfelder hängen an den Kategorien (categories[].fields). Alt-Overrides je Bereich nur als Notnagel.
     if(Array.isArray(sf.__default) && sf.__default.length) return _noStatStart(sf.__default);
+    if(Array.isArray(sf[tree]) && sf[tree].length) return _noStatStart(sf[tree]);
   }
   return DEFAULT_STAMM_FIELDS;
 }

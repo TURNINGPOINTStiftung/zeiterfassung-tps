@@ -217,6 +217,35 @@ function _catsOf(e, treeKey){
   const t=e.tree||treeKey; return t ? [t] : [];
 }
 function crmCatDef(k){ try{ return categoryByKey(k); }catch(e){ return null; } }
+// ── Zusatzfelder je Kategorie (v506): config.categories[].fields=[{key,label,type}],
+// Werte am Eintrag unter e.catFields[<kategorie>][<feld>]. Abgewählte Kategorie → Werte bleiben gespeichert.
+function _catFieldDefs(ck){ const c=crmCatDef(ck); return (c&&Array.isArray(c.fields))?c.fields.filter(f=>f&&f.key&&f.label):[]; }
+function _entCatLabels(e){ try{ return _catsOf(e, e&&e.tree).map(k=>{ const d=crmCatDef(k); return d?d.label:''; }).filter(Boolean); }catch(err){ return []; } }
+function _catFieldsFormHtml(cats, vals){
+  vals=vals||{};
+  return (cats||[]).map(ck=>{ const c=crmCatDef(ck); const fs=_catFieldDefs(ck); if(!c||!fs.length) return '';
+    return `<div class="crm-catf-block" style="border-left:3px solid ${cssColor(c.color||'#5b6b7d')};padding:2px 0 2px 10px;margin:4px 0 10px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">${esc(c.label)}</div>
+      ${fs.map(f=>{ const v=String(((vals[ck]||{})[f.key])||''); const at=`class="crm-cf-in" data-cat="${esc(ck)}" data-f="${esc(f.key)}"`;
+        const inp = f.type==='textarea' ? `<textarea ${at} rows="3">${esc(v)}</textarea>`
+          : f.type==='date' ? `<input type="date" ${at} value="${esc(v)}">` : `<input ${at} value="${esc(v)}">`;
+        return `<div class="crm-modal-field"><label>${esc(f.label)}</label>${inp}</div>`; }).join('')}
+    </div>`; }).join('');
+}
+function _cfReadDom(){
+  const out=JSON.parse(JSON.stringify(window._crmCfDraft||{}));
+  document.querySelectorAll('#modal-body .crm-cf-in').forEach(el=>{ const ck=el.dataset.cat, fk=el.dataset.f; if(!ck||!fk) return;
+    if(!out[ck]||typeof out[ck]!=='object') out[ck]={}; const v=String(el.value||'').trim(); if(v) out[ck][fk]=v; else delete out[ck][fk]; });
+  Object.keys(out).forEach(ck=>{ if(!out[ck]||!Object.keys(out[ck]).length) delete out[ck]; });
+  return out;
+}
+// Kategorie-Häkchen geändert → Zusatzfeld-Blöcke neu zeichnen (getippte Werte bleiben erhalten)
+function crmCatPickChanged(){
+  window._crmCfDraft=_cfReadDom();
+  const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
+  const w=document.getElementById('crm-catf-wrap'); if(w) w.innerHTML=_catFieldsFormHtml(cats, window._crmCfDraft);
+}
+window.crmCatPickChanged=crmCatPickChanged;
 function crmCatBadge(k){ const d=crmCatDef(k); const c=(d&&d.color)||'#5b6b7d'; return `<span class="crm-catbadge" style="background:${cssColor(c)}">${esc(d?d.label:k)}</span>`; }
 function crmCatBadges(e, treeKey){ const a=_catsOf(e, treeKey); return a.length?a.map(crmCatBadge).join(' '):''; }
 // Vereinskürzel (falls als Stammfeld gepflegt) – für Anzeige „Name (KÜRZEL)". Sucht das
@@ -1150,7 +1179,7 @@ function _crmNotifSeen(){ try{ return +localStorage.getItem('tp_crm_notif_seen')
 function _crmNotifSetSeen(ts){ try{ localStorage.setItem('tp_crm_notif_seen', String(ts||Date.now())); }catch(e){} }
 function _notifType(coll){
   const t=getTrees().find(x=>x.key===coll);
-  if(t) return {icon:t.icon||'📇', label:t.single||t.label||'Eintrag'};   // Einzahl bevorzugt („Verein" statt „Vereine")
+  if(t) return {icon:'📇', label:'Kontakt'};   // v506: Bereiche sind nur noch Ablage → neutral „Kontakt"
   return ({veranstaltungen:{icon:'📅',label:'Veranstaltung'},teamprojekte:{icon:'🗂️',label:'Projekt'},vorlagen:{icon:'📋',label:'Vorlage'},verteiler:{icon:'✉️',label:'Verteiler'},workflows:{icon:'⚡',label:'Workflow'}})[coll]||{icon:'•',label:coll};
 }
 function _agoStr(ts){
@@ -1331,7 +1360,7 @@ function _naechsteVA(tree,eid){
   const up=veranstaltungenForEntity(tree,eid).filter(v=>!v.closed && String(v.start||'')>=today).sort((a,b)=>String(a.start).localeCompare(String(b.start)));
   const v=up[0]; return v ? ((v.titel||'(Veranstaltung)')+' · '+fmtDate(Date.parse(v.start))) : '';
 }
-function crmCardFields(treeKey){ const c=getCrmConfig(); const cf=c&&c.cardFields; return (cf&&Array.isArray(cf[treeKey]))?cf[treeKey]:null; }
+function crmCardFields(treeKey){ const c=getCrmConfig(); const cf=c&&c.cardFields; if(!cf) return null; if(Array.isArray(cf.__all)) return cf.__all; return Array.isArray(cf[treeKey])?cf[treeKey]:null; }
 function _cardChipsHtml(e,treeKey){
   const keys=crmCardFields(treeKey); if(!keys||!keys.length) return null;   // null → Standard-Rendering
   const byKey={}; _cardFieldDefs(treeKey).forEach(d=>byKey[d.key]=d);
@@ -1885,7 +1914,12 @@ function paintDetail(){
   const foerderungenSec = foerderungenSecHtml(e);
 
   // Einzelne Sektionen (wie bisher) – werden je nach Unterreiter eingeblendet
-  const stammSec = fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'';
+  const _cfv=e.catFields||{};
+  const catFSec=_catsOf(e, window._crmTree).map(ck=>{ const c=crmCatDef(ck); const fs=_catFieldDefs(ck); if(!c||!fs.length) return '';
+    const rows=fs.map(f=>{ const v=(_cfv[ck]||{})[f.key]; if(!v) return ''; const disp=f.type==='date'?esc(fmtDate(Date.parse(v))):_fieldDisp(v);
+      return `<div class="crm-field"><label>${esc(f.label)}</label><div class="v">${disp}</div></div>`; }).join('');
+    return `<div class="crm-sec"><h4><span class="ttl"><span class="crm-catbadge" style="background:${cssColor(c.color||'#5b6b7d')}">${esc(c.label)}</span></span></h4>${rows?`<div class="crm-fields">${rows}</div>`:`<div class="small" style="color:var(--muted)">Noch nichts eingetragen – über „✎ Stammdaten“ ergänzen.</div>`}</div>`; }).join('');
+  const stammSec = (fields?`<div class="crm-sec"><h4><span class="ttl">📋 Stammdaten</span></h4><div class="crm-fields">${fields}</div></div>`:'') + catFSec;
   const aufgabenSec = entityProjekteSectionHtml(e);
   const _kEdit=crmFull()||crmRestricted();
   const kontakteSec = `<div class="crm-sec">
@@ -2234,7 +2268,7 @@ function crmTagHide(){ const box=document.getElementById('crm-tag-suggest'); if(
 function _catPickerHtml(sel){
   sel=sel||[];
   return `<div class="crm-modal-field"><label>Kategorie(n) *</label>
-    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?cssColor(col):'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
+    <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${getCategories().map(c=>{const on=sel.includes(c.key);const col=c.color||'#5b6b7d';return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?cssColor(col):'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-cat-${esc(c.key)}" ${on?'checked':''} onchange="crmCatPickChanged()" style="margin:0;width:auto;cursor:pointer"> ${esc(c.label)}</label>`;}).join('')||'<span class="small" style="color:var(--muted)">Noch keine Kategorien angelegt (in der Verwaltung möglich).</span>'}</div></div>`;
 }
 // Status-Häkchen fürs Anlage-/Bearbeiten-Formular (Checkbox-IDs crm-st-<key>).
 function _statusPickerHtml(sel){
@@ -2243,10 +2277,11 @@ function _statusPickerHtml(sel){
     <div class="crm-cat-pick" style="display:flex;flex-wrap:wrap;gap:6px">${CRM_STATUS.map(s=>{const on=sel.includes(s.key);return `<label class="crm-status-chk" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border:1.5px solid ${on?cssColor(s.color):'var(--border)'};border-radius:14px;font-size:12px;cursor:pointer"><input type="checkbox" id="crm-st-${esc(s.key)}" ${on?'checked':''} style="margin:0;width:auto;cursor:pointer"> ${esc(s.label)}</label>`;}).join('')}</div></div>`;
 }
 function crmOpenNew(){
-  crmOpenModalShell();
+  crmOpenModalShell(); window._crmCfDraft={};
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Kontakt anlegen</h3>
     ${stammFormHtml({})}
     ${_catPickerHtml([])}
+    <div id="crm-catf-wrap"></div>
     ${_statusPickerHtml([])}
     <div class="crm-modal-actions">
       <button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -2256,9 +2291,11 @@ function crmOpenNew(){
 function crmEditStamm(){
   const e=curEntity(); if(!e) return;
   crmOpenModalShell();
+  window._crmCfDraft=JSON.parse(JSON.stringify(e.catFields||{}));
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✎ Stammdaten</h3>
     ${stammFormHtml(e.stamm||{}, e.fieldLabels||{})}
     ${_catPickerHtml(_catsOf(e, window._crmTree))}
+    <div id="crm-catf-wrap">${_catFieldsFormHtml(_catsOf(e, window._crmTree), window._crmCfDraft)}</div>
     ${_statusPickerHtml(_statusArr(e))}
     <div class="crm-modal-actions">
       <button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -2280,6 +2317,7 @@ function crmSaveStamm(isNew){
   const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
   if(!cats.length){ toast('Bitte mindestens eine Kategorie wählen.','err'); return; }
   const statuses=CRM_STATUS.map(s=>s.key).filter(k=>{ const el=document.getElementById('crm-st-'+k); return el&&el.checked; });
+  const catFields=_cfReadDom();
   if(isNew){
     // Dubletten-Warnung: ähnlicher Name oder gleiche E-Mail schon im CRM
     const dups=_findDuplicates(stamm, '');
@@ -2296,12 +2334,14 @@ function crmSaveStamm(isNew){
       categories: cats, status: statuses,
       statusLog: statuses.length?[{ statuses:statuses.slice(), ts:Date.now(), by:curKuerzel() }]:[],
       kontakte:[], termine:[], angebote:[], kontaktnotizen:[], todos:[], log:[] };
+    if(Object.keys(catFields).length) ent.catFields=catFields;
     saveEntity(tree, ent);
     window._crmTree=tree; window._crmSelId=id;
     crmCloseModal(); paintDetail(); toast('Angelegt ✓','ok');
   } else {
     mutateEntity(e=>{
       e.stamm=stamm; e.categories=cats;
+      if(Object.keys(catFields).length) e.catFields=catFields; else delete e.catFields;
       const oldS=_statusArr(e);
       const changed = oldS.length!==statuses.length || oldS.some(k=>!statuses.includes(k));
       e.status=statuses;
@@ -2353,7 +2393,7 @@ function kooperationenSecHtml(e){
   const list=_koopList(window._crmTree, e.id);
   const active=list.filter(k=>!_koopEnded(k)), ended=list.filter(k=>_koopEnded(k));
   const row=(k,isEnded)=>{
-    const icon=(getTrees().find(t=>t.key===k.partnerTree)||{}).icon||'';
+    const icon='';
     const acts = !canEdit ? '' : (isEnded
       ? `<span class="crm-koop-act"><button class="btn-sm-crm" title="Wieder aktivieren" onclick="crmKoopReactivate(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">↩</button><button class="crm-x" title="Endgültig löschen" onclick="crmKoopDelete(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">✕</button></span>`
       : `<span class="crm-koop-act"><button class="btn-sm-crm" title="Bearbeiten" onclick="crmKoopEdit(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">✎</button><button class="btn-sm-crm" title="Kooperation beenden (bleibt im Verlauf)" onclick="crmKoopEnd(${jsq(k.ownerTree)},${jsq(k.ownerEid)},${jsq(k.koopId)})">⏹</button></span>`);
@@ -2376,7 +2416,7 @@ function kooperationenSecHtml(e){
 function crmKoopAdd(){
   const e=curEntity(); if(!e) return;
   const opts=['<option value="">– Partner wählen –</option>'];
-  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{ if(tr.key===window._crmTree&&o.id===e.id) return; const v=tr.key+'::'+o.id; opts.push(`<option value="${esc(v)}">${esc(tr.icon||'')} ${esc((o.stamm&&o.stamm.name)||'(ohne Name)')}</option>`); }));
+  getTrees().forEach(tr=>listEntities(tr.key).forEach(o=>{ if(tr.key===window._crmTree&&o.id===e.id) return; const v=tr.key+'::'+o.id; opts.push(`<option value="${esc(v)}">${esc((o.stamm&&o.stamm.name)||'(ohne Name)')}</option>`); }));
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">🤝 Kooperation</h3>
    <input type="hidden" id="crm-koop-id" value=""><input type="hidden" id="crm-koop-ot" value=""><input type="hidden" id="crm-koop-oe" value="">
@@ -2697,7 +2737,7 @@ function crmKpSearch(idp,v){ const dd=document.getElementById(idp+'-dd'); if(!dd
        return {c,r,ort}; })
      .filter(x=>x.r<5 && (x.r<3 || x.r===4)).sort((a,b)=>a.r-b.r||a.c.name.localeCompare(b.c.name,'de')).slice(0,30);
    if(!list.length){ dd.innerHTML='<div class="crm-ac-empty">Kein Kontakt gefunden</div>'; dd.style.display='block'; return; }
-   dd.innerHTML=list.map(({c,ort})=>{ const lbl=(getTrees().find(x=>x.key===c.tree)||{}).label||c.tree; return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd(${jsq(idp)},this.dataset.t,this.dataset.e)">${_kpHl(c.name,q)} <span class="crm-ac-tree">· ${esc(lbl)}${ort?' · '+esc(ort):''}</span></div>`; }).join('');
+   dd.innerHTML=list.map(({c,ort})=>{ const lbl=_entCatLabels(getEntity(c.tree,c.eid)).join(', '); return `<div class="crm-ac-item" data-t="${esc(c.tree)}" data-e="${esc(c.eid)}" onclick="crmKpAdd(${jsq(idp)},this.dataset.t,this.dataset.e)">${_kpHl(c.name,q)} <span class="crm-ac-tree">${lbl?'· '+esc(lbl):''}${ort?' · '+esc(ort):''}</span></div>`; }).join('');
    dd.style.display='block'; }
 function _ssLabel(sel){ const o=sel.options[sel.selectedIndex]; return (o && o.value!=='') ? (o.textContent||'').trim() : ''; }
 function _ssSync(sel){ const w=sel.parentNode; if(!w||!w.classList||!w.classList.contains('ss-wrap')) return; const inp=w.querySelector('.ss-in'); if(!inp) return;
@@ -4365,8 +4405,7 @@ function vaDateLabel(v){
 }
 function vaEntityName(t){ const e=getEntity(t.tree,t.eid); return e?((e.stamm&&e.stamm.name)||'(ohne Name)'):'(gelöscht)'; }
 function vaTeilnChip(t,i,removable){
-  const tr=getTrees().find(x=>x.key===t.tree);
-  return `<span class="crm-chip" style="font-size:12px">${esc((tr&&tr.icon)||'')} ${esc(vaEntityName(t))}${removable?` <span style="cursor:pointer;color:var(--danger,#c0392b);font-weight:700" onclick="crmVaRemoveTeiln(${i})">✕</span>`:''}</span>`;
+  return `<span class="crm-chip" style="font-size:12px">${esc(vaEntityName(t))}${removable?` <span style="cursor:pointer;color:var(--danger,#c0392b);font-weight:700" onclick="crmVaRemoveTeiln(${i})">✕</span>`:''}</span>`;
 }
 // Veranstaltungs-Liste (übergreifend) – wiederverwendbar: eigene Ansicht UND
 // direkt oben in der Teams-Ansicht (kein eigener Reiter mehr nötig).
@@ -4406,7 +4445,7 @@ function paintVeranstaltungDetail(){
   if(!v){ window._crmVaSel=null; paintVeranstaltungen(); return; }
   normTasks(v); recoverV187VaItems(v);
   window._crmTaskCtx={ kind:'veranstaltung', id:v.id }; window._crmAfterTask='veranstaltung';
-  const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry(${jsq(t.tree)},${jsq(t.eid)})">${esc((getTrees().find(x=>x.key===t.tree)||{}).icon||'')} ${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
+  const teiln=(v.teilnehmer||[]).map(t=>`<span class="crm-chip" style="cursor:pointer;font-size:12px" onclick="crmGoEntry(${jsq(t.tree)},${jsq(t.eid)})">${esc(vaEntityName(t))} ↗</span>`).join('') || '<span class="small" style="color:var(--muted)">Übergeordnet – keine beteiligten Einträge.</span>';
   const ortLine = v.online
     ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
     : (v.ortOderLink?('📍 '+esc(v.ortOderLink)):'');
@@ -4788,7 +4827,7 @@ function crmEditVerteiler(id){ const v=getVerteiler(id); if(!v) return; if(v.typ
 function _verteilerModal(v){
   crmOpenModalShell();
   const vereinOpts=['<option value="">– Kontakte eines Eintrags übernehmen –</option>']
-    .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${esc(tr.key+'::'+e.id)}">${esc(tr.icon||'')} ${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
+    .concat(getTrees().map(tr=>listEntities(tr.key).map(e=>`<option value="${esc(tr.key+'::'+e.id)}">${esc((e.stamm&&e.stamm.name)||'(ohne Name)')}</option>`).join('')).join('')).join('');
   const usersWithMail=zeUsers().filter(u=>u.id!=='admin' && u.email)
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const userOpts=['<option value="">– Person aus dem System hinzufügen –</option>']
@@ -4983,10 +5022,9 @@ function crmSaveVerteiler(id){
 function crmDeleteVerteilerC(id){ const v=getVerteiler(id); if(!v) return; if(!window.confirm(`Verteiler „${v.name||''}" löschen?`)) return; deleteVerteiler(id); paintVerteiler(); toast('Verteiler gelöscht.','ok'); }
 // ── Massen-Übernahme aus dem CRM in einen Verteiler (v493, User 28.10.2026) ──────────────
 // Was: Eintrags-Adresse (Vereins-E-Mail / Vereinsanschrift) und/oder Adressen der Kontakte/Mitglieder.
-// Eingrenzen (optional, leer = alle): Bereich, Status, Kategorie, Funktion des Kontakts.
+// Eingrenzen (optional, leer = alle): Status, Kategorie, Funktion des Kontakts.
 function _vtImpHtml(kind){
   const cb=(cls,val,lbl,on)=>`<label><input type="checkbox" class="${cls}" value="${esc(val)}"${on?' checked':''} onchange="crmVtImpPreview(${jsq(kind)})"> ${esc(lbl)}</label>`;
-  const trees=getTrees().map(t=>cb('vti-tree',t.key,(t.icon||'')+' '+(t.label||t.key),true)).join('');
   const sts=CRM_STATUS.map(s=>cb('vti-st',s.key,s.label,false)).join('');
   const cats=getCategories().map(c=>cb('vti-cat',c.key,c.label,false)).join('');
   const fnSet=new Set((memberFunctions()||[]).map(x=>String(x))); getTrees().forEach(t=>listEntities(t.key).forEach(e=>(e.kontakte||[]).forEach(k=>{ if(k&&k.funktion) fnSet.add(String(k.funktion).trim()); })));
@@ -4995,7 +5033,6 @@ function _vtImpHtml(kind){
   return `<details class="vt-imp"><summary>📥 Aus dem CRM übernehmen <span class="small" style="color:var(--muted);font-weight:400">– alle oder gefiltert</span></summary>
     <div class="crm-kn-sub">Was übernehmen?</div>
     <div class="crm-share-opts">${cb('vti-org','1',mail?'🏛️ E-Mail des Eintrags (z. B. Vereins-E-Mail)':'🏛️ Anschrift des Eintrags (z. B. Vereinsadresse)',true)}${cb('vti-k','1',mail?'👥 E-Mails der Kontakte / Mitglieder':'👥 Kontakte / Mitglieder (ohne eigene Anschrift: Vereinsadresse)',true)}</div>
-    <div class="crm-kn-sub">Bereiche</div><div class="crm-share-opts">${trees}</div>
     <details style="margin-top:6px"><summary class="small" style="cursor:pointer;color:var(--primary);font-weight:600">Weiter eingrenzen (optional)</summary>
       <div class="crm-kn-sub">Status <span class="small" style="font-weight:400;color:var(--muted)">(nichts angehakt = alle)</span></div><div class="crm-share-opts">${sts}</div>
       ${cats?`<div class="crm-kn-sub">Kategorie <span class="small" style="font-weight:400;color:var(--muted)">(nichts angehakt = alle)</span></div><div class="crm-share-opts">${cats}</div>`:''}
@@ -5009,7 +5046,7 @@ function _vtImpOpts(){ const g=c=>Array.from(document.querySelectorAll('.'+c+':c
 // → [{tree,eid,e,ks:[kontakte]}] nach den Häkchen
 function _vtImpCollect(){
   const o=_vtImpOpts(); const out=[];
-  getTrees().filter(t=>o.trees.includes(t.key)).forEach(t=>listEntities(t.key).forEach(e=>{
+  getTrees().forEach(t=>listEntities(t.key).forEach(e=>{
     if(o.st.length && !_statusArr(e).some(k=>o.st.includes(k))) return;
     if(o.cat.length && !_catsOf(e,t.key).some(k=>o.cat.includes(k))) return;
     const ks=(e.kontakte||[]).filter(k=>k && (!o.fn.length || o.fn.includes(String(k.funktion||'').trim().toLowerCase())));
@@ -5095,7 +5132,7 @@ function _pvModal(v){
     const opts=[`<option value="all::${esc(tr.key)}::${esc(e.id)}">👥 Alle Kontakte (${ks.length})</option>`,
       `<option value="org::${esc(tr.key)}::${esc(e.id)}">📍 ${esc(nm)} – Eintragsadresse${(e.stamm&&e.stamm.adresse)?'':' (keine hinterlegt)'}</option>`]
       .concat(ks.map(k=>`<option value="k::${esc(tr.key)}::${esc(e.id)}::${esc(k.id)}">👤 ${esc(k.name||'(ohne Name)')}${k.funktion?` (${esc(k.funktion)})`:''}${k.adresse?'':' – Vereinsadresse'}</option>`));
-    return `<optgroup label="${esc((tr.icon||'')+' '+nm)}">${opts.join('')}</optgroup>`;
+    return `<optgroup label="${esc(nm)}">${opts.join('')}</optgroup>`;
   }).join('')).join('');
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">📮 Adressverteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
@@ -5713,7 +5750,7 @@ function _histCollLabel(coll){
   if(coll==='vorlagen') return 'Vorlage';
   if(coll==='verteiler') return 'Verteiler';
   if(coll==='config') return 'Konfiguration';
-  try{ const t=getTrees().find(x=>x.key===coll); if(t) return t.single||t.label; }catch(e){}
+  try{ const t=getTrees().find(x=>x.key===coll); if(t) return 'Kontakt'; }catch(e){}
   return coll;
 }
 function _statusLabel(k){ try{ const s=getTaskStatus().find(x=>x.key===k); return s?s.label:k; }catch(e){ return k; } }
@@ -5897,7 +5934,7 @@ function paintVerwConfig(){
       </td></tr>`).join('');
   // ── Kategorien ──
   const catRows=work.categories.map((c,i)=>`<tr>
-      <td><span class="vw-name">${esc(c.label)}</span>${_catStats(c)?' <span title="Statistik/Weitermach-Quote aktiv">📊</span>':''}<div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
+      <td><span class="vw-name">${esc(c.label)}</span>${_catStats(c)?' <span title="Statistik/Weitermach-Quote aktiv">📊</span>':''}${(Array.isArray(c.fields)&&c.fields.length)?` <span title="${esc(c.fields.length+' Zusatzfeld(er)')}">📝</span>`:''}<div class="small" style="color:var(--muted)"><code>${esc(c.key)}</code></div></td>
       <td>${c.color?`<span class="crm-catbadge" style="background:${cssColor(c.color)}">${esc(c.label)}</span>`:'<span class="small" style="color:var(--muted)">—</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn-sm-crm" ${i===0?'disabled':''} onclick="crmCfgCatMove(${jsq(c.key)},-1)">↑</button>
@@ -5906,11 +5943,8 @@ function paintVerwConfig(){
         <button class="crm-x" title="Entfernen" onclick="crmCfgCatDel(${jsq(c.key)})">✕</button>
       </td></tr>`).join('');
   // ── Felder ──
-  const sel=window._cfgFieldTree||'__default';
-  const treeOpts=[`<option value="__default" ${sel==='__default'?'selected':''}>Standard (alle Bäume)</option>`]
-    .concat(work.trees.map(t=>`<option value="${esc(t.key)}" ${sel===t.key?'selected':''}>${esc(t.label)}</option>`)).join('');
-  const hasOverride = sel!=='__default' && Array.isArray(work.stammFields[sel]);
-  const usesDefault = sel!=='__default' && !hasOverride;
+  window._cfgFieldTree='__default'; const sel='__default';   // v506: eine allgemeine Feldliste
+  const usesDefault = false;
   const fields=_cfgFields(work, sel);
   const fieldRows=fields.map((f,i)=>`<tr>
       <td><span class="vw-name">${esc(f.label)}</span>${f.required?' <span class="vw-team">Pflicht</span>':''}<div class="small" style="color:var(--muted)">${esc((FIELD_TYPES.find(x=>x.key===f.type)||{}).label||f.type||'text')} · <code>${esc(f.key)}</code>${f.hint?' · '+esc(f.hint):''}</div></td>
@@ -5922,25 +5956,20 @@ function paintVerwConfig(){
       </td></tr>`).join('');
   const funcs=(work.memberFunctions||[]).join('\n');
   // ── Kachel-Infos je Baum ──
-  const cardSel=(window._cfgCardTree && work.trees.some(t=>t.key===window._cfgCardTree)) ? window._cfgCardTree : (work.trees[0]&&work.trees[0].key);
-  const cardTreeOpts=work.trees.map(t=>`<option value="${esc(t.key)}"${cardSel===t.key?' selected':''}>${esc(t.label)}</option>`).join('');
-  const curCard=(work.cardFields&&Array.isArray(work.cardFields[cardSel]))?work.cardFields[cardSel]:[];
+  const cardSel='__all';   // v506: eine Einstellung für alle Kontakte
+  const _cf0=work.cardFields||{}; const _t0=work.trees[0]&&work.trees[0].key;
+  const curCard=Array.isArray(_cf0.__all)?_cf0.__all:(Array.isArray(_cf0[_t0])?_cf0[_t0]:[]);
   const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle(${jsq(cardSel)},${jsq(d.key)},this.checked)"> ${esc(d.label)}</label>`).join('');
 
   host.innerHTML = `
   <div class="crm-sec">
     <h4><span class="ttl">🏷️ Kategorien</span><button class="btn-sm-crm primary" onclick="crmCfgCatEdit('')">＋ Kategorie</button></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:8px">Kategorien für den einheitlichen „Kontakte"-Filter (Status + Kategorie). Frei erweiterbar. Löschen blendet die Kategorie nur aus – <b>Zuordnungen an Kontakten bleiben erhalten</b>.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Alle Kategorien sind gleichrangig und frei erweiterbar. Über ✎ lassen sich je Kategorie <b>eigene Zusatzfelder</b> anlegen (📝 = hat Zusatzfelder). Löschen blendet die Kategorie nur aus – <b>Zuordnungen an Kontakten bleiben erhalten</b>.</div>
     <div style="overflow-x:auto"><table class="vw-table"><tbody>${catRows}</tbody></table></div>
   </div>
   <div class="crm-sec">
-    <h4><span class="ttl">📋 Stammdaten-Felder</span><button class="btn-sm-crm primary" ${usesDefault?'disabled':''} onclick="crmCfgFieldEdit('')">＋ Feld</button></h4>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <label class="small" style="color:var(--muted)">Für:</label>
-      <select class="crm-tsel" onchange="crmCfgFieldTree(this.value)">${treeOpts}</select>
-      ${hasOverride?`<button class="btn-sm-crm" onclick="crmCfgFieldReset(${jsq(sel)})">↩ Auf Standard zurücksetzen</button>`:''}
-    </div>
-    ${usesDefault?`<div class="small" style="color:var(--muted);margin-bottom:8px">Dieser Baum nutzt aktuell die Standard-Felder. <button class="btn-sm-crm" onclick="crmCfgFieldOverride(${jsq(sel)})">Eigene Felder für diesen Baum anlegen</button></div>`:''}
+    <h4><span class="ttl">📋 Allgemeine Felder</span><button class="btn-sm-crm primary" onclick="crmCfgFieldEdit('')">＋ Feld</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Gelten für <b>alle</b> Kontakte. Eigene Zusatzfelder einer Kategorie legst du oben bei der Kategorie an (✎).</div>
     <div style="overflow-x:auto"><table class="vw-table"><tbody>${fieldRows}</tbody></table></div>
   </div>
   <div class="crm-sec">
@@ -5952,7 +5981,6 @@ function paintVerwConfig(){
   <div class="crm-sec">
     <h4><span class="ttl">🧩 Kachel-Infos (Eintragsliste)</span></h4>
     <div class="small" style="color:var(--muted);margin-bottom:8px">Welche Infos auf den Kacheln der Eintragsliste erscheinen. Ohne Auswahl gilt die Standard-Anzeige (Status · Kontakte · offene Aufgaben). Änderungen werden sofort gespeichert.</div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label class="small" style="color:var(--muted)">Für:</label><select class="crm-tsel" onchange="crmCfgCardTree(this.value)">${cardTreeOpts}</select></div>
     <div class="vw-card-opts">${cardChecks}</div>
   </div>
   <div class="crm-sec">
@@ -5968,7 +5996,8 @@ function crmCfgAiSave(){ const v=(document.getElementById('cfg-ai-endpoint')?.va
 function crmCfgCardTree(k){ window._cfgCardTree=k; paintVerwConfig(); }
 function crmCfgCardToggle(tree,key,on){
   const work=_cfgWork(); if(!work.cardFields||typeof work.cardFields!=='object') work.cardFields={};
-  let arr=Array.isArray(work.cardFields[tree])?work.cardFields[tree].slice():[];
+  const _t0=work.trees[0]&&work.trees[0].key;
+  let arr=Array.isArray(work.cardFields[tree])?work.cardFields[tree].slice():((tree==='__all'&&Array.isArray(work.cardFields[_t0]))?work.cardFields[_t0].slice():[]);
   if(on){ if(!arr.includes(key)) arr.push(key); } else { arr=arr.filter(x=>x!==key); }
   work.cardFields[tree]=arr;
   window._cfgCardTree=tree;
@@ -6031,18 +6060,45 @@ function crmCfgCatEdit(key){
    <div class="crm-modal-field"><label>Bezeichnung *</label><input id="cfg-cat-label" value="${esc(c.label||'')}" placeholder="z. B. Förderpartner"></div>
    <div class="crm-modal-field"><label>Farbe (optional)</label><input id="cfg-cat-color" type="color" value="${esc(c.color||'#5b6b7d')}" style="width:64px;height:34px;padding:2px;cursor:pointer"></div>
    <div class="crm-modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cfg-cat-stats" ${_catStats(c)?'checked':''} style="width:auto;margin:0"> Statistik / Weitermach-Quote für diese Kategorie</label><div class="small" style="color:var(--muted)">z. B. Vereine oder Segelschulen – schaltet den Statistik-Reiter an Kontakten dieser Kategorie frei.</div></div>
+   <div class="crm-modal-field"><label>Eigene Zusatzfelder <span style="font-size:11px;color:var(--muted)">(erscheinen beim Kontakt, sobald diese Kategorie angehakt ist)</span></label>
+     <div id="cfg-cf-rows">${(Array.isArray(c.fields)?c.fields:[]).map(f=>_cfgCfRow(f)).join('')}</div>
+     <button type="button" class="btn-sm-crm" onclick="crmCfgCfAdd()">＋ Feld</button></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmCfgCatSave(${jsq(key)})">Speichern</button></div>`);
+}
+function _cfgCfRow(f){
+  f=f||{key:'',label:'',type:'text'};
+  const opts=FIELD_TYPES.map(t=>`<option value="${esc(t.key)}"${(f.type||'text')===t.key?' selected':''}>${esc(t.label)}</option>`).join('');
+  return `<div class="cfg-cf-row" data-key="${esc(f.key||'')}" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+    <input class="cfg-cf-label" value="${esc(f.label||'')}" placeholder="Bezeichnung, z. B. Antragsfrist" style="flex:2;min-width:150px">
+    <select class="cfg-cf-type" style="flex:1;min-width:120px">${opts}</select>
+    <button type="button" class="btn-sm-crm" title="Nach oben" onclick="crmCfgCfMove(this,-1)">↑</button>
+    <button type="button" class="btn-sm-crm" title="Nach unten" onclick="crmCfgCfMove(this,1)">↓</button>
+    <button type="button" class="crm-x" title="Feld entfernen (eingetragene Werte bleiben gespeichert)" onclick="this.closest('.cfg-cf-row').remove()">✕</button>
+  </div>`;
+}
+function crmCfgCfAdd(){ const w=document.getElementById('cfg-cf-rows'); if(!w) return; w.insertAdjacentHTML('beforeend', _cfgCfRow(null)); const ins=w.querySelectorAll('.cfg-cf-label'); if(ins.length) ins[ins.length-1].focus(); }
+function crmCfgCfMove(btn, dir){ const r=btn.closest('.cfg-cf-row'); if(!r) return; if(dir<0 && r.previousElementSibling) r.parentNode.insertBefore(r, r.previousElementSibling); else if(dir>0 && r.nextElementSibling) r.parentNode.insertBefore(r.nextElementSibling, r); }
+function _cfgCfRead(){
+  const out=[], taken=[];
+  document.querySelectorAll('#cfg-cf-rows .cfg-cf-row').forEach(r=>{
+    const label=(r.querySelector('.cfg-cf-label').value||'').trim(); if(!label) return;
+    const type=r.querySelector('.cfg-cf-type').value||'text';
+    let key=r.dataset.key||''; if(!key || taken.includes(key)) key=_slug(label, taken);
+    taken.push(key); out.push({ key, label, type });
+  });
+  return out;
 }
 function crmCfgCatSave(origKey){
   const label=val('cfg-cat-label'); if(!label){ toast('Bitte eine Bezeichnung eingeben.','err'); return; }
   const color=val('cfg-cat-color')||'';
   const stats=!!(document.getElementById('cfg-cat-stats')&&document.getElementById('cfg-cat-stats').checked);
+  const fields=_cfgCfRead();
   const work=_cfgWork();
   let key=origKey;
-  if(origKey){ const c=work.categories.find(x=>x.key===origKey); if(c){ c.label=label; c.color=color; c.stats=stats; } }
-  else { key=_slug(label, work.categories.map(c=>c.key).concat(work.trees.map(t=>t.key))); work.categories.push({ key, label, color, stats }); }
+  if(origKey){ const c=work.categories.find(x=>x.key===origKey); if(c){ c.label=label; c.color=color; c.stats=stats; c.fields=fields; } }
+  else { key=_slug(label, work.categories.map(c=>c.key).concat(work.trees.map(t=>t.key))); work.categories.push({ key, label, color, stats, fields }); }
   // Kategorie = Speicherpfad: einen Baum mit gleichem Schlüssel sicherstellen, damit neue
   // Kontakte dieser Kategorie dort abgelegt werden. Bestehende Daten bleiben unberührt.
   if(key && !work.trees.some(t=>t.key===key)) work.trees.push({ key, label, icon:'🏷️', single:label });
@@ -6212,7 +6268,7 @@ function allContactRows(){
   const rows=[];
   getTrees().forEach(t=>{ listEntities(t.key).forEach(e=>{
     (e.kontakte||[]).forEach(k=>{
-      rows.push({ baum:t.label, eintrag:(e.stamm&&e.stamm.name)||'',
+      rows.push({ baum:t.label, kategorien:_entCatLabels(e).join(', '), eintrag:(e.stamm&&e.stamm.name)||'',
         name:k.name||'', funktion:k.funktion||'', email:kEmails(k).join('; '), tel:kTels(k).join('; '), adresse:k.adresse||'', note:k.note||'' });
     });
   }); });
@@ -6240,7 +6296,7 @@ function ieSheetName(key){ return String(key).replace(/[\[\]\:\*\?\/\\]/g,'_').s
 // Tabellenblatt-Inhalt (Kopf + Zeilen) je Datenart bauen
 function ieBuildRows(c){
   if(c.type==='kontakte'){
-    return { header:['baum','eintrag','name','funktion','email','tel','note'], rows:allContactRows() };
+    return { header:['baum','kategorien','eintrag','name','funktion','email','tel','note'], rows:allContactRows() };
   }
   if(c.type==='entity'){
     const fields=stammFields(c.key).map(f=>f.key);
@@ -6489,7 +6545,7 @@ Object.assign(window, {
   crmIeSelectAll, crmExportXlsx, crmImportXlsx, crmCheckLogins, crmRepairLogins, crmMigrateUmlautIds,
   // CRM-Konfiguration (Bäume & Felder)
   crmCfgTreeEdit, crmCfgTreeSave, crmCfgTreeMove, crmCfgTreeDel,
-  crmCfgCatEdit, crmCfgCatSave, crmCfgCatMove, crmCfgCatDel,
+  crmCfgCatEdit, crmCfgCatSave, crmCfgCatMove, crmCfgCatDel, crmCfgCfAdd, crmCfgCfMove,
   crmCfgFieldTree, crmCfgFieldOverride, crmCfgFieldReset,
   crmCfgFieldEdit, crmCfgFieldSave, crmCfgFieldMove, crmCfgFieldDel,
   crmCfgFuncsSave, crmCfgCardTree, crmCfgCardToggle, crmCfgAiSave, crmCleanNote, crmQuickRenameField, crmQuickRenameFunktion,
