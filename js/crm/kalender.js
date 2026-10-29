@@ -30,7 +30,7 @@ const MON_ABBR=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','No
 const overlap=(a1,b1,a2,b2)=>a1<=b2&&a2<=b1;   // ISO-Strings vergleichbar (YYYY-MM-DD)
 // Events, die sich datumsmäßig überlappen, auf getrennte Spuren (Lanes) verteilen → Stapeln.
 // Setzt e._lane und liefert die Anzahl belegter Spuren.
-function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von).localeCompare(String(b.von))).forEach(e=>{ let L=0; while(lanes[L]&&lanes[L].some(x=>overlap(x.von,x.bis,e.von,e.bis))) L++; if(!lanes[L]) lanes[L]=[]; lanes[L].push(e); e._lane=L; }); return lanes.length; }
+function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von).localeCompare(String(b.von))||((a.emp?0:1)-(b.emp?0:1))).forEach(e=>{ let L=0; while(lanes[L]&&lanes[L].some(x=>overlap(x.von,x.bis,e.von,e.bis))) L++; if(!lanes[L]) lanes[L]=[]; lanes[L].push(e); e._lane=L; }); return lanes.length; }
 
 // ── Abwesenheits-Typen ──
 // Krankheit (AU) wird im Kalender BEWUSST NICHT gezeigt (sensibel, für alle sichtbar).
@@ -364,10 +364,11 @@ function _dayGrid(days){
       const myAbs=abs.filter(a=>a.emp===u.id);
       // Kopien: die Spur (_lane) gilt je Person, die Objekte werden auch fürs Band oben benutzt
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0).map(it=>Object.assign({},it));
-      const absLanes=myAbs.length?_laneAssign(myAbs):0;
-      const asgLanes=myAsg.length?_laneAssign(myAsg):0;   // mehrere Termine am selben Tag → untereinander
-      myAsg.forEach(it=>{ it._alone=!myAsg.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
-      const aRows=Math.max(absLanes,asgLanes,1);
+      // Abwesenheiten zuerst sortiert (stehen bei Überschneidung oben), dann Termine – gemeinsame Spuren
+      const comb=myAbs.concat(myAsg);
+      const asgLanes=comb.length?_laneAssign(comb):0, absLanes=asgLanes;
+      comb.forEach(it=>{ it._alone=!comb.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
+      const aRows=Math.max(asgLanes,1);
       const rowTot=Math.max(42, aRows*20);                // ab 3 Spuren wird die Zeile höher (mind. 20 px je Spur)
       const laneH=(rowTot/aRows).toFixed(2);
       const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
@@ -375,7 +376,7 @@ function _dayGrid(days){
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
       myAsg.forEach(it=>{ h+=asgBar(it, myAbs, asgLanes); });   // heller Balken zuerst – Abwesenheit liegt darüber
-      myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(absLanes<=1?'1 / -1':(a._lane+1))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
+      myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+((absLanes<=1||a._alone)?'1 / -1':((a._lane+1)+' / span 1'))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
       h+='</div>';
     });
   });
@@ -412,7 +413,7 @@ function _yearGrid(months, title){
     return '<div class="kal-ev-mark'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+(3+it._lane*mH)+'px;height:'+(mH-3)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>';
   };
   // benannte Abwesenheit auf der Personenzeile
-  const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
+  const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(a._alone?3:(3+a._lane*segH))+'px;height:'+(a._alone?36:(segH-2))+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
   const asgMark=(it,rowH,rowAbs,lanes)=>{ const isVa=it.typ==='va'; const col=_col(it); const w=spanPct(it.von,it.bis);
     const L=it._alone?1:Math.max(lanes||1,1), segH=(rowH-6)/L, topPx=3+(L>1?it._lane*segH:0), hPx=(L>1?segH-1:rowH-6);
@@ -442,12 +443,12 @@ function _yearGrid(months, title){
     emps.filter(u=>_teamOf(u)===t).forEach(u=>{
       const myAbs=abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis));
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0&&inYear(it.von,it.bis)).map(it=>Object.assign({},it));
-      const yAsgL=myAsg.length?_laneAssign(myAsg):0;
-      myAsg.forEach(it=>{ it._alone=!myAsg.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
-      const absLanes=myAbs.length?_laneAssign(myAbs):0;
-      const aL=Math.max(absLanes,1);
+      const combY=myAbs.concat(myAsg);
+      const yAsgL=combY.length?_laneAssign(combY):0;
+      combY.forEach(it=>{ it._alone=!combY.some(o=>o!==it && overlap(o.von,o.bis,it.von,it.bis)); });
+      const aL=Math.max(yAsgL,1);
       const rowH=42;                 // alle Zeilen gleich hoch
-      const segH=(rowH-6)/aL;        // Abwesenheits-Spuren teilen sich die Höhe
+      const segH=(rowH-6)/aL;        // Spuren (Abwesenheit + Termine) teilen sich die Höhe
       const isMe=u.id===myId;
       h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
