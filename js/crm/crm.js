@@ -237,6 +237,33 @@ function _catStats(c){ return !!(c && (c.stats===true || (c.stats==null && c.key
 function _entityHasStatsCat(e){ try{ const cats=_catsOf(e, window._crmTree); return getCategories().some(c=>_catStats(c)&&cats.includes(c.key)); }catch(err){ return false; } }
 // Alle Einträge ALLER Bäume zusammengeführt (einheitliche Kontakte-Ansicht), je mit
 // ihrem Speicher-Baum getaggt (e.tree wird abgesichert, falls Altdaten es nicht haben).
+// ── Pflichtfelder (v504): Eintrag = Name + (E-Mail oder Telefon) + (Ort/Sitz oder Adresse);
+// Person = Name + (E-Mail oder Telefon). Felder, die ein Bereich gar nicht hat, werden nicht verlangt.
+// Bestehende Einträge werden nicht gesperrt, sondern als „unvollständig" markiert.
+function _entMissing(e){
+  const s=(e&&e.stamm)||{}, keys=stammFields(e&&e.tree||window._crmTree).map(f=>f.key), miss=[];
+  const has=k=>String(s[k]||'').trim()!=='';
+  if(!has('name')) miss.push('Name');
+  const kHasCon=(e&&e.kontakte||[]).some(k=>kEmails(k).length||kTels(k).length);
+  if((keys.includes('email')||keys.includes('tel')) && !has('email') && !has('tel') && !kHasCon) miss.push('E-Mail oder Telefon');
+  if((keys.includes('sitz')||keys.includes('adresse')) && !has('sitz') && !has('adresse')) miss.push('Ort/Sitz oder Adresse');
+  return miss;
+}
+function _memMissing(k){ const m=[]; if(!String(k&&k.name||'').trim()) m.push('Name'); if(!kEmails(k).length && !kTels(k).length) m.push('E-Mail oder Telefon'); return m; }
+function _incompleteChip(miss){ return miss.length?`<span class="crm-chip warn" title="${esc('Es fehlt: '+miss.join(', '))}">⚠ unvollständig</span>`:''; }
+function _dupNorm(n){ return String(n||'').toLowerCase().replace(/\be\.?\s?v\.?(?=\s|$)/g,' ').replace(/[^a-z0-9äöüß]+/g,''); }
+function _findDuplicates(stamm, skipId){
+  const n=_dupNorm(stamm.name), mail=String(stamm.email||'').toLowerCase().trim(), out=[];
+  allEntitiesWithTree().forEach(e=>{
+    if(e.id===skipId) return;
+    const s=e.stamm||{}, en=_dupNorm(s.name);
+    const nameHit = n.length>=4 && en.length>=4 && (en===n || en.includes(n) || n.includes(en));
+    const mails=[s.email, ...(e.kontakte||[]).flatMap(kEmails)].map(x=>String(x||'').toLowerCase().trim()).filter(Boolean);
+    const mailHit = !!mail && mails.includes(mail);
+    if(nameHit||mailHit) out.push(e);
+  });
+  return out;
+}
 function allEntitiesWithTree(){
   const out=[];
   try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ if(!e.tree) e.tree=tr.key; out.push(e); })); }catch(err){}
@@ -1355,7 +1382,7 @@ function paintList(){
     return `<div class="crm-card" onclick="crmGoEntry(${jsq(tk)},${jsq(e.id)})">
       <h3>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, tk)}</h3>
       ${sub?`<div class="sub">${esc(sub)}</div>`:''}
-      <div class="meta">${meta}</div>
+      <div class="meta">${meta}${_incompleteChip(_entMissing(e))}</div>
     </div>`;
   }).join('');
   root.innerHTML = barHtml() + `<div class="crm-body">
@@ -1806,7 +1833,8 @@ function paintDetail(){
   const kCards=(e.kontakte||[]).map(k=>`
     <div class="crm-card crm-kontakt" onclick="crmMemberDetail(${jsq(k.id)})">
       <h3>👤 ${esc(k.name||'(Kontakt)')}</h3>
-      ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:''}
+      ${k.funktion?`<div class="sub">${esc(k.funktion)}</div>`:`<div class="sub" style="color:var(--muted);font-style:italic">Funktion fehlt</div>`}
+      ${_memMissing(k).length?`<div class="meta">${_incompleteChip(_memMissing(k))}</div>`:''}
       ${k.adresse?`<div class="sub" style="white-space:pre-line">📍 ${esc(k.adresse)}</div>`:''}
       ${(kEmails(k).length||kTels(k).length)?`<div class="meta" onclick="event.stopPropagation()">
         ${kEmails(k).map(em=>`<a href="${mailHref(em)}" class="crm-chip">✉️ ${esc(em)}</a>`).join('')}
@@ -1908,7 +1936,7 @@ function paintDetail(){
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToList()">← ${crmCanView()?'Kontakte':'Meine Aufgaben'}</button>
-      <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)}</h2>
+      <h2>${esc(s.name||'(ohne Name)')}${_kuerzelSuffix(e, window._crmTree)} ${_incompleteChip(_entMissing(e))}</h2>
       ${(crmFull()||crmRestricted())?`<button class="btn-sm-crm" onclick="crmEditStamm()">✎ Stammdaten</button>`:''}
       ${crmFull()?`<button class="btn-sm-crm danger" onclick="crmDeleteEntity()">Löschen</button>`:''}
     </div>
@@ -2173,8 +2201,13 @@ function stammFormHtml(s, flbls){
       inp = `<input id="crm-sf-${esc(f.key)}" value="${v}">`;
     }
     const flabel=flbls[f.key]||f.label;
-    return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${f.required?' *':''}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
-  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
+    const keys=stammFields(window._crmTree).map(x=>x.key);
+    const reqHint = f.key==='name' ? ' *'
+      : (f.key==='email'||f.key==='tel') ? (keys.includes('email')&&keys.includes('tel')?(f.key==='email'?' * (oder Telefon)':' * (oder E-Mail)'):' *')
+      : (f.key==='sitz'||f.key==='adresse') ? (keys.includes('sitz')&&keys.includes('adresse')?(f.key==='sitz'?' * (oder Adresse)':' * (oder Ort/Sitz)'):' *')
+      : (f.required?' *':'');
+    return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${esc(reqHint)}${f.hint?` (${esc(f.hint)})`:''}</label>${inp}</div>`;
+  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">* Pflichtangaben. 💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
 }
 // Schlagwort-Vorschläge (Token nach letztem Komma gegen vorhandene Tags)
 function crmTagSuggest(inp){
@@ -2236,11 +2269,24 @@ function crmSaveStamm(isNew){
   const stamm={};
   stammFields(window._crmTree).forEach(f=>{ stamm[f.key]=val('crm-sf-'+f.key); });
   if(!stamm.name){ toast('Bitte einen Namen eingeben.','err'); return; }
+  {
+    const fk=stammFields(window._crmTree).map(f=>f.key);
+    const ce=isNew?null:curEntity();
+    const kHasCon=ce&&(ce.kontakte||[]).some(k=>kEmails(k).length||kTels(k).length);
+    if((fk.includes('email')||fk.includes('tel')) && !stamm.email && !stamm.tel && !kHasCon){ toast('Bitte eine E-Mail-Adresse oder Telefonnummer eingeben.','err'); return; }
+    if((fk.includes('sitz')||fk.includes('adresse')) && !stamm.sitz && !stamm.adresse){ toast('Bitte Ort/Sitz oder Adresse eingeben.','err'); return; }
+  }
   // Kategorie(n) + Status aus den Häkchen im Formular. Kategorie ist PFLICHT (eindeutige Ablage).
   const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
   if(!cats.length){ toast('Bitte mindestens eine Kategorie wählen.','err'); return; }
   const statuses=CRM_STATUS.map(s=>s.key).filter(k=>{ const el=document.getElementById('crm-st-'+k); return el&&el.checked; });
   if(isNew){
+    // Dubletten-Warnung: ähnlicher Name oder gleiche E-Mail schon im CRM
+    const dups=_findDuplicates(stamm, '');
+    if(dups.length){
+      const list=dups.slice(0,5).map(d=>{ const s=d.stamm||{}; return '• '+(s.name||'(ohne Name)')+((s.sitz||s.adresse)?', '+(s.sitz||String(s.adresse).split('\n')[0]):''); }).join('\n');
+      if(!confirm('Gibt es vielleicht schon:\n'+list+(dups.length>5?'\n…':'')+'\n\nTrotzdem neu anlegen?')) return;
+    }
     // Speicher-Baum = Pfad der ERSTEN gewählten Kategorie (Kategorie = Ablageort).
     const treeKeys=getTrees().map(t=>t.key);
     const tree = cats.find(k=>treeKeys.includes(k)) || (treeKeys.includes(window._crmTree)?window._crmTree:treeKeys[0]);
@@ -2420,11 +2466,11 @@ function memberFormHtml(k){
      <div class="small" style="color:var(--muted);margin-top:3px">Wirkt nur mit hinterlegter E-Mail.</div></div>` : '';
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
-   <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
-   <div class="crm-modal-field"><label>E-Mail-Adressen</label>
+   <div class="crm-modal-field"><label>Funktion im Verein <span style="font-size:11px;color:var(--muted)">(empfohlen – wichtig für Verteiler)</span></label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
+   <div class="crm-modal-field"><label>E-Mail-Adressen * <span style="font-size:11px;color:var(--muted)">(E-Mail oder Telefon)</span></label>
      <div id="crm-mf-emails">${(emails.length?emails:['']).map(v=>_mfRow('email',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('email')">＋ E-Mail</button></div>
-   <div class="crm-modal-field"><label>Telefonnummern</label>
+   <div class="crm-modal-field"><label>Telefonnummern * <span style="font-size:11px;color:var(--muted)">(E-Mail oder Telefon)</span></label>
      <div id="crm-mf-tels">${(tels.length?tels:['']).map(v=>_mfRow('tel',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
    <div class="crm-modal-field"><label>Adresse</label><textarea id="crm-mf-adresse" rows="2" placeholder="Straße, PLZ Ort">${esc(k.adresse||'')}</textarea></div>
@@ -2449,6 +2495,8 @@ function crmSaveMember(mid){
   const name=val('crm-mf-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const emails=Array.from(document.querySelectorAll('.crm-mf-email')).map(x=>x.value.trim()).filter(Boolean);
   const tels=Array.from(document.querySelectorAll('.crm-mf-tel')).map(x=>x.value.trim()).filter(Boolean);
+  if(!emails.length && !tels.length){ toast('Bitte eine E-Mail-Adresse oder Telefonnummer eingeben.','err'); return; }
+  if(!val('crm-mf-fn') && !confirm('Es ist keine Funktion gewählt (z. B. Vorstand, Trainer:in).\nDie Funktion hilft später beim Filtern für Verteiler.\n\nTrotzdem ohne Funktion speichern?')) return;
   const rec={ name, funktion:val('crm-mf-fn'), emails, tels, adresse:val('crm-mf-adresse'), note:val('crm-mf-note') };
   // Verteiler-Auswahl AUS DEM DOM lesen, BEVOR das Modal geschlossen wird (primäre = erste E-Mail)
   const email=String(emails[0]||'').trim();
