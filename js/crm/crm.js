@@ -568,12 +568,7 @@ function injectStyles(){
   .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
   .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:11px;font-weight:400}
-  /* Seitenleiste (Termin/Veranstaltung): fest rechts, kein Abdunkeln, Seite rückt zur Seite */
-  #modal-bg.modal-side{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;justify-content:flex-end;align-items:stretch;padding:0;overflow:visible}
-  #modal-bg.modal-side .modal{pointer-events:auto;width:min(540px,100vw);max-width:none;height:100vh;max-height:100vh;margin:0;border-radius:0;box-shadow:-10px 0 30px rgba(20,30,55,.22);border-left:1px solid var(--border);overflow-y:auto;animation:crmSideIn .2s ease;padding-bottom:calc(90px + env(safe-area-inset-bottom))}
-  @keyframes crmSideIn{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
-  @media(min-width:901px){ body.has-side #app{padding-right:540px;box-sizing:border-box;transition:padding-right .2s} }
-  @media(max-width:900px){ #modal-bg.modal-side .modal{width:100vw} }
+  /* Seitenleiste: seit v502 global in css/styles.css (gilt für alle Fenster) */
   .crm-farben{display:flex;flex-wrap:wrap;gap:6px}
   .crm-farben label{cursor:pointer;display:inline-flex}
   .crm-farben input{position:absolute;opacity:0;width:1px;height:1px}
@@ -3638,7 +3633,7 @@ function foerderungenSecHtml(e){
   const list=(e.foerderungen||[]).slice().sort((a,b)=>(_foerderJahr(b)||0)-(_foerderJahr(a)||0));
   const rows=list.map(f=>`<tr>
       <td style="white-space:nowrap">${_foerderJahr(f)||'–'}</td>
-      <td>${esc(f.was||'')}</td>
+      <td style="white-space:pre-line">${esc(f.was||'')}</td>
       <td style="white-space:nowrap">${canEdit?`<button class="crm-x" title="Bearbeiten" onclick="crmEditFoerderung(${jsq(f.id)})">✎</button> <button class="crm-x" title="Löschen" onclick="crmDeleteFoerderung(${jsq(f.id)})">✕</button>`:''}</td>
     </tr>`).join('');
   return `<div class="crm-sec">
@@ -3654,7 +3649,7 @@ function crmFoerderModal(f){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${isEdit?'✎ Förderung bearbeiten':'＋ Förderung'}</h3>
    <input type="hidden" id="crm-foerder-id" value="${isEdit?esc(f.id):''}">
    <div class="crm-modal-field" style="max-width:180px"><label>Jahr der Förderung</label><input id="crm-foerder-jahr" type="number" min="1990" max="2100" step="1" inputmode="numeric" value="${esc(String(jahr))}"></div>
-   <div class="crm-modal-field"><label>Was wurde gefördert?</label><input id="crm-foerder-was" type="text" value="${isEdit?esc(f.was||''):''}" placeholder="z. B. Vereinsheim-Sanierung, Inklusionsboot, Landesprogramm …"></div>
+   <div class="crm-modal-field"><label>Was wurde gefördert?</label><textarea id="crm-foerder-was" class="crm-ta" rows="6" placeholder="z. B. Vereinsheim-Sanierung, Inklusionsboot, Landesprogramm – gern auch ausführlicher …">${isEdit?esc(f.was||''):''}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveFoerderung()">Speichern</button></div>`);
 }

@@ -109,14 +109,18 @@ export function fmtTs(iso){
 }
 
 // ── UI helpers ───────────────────────────────────────────────────
+// Alle Fenster als Seitenleiste von rechts (v502, User 29.10.2026): einheitlich, die Seite rückt zur Seite,
+// Schließen nur über die Knöpfe im Fenster oder das ✕ oben rechts – nie versehentlich per Klick daneben.
 export function openModal(html,wide=false){
   const m=document.getElementById('modal-body');
-  m.innerHTML=html;
+  m.innerHTML='<button type="button" class="modal-x" aria-label="Schließen" title="Schließen" onclick="window._crmModalOpen?(window.crmCloseModal?crmCloseModal():closeModal()):closeModal()">✕</button>'+html;
   m.classList.toggle('modal-wide',!!wide);
-  const bg=document.getElementById('modal-bg'); bg.classList.remove('modal-side'); document.body.classList.remove('has-side');   // Seitenleiste setzt der Aufrufer danach
+  const bg=document.getElementById('modal-bg'); bg.classList.add('modal-side');
+  document.body.classList.add('has-side'); document.body.classList.toggle('side-wide',!!wide);
+  m.scrollTop=0;
   bg.classList.add('show');
 }
-export function closeModal(){ const bg=document.getElementById('modal-bg'); bg.classList.remove('show','modal-side'); document.body.classList.remove('has-side'); }
+export function closeModal(){ const bg=document.getElementById('modal-bg'); bg.classList.remove('show','modal-side'); document.body.classList.remove('has-side','side-wide'); }
 export function initModalClose(){
   // Schließen per Klick auf den Hintergrund NUR, wenn auch der Mausklick dort begann (v494): Text markieren und
   // außerhalb loslassen schloss sonst das Fenster samt Eingaben. Seitenleisten (modal-side) schließen nie so.
