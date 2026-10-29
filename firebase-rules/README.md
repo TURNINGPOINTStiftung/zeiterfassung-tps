@@ -202,7 +202,7 @@ Rückweg: CANDIDATE-v10.json.
 Text mit `uploaderUid`, Löschen nur Admin oder Hochladende. Im Testprojekt nicht prüfbar (Storage braucht dort den
 Blaze-Tarif) → Syntax beim Veröffentlichen in der Konsole; Rückweg: vorherigen Stand aus der Konsolen-Historie.
 
-## Stand 2026-10-29: CANDIDATE-v12.json (noch NICHT live) – feine Rechte (App v510/v511)
+## Stand 2026-10-29: CANDIDATE-v12.json ist LIVE – feine Rechte (App v510/v511, tpsPw rev tpspw-00017) – veröffentlicht von Moritz per Cloud Shell, Live-Text = Datei (54.256 Zeichen, identisch), Bedienung getestet
 = v11 + Schreibrechte je Datensatz nach Server-Freigaben `grants/r_*` (berechnet aus den Einzelrechten, App `js/rechte.js`
 SERVER_GRANTS bzw. tpsPw `fineGrants` – identisch, Vergleich über 34.720 Kombinationen ohne Abweichung):
 - `crm/$coll/$id` (Kontakte): anlegen `r_crm_anlegen` oder `r_me_uebertragen` (Messe-Übertrag); ändern `r_crm_bearbeiten`
