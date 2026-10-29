@@ -8,6 +8,8 @@
 // ══════════════════════════════════════════════════════════════════
 import { getData } from '../data.js';
 import { listVeranstaltungen, getCrm } from './crm-data.js';
+import { PW_FUNCTION_URL } from '../config.js';
+import { openModal, closeModal, toast } from '../utils.js';
 const _RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -691,6 +693,7 @@ export function renderKalender(){
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
+        <button class="kal-sel" style="cursor:pointer" onclick="kalAboOpen()" title="Eigene Termine in Outlook, Google oder am Handy anzeigen">📲 In Outlook / Handy</button>
         <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend"${V==='liste'||V==='konflikt'?' style="display:none"':''}>
@@ -719,4 +722,40 @@ function kalNav(dir){
   else if(V==='jahr'){ curY+=dir; }
   renderKalender();
 }
+// ── Kalender-Abo (v499): eigener, geheimer Link → Outlook/Google/iPhone abonnieren die eigenen Termine ──
+async function _aboFn(op){
+  const me=window.firebase&&firebase.auth&&firebase.auth().currentUser; if(!me) throw new Error('auth');
+  const r=await fetch(PW_FUNCTION_URL,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+await me.getIdToken()}, body:JSON.stringify({ action:'icsToken', op }) });
+  const j=await r.json().catch(()=>({})); if(!r.ok||!j.ok) throw new Error(j.error||('HTTP '+r.status)); return j.token||'';
+}
+function _aboUrl(t){ return String(PW_FUNCTION_URL).replace(/\/$/,'')+'/kalender/'+t+'.ics'; }
+function _aboHtml(token, err){
+  const head='<h3 style="margin:0 0 10px">📲 Meine Termine in Outlook / am Handy</h3>'
+    +'<p style="font-size:13px;color:var(--muted);margin:0 0 12px">Ein persönlicher Abo-Link zeigt alle CRM-Termine und Veranstaltungen, denen Sie zugewiesen sind, in Ihrem Kalender – neue und geänderte kommen automatisch dazu (Outlook aktualisiert alle paar Stunden). Nur in eine Richtung: Änderungen bitte in der App vornehmen.</p>';
+  if(err) return head+'<div style="color:var(--danger);font-size:13px;margin-bottom:12px">'+esc(err)+'</div><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>';
+  if(!token) return head+'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="kalAboNew(false)">Abo-Link erstellen</button></div>';
+  const url=_aboUrl(token), web=url.replace(/^https:/,'webcal:');
+  return head+'<label style="font-size:12px;font-weight:700">Ihr Abo-Link <span style="font-weight:400;color:var(--muted)">(geheim halten)</span></label>'
+    +'<div style="display:flex;gap:6px;margin:4px 0 10px"><input id="kal-abo-url" readonly value="'+esc(url)+'" style="flex:1;min-width:0;font-size:12px" onclick="this.select()">'
+    +'<button class="btn btn-primary btn-sm" onclick="kalAboCopy()">📋 Kopieren</button></div>'
+    +'<details open style="font-size:13px;margin-bottom:10px"><summary style="cursor:pointer;font-weight:700">So abonnieren</summary><ul style="margin:6px 0 0 18px;padding:0;line-height:1.55">'
+    +'<li><b>Outlook (Web / neues Outlook):</b> Kalender → „Kalender hinzufügen“ → „Aus dem Internet abonnieren“ → Link einfügen → Name z. B. „TPS“.</li>'
+    +'<li><b>Outlook (klassisch, Windows):</b> Kalender → „Kalender öffnen“/„Kalender hinzufügen“ → „Aus dem Internet …“ → Link einfügen.</li>'
+    +'<li><b>Google Kalender:</b> „Weitere Kalender“ ＋ → „Per URL“ → Link einfügen.</li>'
+    +'<li><b>iPhone/iPad:</b> <a href="'+esc(web)+'">hier antippen</a> oder Einstellungen → Kalender → Accounts → Account hinzufügen → Andere → Kalenderabo.</li>'
+    +'</ul></details>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Wer den Link kennt, sieht Ihre Termine. Bei Verdacht: „Neuen Link erzeugen“ – der alte funktioniert dann nicht mehr (im Kalender neu abonnieren).</div>'
+    +'<div class="modal-btns" style="flex-wrap:wrap"><button class="btn btn-outline" onclick="kalAboDelete()">Abo beenden</button><button class="btn btn-outline" onclick="kalAboNew(true)">🔄 Neuen Link erzeugen</button><button class="btn btn-primary" onclick="closeModal()">Fertig</button></div>';
+}
+function _aboErr(e){ const m=String(e&&e.message||e); return m==='action'?'Das Kalender-Abo ist auf dem Server noch nicht freigeschaltet.':(m==='auth'?'Bitte erneut anmelden.':'Hat nicht geklappt ('+m+'). Bitte später erneut versuchen.'); }
+function kalAboOpen(){ openModal(_aboHtml('', '')); const b=document.querySelector('#modal-body .btn-primary'); if(b){ b.disabled=true; b.textContent='Lädt …'; }
+  _aboFn('get').then(t=>openModal(_aboHtml(t,''))).catch(e=>openModal(_aboHtml('',_aboErr(e)))); }
+function kalAboNew(reset){ if(reset && !confirm('Neuen Link erzeugen? Der bisherige Link funktioniert dann nicht mehr – im Kalender muss neu abonniert werden.')) return;
+  _aboFn('new').then(t=>{ openModal(_aboHtml(t,'')); toast(reset?'Neuer Abo-Link erzeugt ✓':'Abo-Link erstellt ✓','ok'); }).catch(e=>openModal(_aboHtml('',_aboErr(e)))); }
+function kalAboDelete(){ if(!confirm('Kalender-Abo beenden? Der Link funktioniert danach nicht mehr.')) return;
+  _aboFn('delete').then(()=>{ openModal(_aboHtml('','')); toast('Kalender-Abo beendet.','ok'); }).catch(e=>openModal(_aboHtml('',_aboErr(e)))); }
+function kalAboCopy(){ const i=document.getElementById('kal-abo-url'); if(!i) return; i.select();
+  (navigator.clipboard?navigator.clipboard.writeText(i.value):Promise.reject()).then(()=>toast('Link kopiert ✓','ok')).catch(()=>{ try{ document.execCommand('copy'); toast('Link kopiert ✓','ok'); }catch(_){ toast('Bitte den Link markieren und kopieren.','err'); } }); }
+
+Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
 Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });

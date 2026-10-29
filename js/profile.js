@@ -68,6 +68,10 @@ export function openProfileModal(){
       <input type="password" id="prof-pw-new" placeholder="Neues Passwort (mind. 12 Zeichen)" autocomplete="new-password"></div>
     <div class="form-group"><label>Neues Passwort bestätigen</label>
       <input type="password" id="prof-pw-confirm" placeholder="Bestätigung" autocomplete="new-password"></div>
+    ${window.kalAboOpen?`<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+    <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">📲 Meine Termine in Outlook / am Handy</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Persönlicher Abo-Link für Outlook, Google oder iPhone – zeigt automatisch alle Termine, denen Sie zugewiesen sind.</div>
+    <button type="button" class="btn btn-outline" style="width:100%" onclick="kalAboOpen()">📲 Kalender-Abo einrichten</button>`:''}
     ${mfaProfileHtml(cu)}
     ${ownBackupSectionHtml(cu)}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
