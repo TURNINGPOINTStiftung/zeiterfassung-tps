@@ -32,7 +32,7 @@ function _me(){ return (window.cu&&window.cu.id)||''; }
 function _dev(){ try{ let d=localStorage.getItem('tps_messe_dev'); if(!d){ d='d'+Math.random().toString(36).slice(2,8); localStorage.setItem('tps_messe_dev',d); } return d; }catch(e){ return 'd?'; } }
 
 // ── Lokaler Zustand ──
-function _load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return { activeId:s.activeId||'', events:s.events||{}, outbox:Array.isArray(s.outbox)?s.outbox:[] }; }catch(e){} return { activeId:'', events:{}, outbox:[] }; }
+function _load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return { activeId:s.activeId||'', events:s.events||{}, outbox:Array.isArray(s.outbox)?s.outbox:[], kiosk:!!s.kiosk }; }catch(e){} return { activeId:'', events:{}, outbox:[] }; }
 function _save(s){ try{ localStorage.setItem(LS, JSON.stringify(s)); }catch(e){} }
 let L=_load();
 
@@ -209,7 +209,27 @@ function _statusLine(){
 }
 
 // ── Einstiegspunkt (Personal, aus dem ☰-Modulmenü) ──
-function messeStart(){ _ensureOverlay(); _subscribe(); _migrateOld().catch(e=>console.warn('Messe-Übernahme:',e)); _renderPicker(); }
+function messeStart(){ _ensureOverlay(); _subscribe(); _migrateOld().catch(e=>console.warn('Messe-Übernahme:',e)); _renderPicker(); _prepareOffline(); }
+// Offline-fest (v503): beim Start (mit Netz) alle bisher geladenen App-Dateien einmal abrufen, damit der Service
+// Worker sie sicher im Gerätespeicher hat – auf der Messe fehlt dann ohne Netz nichts.
+function _prepareOffline(){
+  try{ if(!navigator.onLine || !('serviceWorker' in navigator)) return;
+    const urls=new Set([location.href.split('#')[0]]);
+    (performance.getEntriesByType('resource')||[]).forEach(e=>{ try{ const u=new URL(e.name); if(u.origin===location.origin || /gstatic\.com\/firebasejs/.test(e.name)) urls.add(e.name); }catch(_){} });
+    ['js/messe.js','css/styles.css','manifest.json'].forEach(p=>{ try{ urls.add(new URL(p, location.href).href); }catch(_){} });
+    urls.forEach(u=>{ fetch(u,{credentials:'same-origin'}).catch(()=>{}); });
+  }catch(e){}
+}
+// Nach Neuladen/Neustart: war das Gerät im Messemodus, sofort wieder das gesperrte Formular zeigen –
+// auch ohne Netz und noch bevor die Anmeldung wiederhergestellt ist (Erfassung läuft in den Ausgang).
+function _resumeKiosk(){
+  try{
+    if(!L.kiosk || !L.activeId || !(L.events&&L.events[L.activeId])) return;
+    _ensureOverlay(); _renderForm();
+    try{ firebase.auth().onAuthStateChanged(u=>{ if(u && _ov()){ _subscribe(); _flush(); } }); }catch(e){}
+  }catch(e){ console.warn('Messe fortsetzen:', e); }
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _resumeKiosk); else setTimeout(_resumeKiosk, 0);
 
 // ── Event-Auswahl / -Verwaltung (Personal) ──
 function _renderPicker(){
@@ -296,6 +316,7 @@ function _renderForm(msg){
   _view='form';
   const o=_ensureOverlay(); const ev=_active();
   if(!ev){ _renderPicker(); return; }
+  if(!L.kiosk){ L.kiosk=true; _save(L); }   // Gerät ist jetzt im Messemodus → nach Neuladen/Neustart direkt wieder hier (v503)
   o.innerHTML=`<div class="me-wrap">
     <div class="me-top">
       <span class="cnt" id="me-formtop">${_formTop(ev)}</span>
@@ -436,9 +457,10 @@ async function messeTransfer(btn){
 function messeEnd(){
   const pend=L.outbox.length;
   if(!window.confirm('Messemodus beenden? Die App kehrt zur normalen Ansicht zurück.'+(pend?`\n\n${pend} Eintrag/Einträge warten noch auf Netz und werden beim nächsten Öffnen des Messemodus mit Netz gesendet.`:''))) return;
+  L.kiosk=false; _save(L);
   _close();
 }
-function messeClose(){ _close(); }
+function messeClose(){ L.kiosk=false; _save(L); _close(); }
 
 export { messeStart };
 // Ausgang auch ohne geöffneten Messemodus nachschicken (nach der Anmeldung, siehe main.js)
