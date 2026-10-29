@@ -266,7 +266,7 @@ function _catStats(c){ return !!(c && (c.stats===true || (c.stats==null && c.key
 function _entityHasStatsCat(e){ try{ const cats=_catsOf(e, window._crmTree); return getCategories().some(c=>_catStats(c)&&cats.includes(c.key)); }catch(err){ return false; } }
 // Alle Einträge ALLER Bäume zusammengeführt (einheitliche Kontakte-Ansicht), je mit
 // ihrem Speicher-Baum getaggt (e.tree wird abgesichert, falls Altdaten es nicht haben).
-// ── Pflichtfelder (v504): Eintrag = Name + (E-Mail oder Telefon) + Adresse (v508: Sitz ist freiwillig);
+// ── Pflichtfelder (v504): Eintrag = Name + (E-Mail oder Telefon) + (Adresse oder Sitz);
 // Person = Name + (E-Mail oder Telefon). Felder, die ein Bereich gar nicht hat, werden nicht verlangt.
 // Bestehende Einträge werden nicht gesperrt, sondern als „unvollständig" markiert.
 function _entMissing(e){
@@ -275,7 +275,7 @@ function _entMissing(e){
   if(!has('name')) miss.push('Name');
   const kHasCon=(e&&e.kontakte||[]).some(k=>kEmails(k).length||kTels(k).length);
   if((keys.includes('email')||keys.includes('tel')) && !has('email') && !has('tel') && !kHasCon) miss.push('E-Mail oder Telefon');
-  if(keys.includes('adresse') && !has('adresse')) miss.push('Adresse');
+  if((keys.includes('sitz')||keys.includes('adresse')) && !has('sitz') && !has('adresse')) miss.push('Adresse oder Sitz');
   return miss;
 }
 function _memMissing(k){ const m=[]; if(!String(k&&k.name||'').trim()) m.push('Name'); if(!kEmails(k).length && !kTels(k).length) m.push('E-Mail oder Telefon'); return m; }
@@ -2237,10 +2237,9 @@ function stammFormHtml(s, flbls){
     const flabel=flbls[f.key]||f.label;
     const keys=stammFields(window._crmTree).map(x=>x.key);
     // Paare (E-Mail/Telefon, Adresse/Sitz): eins genügt – steht nur im Satz unter dem Formular (User: keine Zusätze am Feld)
-    const pairs=keys.includes('email')&&keys.includes('tel');
-    const reqHint = (f.key==='name' || f.key==='adresse' || (!pairs && ['email','tel'].includes(f.key)) || f.required) ? ' *' : '';
+    const reqHint = (['name','email','tel','adresse','sitz'].includes(f.key) || f.required) ? ' *' : '';   // bei den Paaren genügt eins – erklärt der Satz unter dem Formular
     return `<div class="crm-modal-field"${f.key==='tags'?' style="position:relative"':''}><label>${esc(flabel)}${esc(reqHint)}</label>${inp}</div>`;
-  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">Pflicht: Name, Adresse und E-Mail <b>oder</b> Telefon. 💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
+  }).join('') + `<div class="small" style="color:var(--muted);margin-top:2px">Pflicht: Name, Adresse <b>oder</b> Sitz und E-Mail <b>oder</b> Telefon. 💡 Bei Links: „Anzeigename | https://…" eingeben → es wird nur der Name angezeigt (lange URLs werden sonst automatisch auf die Adresse gekürzt).</div>`;
 }
 // Schlagwort-Vorschläge (Token nach letztem Komma gegen vorhandene Tags)
 function crmTagSuggest(inp){
@@ -2310,7 +2309,7 @@ function crmSaveStamm(isNew){
     const ce=isNew?null:curEntity();
     const kHasCon=ce&&(ce.kontakte||[]).some(k=>kEmails(k).length||kTels(k).length);
     if((fk.includes('email')||fk.includes('tel')) && !stamm.email && !stamm.tel && !kHasCon){ toast('Bitte eine E-Mail-Adresse oder Telefonnummer eingeben.','err'); return; }
-    if(fk.includes('adresse') && !stamm.adresse){ toast('Bitte eine Adresse eingeben.','err'); return; }
+    if((fk.includes('sitz')||fk.includes('adresse')) && !stamm.sitz && !stamm.adresse){ toast('Bitte eine Adresse oder einen Sitz eingeben.','err'); return; }
   }
   // Kategorie(n) + Status aus den Häkchen im Formular. Kategorie ist PFLICHT (eindeutige Ablage).
   const cats=getCategories().filter(c=>{ const el=document.getElementById('crm-cat-'+c.key); return el&&el.checked; }).map(c=>c.key);
@@ -2506,10 +2505,10 @@ function memberFormHtml(k){
   return `
    <div class="crm-modal-field"><label>Name *</label><input id="crm-mf-name" value="${esc(k.name||'')}"></div>
    <div class="crm-modal-field"><label>Funktion im Verein</label><select id="crm-mf-fn"><option value="">– keine –</option>${opts}</select></div>
-   <div class="crm-modal-field"><label>E-Mail-Adressen</label>
+   <div class="crm-modal-field"><label>E-Mail-Adressen *</label>
      <div id="crm-mf-emails">${(emails.length?emails:['']).map(v=>_mfRow('email',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('email')">＋ E-Mail</button></div>
-   <div class="crm-modal-field"><label>Telefonnummern</label>
+   <div class="crm-modal-field"><label>Telefonnummern *</label>
      <div id="crm-mf-tels">${(tels.length?tels:['']).map(v=>_mfRow('tel',v)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmMfAddRow('tel')">＋ Telefon</button></div>
    <div class="crm-modal-field"><label>Adresse</label><textarea id="crm-mf-adresse" rows="2" placeholder="Straße, PLZ Ort">${esc(k.adresse||'')}</textarea></div>
