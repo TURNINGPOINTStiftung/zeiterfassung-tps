@@ -202,7 +202,7 @@ Rückweg: CANDIDATE-v10.json.
 Text mit `uploaderUid`, Löschen nur Admin oder Hochladende. Im Testprojekt nicht prüfbar (Storage braucht dort den
 Blaze-Tarif) → Syntax beim Veröffentlichen in der Konsole; Rückweg: vorherigen Stand aus der Konsolen-Historie.
 
-## Stand 2026-10-29: CANDIDATE-v13.json (noch NICHT live) – Vertretungen für Leitung (App v513)
+## Stand 2026-10-29: CANDIDATE-v13.json ist LIVE – Vertretungen für Leitung (App v513, tpsPw rev tpspw-00018) – veröffentlicht von Moritz per Cloud Shell, Live-Text = Datei (54.860 Zeichen, identisch)
 = v12 + `zeiterfassung/vertretungen/$i`: mit `grants/vertretung_verwalten` einzelne Einträge anlegen/ändern, NUR wenn
 `grants/vt_team/<teamKey>/<uid>` = Teamname des Eintrags (vom Admin-Start aus den Teams der Person berechnet); Team eines
 Eintrags nicht änderbar, kein Löschen (Löschen/ganze Liste weiter nur Admin/GF).
