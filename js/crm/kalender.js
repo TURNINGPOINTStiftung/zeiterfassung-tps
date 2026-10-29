@@ -38,6 +38,11 @@ function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von)
 // Seit v472 (User 26.10.2026) auch in Beschriftung/Tooltip nur noch „Abwesend“ – der Grund geht niemanden an.
 const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
 const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
+// Wählbare Farben je Termin/Veranstaltung (v495): [kräftig, hell]. Blau bleibt für „Abwesend“ reserviert.
+const KAL_FARBEN={ rot:['#dc2626','#f2b8b8'], orange:['#d97706','#f0c58a'], gruen:['#16a34a','#bfe5cb'], tuerkis:['#0d9488','#b5e3de'],
+  lila:['#7c3aed','#d9ccfb'], pink:['#db2777','#f6c3da'], braun:['#92400e','#e3c9b4'], grau:['#475569','#cfd6df'] };
+const _col=it=>{ const f=KAL_FARBEN[it&&it.farbe]; return f?f[0]:((it&&it.typ==='va')?'#dc2626':'#d97706'); };
+const _colL=it=>{ const f=KAL_FARBEN[it&&it.farbe]; return f?f[1]:((it&&it.typ==='va')?'#f2b8b8':'#f0c58a'); };
 
 // ── Zustand ──
 let V='monat';                         // woche | monat | jahr | konflikt
@@ -60,13 +65,13 @@ function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{}
     out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay, note:r.note||''}); });
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
-  return vs.filter(v=>v&&v.start).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||'', mitarbeiter:Array.isArray(v.mitarbeiter)?v.mitarbeiter:[]})); }
+  return vs.filter(v=>v&&v.start).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||'', farbe:v.farbe||'', mitarbeiter:Array.isArray(v.mitarbeiter)?v.mitarbeiter:[]})); }
 // CRM-Termine (auf Kontakten: e.termine) einsammeln – über alle Bäume/Einträge.
 function _termine(){ const out=[]; try{
     const crm=getCrm()||{};
     Object.keys(crm).forEach(tk=>{ if(_RESERVED.has(tk)) return; const ents=crm[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; const ts=(e&&e.termine)||[]; if(!Array.isArray(ts)) return;
-        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:t.uhr||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'', tree:tk, eid:eid }); });
+        ts.forEach(t=>{ if(!t||!t.datum) return; out.push({ id:t.id||'', titel:t.titel||'(Termin)', typ:'termin', von:t.datum, bis:t.bis||t.datum, uhr:t.uhr||'', farbe:t.farbe||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], entity:(e.stamm&&e.stamm.name)||'', tree:tk, eid:eid }); });
       });
     });
   }catch(e){}
@@ -201,7 +206,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-dh.we{background:rgba(0,0,0,.16)} .kal-mh{grid-row:1;display:flex;align-items:center;justify-content:center;padding:8px 0;border-right:1px solid rgba(255,255,255,.16);font-size:.88rem;font-weight:700}
   .kal-teamrow{background:var(--surface-2,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec);padding:7px 14px;font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#5d7086);position:sticky;left:0;z-index:2}
   .kal-cell{grid-row:1;border-right:1px solid var(--border,#e6ebf2);min-height:42px;position:relative} .kal-cell.we{background:var(--surface-2,#eef1f5)} .kal-cell.today{background:var(--warn-bg,#fff3e0)}
-  .kal-cell.cf{background:rgba(240,169,46,.14)}
+  /* .kal-cell.cf: früher ganze Tagesspalte eingefärbt – entfernt (v495); Konflikte = Umrandung am Termin */
   .kal-cell.mon{border-left:2px solid rgba(120,140,170,.32)}
   .kal-dh.mon{border-left:2px solid rgba(255,255,255,.32)}
   .kal-kw{font-size:10px;font-weight:700;letter-spacing:.01em;line-height:1;margin-bottom:2px;background:rgba(255,255,255,.2);padding:1px 5px;border-radius:5px}
@@ -322,7 +327,7 @@ function _dayGrid(days){
   const clampCols=(von,bis)=>{ let a=von<isoList[0]?isoList[0]:von, b=bis>isoList[N-1]?isoList[N-1]:bis; const ca=colOf(a), cb=colOf(b); if(ca<0||cb<0) return null; return [ca,cb]; };
   // Benannter Balken oben im Band „Veranstaltungen" (einmal je Eintrag – gilt für alle)
   const namedBar=(it)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706'; const ic=isVa?'📅':'•';
+    const isVa=it.typ==='va'; const col=_col(it); const ic=isVa?'📅':'•';
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
     const c=_clk(it);
     return '<div class="kal-ev'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+(it._lane+1)+';background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+ic+' '+esc(it.titel)+'</div>';
@@ -330,7 +335,7 @@ function _dayGrid(days){
   // Zuweisungs-Balken auf der Personenzeile (Monat/Woche): volle Zeilenhöhe, HELLER Ton, kein Text
   // (Name steht oben im Band). Vom User bewusst hell gewünscht – nur die Jahres-Gesamtübersicht ist voll.
   const asgBar=(it,rowAbs)=>{ const cc=clampCols(it.von,it.bis); if(!cc) return '';
-    const isVa=it.typ==='va'; const col=isVa?'#f2b8b8':'#f0c58a';
+    const isVa=it.typ==='va'; const col=_colL(it);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -396,7 +401,7 @@ function _yearGrid(months, title){
   const mcells=()=>{ let s=''; for(let i=0;i<months.length;i++) s+='<div class="kal-cell" style="grid-column:'+(i+2)+';border-right:1px solid var(--border,#c3cedb)"></div>'; return s; };
   const mH=28;
   // benannter Marker oben im Band „Veranstaltungen"
-  const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706'; const w=spanPct(it.von,it.bis);
+  const namedMark=(it)=>{ const isVa=it.typ==='va'; const col=_col(it); const w=spanPct(it.von,it.bis);
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'');
     const c=_clk(it);
     return '<div class="kal-ev-mark'+c.cls+(it.typ==='termin'?' kal-termin':'')+'" style="left:'+leftPct(it.von)+'%;width:'+w+'%;top:'+(3+it._lane*mH)+'px;height:'+(mH-3)+'px;background:'+col+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅 ':'• ')+esc(it.titel)+'</div>';
@@ -404,7 +409,7 @@ function _yearGrid(months, title){
   // benannte Abwesenheit auf der Personenzeile
   const absMark=(a,nm,segH)=>{ const m=KMETA[a.type]; const w=spanPct(a.von,a.bis); const tip=m.lbl+' · '+nm+' · '+_deDate(a.von)+'–'+_deDate(a.bis); return '<div class="kal-seg-abs" style="left:'+leftPct(a.von)+'%;width:'+w+'%;top:'+(3+a._lane*segH)+'px;height:'+(segH-2)+'px;background:'+m.c+'" data-tip="'+esc(tip)+'">'+(w>2.5?m.lbl:'')+'</div>'; };
   // schmaler Zuweisungs-Marker (nur Farbe, kein Text)
-  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=isVa?'#dc2626':'#d97706'; const w=spanPct(it.von,it.bis);
+  const asgMark=(it,rowH,rowAbs)=>{ const isVa=it.typ==='va'; const col=_col(it); const w=spanPct(it.von,it.bis);
     const cfl=(rowAbs||[]).some(a=>overlap(a.von,a.bis,it.von,it.bis));
     const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'');
     const c=_clk(it);
@@ -482,7 +487,7 @@ function _persItems(){ return _events().concat(_termine()); }
 function _persMine(it){ const myId=(window.cu&&window.cu.id)||''; return (it.mitarbeiter||[]).indexOf(myId)>=0; }
 function _persMyAbs(){ const myId=(window.cu&&window.cu.id)||''; return _abs().filter(a=>a.emp===myId); }
 function _persChip(it){
-  const isVa=it.typ==='va'; const mine=_persMine(it); const base=isVa?'#dc2626':'#d97706'; const c=_clk(it);
+  const isVa=it.typ==='va'; const mine=_persMine(it); const base=_col(it); const c=_clk(it);
   const tip=(isVa?'📅 ':'• ')+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(it.uhr?(' '+it.uhr):'')+(mine?' · dir zugewiesen':'');
   const style='background:'+base+';color:#fff';   // volle Farbe für alle (kein „hell"/Umriss mehr)
   return '<div class="kal-pchip'+c.cls+'" style="'+style+'" data-tip="'+esc(tip)+'"'+c.on+'>'+(isVa?'📅':'•')+' '+esc(it.titel)+(it.uhr?(' '+esc(it.uhr)):'')+'</div>';
@@ -552,8 +557,8 @@ function _persYear(months){
       if(d>_daysInMonth(y,m)){ h+='<div class="kal-py-cell empty"></div>'; continue; }
       const dt=new Date(y,m-1,d,12); const iso=_iso(dt); const dow=_dowMon(dt);
       const segs=[];
-      ITEMS.filter(it=>it.typ==='va'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CVA,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'📅 '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
-      ITEMS.filter(it=>it.typ==='termin'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:CTE,start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'• '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
+      ITEMS.filter(it=>it.typ==='va'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:_col(it),start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'📅 '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
+      ITEMS.filter(it=>it.typ==='termin'&&overlap(it.von,it.bis,iso,iso)).forEach(it=>{ const cl=_clk(it); segs.push({col:_col(it),start:it.von===iso,label:it.titel,cls:cl.cls,on:cl.on,tip:'• '+it.titel+(it.entity?(' · '+it.entity):'')+' · '+_deDate(it.von)+(it.bis!==it.von?('–'+_deDate(it.bis)):'')+(_persMine(it)?' · dir zugewiesen':'')}); });
       MYABS.filter(a=>overlap(a.von,a.bis,iso,iso)).forEach(a=>segs.push({col:CAB,start:a.von===iso,label:KMETA[a.type].lbl,tip:KMETA[a.type].lbl+' · '+_deDate(a.von)+'–'+_deDate(a.bis)}));
       let inner='';
       if(segs.length){ const cols=segs.length===1?'1fr':'1fr 1fr';
@@ -611,7 +616,7 @@ function _agenda(){
       const away=absAll.filter(a=>(it.mitarbeiter||[]).indexOf(a.emp)>=0 && overlap(a.von,a.bis,it.von,it.bis));
       const span=rng(it);
       const meta=[it.uhr, span, it.entity, mine?'dir zugewiesen':''].filter(Boolean).join(' · ');
-      h+='<div class="kal-ag-it'+c.cls+'" style="border-left-color:'+(isVa?'#dc2626':'#d97706')+'"'+c.on+'>'
+      h+='<div class="kal-ag-it'+c.cls+'" style="border-left-color:'+_col(it)+'"'+c.on+'>'
         +'<div class="t">'+(isVa?'📅 ':'')+esc(it.titel)+'</div>'+(meta?'<div class="m">'+esc(meta)+'</div>':'')
         +(away.length?'<div class="cf">⚠ abwesend: '+away.map(a=>esc(empName(a.emp))).join(', ')+'</div>':'')+'</div>';
     });

@@ -574,6 +574,12 @@ function injectStyles(){
   @keyframes crmSideIn{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
   @media(min-width:901px){ body.has-side #app{padding-right:540px;box-sizing:border-box;transition:padding-right .2s} }
   @media(max-width:900px){ #modal-bg.modal-side .modal{width:100vw} }
+  .crm-farben{display:flex;flex-wrap:wrap;gap:6px}
+  .crm-farben label{cursor:pointer;display:inline-flex}
+  .crm-farben input{position:absolute;opacity:0;width:1px;height:1px}
+  .crm-farben span{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#fff;font-size:10px;font-weight:700;border:2px solid transparent;box-shadow:0 0 0 1px var(--border)}
+  .crm-farben input:checked+span{border-color:var(--text);box-shadow:0 0 0 2px var(--surface,#fff),0 0 0 4px var(--primary)}
+  .crm-farben input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
   .vt-imp{margin:4px 0 12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--surface,#fff)}
   .vt-imp>summary{cursor:pointer;font-weight:700;color:var(--primary);font-size:14px}
   .ss-wrap{position:relative;flex:1 1 200px;min-width:160px}
@@ -2716,7 +2722,7 @@ function crmSaveTermin(){
   if(bis && datum && bis<datum) bis=datum;  // Ende nie vor Beginn
   mutateEntity(e=>{
     if(!Array.isArray(e.termine)) e.termine=[];
-    e.termine.push({ id:newId(), titel, datum, bis, uhr:_joinUhr(val('crm-tf-uhrvon'),val('crm-tf-uhrbis')), datumTs:datum?Date.parse(datum):null, ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[], teilnehmer:kontakte.slice(1) });
+    e.termine.push({ id:newId(), titel, datum, bis, uhr:_joinUhr(val('crm-tf-uhrvon'),val('crm-tf-uhrbis')), datumTs:datum?Date.parse(datum):null, farbe:_farbVal('crm-tf'), ort:val('crm-tf-ort'), note:val('crm-tf-note'), mitarbeiter:_canAssignStaff()?readStaffPicker('crm-tf'):[], teilnehmer:kontakte.slice(1) });
     e.termine.sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
   });
   crmCloseModal();
@@ -2747,6 +2753,7 @@ function crmEditTermin(tid){
      <div class="crm-modal-field" style="flex:1;min-width:90px"><label>bis</label><input id="crm-te-uhrbis" type="time" value="${esc(_splitUhr(t.uhr).bis)}"${ro}></div>
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-te-ort" value="${esc(t.ort||'')}"${ro}></div>
+   ${canEdit?_farbPickHtml('crm-te', t.farbe, false):''}
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"${ro}></div>
    ${(canEdit||(t.teilnehmer&&t.teilnehmer.length))?crmKpHtml('crm-te','Weitere beteiligte Kontakte','optional',!canEdit):''}
    ${canAsg
@@ -2766,7 +2773,7 @@ function crmSaveTerminEdit(tid){
     if(datum && datum<localISODate() && (!t0 || t0.datum!==datum) && !confirm('Das Datum '+fmtDate(Date.parse(datum))+' liegt in der Vergangenheit. Trotzdem speichern?\n(„Abbrechen“ zum Korrigieren, z. B. falsches Jahr)')) return; }
   const canAsg=_canAssignStaff();
   mutateEntity(e=>{ const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
-    t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=_joinUhr(val('crm-te-uhrvon'),val('crm-te-uhrbis')); t.datumTs=datum?Date.parse(datum):null; t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
+    t.titel=titel; t.datum=datum; t.bis=bis; t.uhr=_joinUhr(val('crm-te-uhrvon'),val('crm-te-uhrbis')); t.datumTs=datum?Date.parse(datum):null; t.farbe=_farbVal('crm-te'); t.ort=val('crm-te-ort'); t.note=val('crm-te-note');
     t.teilnehmer=readMultiKontakt('crm-te');
     if(canAsg) t.mitarbeiter=readStaffPicker('crm-te');   // sonst bestehende Zuweisung erhalten
     (e.termine||[]).sort((a,b)=>(a.datumTs||0)-(b.datumTs||0));
@@ -4485,6 +4492,13 @@ function crmSpKey(ev,idp){
 function readStaffPicker(idp){ return Array.from(document.querySelectorAll('.'+idp+'-ma:checked')).map(x=>x.value); }
 function crmStaffAll(idp,on){ document.querySelectorAll('.'+idp+'-ma').forEach(cb=>{ cb.checked=!!on; }); }
 // Nur die Veranstaltungs-FELDER (ohne h3/Aktionen) – wiederverwendbar im Einheits-Fenster.
+// Farbe eines Termins/einer Veranstaltung im Kalender (v495) – Schlüssel wie KAL_FARBEN in kalender.js
+const CRM_FARBEN=[['','Standard',''],['rot','Rot','#dc2626'],['orange','Orange','#d97706'],['gruen','Grün','#16a34a'],['tuerkis','Türkis','#0d9488'],['lila','Lila','#7c3aed'],['pink','Pink','#db2777'],['braun','Braun','#92400e'],['grau','Grau','#475569']];
+function _farbPickHtml(idp, sel, isVa){
+  const def=isVa?'#dc2626':'#d97706';
+  return `<div class="crm-modal-field"><label>Farbe im Kalender</label><div class="crm-farben">${CRM_FARBEN.map(([k,l,c])=>`<label title="${esc(l)}"><input type="radio" name="${esc(idp)}-farbe" value="${esc(k)}"${(sel||'')===k?' checked':''}><span style="background:${c||def}">${k?'':'Std.'}</span></label>`).join('')}</div></div>`;
+}
+function _farbVal(idp){ const r=document.querySelector('input[name="'+idp+'-farbe"]:checked'); const v=r?r.value:''; return CRM_FARBEN.some(x=>x[0]===v)?v:''; }
 function _vaFieldsHtml(v){
   v=v||{};
   const uv=_splitUhr(v.uhrzeit);
@@ -4500,6 +4514,7 @@ function _vaFieldsHtml(v){
    <div class="crm-modal-field"><label>Ort / Link</label><input id="crm-va-ort" value="${esc(v.ortOderLink||'')}" placeholder="Adresse oder Meeting-Link"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-va-team">${teamOpts}</select></div>
    ${crmKpHtml('crm-va','Beteiligte CRM-Kontakte','beliebig viele, per Suche')}
+   ${_farbPickHtml('crm-va', v.farbe, true)}
    ${_canAssignStaff()
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
@@ -4519,6 +4534,7 @@ function _terminFieldsHtml(t){
      <div class="crm-modal-field" style="flex:1;min-width:90px"><label>bis</label><input id="crm-tf-uhrbis" type="time" value="${esc(u.bis)}"></div>
    </div>
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort" value="${esc(t.ort||'')}"></div>
+   ${_farbPickHtml('crm-tf', t.farbe, false)}
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note" value="${esc(t.note||'')}"></div>
    ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter||[], 'crm-tf')}</div>`:''}`;
 }
@@ -4599,7 +4615,7 @@ function crmSaveVeranstaltung(isNew){
   const start=val('crm-va-start'); if(!start){ toast('Bitte ein Startdatum wählen.','err'); return; }
   const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:_joinUhr(val('crm-va-uhrvon'),val('crm-va-uhrbis')),
     online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
-    ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'),
+    ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'), farbe:_farbVal('crm-va'),
     teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
   if(_canAssignStaff()) rec.mitarbeiter=readStaffPicker('crm-va');   // sonst bestehende Zuweisung NICHT überschreiben
   if(isNew){
