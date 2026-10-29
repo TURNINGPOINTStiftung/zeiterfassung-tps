@@ -31,6 +31,7 @@ export const DEFAULT_PERMISSIONS = {
   btn_erinnerungen:    ['leitung'],        // „Erinnerungen senden"
   genehmigung_abwesenheit: ['leitung','geschaeftsfuehrer'],
   stempel:             ['mitarbeiter','berater','freiberuflich','leitung'],
+  vertretung_verwalten:['leitung','geschaeftsfuehrer'],   // Vertretungen anlegen/beenden (Leitung: nur eigene Teams; GF/Admin: alle)
   zugriff_verwaltung:  [],   // voller Verwaltungs-Zugriff (wie Admin im Verwaltungs-Modul) – pro Person vergeben
 };
 

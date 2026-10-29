@@ -323,6 +323,7 @@ const PERM_DEFS=[
   {key:'btn_erinnerungen',     label:'Button: „Erinnerungen senden"'},
   {key:'genehmigung_abwesenheit', label:'Funktion: Abwesenheiten genehmigen / ablehnen'},
   {key:'stempel',              label:'Funktion: Zeitstempel nutzen'},
+  {key:'vertretung_verwalten', label:'Funktion: Vertretungen verwalten (Leitung: nur eigene Teams)'},
   {key:'zugriff_verwaltung_crm', label:'📇 CRM-Verwaltung (nur CRM-Einstellungen konfigurieren)'},
 ];
 const PERM_ROLES=[
@@ -881,7 +882,7 @@ function userForm(u={}){
       const modBlock=(key,icon,name,body)=>`<div class="uf-mod"><div class="uf-mod-head"><span class="uf-mod-name">${icon} ${name}</span>${seg(key,st(key))}</div><div class="uf-mod-body" id="ufsub-${key}" style="display:${st(key)==='kein'?'none':''}">${body||'<div style="font-size:12px;color:var(--muted)">Darf diesen Bereich nutzen.</div>'}${(key!=='crm'&&!NOADM.has(key))?`<div id="ufadm-${key}" style="display:${st(key)==='verwaltend'?'':'none'};font-size:12px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${key==='kalender'?'🛠️ Darf Termine und Veranstaltungen anlegen und bearbeiten.':'🛠️ Darf diesen Bereich verwalten (Einstellungen ändern).'}</div>`:''}</div></div>`;
       const vereinDiv=`<div class="form-group" id="uf-crmverein" style="display:${(window.tpsHatNeueRechte&&window.tpsHatNeueRechte(u)) ? ((window.tpsRechteOf(u).crm_ansehen==='verein')?'':'none') : ((st('crm')!=='kein'&&acc.crmLevel==='verein')?'':'none')}"><label style="font-size:12px">Zugeordnete Vereine</label>
           <div style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:120px;overflow-y:auto">${vChecks}</div></div>`;
-      const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen']];
+      const zePerms=[['tab_uebersicht','Mitarbeiterübersicht sehen'],['tab_gfberichte','GF-Berichte sehen'],['btn_teamberichte','„An GF senden" (Monat)'],['btn_jahresbericht','„An GF senden" (Jahr)'],['btn_erinnerungen','Erinnerungen senden'],['genehmigung_abwesenheit','Abwesenheiten genehmigen'],['stempel','Zeitstempel nutzen'],['vertretung_verwalten','Vertretungen verwalten (Leitung: nur eigene Teams)']];
       const zeOn=k=>(u.perms&&Object.prototype.hasOwnProperty.call(u.perms,k))?!!u.perms[k]:(DEFAULT_PERMISSIONS[k]?.includes(u.role||'mitarbeiter')??false);
       // Zeiterfassung ist jetzt ein ECHTES Modul (Kein/Nutzen/Verwaltend) – wie CRM/Kanban.
       // „Kein"  = kein Zeiterfassungs-Zugang (ersetzt das frühere „Nur CRM"-Häkchen).
@@ -1047,7 +1048,7 @@ function collectUserForm(){
     if(zeState==='verwaltend') perms['zugriff_verwaltung_ze']=true;
   }
   // ZE-Feinrechte (Checkboxen im ZE-Block) – nur wirksam, solange ZE genutzt wird.
-  ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel']
+  ['tab_uebersicht','tab_gfberichte','btn_teamberichte','btn_jahresbericht','btn_erinnerungen','genehmigung_abwesenheit','stempel','vertretung_verwalten']
     .forEach(k=>{ const cb=document.getElementById('uf-perm-'+k); if(cb) perms[k]=!!cb.checked; });
   // 2) Weitere Tri-State-Module (Kein/Nutzen/Verwaltend) → Pfad-Sichtbarkeit + Verwalten-Recht
   [['kanban','verw_kanban'],['verteiler','verw_verteiler'],['ki','verw_ki'],['messe','verw_messe'],['auswertung','verw_auswertung'],['kalender','verw_kalender'],['shop','verw_shop'],['anleitung','verw_anleitung']]

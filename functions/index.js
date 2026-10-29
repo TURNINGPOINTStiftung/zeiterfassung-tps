@@ -65,7 +65,7 @@ const mfaRequired = res => res.status(403).json({ ok: false, error: 'mfa-require
 // Rollen-Standardrechte (wie js/config.js DEFAULT_PERMISSIONS) – nur die serverseitig geprüften (grants).
 // Die Rechte-Matrix (zeiterfassung/rolePermissions) hat Vorrang, persönliche Einzelrechte (perms) erst recht.
 const ROLE_DEFAULTS = { tab_gfberichte: ['geschaeftsfuehrer'], btn_teamberichte: [], btn_jahresbericht: ['leitung'],
-  genehmigung_abwesenheit: ['leitung', 'geschaeftsfuehrer'], zugriff_verwaltung: [] };
+  genehmigung_abwesenheit: ['leitung', 'geschaeftsfuehrer'], vertretung_verwalten: ['leitung', 'geschaeftsfuehrer'], zugriff_verwaltung: [] };
 const ALL_ROLES = ['mitarbeiter', 'berater', 'freiberuflich', 'leitung', 'geschaeftsfuehrer'];
 const BASIC_ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
 // Freigabelisten (grants) einer Person aus Rolle + Einzelrechten – gleiche Logik wie admin-setup.js
@@ -144,7 +144,8 @@ async function grantUpdates(authUid, u, opts) {
   const has = k => own(k) ? !!p[k] : (Array.isArray(rp[k]) ? rp[k] : (ROLE_DEFAULTS[k] || [])).includes(u.role);
   const sys = p.zugriff_verwaltung === true;
   const upd = {}; const g = (k, on) => { upd['zeiterfassung/grants/' + k + '/' + authUid] = on ? true : null; };
-  ['tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'genehmigung_abwesenheit'].forEach(k => g(k, has(k)));
+  ['tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'genehmigung_abwesenheit', 'vertretung_verwalten'].forEach(k => g(k, has(k)));
+  // grants/vt_team (Teams je Leitung) rechnet nur der Admin-Start (admin-setup.js) – braucht alle Teams/Personen.
   g('zugriff_verwaltung', sys);
   g('zugriff_verwaltung_plus', sys && p.zugriff_verwaltung_plus === true);
   ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'verw_kanban', 'verw_kalender'].forEach(k => g(k, sys || has(k)));
@@ -419,7 +420,7 @@ exports.tpsPw = async (req, res) => {
       const rec = { id: uid0, name, role };
       FIELDS.forEach(f => { if (inU[f] !== undefined) rec[f] = clean(inU[f]); });
       const PERM_OK = k => k !== 'zugriff_verwaltung' && (/^(path|verw)_[a-z_]{1,30}$/.test(k) || ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'startseite',
-        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel'].includes(k));
+        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel', 'vertretung_verwalten'].includes(k));
       const perms = {};
       Object.keys(inU.perms || {}).forEach(k => { if (PERM_OK(k) && typeof inU.perms[k] === 'boolean') perms[k] = inU.perms[k]; });
       rec.perms = perms;
@@ -482,7 +483,7 @@ exports.tpsPw = async (req, res) => {
       const isPlus = isStaff && (await db.ref('zeiterfassung/grants/zugriff_verwaltung_plus/' + tok.uid).once('value')).val() === true;
       const TARGET_ROLES = (isAdmin || isPlus) ? ALL_ROLES : BASIC_ROLES;
       const PERM_OK = k => k !== 'zugriff_verwaltung' && (/^(path|verw)_[a-z_]{1,30}$/.test(k) || ['zugriff_verwaltung_ze', 'zugriff_verwaltung_crm', 'startseite',
-        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel'].includes(k));
+        'tab_uebersicht', 'tab_gfberichte', 'btn_teamberichte', 'btn_jahresbericht', 'btn_erinnerungen', 'genehmigung_abwesenheit', 'stempel', 'vertretung_verwalten'].includes(k));
       const inPerms = (body.perms && typeof body.perms === 'object') ? body.perms : {};
       const newPerms = {};
       Object.keys(inPerms).forEach(k => { if (PERM_OK(k) && typeof inPerms[k] === 'boolean') newPerms[k] = inPerms[k]; });

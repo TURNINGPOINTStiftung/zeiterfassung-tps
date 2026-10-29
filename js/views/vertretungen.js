@@ -1,5 +1,15 @@
 import { getData, mutate } from '../data.js';
 import { esc, toast, localISODate, jsArg as jsq } from '../utils.js';
+import { hasPermission } from '../roles.js';
+
+// Team → Schlüssel für die Server-Freigabe grants/vt_team/<schlüssel>/<uid> (Umlaute/Sonderzeichen sind in
+// Datenbank-Schlüsseln heikel). GLEICH in js/views/vertretungen.js und js/admin-setup.js.
+const _vtTeamKey = t => String(t||'').replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue').replace(/ß/g,'ss').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,80) || '_';
+// Wer darf was? GF/Admin: alle Teams, auch löschen. Recht „Vertretungen verwalten“ (sonst): nur eigene Teams,
+// anlegen + beenden (Löschen nicht – die Liste würde sonst fremde Einträge verschieben; Regel v13).
+function _vtAll(cu){ return !!(cu && (cu.role==='geschaeftsfuehrer'||cu.role==='admin')); }
+function _vtMayUse(cu){ return _vtAll(cu) || !!(cu && hasPermission('vertretung_verwalten', cu)); }
+function _vtOwnTeams(cu){ return (cu && Array.isArray(cu.teams) && cu.teams.length) ? cu.teams.filter(Boolean) : (cu && cu.team ? [cu.team] : []); }
 
 // Vertretungsregelung (eigener Reiter, nur GF/Admin): Fällt eine Team-Leitung aus, bestimmt die
 // Geschäftsführung/Admin hier befristet eine Vertretung – auch sich selbst. Die Vertretung sieht/
@@ -32,14 +42,16 @@ export function renderVertretungen(){
   const content=document.getElementById('vertretungen-content');
   if(!content) return;
   const cu=window.cu;
-  if(!(cu&&(cu.role==='geschaeftsfuehrer'||cu.role==='admin'))){
-    content.innerHTML='<p style="color:var(--muted);padding:20px 0">Diese Ansicht ist nur für die Geschäftsführung und Administratoren.</p>';
+  if(!_vtMayUse(cu)){
+    content.innerHTML='<p style="color:var(--muted);padding:20px 0">Für Vertretungen fehlt das Recht „Vertretungen verwalten“.</p>';
     return;
   }
   const d=getData();
-  const teams=_allTeams(d);
+  const all=_vtAll(cu), own=_vtOwnTeams(cu);
+  const teams=all ? _allTeams(d) : own;
+  if(!teams.length){ content.innerHTML='<p style="color:var(--muted);padding:20px 0">Dir ist kein Team zugeordnet – Vertretungen legt dann die Geschäftsführung an.</p>'; return; }
   const deputies=(d.users||[]).filter(u=>u.role==='geschaeftsfuehrer'||u.role==='leitung'||u.role==='admin');
-  const vs=(d.vertretungen||[]).slice().sort((a,b)=>String(b.von||'').localeCompare(String(a.von||'')));
+  const vs=(d.vertretungen||[]).filter(v=>all||own.includes(v.team)).slice().sort((a,b)=>String(b.von||'').localeCompare(String(a.von||'')));
 
   const rows=vs.length?vs.map(v=>{
     const act=_vtActive(v);
@@ -47,7 +59,7 @@ export function renderVertretungen(){
     const zeit=_vtDate(v.von)+(v.bis?' – '+_vtDate(v.bis):' – offen');
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap">
       <span>🔄 <strong>${esc(v.team)}</strong> → ${esc(v.deputyName||'')} <span style="color:var(--muted);font-size:12px">(${esc(zeit)})</span> · ${state}</span>
-      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung(${jsq(v.id)})">Beenden</button>`:''}<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung(${jsq(v.id)})">🗑</button></span>
+      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung(${jsq(v.id)})">Beenden</button>`:''}${all?`<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung(${jsq(v.id)})">🗑</button>`:''}</span>
     </div>`;
   }).join(''):'<div style="color:var(--muted);font-size:13px;padding:6px 0">Noch keine Vertretungen angelegt.</div>';
 
@@ -75,15 +87,19 @@ export function addVertretung(){
   if(!team||!deputyId){ toast('Bitte Team und Vertreter:in wählen.','err'); return; }
   if(bis&&von&&bis<von){ toast('Das Bis-Datum liegt vor dem Ab-Datum.','err'); return; }
   const d=getData(); const dep=(d.users||[]).find(u=>u.id===deputyId); const cu=window.cu;
+  if(!_vtMayUse(cu) || (!_vtAll(cu) && !_vtOwnTeams(cu).includes(team))){ toast('Vertretungen nur für das eigene Team.','err'); return; }
   mutate(dd=>{ if(!Array.isArray(dd.vertretungen)) dd.vertretungen=[];
-    dd.vertretungen.push({ id:'vt_'+Date.now()+'_'+Math.floor(Math.random()*1e6), team, deputyId, deputyName:(dep&&dep.name)||'', von:von||localISODate(), bis:bis||'', ended:false, byId:cu&&cu.id, byName:cu&&cu.name, ts:Date.now() }); });
+    dd.vertretungen.push({ id:'vt_'+Date.now()+'_'+Math.floor(Math.random()*1e6), team, teamKey:_vtTeamKey(team), deputyId, deputyName:(dep&&dep.name)||'', von:von||localISODate(), bis:bis||'', ended:false, byId:cu&&cu.id, byName:cu&&cu.name, ts:Date.now() }); });
   toast('Vertretung angelegt ✓','ok'); renderVertretungen();
 }
 export function endVertretung(id){
-  mutate(d=>{ const v=(d.vertretungen||[]).find(x=>x.id===id); if(v) v.ended=true; });
+  const cu=window.cu; const x=(getData().vertretungen||[]).find(v=>v.id===id);
+  if(!x || !_vtMayUse(cu) || (!_vtAll(cu) && !_vtOwnTeams(cu).includes(x.team))){ toast('Vertretungen nur für das eigene Team.','err'); return; }
+  mutate(d=>{ const v=(d.vertretungen||[]).find(x=>x.id===id); if(v){ v.ended=true; if(!v.teamKey) v.teamKey=_vtTeamKey(v.team); } });
   toast('Vertretung beendet.','ok'); renderVertretungen();
 }
 export function deleteVertretung(id){
+  if(!_vtAll(window.cu)){ toast('Löschen nur durch Geschäftsführung/Administrator – bitte „Beenden“ nutzen.','err'); return; }
   if(!confirm('Diese Vertretung wirklich löschen?')) return;
   mutate(d=>{ d.vertretungen=(d.vertretungen||[]).filter(x=>x.id!==id); });
   renderVertretungen();

@@ -202,6 +202,16 @@ Rückweg: CANDIDATE-v10.json.
 Text mit `uploaderUid`, Löschen nur Admin oder Hochladende. Im Testprojekt nicht prüfbar (Storage braucht dort den
 Blaze-Tarif) → Syntax beim Veröffentlichen in der Konsole; Rückweg: vorherigen Stand aus der Konsolen-Historie.
 
+## Stand 2026-10-29: CANDIDATE-v13.json (noch NICHT live) – Vertretungen für Leitung (App v513)
+= v12 + `zeiterfassung/vertretungen/$i`: mit `grants/vertretung_verwalten` einzelne Einträge anlegen/ändern, NUR wenn
+`grants/vt_team/<teamKey>/<uid>` = Teamname des Eintrags (vom Admin-Start aus den Teams der Person berechnet); Team eines
+Eintrags nicht änderbar, kein Löschen (Löschen/ganze Liste weiter nur Admin/GF).
+Test im Testprojekt 29.10.2026 (`ruletest_ze`): 10 Fälle, 9 wie erwartet; V9 („Leitung überschreibt ganze Liste“ erlaubt) ist die
+bekannte Simulator-Eigenheit (set auf Elternknoten = Zusammenführen) – real hat die Liste nur für Admin/GF ein Schreibrecht.
+Hinweis: `numChildren()` gibt es in RTDB-Regeln nicht (Versuch verworfen). Vollständige Datei vom Compiler akzeptiert.
+sha256 (raw @7a2c4e4): 67a2496d4c1ce2fb119247e8cdd0ba3c1482d1d50e967b14e4c78df34858beab · Prüfwort `vt_team` = 1 Treffer.
+**Reihenfolge:** tpsPw (vertretung_verwalten) deployen → App v513 live → Admin öffnet App (schreibt grants/vt_team) → v13. Rückweg: v12.
+
 ## Stand 2026-10-29: CANDIDATE-v12.json ist LIVE – feine Rechte (App v510/v511, tpsPw rev tpspw-00017) – veröffentlicht von Moritz per Cloud Shell, Live-Text = Datei (54.256 Zeichen, identisch), Bedienung getestet
 = v11 + Schreibrechte je Datensatz nach Server-Freigaben `grants/r_*` (berechnet aus den Einzelrechten, App `js/rechte.js`
 SERVER_GRANTS bzw. tpsPw `fineGrants` – identisch, Vergleich über 34.720 Kombinationen ohne Abweichung):

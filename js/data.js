@@ -51,7 +51,10 @@ function _mayWriteConfig(k){
   if(k==='teams'||k==='cats'||k==='teamCats'){
     try{ return !!(window.hasPermission && (window.hasPermission('zugriff_verwaltung_ze',cu) || window.hasPermission('zugriff_verwaltung',cu))); }catch(e){ return false; }
   }
-  return k==='vertretungen' && cu.role==='geschaeftsfuehrer';
+  if(k!=='vertretungen') return false;
+  if(cu.role==='geschaeftsfuehrer') return true;
+  // Recht „Vertretungen verwalten" (v513): nur einzelne Einträge des eigenen Teams (Regel v13 prüft das Team)
+  try{ return !!(window.hasPermission && window.hasPermission('vertretung_verwalten',cu)); }catch(e){ return false; }
 }
 // Stammdaten, die eine Person mit „System-Verwaltung" bei ANDEREN (Nicht-Admin-)Nutzern pflegen
 // darf. Muss mit firebase-rules (users/$i/<feld>) übereinstimmen. Nicht dabei: id, name, pw, role,
@@ -72,6 +75,11 @@ export function _migrate(d){
   if(!d.cats) d.cats=[...DEFAULT_CATS];
   if(!d.teams) d.teams=[...DEFAULT_TEAMS];
   if(!d.entries) d.entries={};
+  // Vertretungen werden seit v513 auch eintragsgenau gespeichert (vertretungen/<i>) – kommen sie als Objekt zurück,
+  // lokal wieder als Liste führen (Reihenfolge der Indizes bleibt, damit die Pfade stimmen).
+  if(d.vertretungen && !Array.isArray(d.vertretungen) && typeof d.vertretungen==='object'){
+    const o=d.vertretungen, arr=[]; Object.keys(o).filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b).forEach(k=>{ arr[+k]=o[k]; }); d.vertretungen=arr;
+  }
   // „Sonstiges" mit Arbeitszeit-Gutschrift (_absCredit, z. B. Bildungsurlaub) zählt wie eine
   // Abwesenheit: reine Arbeitszeit, KEINE Pflichtpause. Bis v377 hat die Live-Pausenlogik dort
   // trotzdem 30/45 Min auf die Endzeit aufgeschlagen (08:00–15:48 → 16:18) – hier idempotent
@@ -554,6 +562,9 @@ function _diffToUpdate(before, after, blocked){
     } else if(_CONFIG_NODES.has(key) && !_mayWriteConfig(key)){
       // Nur der Administrator-Account darf Config-Knoten ändern → nicht schreiben, melden.
       if(blocked && !_eqJSON(B[key],A[key])) blocked.push(key);
+    } else if(key==='vertretungen' && window.cu && window.cu.role!=='admin' && window.cu.role!=='geschaeftsfuehrer'){
+      // Leitung mit „Vertretungen verwalten": eintragsgenau (vertretungen/<i>), nie die ganze Liste (Regel v13)
+      _childDiff(key);
     } else if(key==='users' && _usersPoisoned(A.users)){
       // Schutz: verstümmelten users-Array NICHT schreiben (Server-Stand bleibt intakt).
       console.warn('[Schutz] users-Diff nicht geschrieben (Mojibake erkannt).');

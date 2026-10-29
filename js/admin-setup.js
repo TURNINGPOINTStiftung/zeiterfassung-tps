@@ -24,7 +24,10 @@ import { hasPermission } from './roles.js';
 
 // Rechte, die serverseitig über zeiterfassung/grants geprüft werden (siehe firebase-rules).
 const GRANT_KEYS=['genehmigung_abwesenheit','btn_teamberichte','btn_jahresbericht','tab_gfberichte',
-  'zugriff_verwaltung','zugriff_verwaltung_ze','zugriff_verwaltung_crm','verw_kanban','verw_kalender'];
+  'zugriff_verwaltung','zugriff_verwaltung_ze','zugriff_verwaltung_crm','verw_kanban','verw_kalender','vertretung_verwalten'];
+// Team → Schlüssel für die Server-Freigabe grants/vt_team/<schlüssel>/<uid> (Umlaute/Sonderzeichen sind in
+// Datenbank-Schlüsseln heikel). GLEICH in js/views/vertretungen.js und js/admin-setup.js.
+const _vtTeamKey = t => String(t||'').replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue').replace(/ß/g,'ss').replace(/[^A-Za-z0-9_-]/g,'_').slice(0,80) || '_';
 // Bereichs-Verwalter-Rechte: System-Verwaltung schließt sie ein (wie _canAdminFor im CRM).
 const AREA_ADMIN_KEYS=['zugriff_verwaltung_ze','zugriff_verwaltung_crm','verw_kanban','verw_kalender'];
 
@@ -274,6 +277,11 @@ export async function refreshPermissionAllowlists(opts){
   const grants={};
   for(const [uid,id] of Object.entries(uidMap)){
     const u=byId[id]; if(!u || _isAdminUser(u)) continue;
+    // Vertretungen: Leitung (ohne GF/Admin) darf nur ihre eigenen Teams → grants/vt_team/<schlüssel>/<uid> = Teamname
+    if(hasPermission('vertretung_verwalten',u) && u.role!=='geschaeftsfuehrer'){
+      const ts=(Array.isArray(u.teams)&&u.teams.length)?u.teams:(u.team?[u.team]:[]);
+      ts.filter(Boolean).forEach(t=>{ const k=_vtTeamKey(t); ((grants.vt_team=grants.vt_team||{})[k]=grants.vt_team[k]||{})[uid]=t; });
+    }
     if(_crmOk){ try{ const fg=window.tpsServerGrantsOf(u); Object.keys(fg).forEach(k=>{ if(fg[k]) (grants[k]=grants[k]||{})[uid]=true; }); }catch(_){} }
     const sys=!!hasPermission('zugriff_verwaltung',u);
     // Feine Rechte (v510, js/rechte.js): wer eine Vorlage hat, bekommt die Server-Freigaben aus diesen Rechten.
