@@ -21,6 +21,10 @@
 //  POST { action:'staffRole', id, role } – Rolle ändern (nur Admin und „System-Verwaltung erweitert“, siehe unten).
 //  POST { action:'backupList' | 'backupGet' | 'restore' | 'adminLog' } – Backups / Protokoll („erweitert“, siehe unten).
 //  POST { action:'autoBackup' } – Tages-Backup durch den Server (jede freigeschaltete Person, siehe unten).
+//  POST { action:'icsToken', op:'get'|'new'|'delete' } – eigener Kalender-Abo-Link (jede freigeschaltete Person).
+//  GET  /kalender/<schlüssel>.ics – Kalender-Abo (Outlook/Google/iPhone): eigene CRM-Termine + Veranstaltungen,
+//        denen die Person zugewiesen ist. Ohne Anmeldung – der lange Zufallsschlüssel ist die Berechtigung.
+//        Schlüssel liegen unter kalenderAbo/ (oberste Ebene, für Geräte durch die Regeln gesperrt; nur dieser Server).
 //
 //  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
 //  zusammen mit „System-Verwaltung“ und nur mit zweitem Faktor): zusätzlich Einmal-Passwörter setzen ('set') und die
@@ -39,6 +43,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:7891', 'http://localhost:8765',
 ];
 const ID_RE = /^[a-z0-9._-]{1,64}$/;
+const crypto = require('crypto');
 const accountEmail = id => String(id || '').toLowerCase().replace(/[^a-z0-9._-]/g, '') + '@tps.intern';
 // Gleiche Schlüssel-Bildung wie admin-setup.js _dirKey (loginDir ist ASCII-verschlüsselt)
 const dirKey = id => String(id || '')
@@ -138,9 +143,88 @@ function cors(req, res) {
   res.set('Access-Control-Max-Age', '3600');
 }
 
+// ── Kalender-Abo (ICS) ───────────────────────────────────────────────
+const ICS_PATH = /^\/kalender\/([A-Za-z0-9_-]{32,64})\.ics$/;
+const icsHash = t => crypto.createHash('sha256').update(String(t)).digest('hex');
+const CRM_NONTREE = new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess',
+  'shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
+let _crmCache = null, _crmCacheAt = 0;
+async function crmSnapshot() {   // höchstens alle 5 Minuten neu lesen (viele Abos fragen zeitgleich)
+  if (_crmCache && Date.now() - _crmCacheAt < 5 * 60 * 1000) return _crmCache;
+  _crmCache = (await db.ref('crm').once('value')).val() || {}; _crmCacheAt = Date.now(); return _crmCache;
+}
+const icsEsc = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+function icsFold(line) {   // Zeilen > 75 Byte umbrechen (RFC 5545)
+  const out = []; let cur = '';
+  for (const ch of line) { if (Buffer.byteLength(cur + ch, 'utf8') > (out.length ? 74 : 75)) { out.push(cur); cur = ch; } else cur += ch; }
+  out.push(cur); return out.join('\r\n ');
+}
+const ymd = iso => String(iso || '').slice(0, 10).replace(/-/g, '');
+function addDay(iso) { const d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
+function parseUhr(s) { const m = String(s || '').match(/(\d{1,2})[:.](\d{2})(?:\s*[–-]\s*(\d{1,2})[:.](\d{2}))?/); if (!m) return null;
+  return { a: m[1].padStart(2, '0') + m[2] + '00', b: m[3] ? (m[3].padStart(2, '0') + m[4] + '00') : null }; }
+function icsEvent(o) {   // o = { uid, titel, von, bis, uhr, ort, notiz }
+  const L = ['BEGIN:VEVENT', 'UID:' + o.uid, 'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '')];
+  const t = (o.von === (o.bis || o.von)) ? parseUhr(o.uhr) : null;
+  if (t) {
+    L.push('DTSTART;TZID=Europe/Berlin:' + ymd(o.von) + 'T' + t.a);
+    let end = t.b; if (!end || end <= t.a) { const h = Math.min(23, Number(t.a.slice(0, 2)) + 1); end = String(h).padStart(2, '0') + t.a.slice(2); }
+    L.push('DTEND;TZID=Europe/Berlin:' + ymd(o.von) + 'T' + end);
+  } else {
+    L.push('DTSTART;VALUE=DATE:' + ymd(o.von), 'DTEND;VALUE=DATE:' + ymd(addDay(o.bis || o.von)));
+  }
+  L.push('SUMMARY:' + icsEsc(o.titel));
+  if (o.ort) L.push('LOCATION:' + icsEsc(o.ort));
+  L.push('DESCRIPTION:' + icsEsc((o.notiz ? String(o.notiz).slice(0, 800) + '\n\n' : '') + 'Aus der TPS-App – Änderungen bitte dort vornehmen.'));
+  L.push('END:VEVENT');
+  return L.map(icsFold).join('\r\n');
+}
+const VTZ_BERLIN = ['BEGIN:VTIMEZONE', 'TZID:Europe/Berlin',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST', 'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET', 'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+  'END:VTIMEZONE'].join('\r\n');
+async function icsServe(token, res) {
+  const nf = () => res.status(404).set('Content-Type', 'text/plain; charset=utf-8').send('Kalender-Abo nicht gefunden oder zurückgesetzt.');
+  const rec = (await db.ref('kalenderAbo/tokens/' + icsHash(token)).once('value')).val();
+  if (!rec || !rec.u) return nf();
+  // Person muss noch aktiv sein (archiviert/gesperrt → Abo endet automatisch)
+  const usersV = (await db.ref('zeiterfassung/users').once('value')).val() || [];
+  const u = (Array.isArray(usersV) ? usersV : Object.values(usersV)).find(x => x && x.id === rec.u);
+  if (!u || u.accessRevoked) return nf();
+  const crm = await crmSnapshot();
+  const cutoff = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
+  const ev = [];
+  Object.keys(crm).forEach(tk => { if (CRM_NONTREE.has(tk) || tk.startsWith('shop')) return; const ents = crm[tk]; if (!ents || typeof ents !== 'object') return;
+    Object.keys(ents).forEach(eid => { const e = ents[eid]; const ts = e && e.termine; if (!ts) return;
+      (Array.isArray(ts) ? ts : Object.values(ts)).forEach(t => { if (!t || !t.datum) return;
+        const ma = Array.isArray(t.mitarbeiter) ? t.mitarbeiter : Object.values(t.mitarbeiter || {});
+        if (!ma.includes(u.id) || (t.bis || t.datum) < cutoff) return;
+        const name = (e.stamm && e.stamm.name) || '';
+        ev.push(icsEvent({ uid: 'termin-' + (t.id || (eid + t.datum)) + '@tps-app', titel: (t.titel || 'Termin') + (name ? ' · ' + name : ''), von: t.datum, bis: t.bis || t.datum, uhr: t.uhr, ort: t.ort, notiz: t.note }));
+      }); }); });
+  const vas = crm.veranstaltungen || {};
+  Object.keys(vas).forEach(id => { const v = vas[id]; if (!v || !v.start) return;
+    const ma = Array.isArray(v.mitarbeiter) ? v.mitarbeiter : Object.values(v.mitarbeiter || {});
+    if (!ma.includes(u.id) || (v.ende || v.start) < cutoff) return;
+    ev.push(icsEvent({ uid: 'va-' + (v.id || id) + '@tps-app', titel: '📅 ' + (v.titel || 'Veranstaltung'), von: v.start, bis: v.ende || v.start, uhr: v.uhrzeit, ort: v.ortOderLink, notiz: v.beschreibung }));
+  });
+  const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TURNING POINT Stiftung//TPS-App//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    icsFold('X-WR-CALNAME:TPS – Meine Termine'), 'X-WR-TIMEZONE:Europe/Berlin', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
+    VTZ_BERLIN].concat(ev).concat(['END:VCALENDAR']).join('\r\n') + '\r\n';
+  res.set('Content-Type', 'text/calendar; charset=utf-8');
+  res.set('Content-Disposition', 'inline; filename="tps-termine.ics"');
+  res.set('Cache-Control', 'private, max-age=900');
+  return res.status(200).send(body);
+}
+
 exports.tpsPw = async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method === 'GET') {   // Kalender-Abo
+    const m = String(req.path || '').match(ICS_PATH);
+    if (!m) return res.status(404).send('');
+    try { return await icsServe(m[1], res); } catch (e) { console.error('tpsPw ics', e); return res.status(500).send(''); }
+  }
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'method' });
   const body = req.body || {};
   const action = String(body.action || '');
@@ -709,6 +793,27 @@ exports.tpsPw = async (req, res) => {
         }
       } while (page.pageToken);
       return res.json({ ok: true, on, changed });
+    }
+
+    // Eigener Kalender-Abo-Link: jede freigeschaltete Person, nur für sich selbst
+    if (action === 'icsToken') {
+      const c = await whoCalls(req);
+      if (!c || !c.callerId) return res.status(401).json({ ok: false, error: 'auth' });
+      const allowed = (await db.ref('zeiterfassung/allowed/' + c.tok.uid).once('value')).val() === true;
+      if (!allowed && !c.isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      const uRef = db.ref('kalenderAbo/users/' + dirKey(c.callerId));
+      const cur = (await uRef.once('value')).val();
+      const op = String(body.op || 'get');
+      if (op === 'get') return res.json({ ok: true, token: (cur && cur.t) || '' });
+      const upd = {};
+      if (cur && cur.t) upd['kalenderAbo/tokens/' + icsHash(cur.t)] = null;
+      if (op === 'delete') { upd['kalenderAbo/users/' + dirKey(c.callerId)] = null; await db.ref().update(upd); return res.json({ ok: true, token: '' }); }
+      if (op !== 'new') return res.status(400).json({ ok: false, error: 'op' });
+      const token = crypto.randomBytes(32).toString('base64url');   // 43 Zeichen
+      upd['kalenderAbo/tokens/' + icsHash(token)] = { u: c.callerId, at: Date.now() };
+      upd['kalenderAbo/users/' + dirKey(c.callerId)] = { t: token, at: Date.now() };
+      await db.ref().update(upd);
+      return res.json({ ok: true, token });
     }
 
     return res.status(400).json({ ok: false, error: 'action' });
