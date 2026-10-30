@@ -668,7 +668,7 @@ export function renderAbwesenheiten(){
       const u=r.userId===cu.id?cu:getUser(r.userId);
       return u&&canSeeAbsence(cu,u);
     }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-    const rows=upcoming.map(r=>{
+    const rowHtml=r=>{
       const start=new Date(r.startDate+'T12:00:00'), end=new Date(r.endDate+'T12:00:00');
       const daysUntil=Math.round((start-noon)/86400000);
       const isActive=start<=noon&&end>=noon;
@@ -680,9 +680,14 @@ export function renderAbwesenheiten(){
         <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(r.type)}">${esc(_typeLabel(r.type))}</span></div>
           <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}</div></div>
         <span class="upc-badge ${cls}">${txt}</span></div>`;
-    }).join('');
-    const listCard=`<div class="ab-box ab-listbox"><div class="ab-box-h">Laufend und demnächst <span class="ab-c2-sub">(${upcoming.length})</span></div>
-      ${rows||'<div class="ab-c2-sub" style="padding:8px 0">Gerade ist niemand abwesend und nichts geplant.</div>'}</div>`;
+    };
+    // Nur die nächsten 40 Tage offen zeigen, der Rest ist ausklappbar (v517, User 30.10.2026)
+    const lim=new Date(noon); lim.setDate(lim.getDate()+40); const limStr=localISODate(lim);
+    const nah=upcoming.filter(r=>r.startDate<=limStr), spaeter=upcoming.filter(r=>r.startDate>limStr);
+    const rowsOf=list=>list.map(r=>rowHtml(r)).join('');
+    const listCard=`<div class="ab-box ab-listbox"><div class="ab-box-h">Laufend und nächste 40 Tage <span class="ab-c2-sub">(${nah.length})</span></div>
+      ${nah.length?rowsOf(nah):'<div class="ab-c2-sub" style="padding:8px 0">In den nächsten 40 Tagen ist niemand abwesend.</div>'}
+      ${spaeter.length?`<details class="ab-later"${window._abLaterOpen?' open':''} ontoggle="window._abLaterOpen=this.open"><summary class="ab-sum">Später (${spaeter.length})</summary>${rowsOf(spaeter)}</details>`:''}</div>`;
     html+=`<div class="ab-grid">${calCard}${listCard}</div>`;
   }
 

@@ -226,7 +226,9 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .ab-tab.on{background:var(--info-bg);color:var(--primary);border-color:var(--primary-l);font-weight:600}
 .ab-cnt{background:var(--warn-bg);color:var(--warn-text);border-radius:10px;padding:0 7px;font-size:12px;font-weight:700}
 .ab-hint{background:var(--warn-bg);color:var(--warn-text);border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px;cursor:pointer}
-.ab-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:14px;align-items:start}
+.ab-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(320px,1fr);gap:16px;align-items:start}
+/* Abwesenheiten nutzen die volle Bildschirmbreite (v517) */
+.app-content:has(#view-abwesenheiten.active){max-width:none}
 .ab-box{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
 .ab-box-h{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px}
 .ab-calnav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
