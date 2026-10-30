@@ -671,15 +671,18 @@ export function renderAbwesenheiten(){
     const rows=upcoming.map(r=>{
       const start=new Date(r.startDate+'T12:00:00');
       const end=new Date(r.endDate+'T12:00:00');
-      const daysUntil=Math.round((start-today)/86400000);
-      const isActive=start<=today&&end>=today;
+      // Beide Seiten auf 12 Uhr rechnen (today steht auf 0 Uhr) – sonst ergab Ende−heute einen halben Tag zu viel
+      // und am letzten Tag stand „noch 2 Tage“ (User 30.10.2026).
+      const noon=new Date(today); noon.setHours(12,0,0,0);
+      const daysUntil=Math.round((start-noon)/86400000);
+      const isActive=start<=noon&&end>=noon;
       const isSoon=!isActive&&daysUntil<=14;
       let badgeCls,badgeTxt;
       if(isActive){
-        const remaining=Math.round((end-today)/86400000)+1;
-        badgeCls='active'; badgeTxt=`Läuft · noch ${remaining} Tag${remaining!==1?'e':''}`;
+        const remaining=Math.round((end-noon)/86400000)+1;   // inkl. heute
+        badgeCls='active'; badgeTxt=remaining<=1?'Läuft · endet heute':`Läuft · noch ${remaining} Tage`;
       } else if(isSoon){
-        badgeCls='soon'; badgeTxt=`in ${daysUntil} Tag${daysUntil!==1?'en':''}`;
+        badgeCls='soon'; badgeTxt=daysUntil===1?'ab morgen':`in ${daysUntil} Tagen`;
       } else {
         badgeCls='later'; badgeTxt=`in ${daysUntil} Tagen`;
       }
