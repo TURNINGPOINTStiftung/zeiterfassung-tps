@@ -220,6 +220,38 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .upc-badge.active{background:var(--danger-bg);color:var(--danger-text)}
 .upc-badge.soon{background:var(--warn-bg);color:var(--warn-text)}
 .upc-badge.later{background:var(--info-bg);color:var(--primary)}
+/* Abwesenheiten (v516): Reiter, Kalender + Liste nebeneinander, Karten mit Farbbalken je Art */
+.ab-tabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.ab-tab{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer}
+.ab-tab.on{background:var(--info-bg);color:var(--primary);border-color:var(--primary-l);font-weight:600}
+.ab-cnt{background:var(--warn-bg);color:var(--warn-text);border-radius:10px;padding:0 7px;font-size:12px;font-weight:700}
+.ab-hint{background:var(--warn-bg);color:var(--warn-text);border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:12px;cursor:pointer}
+.ab-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:14px;align-items:start}
+.ab-box{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.ab-box-h{font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px}
+.ab-calnav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.ab-calnav b{font-size:15px;color:var(--primary);min-width:120px;text-align:center}
+.ab-segs{margin-left:auto;display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.ab-seg{font:inherit;font-size:12px;padding:5px 10px;border:0;background:var(--white);color:var(--muted);cursor:pointer}
+.ab-seg.on{background:var(--primary);color:var(--on-primary,#fff)}
+.ab-type-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px}
+.ab-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.ab-calbox .ab-cal-wrap{zoom:1;border:0}
+.ab-calbox .ab-cal-day{min-height:74px;padding:4px 5px}
+.ab-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-left:4px solid var(--primary-l);background:var(--bg);border-radius:6px;margin-bottom:6px;font-size:13px}
+.ab-row-l{flex:1;min-width:0}
+.ab-card2{background:var(--white);border:1px solid var(--border);border-left:4px solid var(--primary-l);border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.ab-c2-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.ab-c2-date{font-size:13px}
+.ab-c2-sub{font-size:12px;color:var(--muted)}
+.ab-c2-top .ab-c2-sub{margin-left:auto}
+.ab-type{font-size:12px;font-weight:600;padding:2px 9px;border-radius:10px}
+.ab-c2-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ab-mini{padding:4px 10px !important;font-size:12px !important}
+.ab-del{background:var(--white);border:1px solid var(--danger);color:var(--danger)}
+.ab-h3{font-size:15px;font-weight:700;color:var(--primary);margin:0 0 10px}
+.ab-sum{cursor:pointer;font-size:13px;color:var(--muted);padding:6px 0;user-select:none}
+@media(max-width:900px){ .ab-grid{grid-template-columns:minmax(0,1fr)} .ab-listbox{order:-1} }
 
 /* ── Time Table ── */
 .tbl-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);background:var(--white)}

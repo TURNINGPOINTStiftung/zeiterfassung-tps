@@ -241,7 +241,12 @@ Wenn alle Zeiten des Monats erfasst sind:
 
 ## 8. Abwesenheiten (Urlaub, Krank …)
 
-Reiter **Abwesenheiten** → **„Abwesenheit eintragen"**.
+Reiter **Abwesenheiten** → **„＋ Abwesenheit eintragen"** (oben rechts).
+
+Die Seite hat drei Reiter: **Übersicht** (links Kalender – Woche/Monat/Jahr –, rechts „Laufend und demnächst“; am Handy
+untereinander), **Meine Abwesenheiten** (eigene Anträge, Resturlaub, vergangene eingeklappt) und für Leitung/GF/Admin
+**Team · Genehmigen** (offene Anträge, Team-Übersicht). Farben: **blau** Urlaub, **rot** Krank, **grün** Ausgleich,
+**gelb** Sonstiges.
 
 **Arten:** Urlaub · AU/Krank · Arbeitszeitausgleich · Sonstiges.
 

@@ -2,7 +2,7 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate, jsArg as jsq } from '../utils.js';
-import { vacDailyMin, dailyMinutes } from '../calc.js';
+import { vacDailyMin, dailyMinutes, vacStatus } from '../calc.js';
 
 export function countWorkDays(start,end,user){
   // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
@@ -527,7 +527,7 @@ export function renderAbCalendar(){
       const dsX=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
       if(dsX.startsWith(`${y}-${String(m).padStart(2,'0')}`)){
         if(!dayMap[dsX]) dayMap[dsX]=[];
-        dayMap[dsX].push({name:r.userName,type:r.type,userId:r.userId});
+        dayMap[dsX].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:r.type,userId:r.userId});
       }
       cur.setDate(cur.getDate()+1);
     }
@@ -541,13 +541,6 @@ export function renderAbCalendar(){
   const personList=[...personMap.entries()];
   const colorFor=uid=>COLORS[personList.findIndex(([id])=>id===uid)%COLORS.length]||'#e8f0fe';
   let cal='<div class="ab-cal-wrap">';
-  if(personList.length>0){
-    cal+='<div class="ab-cal-legend">';
-    personList.forEach(([uid,name])=>{
-      cal+=`<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${colorFor(uid)};border:1px solid rgba(0,0,0,.1)"></span>${esc(name)}</span>`;
-    });
-    cal+='</div>';
-  }
   cal+='<div class="ab-cal-grid">';
   const GER_DAYS=['Mo','Di','Mi','Do','Fr','Sa','So'];
   GER_DAYS.forEach((dn,i)=>{ cal+=`<div class="ab-cal-dow${i>=5?' we':''}">${dn}</div>`; });
@@ -560,9 +553,8 @@ export function renderAbCalendar(){
     let cls='ab-cal-day'+(isWE?' weekend':'')+(hols.has(ds)?' holiday-cell':'')+(ds===todayStr2?' today-cell':'');
     const abs=dayMap[ds]||[];
     const badges=abs.map(a=>{
-      const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Arbeitszeitausgleich'?'📋':'📌';
       const firstName=a.name.split(' ')[0];
-      return `<span class="ab-cal-badge" style="background:${colorFor(a.userId)};color:#1a1a2e" title="${esc(a.name)}: ${esc(a.type)}">${icon} ${esc(firstName)}</span>`;
+      return `<span class="ab-cal-badge" style="background:${_typeBg(a.type)};color:${_typeFg(a.type)}" title="${esc(a.name)}: ${esc(a.type)}">${esc(firstName)}</span>`;
     }).join('');
     const holNote=hols.has(ds)?'<span style="font-size:9px;color:var(--danger);display:block">Feiertag</span>':'';
     cal+=`<div class="${cls}"><span class="ab-cal-dn${isWE?' we':''}">${dd}</span>${holNote}${badges}</div>`;
@@ -574,35 +566,34 @@ export function renderAbCalendar(){
   return cal;
 }
 
+// ── Farben je Art (v516, User 30.10.2026): Urlaub blau · Krank rot · Ausgleich grün · Sonstiges gelb ──
+const _AB_TYPES=[['Urlaub','Urlaub','info','#378ADD'],['AU/Krank','Krank','danger','#E24B4A'],['Arbeitszeitausgleich','Ausgleich','ok','#1D9E75'],['Sonstiges','Sonstiges','warn','#BA7517']];
+function _abType(t){ return _AB_TYPES.find(x=>x[0]===t) || _AB_TYPES[3]; }
+function _typeBg(t){ return `var(--${_abType(t)[2]}-bg)`; }
+function _typeFg(t){ return `var(--${_abType(t)[2]}-text)`; }
+function _typeBar(t){ return _abType(t)[3]; }
+function _typeLegend(){
+  return '<div class="ab-type-legend">'+_AB_TYPES.map(([,l,c,b])=>`<span><span class="ab-dot" style="background:${b}"></span>${esc(l)}</span>`).join('')+'</div>';
+}
+// Titel der Kalender-Navigation (Woche / Monat / Jahr)
+function _abCalTitle(){
+  const sub=window.abCalSubView||'month';
+  if(sub==='year') return String(window.abCalYear||new Date().getFullYear());
+  if(sub==='week'){ const mo=new Date((window.abCalWeekStart||_thisMonday())+'T12:00:00'); const su=new Date(mo); su.setDate(su.getDate()+6);
+    const f=d=>String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'; return f(mo)+' – '+f(su)+su.getFullYear(); }
+  return MONTHS[(window.abCalMon||1)-1]+' '+window.abCalYear;
+}
+export function setAbTab(t){ window.abTab=t; renderAbwesenheiten(); }
+window.setAbTab=setAbTab;   // neu in v516 → über window (kein benannter Import in main.js, siehe CLAUDE.md)
+
+// Neuer Aufbau (v516): Reiter Übersicht (Kalender + Liste nebeneinander) · Meine Abwesenheiten · Team · Genehmigen
 export function renderAbwesenheiten(){
   const cu=window.cu;
-  const abViewMode=window.abViewMode||'list';
-  _syncAbViewButtons();
-  if(abViewMode==='calendar'){
-    const sub=window.abCalSubView||'month';
-    let calHtml='';
-    if(sub==='year') calHtml=renderAbCalendarYear();
-    else if(sub==='week') calHtml=renderAbCalendarWeek();
-    else calHtml=renderAbCalendar();
-    let pendingHtml='';
-    const d2=getData();
-    const reqs2=Object.values(d2.vacRequests||{});
-    const pending2=reqs2.filter(r=>{
-      if(r.status!=='pending') return false;
-      if(cu.role==='admin') return true;
-      if((cu.role==='leitung'||cu.role==='geschaeftsfuehrer')&&r.userId!==cu.id){ const u=getUser(r.userId); return u&&canSeeEmployee(cu,u); }
-      return false;
-    });
-    if(pending2.length){
-      const fmtD2=ds=>{ const[yz,mz,dz]=String(ds||'').split('-'); return esc(`${dz}.${mz}.`); };
-      calHtml+=`<section style="margin-top:20px"><h3 style="font-size:14px;font-weight:700;color:var(--warn);margin-bottom:8px">⏳ Offene Anträge (${pending2.length})</h3>`
-        +pending2.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--white);border:1.5px solid var(--warn);border-radius:8px;margin-bottom:6px;flex-wrap:wrap"><strong style="font-size:13px">${esc(r.userName)}</strong><span style="font-size:13px;color:var(--primary)">${esc(r.type)}: ${fmtD2(r.startDate)}–${fmtD2(r.endDate)}</span><div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ok btn-sm" onclick="approveVacRequest(${jsq(r.id)})">✓</button><button class="btn btn-danger btn-sm" onclick="showRejectModal(${jsq(r.id)})">✗</button></div></div>`).join('')
-        +'</section>';
-    }
-    document.getElementById('ab-content').innerHTML=calHtml;
-    updateAbBadge();
-    return;
-  }
+  if(!window.abCalYear){ const n=new Date(); window.abCalYear=n.getFullYear(); window.abCalMon=n.getMonth()+1; }
+  // alte Kopf-Knöpfe aus index.html ausblenden (Ansicht steuert sich jetzt selbst)
+  ['btn-ab-list','btn-ab-cal'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display='none'; });
+  document.querySelectorAll('#view-abwesenheiten > div:first-child button').forEach(b=>{ b.style.display='none'; });   // alter Kopf (Gerätecache)
+  const nav0=document.getElementById('ab-cal-nav'); if(nav0) nav0.style.display='none';
   const d=getData();
   const isAdmin=cu.role==='admin';
   const isLeitung=cu.role==='leitung';
@@ -610,6 +601,8 @@ export function renderAbwesenheiten(){
   const isMgr=isAdmin||isLeitung||isGF;
   const reqs=Object.values(d.vacRequests||{});
   const fmtD=ds=>{ if(!ds) return '–'; const[y,m,dd]=String(ds||'').split('-'); return esc(`${dd}.${m}.${y}`); };
+  const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const fmtW=ds=>{ if(!ds) return '–'; const x=new Date(ds+'T12:00:00'); const[,m,dd]=String(ds).split('-'); return esc(`${WD[x.getDay()]} ${dd}.${m}.`); };
   const statusBadge=s=>({
     pending:'<span class="ab-status pending">⏳ Ausstehend</span>',
     approved:'<span class="ab-status approved">✓ Genehmigt</span>',
@@ -625,130 +618,105 @@ export function renderAbwesenheiten(){
   };
   const card=r=>{
     const showName=r.userId!==cu.id;
-    const rnBtns=canReview(r)?`<div style="display:flex;gap:6px;margin-top:10px">
+    const rnBtns=canReview(r)?`<div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn btn-ok btn-sm" onclick="approveVacRequest(${jsq(r.id)})">✓ Genehmigen</button>
       <button class="btn btn-danger btn-sm" onclick="showRejectModal(${jsq(r.id)})">✗ Ablehnen</button>
     </div>`:'';
-    // Offen: Antragsteller:in oder Genehmiger. Genehmigt: NUR Antragsteller:in oder Admin.
     const canDelete=(r.status==='pending'&&(r.userId===cu.id||hasPermission('genehmigung_abwesenheit',cu)))
                   ||(r.status==='approved'&&(r.userId===cu.id||cu.role==='admin'));
-    // Bearbeiten: Antragsteller:in selbst oder Admin – auch nach Genehmigung.
     const canEdit=r.userId===cu.id||cu.role==='admin';
-    const delLabel=r.status==='pending'?'🗑 Antrag zurückziehen':r.type==='AU/Krank'?'🗑 Krankmeldung stornieren':'🗑 Abwesenheit stornieren';
-    const delBtn=canDelete
-      ?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger);padding:6px 12px;font-size:12px" onclick="deleteVacRequest(${jsq(r.id)})">${delLabel}</button>${canEdit?`<button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm(${jsq(r.id)})">✏️ Bearbeiten</button>`:''}</div>`
-      :canEdit?`<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="padding:6px 12px;font-size:12px" onclick="showVacRequestForm(${jsq(r.id)})">✏️ Bearbeiten</button></div>`
-      :'';
-    const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:11px;color:var(--danger);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
-                r.status==='approved'&&r.reviewNote?`<div style="font-size:11px;color:var(--ok);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
-    return `<div class="ab-card ab-${esc(r.status)}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-            ${showName?`<strong style="font-size:14px">${esc(r.userName)}</strong>`:''}
-            <span style="font-size:13px;font-weight:600;color:var(--primary)">${esc(_typeLabel(r.type))}</span>
-            ${statusBadge(r.status)}
-          </div>
-          <div style="font-size:13px;margin-bottom:2px">📅 ${fmtD(r.startDate)} – ${fmtD(r.endDate)} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?` <span style="background:var(--info-bg,#e8f4fd);color:#1a5276;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">½ Tag</span>`:''}${r.team?` · ${esc(r.team)}`:''}</div>
-          ${r.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">💬 ${esc(r.note)}</div>`:''}
-          ${extra}${rnBtns}${delBtn}
-        </div>
-        <div style="font-size:11px;color:var(--muted);white-space:nowrap">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</div>
+    const delLabel=r.status==='pending'?'Antrag zurückziehen':r.type==='AU/Krank'?'Krankmeldung stornieren':'Stornieren';
+    const acts=[canEdit?`<button class="btn btn-outline btn-sm ab-mini" onclick="showVacRequestForm(${jsq(r.id)})">✏️ Bearbeiten</button>`:'',
+      canDelete?`<button class="btn btn-sm ab-mini ab-del" onclick="deleteVacRequest(${jsq(r.id)})">🗑 ${delLabel}</button>`:''].filter(Boolean).join('');
+    const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:12px;color:var(--danger-text);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
+                r.status==='approved'&&r.reviewNote?`<div style="font-size:12px;color:var(--ok-text);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
+    return `<div class="ab-card2" style="border-left-color:${_typeBar(r.type)}">
+      <div class="ab-c2-top">
+        ${showName?`<strong>${esc(r.userName)}</strong>`:''}
+        <span class="ab-type" style="background:${_typeBg(r.type)};color:${_typeFg(r.type)}">${esc(_typeLabel(r.type))}</span>
+        ${statusBadge(r.status)}
+        <span class="ab-c2-sub">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?'beantragt '+new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</span>
       </div>
+      <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''}</div>
+      ${r.note?`<div class="ab-c2-sub" style="margin-top:2px">💬 ${esc(r.note)}</div>`:''}
+      ${extra}${rnBtns}${acts?`<div class="ab-c2-acts">${acts}</div>`:''}
     </div>`;
   };
   const today=new Date(); today.setHours(0,0,0,0);
   const todayStr=localISODate(today);
-  const upcoming=reqs.filter(r=>{
-    if(r.status!=='approved') return false;
-    if(r.endDate<todayStr) return false;
-    const u=r.userId===cu.id?cu:getUser(r.userId);
-    return u&&canSeeAbsence(cu,u);
-  }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const noon=new Date(today); noon.setHours(12,0,0,0);
+  const pending=reqs.filter(canReview).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const tabs=[['uebersicht','Übersicht'],['meine','Meine Abwesenheiten']].concat(isMgr?[['team','Team · Genehmigen']]:[]);
+  let tab=window.abTab||'uebersicht'; if(!tabs.some(t=>t[0]===tab)) tab='uebersicht';
+  const tabBar=`<div class="ab-tabs">${tabs.map(([k,l])=>`<button class="ab-tab${k===tab?' on':''}" onclick="setAbTab(${jsq(k)})">${esc(l)}${k==='team'&&pending.length?` <span class="ab-cnt">${pending.length}</span>`:''}</button>`).join('')}
+    <button class="btn btn-ok btn-sm" style="margin-left:auto" onclick="showVacRequestForm()">＋ Abwesenheit eintragen</button></div>`;
+  let html=tabBar;
 
-  let upcomingHtml='';
-  if(upcoming.length){
+  if(tab==='uebersicht'){
+    if(pending.length && isMgr) html+=`<div class="ab-hint" onclick="setAbTab('team')">⏳ ${pending.length} offene${pending.length===1?'r':''} Antrag${pending.length===1?'':'e'} ${pending.length===1?'wartet':'warten'} auf deine Genehmigung – im Reiter „Team · Genehmigen“ ›</div>`;
+    const sub=window.abCalSubView||'month';
+    const calHtml=sub==='year'?renderAbCalendarYear():(sub==='week'?renderAbCalendarWeek():renderAbCalendar());
+    const sb=(k,l)=>`<button class="ab-seg${sub===k?' on':''}" onclick="setAbSubView(${jsq(k)})">${l}</button>`;
+    const calCard=`<div class="ab-box ab-calbox">
+      <div class="ab-calnav"><button class="btn btn-outline btn-sm" onclick="changeAbNav(-1)" aria-label="zurück">◀</button>
+        <b>${esc(_abCalTitle())}</b><button class="btn btn-outline btn-sm" onclick="changeAbNav(1)" aria-label="weiter">▶</button>
+        <span class="ab-segs">${sb('week','Woche')}${sb('month','Monat')}${sb('year','Jahr')}</span></div>
+      ${_typeLegend()}${calHtml}</div>`;
+    const upcoming=reqs.filter(r=>{
+      if(r.status!=='approved') return false;
+      if(r.endDate<todayStr) return false;
+      const u=r.userId===cu.id?cu:getUser(r.userId);
+      return u&&canSeeAbsence(cu,u);
+    }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
     const rows=upcoming.map(r=>{
-      const start=new Date(r.startDate+'T12:00:00');
-      const end=new Date(r.endDate+'T12:00:00');
-      // Beide Seiten auf 12 Uhr rechnen (today steht auf 0 Uhr) – sonst ergab Ende−heute einen halben Tag zu viel
-      // und am letzten Tag stand „noch 2 Tage“ (User 30.10.2026).
-      const noon=new Date(today); noon.setHours(12,0,0,0);
+      const start=new Date(r.startDate+'T12:00:00'), end=new Date(r.endDate+'T12:00:00');
       const daysUntil=Math.round((start-noon)/86400000);
       const isActive=start<=noon&&end>=noon;
-      const isSoon=!isActive&&daysUntil<=14;
-      let badgeCls,badgeTxt;
-      if(isActive){
-        const remaining=Math.round((end-noon)/86400000)+1;   // inkl. heute
-        badgeCls='active'; badgeTxt=remaining<=1?'Läuft · endet heute':`Läuft · noch ${remaining} Tage`;
-      } else if(isSoon){
-        badgeCls='soon'; badgeTxt=daysUntil===1?'ab morgen':`in ${daysUntil} Tagen`;
-      } else {
-        badgeCls='later'; badgeTxt=`in ${daysUntil} Tagen`;
-      }
-      const showName=r.userId!==cu.id;
-      const fmtShort=ds=>{ const[y,m,d]=String(ds||'').split('-'); return esc(`${d}.${m}.`); };
-      const typeIcon=r.type==='AU/Krank'?'🤒 ':r.type==='Urlaub'?'🏖 ':r.type==='Arbeitszeitausgleich'?'📋 ':'📌 ';
-      return `<div class="upcoming-row${isActive?' today':isSoon?' soon':''}">
-        ${showName?`<span class="upc-name">${esc(r.userName)}</span>`:'<span class="upc-name">Ich</span>'}
-        <span class="upc-type">${typeIcon}${esc(_typeLabel(r.type))}</span>
-        <span class="upc-dates">📅 ${fmtShort(r.startDate)}–${fmtShort(r.endDate)}${new Date(r.startDate).getFullYear()!==today.getFullYear()?new Date(r.startDate).getFullYear():''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}${r.team?` · ${esc(r.team)}`:''}</span>
-        <span class="upc-badge ${badgeCls}">${badgeTxt}</span>
-      </div>`;
+      let cls,txt;
+      if(isActive){ const rem=Math.round((end-noon)/86400000)+1; cls='active'; txt=rem<=1?'endet heute':`läuft · noch ${rem} Tage`; }
+      else if(daysUntil<=14){ cls='soon'; txt=daysUntil===1?'ab morgen':`in ${daysUntil} Tagen`; }
+      else { cls='later'; txt=`in ${daysUntil} Tagen`; }
+      return `<div class="ab-row" style="border-left-color:${_typeBar(r.type)}">
+        <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(r.type)}">${esc(_typeLabel(r.type))}</span></div>
+          <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}</div></div>
+        <span class="upc-badge ${cls}">${txt}</span></div>`;
     }).join('');
-    upcomingHtml=`<div class="upcoming-section">
-      <h3>📅 Anstehende &amp; laufende Abwesenheiten <span style="font-size:12px;font-weight:400;color:var(--muted)">(${upcoming.length})</span></h3>
-      <div class="upcoming-list">${rows}</div>
-    </div>`;
+    const listCard=`<div class="ab-box ab-listbox"><div class="ab-box-h">Laufend und demnächst <span class="ab-c2-sub">(${upcoming.length})</span></div>
+      ${rows||'<div class="ab-c2-sub" style="padding:8px 0">Gerade ist niemand abwesend und nichts geplant.</div>'}</div>`;
+    html+=`<div class="ab-grid">${calCard}${listCard}</div>`;
   }
 
-  let html=upcomingHtml;
-  if(isMgr){
-    const pending=reqs.filter(canReview).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-    if(pending.length) html+=`<section style="margin-bottom:28px">
-      <h3 style="font-size:15px;font-weight:700;color:var(--warn);margin-bottom:10px">⏳ Offene Anträge (${pending.length})</h3>
-      ${pending.map(card).join('')}</section>`;
+  if(tab==='meine'){
+    let vs=null; try{ const u=getUser(cu.id)||cu; if(u && u.role!=='freiberuflich' && u.role!=='admin') vs=vacStatus(cu.id,u,today.getFullYear(),today.getMonth()+1); }catch(e){ vs=null; }
+    if(vs) html+=`<div class="ab-box" style="display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;margin-bottom:14px">
+      <span><span class="ab-c2-sub">Resturlaub ${today.getFullYear()}</span><br><b style="font-size:20px">${esc(vs.left+vs.carryLeft)} Tage</b></span>
+      ${vs.carryLeft>0?`<span class="ab-c2-sub">davon ${esc(vs.carryLeft)} aus ${today.getFullYear()-1} (nur im Januar)</span>`:''}
+      ${vs.future>0?`<span class="ab-c2-sub">${esc(vs.future)} Tage bereits geplant</span>`:''}
+      <span class="ab-c2-sub">Jahresanspruch ${esc(vs.annual)} Tage</span></div>`;
+    const myReqs=reqs.filter(r=>r.userId===cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+    const myActive=myReqs.filter(r=>r.endDate>=todayStr||r.status==='pending').sort((a,b)=>a.startDate.localeCompare(b.startDate));
+    const myPast=myReqs.filter(r=>r.endDate<todayStr&&r.status!=='pending');
+    html+=`<section>${myActive.length?myActive.map(card).join(''):'<div class="empty-state"><span class="es-icon">🏖️</span><span>Keine aktiven oder geplanten Abwesenheiten.</span></div>'}
+      ${myPast.length?`<details style="margin-top:10px"><summary class="ab-sum">🕓 Vergangene Abwesenheiten (${myPast.length})</summary><div style="margin-top:8px">${myPast.map(card).join('')}</div></details>`:''}</section>`;
+  }
+
+  if(tab==='team' && isMgr){
+    html+=`<section style="margin-bottom:22px"><h3 class="ab-h3" style="color:var(--warn-text)">⏳ Offene Anträge (${pending.length})</h3>
+      ${pending.length?pending.map(card).join(''):'<div class="ab-c2-sub">Keine offenen Anträge.</div>'}</section>`;
     const teamDone=reqs.filter(r=>{
       if(r.status==='pending'||r.userId===cu.id) return false;
       if(r.endDate<todayStr) return false;
       if(isAdmin) return true;
       const u=getUser(r.userId); return u&&canSeeAbsence(cu,u);
     }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-    if(teamDone.length) html+=`<section style="margin-bottom:28px">
-      <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Team-Übersicht</h3>
-      ${teamDone.map(card).join('')}</section>`;
+    html+=`<section style="margin-bottom:22px"><h3 class="ab-h3">Team-Übersicht – laufend und geplant</h3>
+      ${teamDone.length?teamDone.map(card).join(''):'<div class="ab-c2-sub">Keine laufenden oder geplanten Abwesenheiten.</div>'}</section>`;
     if(isAdmin){
       const allPast=reqs.filter(r=>r.status==='approved'&&r.endDate<todayStr&&r.userId!==cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
-      if(allPast.length) html+=`<section style="margin-bottom:28px">
-        <details><summary style="cursor:pointer;font-size:15px;font-weight:700;color:var(--primary);user-select:none">🕓 Vergangene Abwesenheiten – alle Mitarbeitenden (${allPast.length})</summary>
-        <div style="margin-top:10px;opacity:.85">${allPast.map(card).join('')}</div></details></section>`;
+      if(allPast.length) html+=`<section><details><summary class="ab-sum">🕓 Vergangene Abwesenheiten – alle Mitarbeitenden (${allPast.length})</summary>
+        <div style="margin-top:10px">${allPast.map(card).join('')}</div></details></section>`;
     }
-  } else {
-    const teamAbs=reqs.filter(r=>{
-      if(r.userId===cu.id) return false;
-      if(r.status!=='approved') return false;
-      if(r.endDate<todayStr) return false;
-      return true;
-    }).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-    if(teamAbs.length) html+=`<section style="margin-bottom:28px">
-      <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Abwesenheiten im Unternehmen</h3>
-      ${teamAbs.map(card).join('')}</section>`;
   }
-  const myReqs=reqs.filter(r=>r.userId===cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
-  const myActive=myReqs.filter(r=>r.endDate>=todayStr||r.status==='pending');
-  const myPast=myReqs.filter(r=>r.endDate<todayStr&&r.status!=='pending');
-  const pastToggle=myPast.length?`
-    <details style="margin-top:10px">
-      <summary style="cursor:pointer;font-size:13px;color:var(--muted);padding:6px 0;user-select:none">
-        🕓 Vergangene Abwesenheiten (${myPast.length})
-      </summary>
-      <div style="margin-top:8px;opacity:.8">${myPast.map(card).join('')}</div>
-    </details>`:'';
-  html+=`<section>
-    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">Meine Anträge</h3>
-    ${myActive.length?myActive.map(card).join(''):'<div class="empty-state"><span class="es-icon">🏖️</span><span>Keine aktiven oder geplanten Abwesenheiten.</span></div>'}
-    ${pastToggle}
-  </section>`;
   document.getElementById('ab-content').innerHTML=html;
   updateAbBadge();
 }
@@ -767,7 +735,7 @@ function _buildDayMap(reqs,cu,filterFn){
     while(cur<=end){
       const ds=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
       if(!dayMap[ds]) dayMap[ds]=[];
-      dayMap[ds].push({name:r.userName,type:r.type,userId:r.userId});
+      dayMap[ds].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:r.type,userId:r.userId});
       cur.setDate(cur.getDate()+1);
     }
   });
@@ -802,8 +770,7 @@ export function renderAbCalendarWeek(){
   // Update title
   const t=document.getElementById('ab-cal-title');
   if(t) t.textContent=fmtShort(mondayStr)+' – '+fmtShort(sundayStr)+sunday.getFullYear();
-  let html=_legend(personList,colorFor);
-  html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
+  let html='<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">';
   for(let i=0;i<7;i++){
     const day=new Date(monday); day.setDate(day.getDate()+i);
     const ds=localISODate(day);
@@ -819,8 +786,7 @@ export function renderAbCalendarWeek(){
       </div>
       <div style="padding:6px;min-height:60px">
         ${abs.length?abs.map(a=>{
-          const icon=a.type==='AU/Krank'?'🤒':a.type==='Urlaub'?'🏖':a.type==='Arbeitszeitausgleich'?'📋':'📌';
-          return `<div style="font-size:11px;padding:2px 4px;border-radius:4px;background:${colorFor(a.userId)};margin-bottom:2px">${icon} ${esc(a.name)}</div>`;
+          return `<div style="font-size:11px;padding:2px 4px;border-radius:4px;background:${_typeBg(a.type)};color:${_typeFg(a.type)};margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.name)}: ${esc(a.type)}">${esc(a.name.split(' ')[0])}</div>`;
         }).join(''):'<span style="font-size:11px;color:var(--border)">–</span>'}
       </div>
     </div>`;
@@ -839,8 +805,7 @@ export function renderAbCalendarYear(){
   const today=new Date(); const todayStr=dateStr(today.getFullYear(),today.getMonth()+1,today.getDate());
   // Update title
   const t=document.getElementById('ab-cal-title'); if(t) t.textContent=String(y);
-  let html=_legend(personList,colorFor);
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px">';
+  let html='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px">';
   for(let m=1;m<=12;m++){
     const hols=getHolidays(y,cu.bundesland||'');
     const dim=daysInMonth(y,m);
@@ -859,7 +824,7 @@ export function renderAbCalendarYear(){
       const isHol=hols.has(ds);
       const abs=dayMap[ds]||[];
       const isToday=ds===todayStr;
-      const bg=abs.length?colorFor(abs[0].userId):(isWE||isHol?'#f0f0f0':'');
+      const bg=abs.length?_typeBg(abs[0].type):(isWE||isHol?'var(--bg)':'');
       const bdr=isToday?'2px solid var(--primary)':'1px solid transparent';
       const tip=abs.map(a=>a.name+': '+a.type).join('\n')+(isHol?'\nFeiertag':'');
       const dot=abs.length>1?'<span style="position:absolute;top:0;right:0;width:4px;height:4px;border-radius:50%;background:var(--danger)"></span>':'';
