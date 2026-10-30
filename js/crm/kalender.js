@@ -316,6 +316,8 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-ag-date{width:44px;flex:none;display:flex;flex-direction:column;align-items:center;padding-top:2px}
   .kal-ag-date .dn{font-size:1.35rem;font-weight:800;color:var(--primary-d,#15263a);line-height:1.1} .kal-ag-date .dw{font-size:.74rem;font-weight:700;color:var(--muted,#5d7086);text-align:center}
   .kal-ag-list{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+  .kal-cfmon{font-weight:700;color:var(--primary,#1f3a5f);font-size:.95rem;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border,#e6ebf2)}
+  .kal-cfarch{margin-top:18px} .kal-cfarch>summary{cursor:pointer;color:var(--muted,#64748b);font-weight:600;padding:8px 0;user-select:none} .kal-cfarch .kal-cfitem{opacity:.8}
   .kal-ag-it{border-left:4px solid;border-radius:6px;background:var(--surface,#fff);box-shadow:0 1px 2px rgba(0,0,0,.08);padding:8px 10px;min-height:44px;box-sizing:border-box}
   .kal-ag-it .t{font-weight:700;font-size:.92rem;color:var(--text,#15263a);overflow-wrap:anywhere} .kal-ag-it .m{font-size:.8rem;color:var(--muted,#5d7086);margin-top:2px}
   .kal-ag-it .cf{font-size:.84rem;font-weight:700;color:var(--danger,#c8442f);margin-top:3px}
@@ -505,14 +507,28 @@ function _yearGrid(months, title){
 }
 
 // ── Konflikte-Liste ──
-function _conflictList(from,to){
+// Konflikte (v524, User 30.10.2026): ab heute chronologisch weiter (keine Jahresgrenze), Monatsüberschriften,
+// Datum mit Jahr; Vergangenes eingeklappt im Archiv (neueste zuerst).
+const _MON_DE=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const _deDateY=iso=>{ const p=String(iso).split('-'); return p.length===3?(+p[2]+'.'+ +p[1]+'.'+p[0]):iso; };
+function _cfTimeline(items, rowFn, emptyMsg){
+  const today=_todayISO();
+  const up=items.filter(e=>(e.bis||e.von)>=today).sort((a,b)=>(a.von<b.von?-1:a.von>b.von?1:String(a.titel).localeCompare(String(b.titel),'de')));
+  const past=items.filter(e=>(e.bis||e.von)<today).sort((a,b)=>(a.von<b.von?1:a.von>b.von?-1:0));
+  const withMonths=list=>{ let last='', h=''; list.forEach(e=>{ const ym=String(e.von).slice(0,7); if(ym!==last){ last=ym; const[y,m]=ym.split('-'); h+='<div class="kal-cfmon">'+_MON_DE[(+m)-1]+' '+y+'</div>'; } h+=rowFn(e); }); return h; };
+  let h='<div class="kal-cf">';
+  h+=up.length?withMonths(up):'<div class="kal-empty">'+emptyMsg+'</div>';
+  if(past.length) h+='<details class="kal-cfarch"><summary>🗄 Archiv – vergangene Termine ('+past.length+')</summary>'+withMonths(past)+'</details>';
+  return h+'</div>';
+}
+function _conflictList(){
   const zeIds=new Set(_emps().map(u=>u.id));   // nur Mitarbeiter mit Zeiterfassung
   const abs=_abs().filter(a=>zeIds.has(a.emp));
-  const items=_events().concat(_termine()).filter(e=>overlap(e.von,e.bis,from,to)).sort((a,b)=>a.von<b.von?-1:1);
-  if(!items.length) return '<div class="kal-empty">Keine Veranstaltungen oder Termine in diesem Zeitraum.</div>';
+  const items=_events().concat(_termine());
+  if(!items.length) return '<div class="kal-empty">Keine Veranstaltungen oder Termine.</div>';
   const inTeam=id=>!curTeam||empTeamById(id)===curTeam;
-  let h='<div class="kal-cf">';
-  items.forEach(e=>{
+  const row=e=>{
+    let h='';
     const ic=e.typ==='va'?'📅':'•';
     const assignedIds=(e.mitarbeiter||[]).filter(id=>zeIds.has(id)&&inTeam(id));
     let absentList, sub;
@@ -524,13 +540,14 @@ function _conflictList(from,to){
       sub=absentList.length?(absentList.length+' abwesend an diesem Tag'):'niemand abwesend';
     }
     const cnt=absentList.length;
-    const dl=e.von===e.bis?_deDate(e.von):(_deDate(e.von)+' – '+_deDate(e.bis));
+    const dl=e.von===e.bis?_deDateY(e.von):(_deDateY(e.von)+' – '+_deDateY(e.bis));
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+sub+'</div>';
     if(cnt) h+='<div class="kal-chips">'+absentList.map(a=>{const m=KMETA[a.type];return '<span class="kal-chip" style="background:'+m.c+'">'+esc(empName(a.emp))+' · '+m.lbl+'</span>';}).join('')+'</div>';
     h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
-  });
-  return h+'</div>';
+    return h;
+  };
+  return _cfTimeline(items, row, 'Ab heute stehen keine Veranstaltungen oder Termine an.');
 }
 
 // ═══ Persönliche Ansicht („Nur ich"): klassische Kalender-Layouts ═══
@@ -625,18 +642,17 @@ function _persYear(months){
   }
   return h+'</div>';
 }
-function _persConflict(from,to){
+function _persConflict(){
   const myId=(window.cu&&window.cu.id)||''; const myAbs=_abs().filter(a=>a.emp===myId);
-  const mine=_persItems().filter(it=>_persMine(it)&&overlap(it.von,it.bis,from,to)).sort((a,b)=>a.von<b.von?-1:1);
-  if(!mine.length) return '<div class="kal-empty">Dir sind in diesem Zeitraum keine Veranstaltungen oder Termine zugewiesen.</div>';
-  let h='<div class="kal-cf">';
-  mine.forEach(e=>{ const ic=e.typ==='va'?'📅':'•'; const clash=myAbs.filter(a=>overlap(a.von,a.bis,e.von,e.bis)); const cnt=clash.length;
-    const dl=e.von===e.bis?_deDate(e.von):(_deDate(e.von)+' – '+_deDate(e.bis));
-    h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
+  const mine=_persItems().filter(it=>_persMine(it));
+  if(!mine.length) return '<div class="kal-empty">Dir sind keine Veranstaltungen oder Termine zugewiesen.</div>';
+  const row=e=>{ const ic=e.typ==='va'?'📅':'•'; const clash=myAbs.filter(a=>overlap(a.von,a.bis,e.von,e.bis)); const cnt=clash.length;
+    const dl=e.von===e.bis?_deDateY(e.von):(_deDateY(e.von)+' – '+_deDateY(e.bis));
+    let h='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
     h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
-  });
-  return h+'</div>';
+    return h; };
+  return _cfTimeline(mine, row, 'Ab heute sind dir keine Veranstaltungen oder Termine zugewiesen.');
 }
 
 // ── Liste (Agenda): Tag für Tag, was ansteht – gut am Handy (User 14.10.2026) ──
@@ -708,7 +724,7 @@ function _boardHtml(){
   if(V==='woche'){ if(personal) return _persWeek(weekStart); const days=[]; for(let i=0;i<7;i++){ const dt=_addDays(weekStart,i); const iso=_iso(dt); days.push({iso,dom:dt.getDate(),dow:_dowMon(dt),we:_dowMon(dt)>=5,today:iso===_todayISO()}); } return _dayGrid(days); }
   if(V==='jahr'){ const months=_saisonMonths(); return personal?_persYear(months):_yearGrid(months, (_mobile()?'Name':'Mitarbeiter · '+_saisonLabel())); }
   // konflikt
-  return personal ? _persConflict(curY+'-01-01', curY+'-12-31') : _conflictList(curY+'-01-01', curY+'-12-31');
+  return personal ? _persConflict() : _conflictList();
 }
 
 export function renderKalender(){
