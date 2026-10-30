@@ -16,13 +16,8 @@ function _vtOwnTeams(cu){ return (cu && Array.isArray(cu.teams) && cu.teams.leng
 // prüft/leitet die Zeiten des Teams in der Mitarbeiterübersicht weiter, bis von/bis abläuft oder
 // manuell beendet wird. Technisch angebunden über canSeeEmployee()/activeVertretungTeams() in
 // roles.js. Datenmodell: d.vertretungen[]={id,team,deputyId,deputyName,von,bis,ended,byId,byName,ts}.
-function _vtActive(v){
-  if(!v||v.ended) return false;
-  const c=s=>{ s=String(s||'').trim(); const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0'):s; };
-  const today=c(localISODate());
-  return c(v.von)<=today && (!v.bis || today<=c(v.bis));
-}
-function _vtDate(s){ if(!s) return ''; try{ return new Date(s).toLocaleDateString('de-DE'); }catch(e){ return String(s); } }
+
+
 function _vtVal(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
 // Vollständige Team-Auswahl: konfigurierte Teams (d.teams) PLUS alle Teams, die tatsächlich
 // bei Nutzern hinterlegt sind (u.teams[]/u.team). So sind auch Teams wählbar, die nie explizit
@@ -51,35 +46,60 @@ export function renderVertretungen(){
   const teams=all ? _allTeams(d) : own;
   if(!teams.length){ content.innerHTML='<p style="color:var(--muted);padding:20px 0">Dir ist kein Team zugeordnet – Vertretungen legt dann die Geschäftsführung an.</p>'; return; }
   const deputies=(d.users||[]).filter(u=>u.role==='geschaeftsfuehrer'||u.role==='leitung'||u.role==='admin');
-  const vs=(d.vertretungen||[]).filter(v=>all||own.includes(v.team)).slice().sort((a,b)=>String(b.von||'').localeCompare(String(a.von||'')));
-
-  const rows=vs.length?vs.map(v=>{
-    const act=_vtActive(v);
-    const state=v.ended?'<span style="color:var(--muted)">beendet</span>':(act?'<span style="color:var(--ok);font-weight:700">aktiv</span>':'<span style="color:var(--warn)">geplant / abgelaufen</span>');
-    const zeit=_vtDate(v.von)+(v.bis?' – '+_vtDate(v.bis):' – offen');
-    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;flex-wrap:wrap">
-      <span>🔄 <strong>${esc(v.team)}</strong> → ${esc(v.deputyName||'')} <span style="color:var(--muted);font-size:12px">(${esc(zeit)})</span> · ${state}</span>
-      <span style="display:flex;gap:6px">${(!v.ended&&act)?`<button class="btn btn-outline btn-sm" onclick="endVertretung(${jsq(v.id)})">Beenden</button>`:''}${all?`<button class="btn btn-sm" style="background:var(--surface,#fff);border:1.5px solid var(--danger);color:var(--danger)" title="Löschen" onclick="deleteVertretung(${jsq(v.id)})">🗑</button>`:''}</span>
+  const vs=(d.vertretungen||[]).filter(v=>v&&(all||own.includes(v.team)));
+  // Neues Layout (v521, User 30.10.2026): links „Neue Vertretung“, rechts Aktiv / Geplant, Vergangene eingeklappt –
+  // gleiche Bausteine wie die Abwesenheiten (ab-box, ab-card2).
+  const c=s=>{ s=String(s||'').trim(); const m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0'):s; };
+  const todayC=c(localISODate());
+  const state=v=>v.ended?'ended':(c(v.von)>todayC?'planned':((v.bis&&c(v.bis)<todayC)?'expired':'active'));
+  const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  const fmtW=ds=>{ if(!ds) return ''; const x=new Date(String(ds).slice(0,10)+'T12:00:00'); if(isNaN(x)) return esc(ds); return esc(WD[x.getDay()]+' '+String(x.getDate()).padStart(2,'0')+'.'+String(x.getMonth()+1).padStart(2,'0')+'.'+(x.getFullYear()!==new Date().getFullYear()?x.getFullYear():'')); };
+  const days=(a,b)=>Math.round((new Date(String(b).slice(0,10)+'T12:00:00')-new Date(String(a).slice(0,10)+'T12:00:00'))/86400000);
+  const today=localISODate();
+  const STY={ active:['#1D9E75','ok','aktiv'], planned:['#378ADD','info','geplant'], expired:['#888780','','abgelaufen'], ended:['#888780','','beendet'] };
+  const card=v=>{
+    const st=state(v), [bar,cls,lbl]=STY[st];
+    let hint='';
+    if(st==='active') hint=v.bis?(()=>{ const n=days(today,v.bis)+1; return n<=1?'endet heute':`noch ${n} Tage`; })():'ohne Enddatum';
+    if(st==='planned'){ const n=days(today,v.von); hint=n===1?'ab morgen':`in ${n} Tagen`; }
+    const chip=cls?`<span class="ab-type" style="background:var(--${cls}-bg);color:var(--${cls}-text)">${lbl}</span>`:`<span class="ab-type" style="background:var(--bg);color:var(--muted)">${lbl}</span>`;
+    const acts=[(st==='active'||st==='planned')?`<button class="btn btn-outline btn-sm ab-mini" onclick="endVertretung(${jsq(v.id)})">${st==='planned'?'Absagen':'Beenden'}</button>`:'',
+      all?`<button class="btn btn-sm ab-mini ab-del" onclick="deleteVertretung(${jsq(v.id)})">🗑 Löschen</button>`:''].filter(Boolean).join('');
+    return `<div class="ab-card2" style="border-left-color:${bar}">
+      <div class="ab-c2-top"><strong>${esc(v.team)}</strong>${chip}${hint?`<span class="ab-c2-sub">${esc(hint)}</span>`:''}</div>
+      <div class="ab-c2-date">🔄 vertreten durch <strong>${esc(v.deputyName||'')}</strong></div>
+      <div class="ab-c2-sub">📅 ${fmtW(v.von)} – ${v.bis?fmtW(v.bis):'offen'}${v.byName?` · angelegt von ${esc(v.byName)}`:''}</div>
+      ${acts?`<div class="ab-c2-acts">${acts}</div>`:''}
     </div>`;
-  }).join(''):'<div style="color:var(--muted);font-size:13px;padding:6px 0">Noch keine Vertretungen angelegt.</div>';
+  };
+  const sortVon=(a,b)=>String(a.von||'').localeCompare(String(b.von||''));
+  const aktiv=vs.filter(v=>state(v)==='active').sort(sortVon);
+  const geplant=vs.filter(v=>state(v)==='planned').sort(sortVon);
+  const vorbei=vs.filter(v=>state(v)==='ended'||state(v)==='expired').sort((a,b)=>-sortVon(a,b));
+  const sec=(t,list,leer)=>`<section style="margin-bottom:18px"><h3 class="ab-h3">${t} <span class="ab-c2-sub">(${list.length})</span></h3>${list.length?list.map(card).join(''):`<div class="ab-c2-sub">${leer}</div>`}</section>`;
 
   const teamOpts=teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   const depOpts=deputies.map(u=>`<option value="${esc(u.id)}">${esc(u.name)}${u.role==='geschaeftsfuehrer'?' (GF)':(u.role==='admin'?' (Admin)':'')}</option>`).join('');
-  const today=localISODate();
 
   content.innerHTML=`
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px;max-width:760px">Fällt eine Team-Leitung aus, kann sie hier zeitweise vertreten werden – auch durch die Geschäftsführung selbst. Die Vertretung sieht, prüft und leitet die Zeiten des Teams in der Mitarbeiterübersicht weiter, bis der Zeitraum endet oder du sie beendest. Die eigentliche Leitung behält ihr Team dabei.</div>
-    <div style="background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:22px">
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-        <label style="font-size:12px;color:var(--muted)">Team<br><select id="vt-team" style="min-width:160px">${teamOpts}</select></label>
-        <label style="font-size:12px;color:var(--muted)">Vertreter:in<br><select id="vt-deputy" class="crm-ss" style="min-width:180px">${depOpts}</select></label>
-        <label style="font-size:12px;color:var(--muted)">ab<br><input type="date" id="vt-von" value="${today}"></label>
-        <label style="font-size:12px;color:var(--muted)">bis (optional)<br><input type="date" id="vt-bis"></label>
-        <button class="btn btn-ok btn-sm" onclick="addVertretung()">＋ Vertretung anlegen</button>
+    <div class="ab-c2-sub" style="margin:-4px 0 14px;max-width:900px;font-size:13px">Fällt eine Team-Leitung aus, übernimmt die Vertretung für den gewählten Zeitraum: Sie sieht, prüft und leitet die Zeiten des Teams in der Mitarbeiterübersicht weiter. Die eigentliche Leitung behält ihr Team.${all?'':' Du kannst Vertretungen für deine eigenen Teams anlegen und beenden.'}</div>
+    <div class="vt-grid">
+      <div class="ab-box vt-new">
+        <div class="ab-box-h">＋ Neue Vertretung</div>
+        <label class="vt-f">Team<select id="vt-team">${teamOpts}</select></label>
+        <label class="vt-f">Vertreten durch<select id="vt-deputy">${depOpts}</select></label>
+        <div class="vt-2">
+          <label class="vt-f">ab<input type="date" id="vt-von" value="${today}"></label>
+          <label class="vt-f">bis <span class="ab-c2-sub">(optional)</span><input type="date" id="vt-bis"></label>
+        </div>
+        <button class="btn btn-ok" style="width:100%;margin-top:6px" onclick="addVertretung()">Vertretung anlegen</button>
       </div>
-    </div>
-    <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin:0 0 10px">Angelegte Vertretungen</h3>
-    ${rows}`;
+      <div>
+        ${sec('Aktiv',aktiv,'Gerade keine aktive Vertretung.')}
+        ${sec('Geplant',geplant,'Keine geplanten Vertretungen.')}
+        ${vorbei.length?`<details><summary class="ab-sum">🕓 Beendet und abgelaufen (${vorbei.length})</summary><div style="margin-top:8px">${vorbei.map(card).join('')}</div></details>`:''}
+      </div>
+    </div>`;
 }
 
 export function addVertretung(){

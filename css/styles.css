@@ -257,6 +257,12 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .ab-del{background:var(--white);border:1px solid var(--danger);color:var(--danger)}
 .ab-h3{font-size:15px;font-weight:700;color:var(--primary);margin:0 0 10px}
 .ab-sum{cursor:pointer;font-size:13px;color:var(--muted);padding:6px 0;user-select:none}
+/* Vertretungen (v521) */
+.vt-grid{display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:16px;align-items:start;max-width:1200px}
+.vt-f{display:block;font-size:12px;color:var(--muted);margin-bottom:10px}
+.vt-f select,.vt-f input{display:block;width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--white);color:var(--text);box-sizing:border-box}
+.vt-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:800px){ .vt-grid{grid-template-columns:minmax(0,1fr)} }
 @media(max-width:900px){ .ab-grid{grid-template-columns:minmax(0,1fr)} .ab-listbox{order:-1} }
 
 /* ── Time Table ── */
