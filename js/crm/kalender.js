@@ -70,6 +70,26 @@ const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray
 function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{};
   Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved') return; const m=AB[r.type]; if(!m||!r.startDate) return;
     out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay, note:r.note||''}); });
+  return _absMerge(out); }
+// Aneinanderhängende Abwesenheiten einer Person (Urlaub + Ausgleich usw.) als EINEN Balken zeigen (v522, User 30.10.2026):
+// zusammengefasst, wenn sie sich überlappen, direkt aneinander anschließen oder nur ein Wochenende dazwischen liegt.
+function _absMerge(list){
+  const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const nahtlos=(bis,von)=>{ const d=new Date(bis+'T12:00:00'); d.setDate(d.getDate()+1);
+    while(iso(d)<von){ const w=d.getDay(); if(w!==0 && w!==6) return false; d.setDate(d.getDate()+1); }
+    return true; };
+  const byEmp={}; list.forEach(a=>{ (byEmp[a.emp]=byEmp[a.emp]||[]).push(a); });
+  const out=[];
+  Object.values(byEmp).forEach(arr=>{
+    arr.sort((x,y)=>String(x.von).localeCompare(String(y.von)));
+    let cur=null;
+    arr.forEach(a=>{
+      if(cur && (a.von<=cur.bis || nahtlos(cur.bis, a.von))){
+        if(a.bis>cur.bis) cur.bis=a.bis;
+        cur.half=false; if(a.note && a.note!==cur.note) cur.note=[cur.note,a.note].filter(Boolean).join(' · ');
+      } else { cur=Object.assign({}, a); out.push(cur); }
+    });
+  });
   return out; }
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
   const _own=_kr('kal_ansehen')==='eigene';
