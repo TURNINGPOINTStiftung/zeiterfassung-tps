@@ -68,7 +68,7 @@ function _ufRechteKopf(u, isNew){
   if(!(window.TPS_RECHTE||[]).length) return '';
   const rk=window.tpsRoleTplKey?window.tpsRoleTplKey(u.role||'mitarbeiter'):'team';
   const lbl=((window.TPS_VORLAGEN||[]).find(t=>t.key===rk)||{}).label||rk;
-  return `<style>.uf-r-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer}.uf-r-row input{width:auto;margin:0;cursor:pointer}.uf-r-row select{width:auto;margin-left:auto;font-size:12px;padding:3px 6px}.uf-r-nr{display:inline-block;min-width:30px;color:var(--muted);font-size:11px}.uf-r-lbl{flex:1}</style>
+  return `<style>.uf-r-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer}.uf-r-row input{width:auto;margin:0;cursor:pointer}.uf-r-row select{width:auto;margin-left:auto;font-size:12px;padding:3px 6px}.uf-r-nr{display:inline-block;min-width:30px;color:var(--muted);font-size:12px}.uf-r-lbl{flex:1}</style>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:2px 0 8px">
     <span>Standard der Rolle: <b id="uf-r-rolle">${esc(lbl)}</b> – gilt beim Einschalten eines Moduls („Nutzen").</span>
     <span style="margin-left:auto">Füllen:</span>
@@ -169,13 +169,13 @@ export function renderSettings(){
     const zeAktiv=!u.noTimesheet;
     const reportAktiv=!u.noReport;
     const zeToggle=isGFUser
-      ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet(${jsq(u.id)})" style="font-size:11px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
+      ?`<button class="btn btn-sm btn-${zeAktiv?'warn':'ok'}" onclick="toggleGFTimesheet(${jsq(u.id)})" style="font-size:12px;padding:4px 9px">${zeAktiv?'ZE deaktivieren':'ZE aktivieren'}</button>`
       :isLeitungUser
-        ?`<span style="font-size:11px;color:var(--muted)" title="Leitungs-Zeiterfassung ist immer privat; eingereichte Monate gehen als Buchhaltungsversion an die GF">🔒 ZE privat · Buchhaltung an GF</span>`
+        ?`<span style="font-size:12px;color:var(--muted)" title="Leitungs-Zeiterfassung ist immer privat; eingereichte Monate gehen als Buchhaltungsversion an die GF">🔒 ZE privat · Buchhaltung an GF</span>`
         :'';
     return `<div class="user-row">
       <div>
-        <div class="name">${esc(u.name)} <span class="chip chip-${esc(u.role)}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:10px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:10px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
+        <div class="name">${esc(u.name)} <span class="chip chip-${esc(u.role)}">${roleLabel(u.role,u)}</span>${(Array.isArray(u.customRoles)&&u.customRoles.length?u.customRoles:u.customRole?[u.customRole]:[]).map(cid=>{const cr=getCustomRoles().find(r=>r.id===cid);return cr?`<span class="chip" style="background:var(--info-bg,#e8f4fd);color:#1a5276;font-size:12px">${esc(cr.label)}</span>`:''}).join('')}${(Array.isArray(u.teams)&&u.teams.length?u.teams:[u.team]).filter(Boolean).map(t=>`<span class="team-badge">${esc(t)}</span>`).join('')}${u.role==='geschaeftsfuehrer'&&u.noTimesheet?'<span style="font-size:12px;color:var(--muted);margin-left:6px">ZE inaktiv</span>':''}${u.role==='leitung'&&u.noReport?'<span style="font-size:12px;color:var(--muted);margin-left:6px">ZE privat</span>':''}</div>
         <div class="details"><span data-mfa="${esc(u.id)}"></span> ${esc(u.city||'–')} · ${u.role==='freiberuflich'?'flexibel':`${esc(u.wh)}h/Woche · ${esc(u.al)} T Urlaub`}</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -195,7 +195,7 @@ export function renderSettings(){
   const crs=getCustomRoles();
   const crEl=document.getElementById('custom-role-list');
   if(crEl) crEl.innerHTML=crs.length
-    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:10px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole(${jsq(r.id)})" title="Entfernen">×</button></span>`).join('')
+    ? crs.map(r=>`<span class="team-chip">${esc(r.label)} <span style="font-size:12px;opacity:.7">(${_baseRoleLabel(r.base)})</span> <button onclick="removeCustomRole(${jsq(r.id)})" title="Entfernen">×</button></span>`).join('')
     : '<span style="color:var(--muted);font-size:13px">Noch keine eigenen Rollen.</span>';
 
   {
@@ -212,7 +212,7 @@ export function renderSettings(){
     const mkSection=(label,labelColor,arr,teamArg,idx,note='')=>{
       const ta=jsq(teamArg);
       return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-        <div style="font-size:11px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(label)}</div>
+        <div style="font-size:12px;font-weight:700;color:${labelColor};text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">${esc(label)}</div>
         ${note}
         <div style="margin-bottom:6px">${mkChips(arr,teamArg)}</div>
         <div class="flex mt-14">
@@ -221,15 +221,15 @@ export function renderSettings(){
         </div>
       </div>`;
     };
-    let csHtml='<div style="font-size:11px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--surface-2,#f5f7fa);border-radius:6px">Mit ‹ › die Reihenfolge ändern. Urlaub &amp; AU/Krank erscheinen in der Zeiterfassung immer ganz unten.</div>';
+    let csHtml='<div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:6px 10px;background:var(--surface-2,#f5f7fa);border-radius:6px">Mit ‹ › die Reihenfolge ändern. Urlaub &amp; AU/Krank erscheinen in der Zeiterfassung immer ganz unten.</div>';
     csHtml+=mkSection('Standard (kein Team)','var(--muted)',dd2.cats||[...DEFAULT_CATS],null,0);
     tms.forEach((t,i)=>{
       const isCustom=dd2.teamCats&&Array.isArray(dd2.teamCats[_fk(t)]);
       const arr=isCustom?dd2.teamCats[_fk(t)]:getCatsForTeam(t);
-      const note=isCustom?'':'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">↳ Vorkonfigurierte Kategorien – Änderungen gelten nur für dieses Team</div>';
+      const note=isCustom?'':'<div style="font-size:12px;color:var(--muted);margin-bottom:4px">↳ Vorkonfigurierte Kategorien – Änderungen gelten nur für dieses Team</div>';
       csHtml+=mkSection(t,'var(--primary)',arr,t,i+1,note);
     });
-    csHtml+=`<div style="padding:6px 10px;background:#f5f5f5;border-radius:6px;font-size:11px;color:var(--muted)">★ Freiberufliche: AKADEMIE · WENDESTART · WENDEKURS · WENDETRAINING (fest, nicht änderbar)</div>`;
+    csHtml+=`<div style="padding:6px 10px;background:#f5f5f5;border-radius:6px;font-size:12px;color:var(--muted)">★ Freiberufliche: AKADEMIE · WENDESTART · WENDEKURS · WENDETRAINING (fest, nicht änderbar)</div>`;
     document.getElementById('cat-section').innerHTML=csHtml;
   }
 
@@ -341,7 +341,7 @@ function renderPermissionsMatrix(el){
     if(rk==='admin') return true;
     return Array.isArray(perms[pk])?perms[pk].includes(rk):DEFAULT_PERMISSIONS[pk]?.includes(rk)??false;
   };
-  const hdrs=PERM_ROLES.map(r=>`<th style="text-align:center;font-size:11px;padding:6px 8px;min-width:60px">${esc(r.label)}</th>`).join('');
+  const hdrs=PERM_ROLES.map(r=>`<th style="text-align:center;font-size:12px;padding:6px 8px;min-width:60px">${esc(r.label)}</th>`).join('');
   const rows=PERM_DEFS.map(p=>{
     const cells=PERM_ROLES.map(r=>{
       const checked=getVal(p.key,r.key);
@@ -354,7 +354,7 @@ function renderPermissionsMatrix(el){
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="font-size:12px;padding:7px 10px;color:var(--text)">${esc(p.label)}</td>
       ${cells}
-      <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">✓</span></td>
+      <td style="text-align:center;padding:5px"><span style="font-size:12px;color:var(--muted)">✓</span></td>
     </tr>`;
   }).join('');
   // Vorlage je Rolle für CRM, Kalender, Projekte, Verteiler, Messe, Lager (v512, js/rechte.js roleTplKey)
@@ -362,8 +362,8 @@ function renderPermissionsMatrix(el){
   const tplRow=TPL.length?`<tr style="border-bottom:2px solid var(--border);background:rgba(127,127,127,.05)">
       <td style="font-size:12px;padding:7px 10px;color:var(--text)"><b>Vorlage</b> für CRM, Kalender, Projekte, Verteiler, Messe, Lager</td>
       ${PERM_ROLES.map(r=>{ const cur=window.tpsRoleTplKey?window.tpsRoleTplKey(r.key):'';
-        return `<td style="text-align:center;padding:5px"><select style="font-size:11px;padding:2px 4px;width:auto" onchange="saveRoleTemplate(${jsq(r.key)},this.value)">${TPL.map(t=>`<option value="${esc(t.key)}"${cur===t.key?' selected':''}>${esc(t.label)}</option>`).join('')}</select></td>`; }).join('')}
-      <td style="text-align:center;padding:5px"><span style="font-size:11px;color:var(--muted)">alles</span></td></tr>`:'';
+        return `<td style="text-align:center;padding:5px"><select style="font-size:12px;padding:2px 4px;width:auto" onchange="saveRoleTemplate(${jsq(r.key)},this.value)">${TPL.map(t=>`<option value="${esc(t.key)}"${cur===t.key?' selected':''}>${esc(t.label)}</option>`).join('')}</select></td>`; }).join('')}
+      <td style="text-align:center;padding:5px"><span style="font-size:12px;color:var(--muted)">alles</span></td></tr>`:'';
   el.innerHTML=`
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:20px">🔐 Standard-Rechte je Rolle</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Gilt als Vorbelegung für <b>neue Personen</b> und beim <b>Wechsel der Rolle</b>. Was eine Person tatsächlich darf, steht in ihrem Mitarbeiter-Dialog (je Modul). Admin hat immer alle Rechte.</p>
@@ -372,7 +372,7 @@ function renderPermissionsMatrix(el){
       <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
         <th style="text-align:left;padding:8px 10px;font-size:12px">Berechtigung</th>
         ${hdrs}
-        <th style="text-align:center;font-size:11px;padding:6px 8px">Admin</th>
+        <th style="text-align:center;font-size:12px;padding:6px 8px">Admin</th>
       </tr></thead>
       <tbody>${tplRow}${rows}</tbody>
     </table></div>`;
@@ -647,7 +647,7 @@ function _renderAccountCheck(){
   const res=window._accCheck||[];
   const open=res.filter(r=>r.status==='offen'), unk=res.filter(r=>r.status==='unbekannt');
   const rows=open.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
-      <span><b>${esc(r.name)}</b> <span style="font-size:11px;color:var(--muted)">(${esc(r.id)})</span></span>
+      <span><b>${esc(r.name)}</b> <span style="font-size:12px;color:var(--muted)">(${esc(r.id)})</span></span>
       <button class="btn btn-ok btn-sm" onclick="secureAccountUi(${jsq(r.id)})">🔐 Absichern</button></div>`).join('');
   openModal(`<h3>🔐 Konten prüfen</h3>
     <p style="font-size:13px;margin:0 0 10px">${res.length} Konten geprüft · <b style="color:${open.length?'var(--danger)':'var(--ok)'}">${open.length} offen</b> · ${res.length-open.length-unk.length} sicher${unk.length?` · ${unk.length} nicht prüfbar (später erneut)`:''}</p>
@@ -701,7 +701,7 @@ export function showEditDpw(id){
   openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${esc(u.wh||0)}&thinsp;h/Woche</p>
     <div class="form-group">
-      <label>Arbeitstage pro Woche <span style="font-size:11px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
+      <label>Arbeitstage pro Woche <span style="font-size:12px;color:var(--muted)">(beeinflusst Urlaubs- &amp; Krankheitsstunden)</span></label>
       <input id="edit-dpw-val" type="number" min="1" max="7" value="${esc(u.dpw||5)}" style="max-width:90px">
     </div>
     <div class="modal-btns">
@@ -752,10 +752,10 @@ function userForm(u={}){
             <option value="">– kein Team –</option>
             ${getTeams().map(t=>`<option value="${esc(t)}"${h.team===t?' selected':''}>${esc(t)}</option>`).join('')}
           </select>
-          <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:11px"
+          <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:12px"
             onclick="deleteTeamHistEntry(${jsq(u.id)},${i})">×</button>
         </div>`).join('');
-      return `<div class="form-group"><label>📅 Team-Verlauf <span style="font-size:11px;color:var(--muted)">(editierbar)</span></label>
+      return `<div class="form-group"><label>📅 Team-Verlauf <span style="font-size:12px;color:var(--muted)">(editierbar)</span></label>
         <div style="border:1.5px solid var(--border);border-radius:6px;padding:6px;margin-bottom:8px;max-height:160px;overflow-y:auto">
           ${histRows||'<span style="font-size:12px;color:var(--muted)">Noch kein Verlauf.</span>'}
         </div>
@@ -766,7 +766,7 @@ function userForm(u={}){
         </div>
       </div>`;
     })():'';
-  const teamPickerHtml=`<div class="form-group"><label>Team(s) <span style="font-size:11px;color:var(--muted)">(aktuell)</span></label>
+  const teamPickerHtml=`<div class="form-group"><label>Team(s) <span style="font-size:12px;color:var(--muted)">(aktuell)</span></label>
       <style>#uf-team-multi label{display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:3px 0;font-size:13px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0}#uf-team-multi input{width:auto;margin:0}</style>
       <div id="uf-team-multi" style="padding:6px;border:1.5px solid var(--border);border-radius:6px;max-height:130px;overflow-y:auto">${teamChecks}</div>
     </div>${teamHistHtml}`;
@@ -778,13 +778,13 @@ function userForm(u={}){
     </div>
     <div class="uf-grid2">
       <div class="form-group"><label>E-Mail</label><input id="uf-email" type="email" value="${esc(u.email||'')}" placeholder="vorname@beispiel.de"></div>
-      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:11px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben (mind. 12 Zeichen)'}" autocomplete="new-password"></div>
+      <div class="form-group"><label>Passwort${u.id?' <span style="font-size:12px;color:var(--muted)">(leer = nicht ändern)</span>':' *'}</label><input id="uf-pw" type="password" placeholder="${u.id?'Leer lassen = unverändert':'Passwort eingeben (mind. 12 Zeichen)'}" autocomplete="new-password"></div>
     </div>
     <div class="uf-section-head">🏢 Rolle &amp; Zugehörigkeit</div>
     ${isAdminUser
-      ? `<div class="form-group"><label>Systemrolle <span style="font-size:11px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
-      : `<div class="uf-grid2"><div class="form-group"><label>Rolle <span style="font-size:11px;color:var(--muted)">(bestimmt auch die Standard-Rechte)</span></label>${roleSelectHtml}</div></div>${teamPickerHtml}`}
-    <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:11px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
+      ? `<div class="form-group"><label>Systemrolle <span style="font-size:12px;color:var(--muted)">(bestimmt Zugriffsrechte)</span></label><input type="hidden" id="uf-role" value="admin"><div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – Rolle kann nicht geändert werden</div></div>`
+      : `<div class="uf-grid2"><div class="form-group"><label>Rolle <span style="font-size:12px;color:var(--muted)">(bestimmt auch die Standard-Rechte)</span></label>${roleSelectHtml}</div></div>${teamPickerHtml}`}
+    <div class="form-group"><label>Funktionsbezeichnungen <span style="font-size:12px;color:var(--muted)">(Anzeige-Labels, mehrere möglich)</span></label>
       ${(()=>{
           const crs=getCustomRoles();
           const userCRs=Array.isArray(u.customRoles)?u.customRoles:(u.customRole?[u.customRole]:[]);
@@ -798,34 +798,34 @@ function userForm(u={}){
     ${isAdminUser?`<div class="uf-grid2">${teamPickerHtml}</div>`:''}
     <div class="uf-grid2">
       <div class="form-group"><label>Wohnort</label><input id="uf-city" type="text" value="${esc(u.city||'')}"></div>
-      <div class="form-group"><label>Bundesland <span style="font-size:11px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
+      <div class="form-group"><label>Bundesland <span style="font-size:12px;color:var(--muted)">(für Feiertage)</span></label><select id="uf-bl">${blOpts}</select></div>
     </div>
     ${(()=>{ // Postadresse = CRM-Kontakt bei der eigenen Organisation (eine Quelle für Profil, CRM & Shop)
       try{ const ga=window.shopGetAddr ? window.shopGetAddr(u.id||'') : null;
         if(!ga || !ga.ok) return '';
-        return `<div class="form-group"><label>📮 Postadresse <span style="font-size:11px;color:var(--muted)">(CRM-Kontakt bei „${esc(ga.orgName)}" – für Lager-Lieferungen)</span></label>
+        return `<div class="form-group"><label>📮 Postadresse <span style="font-size:12px;color:var(--muted)">(CRM-Kontakt bei „${esc(ga.orgName)}" – für Lager-Lieferungen)</span></label>
           <textarea id="uf-adr" rows="2" placeholder="Straße Hausnr.&#10;PLZ Ort" data-orig="${esc(ga.adresse)}">${esc(ga.adresse)}</textarea></div>`;
       }catch(e){ return ''; } })()}
     <div id="uf-employed-fields"${(u.crmOnly||!u.id)?' style="display:none"':''}>
       <div class="uf-section-head">⏱ Arbeitszeit &amp; Urlaub</div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Eintritt <span style="font-size:11px;color:var(--muted)">(erster Arbeitstag)</span></label><input id="uf-entry" type="date" value="${esc(u.entryDate||'')}" oninput="ufAutoAdjust()"></div>
-        <div class="form-group"><label>Austritt <span style="font-size:11px;color:var(--muted)">(letzter Arbeitstag, optional)</span></label><input id="uf-exit" type="date" value="${esc(u.exitDate||'')}" oninput="ufAutoAdjust()"></div>
+        <div class="form-group"><label>Eintritt <span style="font-size:12px;color:var(--muted)">(erster Arbeitstag)</span></label><input id="uf-entry" type="date" value="${esc(u.entryDate||'')}" oninput="ufAutoAdjust()"></div>
+        <div class="form-group"><label>Austritt <span style="font-size:12px;color:var(--muted)">(letzter Arbeitstag, optional)</span></label><input id="uf-exit" type="date" value="${esc(u.exitDate||'')}" oninput="ufAutoAdjust()"></div>
       </div>
       <div id="uf-vac-info" style="font-size:12px;color:var(--primary);background:#eef3fb;border-radius:6px;padding:6px 10px;margin:-4px 0 10px;display:none"></div>
       <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
         <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
         <input type="date" id="uf-param-change-date" value="${localISODate().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">Greift nur, wenn du unten einen Wert änderst. Vergangene Monate rechnen dann weiter mit den bisherigen Werten (SOLL & Überträge bleiben korrekt).</div>
-        ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:11px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Greift nur, wenn du unten einen Wert änderst. Vergangene Monate rechnen dann weiter mit den bisherigen Werten (SOLL & Überträge bleiben korrekt).</div>
+        ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:12px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
       </div>
       <div class="uf-grid2">
         <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${esc(u.wh||20)}" data-orig="${esc(u.wh||20)}" oninput="ufAutoAdjust('wh')"></div>
         <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${esc(u.dpw||5)}" data-orig="${esc(u.dpw||5)}" oninput="ufAutoAdjust('dpw')"></div>
       </div>
       <div class="uf-grid2">
-        <div class="form-group"><label>Jahresurlaub (Tage) <span style="font-size:11px;color:var(--muted)">(voller Jahreswert)</span></label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${esc(u.al||24)}" data-orig="${esc(u.al||24)}" oninput="this.dataset.touched='1';ufAutoAdjust()"></div>
-        <div class="form-group"><label>Stunden / Urlaubstag <span style="font-size:11px;color:var(--muted)">(Teilzeit i.d.R. 8)</span></label>
+        <div class="form-group"><label>Jahresurlaub (Tage) <span style="font-size:12px;color:var(--muted)">(voller Jahreswert)</span></label><input id="uf-al" type="number" min="0" max="60" step="0.5" value="${esc(u.al||24)}" data-orig="${esc(u.al||24)}" oninput="this.dataset.touched='1';ufAutoAdjust()"></div>
+        <div class="form-group"><label>Stunden / Urlaubstag <span style="font-size:12px;color:var(--muted)">(Teilzeit i.d.R. 8)</span></label>
           <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" data-orig="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" oninput="this.dataset.touched='1'">
         </div>
       </div>
@@ -844,21 +844,21 @@ function userForm(u={}){
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-sollwd"${u.sollWorkdays?' checked':''} style="width:auto;cursor:pointer">
-          SOLL arbeitstaggenau berechnen <span style="font-size:11px;color:var(--muted)">(statt pauschal 4× Wochenstunden)</span>
+          SOLL arbeitstaggenau berechnen <span style="font-size:12px;color:var(--muted)">(statt pauschal 4× Wochenstunden)</span>
         </label>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.</div>
       </div>
       <div id="uf-werkstudent-fields" data-haslecture="${((Array.isArray(u.lecturePeriods)&&u.lecturePeriods.length)||(Array.isArray(u.lectureFreeDays)&&u.lectureFreeDays.length))?'1':''}" style="display:none">
         <div class="uf-section-head">🎓 Werkstudent – Vorlesungszeiten</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze: Wochen, in denen Mo–Fr zwischen 8 und 20 Uhr mehr als 20h gearbeitet werden, werden in der Zeiterfassung rot markiert (Zeiten vor 8 / nach 20 Uhr und am Wochenende zählen nicht mit). Pro Semester einen Zeitraum eintragen.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">In der Vorlesungszeit gilt die 20h-/Woche-Grenze: Wochen, in denen Mo–Fr zwischen 8 und 20 Uhr mehr als 20h gearbeitet werden, werden in der Zeiterfassung rot markiert (Zeiten vor 8 / nach 20 Uhr und am Wochenende zählen nicht mit). Pro Semester einen Zeitraum eintragen.</div>
         ${wsPeriodRows(u.lecturePeriods,'uf-lp',4,'Semester')}
         <div class="uf-section-head" style="margin-top:14px">🌉 Brückentage / vorlesungsfreie Tage</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tage oder Zeiträume INNERHALB der Vorlesungszeit, an denen die 20h-/Woche-Grenze NICHT gilt (z.B. Brückentage, vorlesungsfreie Tage – dann darf wie in den Semesterferien mehr gearbeitet werden). Einzelner Tag: bei „von" und „bis" dasselbe Datum eintragen.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Tage oder Zeiträume INNERHALB der Vorlesungszeit, an denen die 20h-/Woche-Grenze NICHT gilt (z.B. Brückentage, vorlesungsfreie Tage – dann darf wie in den Semesterferien mehr gearbeitet werden). Einzelner Tag: bei „von" und „bis" dasselbe Datum eintragen.</div>
         ${wsPeriodRows(u.lectureFreeDays,'uf-lf',6,'Zeitraum')}
       </div>
     </div>
     <div id="uf-freelancer-fields" style="display:none">
-      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:11px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${esc(u.maxHours||0)}"></div>
+      <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:12px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${esc(u.maxHours||0)}"></div>
     </div>
     ${(()=>{
       if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>
@@ -892,7 +892,7 @@ function userForm(u={}){
       // toggleFreelancerFields). Der ZE-Body blendet bei „Kein" ohnehin komplett aus → passt,
       // da diese Optionen nur bei aktiver Zeiterfassung Sinn ergeben.
       const _cbLbl='display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px';
-      const _cbHint='font-size:11px;color:var(--muted);margin:2px 0 0 26px';
+      const _cbHint='font-size:12px;color:var(--muted);margin:2px 0 0 26px';
       const zeRoleOpts=`<div id="uf-ze-roleopts" style="display:none;margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
           <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Rollen-Optionen:</div>
           <div id="uf-ze-opt-countersign" style="display:none;margin-bottom:8px">
@@ -925,9 +925,9 @@ function userForm(u={}){
         ? '<div style="font-size:12px;color:var(--muted)">Noch keine Teams angelegt (Teams &amp; Rollen).</div>'
         : `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Team-Boards, die diese Person im Projektmanagement sieht. Die <b>Zeiterfassungs-Teams</b> sind automatisch dabei; hier zusätzliche <b>zuweisen</b>. (Verwalten / CRM-Vollzugriff sieht alle.)</div>`
           +_kbTeams.map(t=>{ const inZe=_kbZe.has(t); const on=inZe||_kbExtra.has(t);
-            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;${inZe?'opacity:.65':'cursor:pointer'}"><input type="checkbox" class="uf-kbteam" value="${esc(t)}" data-ze="${inZe?'1':'0'}" ${on?'checked':''} ${inZe?'disabled':''} style="width:auto;cursor:${inZe?'default':'pointer'}"> ${esc(t)}${inZe?' <span style="font-size:11px;color:var(--muted)">(aus Zeiterfassung – automatisch)</span>':''}</label>`; }).join('');
-      return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:13.5px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
-        <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:11px;color:var(--muted)">(pro Person)</span></div>
+            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;${inZe?'opacity:.65':'cursor:pointer'}"><input type="checkbox" class="uf-kbteam" value="${esc(t)}" data-ze="${inZe?'1':'0'}" ${on?'checked':''} ${inZe?'disabled':''} style="width:auto;cursor:${inZe?'default':'pointer'}"> ${esc(t)}${inZe?' <span style="font-size:12px;color:var(--muted)">(aus Zeiterfassung – automatisch)</span>':''}</label>`; }).join('');
+      return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:14px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
+        <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:12px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
         ${_ufRechteKopf(u, isNewUser)}
         ${_ufAreaBox('crm', u, isNewUser, vereinDiv, '')}

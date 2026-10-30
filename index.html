@@ -148,7 +148,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
         </span>
         <span id="viewing-other-banner" style="display:none;background:#e8f0fe;color:var(--primary);font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1.5px solid var(--primary-l)">
           👁 Ansicht: <span id="viewing-other-name"></span>
-          &nbsp;<button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px" onclick="if(cu)viewEmpId=cu.id;renderZeiterfassung()">Eigene anzeigen</button>
+          &nbsp;<button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:12px" onclick="if(cu)viewEmpId=cu.id;renderZeiterfassung()">Eigene anzeigen</button>
         </span>
         <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap" class="no-print">
           <button class="btn btn-outline btn-sm" onclick="printFull()" title="Mit Bemerkungsspalten">🖨 Drucken<span class="hide-m"> (vollständig)</span></button>
@@ -222,7 +222,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
           <label id="carryover-label" for="carryover-input" style="font-weight:600">Übertrag Vormonat (Std:Min):</label>
           <input type="text" id="carryover-input" inputmode="text" placeholder="z. B. 14:15 oder -2:30" value="0:00" onchange="saveCarryover()" style="width:96px;text-align:center">
           <button id="carryover-reset" class="btn btn-outline btn-sm" onclick="resetCarryover()" title="Auf automatischen Wert zurücksetzen" style="display:none">↺ Auto</button>
-          <div id="carryover-log" class="no-print" style="flex-basis:100%;font-size:11px;color:var(--muted);margin-top:2px"></div>
+          <div id="carryover-log" class="no-print" style="flex-basis:100%;font-size:12px;color:var(--muted);margin-top:2px"></div>
         </div>
         <div id="action-btns"></div>
       </div>
@@ -322,7 +322,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
           </div>
           <div id="set-roles-part">
           <h3 style="margin-top:20px">🎖 Eigene Rollen</h3>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Anzeigebezeichnungen – Rechte kommen von der Systemrolle.</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Anzeigebezeichnungen – Rechte kommen von der Systemrolle.</div>
           <div id="custom-role-list"></div>
           <div class="flex mt-14" style="gap:6px;flex-wrap:wrap">
             <input class="tag-input" id="new-role-label" placeholder="Bezeichnung…" style="flex:2;min-width:120px" onkeydown="if(event.key==='Enter')addCustomRole()">
@@ -507,6 +507,6 @@ window.addEventListener('error',function(ev){
   }
 });
 </script>
-<script type="module" src="js/main.js?v=385"></script>
+<script type="module" src="js/main.js?v=386"></script>
 </body>
 </html>

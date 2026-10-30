@@ -111,21 +111,21 @@ export function showVacRequestForm(editId){
           <button type="button" class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 10px" onclick="fillVADays()">Übernehmen</button>
         </div>
         <div id="vr-va-days" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto"></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">Tage ohne Uhrzeit werden nicht eingetragen · keine automatische Pause.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Tage ohne Uhrzeit werden nicht eingetragen · keine automatische Pause.</div>
       </div>
     </div>
     <div id="vr-halfday-wrap" style="display:none;margin:-4px 0 10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
         <input type="checkbox" id="vr-halfday" ${editing?.halfDay?'checked':''} onchange="calcVrDays()" style="width:16px;height:16px">
-        <span>Halber Urlaubstag <span style="color:var(--muted);font-size:11px">(z.B. 4h bei 8h-Tag)</span></span>
+        <span>Halber Urlaubstag <span style="color:var(--muted);font-size:12px">(z.B. 4h bei 8h-Tag)</span></span>
       </label>
     </div>
     <div id="vr-sonstiges-wrap" style="display:none;margin:-4px 0 10px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
         <input type="checkbox" id="vr-credit-work" ${editing?.creditWork?'checked':''} onchange="calcVrDays()" style="width:16px;height:16px">
-        <span>Arbeitszeit gutschreiben <span style="color:var(--muted);font-size:11px">(nach Wochenarbeitszeit – z.B. Bildungsurlaub)</span></span>
+        <span>Arbeitszeit gutschreiben <span style="color:var(--muted);font-size:12px">(nach Wochenarbeitszeit – z.B. Bildungsurlaub)</span></span>
       </label>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Wird als Arbeitszeit eingetragen und <b>muss</b> von Leitung/GF freigegeben werden.</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Wird als Arbeitszeit eingetragen und <b>muss</b> von Leitung/GF freigegeben werden.</div>
     </div>
     <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
@@ -133,14 +133,14 @@ export function showVacRequestForm(editId){
         <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${esc(editing?editing.workDays:1)}"
           style="width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
           oninput="onVrManualDaysInput()">
-        <span id="vr-mode-manual-hint" style="font-size:11px;color:var(--muted)"></span>
+        <span id="vr-mode-manual-hint" style="font-size:12px;color:var(--muted)"></span>
       </label>
     </div>
     <div id="vr-days-info" style="margin:-6px 0 10px;font-size:13px;color:var(--primary);font-weight:600"></div>
     <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--warn-bg,#fffbf5);border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:var(--warn-text,#856404)">
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
     </div>
-    <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:11px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
+    <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:12px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
       <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…">${esc(note)}</textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -556,7 +556,7 @@ export function renderAbCalendar(){
       const firstName=a.name.split(' ')[0];
       return `<span class="ab-cal-badge" style="background:${_typeBg(a.type)};color:${_typeFg(a.type)}" title="${esc(a.name)}: ${esc(a.type)}">${esc(firstName)}</span>`;
     }).join('');
-    const holNote=hols.has(ds)?'<span style="font-size:9px;color:var(--danger);display:block">Feiertag</span>':'';
+    const holNote=hols.has(ds)?'<span style="font-size:12px;color:var(--danger);display:block">Feiertag</span>':'';
     cal+=`<div class="${cls}"><span class="ab-cal-dn${isWE?' we':''}">${dd}</span>${holNote}${badges}</div>`;
   }
   const total=firstGer+dim;
@@ -794,12 +794,12 @@ export function renderAbCalendarWeek(){
     const isToday=ds===todayStr;
     html+=`<div style="background:var(--surface,#fff);border:${isToday?'2px solid var(--primary)':'1.5px solid var(--border)'};border-radius:8px;overflow:hidden">
       <div style="background:${isWE||isHol?'#f3f4f6':'var(--primary)'};color:${isWE||isHol?'var(--muted)':'#fff'};font-size:12px;font-weight:700;padding:5px 8px;text-align:center">
-        ${GER[i]}<br><span style="font-size:11px;font-weight:400">${fmtShort(ds)}</span>${isHol?'<br><span style="font-size:9px;color:var(--danger)">Feiertag</span>':''}
+        ${GER[i]}<br><span style="font-size:12px;font-weight:400">${fmtShort(ds)}</span>${isHol?'<br><span style="font-size:12px;color:var(--danger)">Feiertag</span>':''}
       </div>
       <div style="padding:6px;min-height:60px">
         ${abs.length?abs.map(a=>{
-          return `<div style="font-size:11px;padding:2px 4px;border-radius:4px;background:${_typeBg(a.type)};color:${_typeFg(a.type)};margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.name)}: ${esc(a.type)}">${esc(a.name.split(' ')[0])}</div>`;
-        }).join(''):'<span style="font-size:11px;color:var(--border)">–</span>'}
+          return `<div style="font-size:12px;padding:2px 4px;border-radius:4px;background:${_typeBg(a.type)};color:${_typeFg(a.type)};margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.name)}: ${esc(a.type)}">${esc(a.name.split(' ')[0])}</div>`;
+        }).join(''):'<span style="font-size:12px;color:var(--border)">–</span>'}
       </div>
     </div>`;
   }

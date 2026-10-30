@@ -134,13 +134,13 @@ function _injectStyles(){
   .aus-filter{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
   .aus-ent{max-height:190px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;min-width:260px;flex:1}
   .aus-ent label{display:flex;gap:7px;align-items:center;font-size:13px;padding:2px 0;cursor:pointer}
-  .aus-ent .grp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:6px 0 2px}
+  .aus-ent .grp{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:6px 0 2px}
   table.aus-t{width:100%;border-collapse:collapse;min-width:420px}
   table.aus-t th,table.aus-t td{border:1px solid var(--border);padding:6px 9px;font-size:13px;text-align:right}
   table.aus-t th:first-child,table.aus-t td:first-child{text-align:left}
   table.aus-t thead th{background:var(--primary);color:var(--on-primary,#fff);font-size:12px}
   table.aus-t tr.total td{font-weight:800;background:var(--surface-2,#eef2f8)}
-  .aus-badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700}
+  .aus-badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:12px;font-weight:700}
   .aus-btn{background:var(--primary);color:var(--on-primary,#fff);border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer}
   .aus-btn.sec{background:var(--surface,#fff);color:var(--primary);border:1.5px solid var(--border)}
   .aus-scroll{overflow-x:auto}`;
@@ -217,7 +217,7 @@ function _filterBar(){
         </div>
         <div style="margin-top:12px"><button class="aus-btn" onclick="ausExport()">⬇ Als Excel herunterladen</button></div>
       </div>
-      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Einträge mit Statistik.</div>'}<div class="aus-sub" style="margin:8px 0 0;font-size:11.5px">Es erscheinen nur Einträge mit Statistik.</div></div>
+      <div class="aus-ent">${entHtml||'<div class="aus-sub">Noch keine Einträge mit Statistik.</div>'}<div class="aus-sub" style="margin:8px 0 0;font-size:12px">Es erscheinen nur Einträge mit Statistik.</div></div>
     </div></div>`;
 }
 

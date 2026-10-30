@@ -199,9 +199,9 @@ export function renderZeiterfassung(){
     const dis=readonly;
     const dateFmt=`${String(d).padStart(2,'0')}.${String(mon).padStart(2,'0')}.${String(year).slice(2)}`;
     tr.innerHTML=`
-      <td class="date-c">${dateFmt}${hol?'<span style="font-size:8px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
+      <td class="date-c">${dateFmt}${hol?'<span style="font-size:12px;display:block;color:var(--danger);font-weight:400">Feiertag</span>':''}</td>
       <td class="kw-c">${kw}</td>
-      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:9px;display:block;color:var(--warn-text)">WE</span>':''}</td>
+      <td class="day-c${we?' we':''}">${dn}${we?'<span style="font-size:12px;display:block;color:var(--warn-text)">WE</span>':''}</td>
       <td><input type="text" id="ti_${ds}_b1von" aria-label="${dateFmt} Beginn Block 1" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b1von||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_tchange(${jsq(ds)},'b1von',this.value)"></td>
       <td><input type="text" id="ti_${ds}_b1bis" aria-label="${dateFmt} Ende Block 1" class="t-inp zt-nav" maxlength="5" value="${esc(dd.b1bis||'')}" ${dis?'disabled':''} oninput="fmtTimeIn(this)" onkeydown="ztNav(event,this)" onchange="td_b1bis_change(${jsq(ds)},this.value)"></td>
       <td><select id="sel_${ds}_b1zuord" aria-label="${dateFmt} Zuordnung Block 1" class="zuord zt-nav" ${dis?'disabled':''} onkeydown="ztNav(event,this)" onchange="td_zuord(${jsq(ds)},'b1zuord',this.value,${Number(user.wh)||0},${Number(user.dpw)||5})">${catOptionsForUser(user,(dd.halfDay&&(dd.b1zuord==='Urlaub'))?'Urlaub½':(dd.b1zuord||''),true)}</select></td>
@@ -223,7 +223,7 @@ export function renderZeiterfassung(){
   }
 
   const _tDays=dayFmt(monthTotal);
-  document.getElementById('tfoot-total').innerHTML=hFmt(monthTotal)+(_tDays?`<br><small style="font-size:10px;font-weight:400;opacity:.75">${_tDays}</small>`:'');
+  document.getElementById('tfoot-total').innerHTML=hFmt(monthTotal)+(_tDays?`<br><small style="font-size:12px;font-weight:400;opacity:.75">${_tDays}</small>`:'');
   const _tp=document.getElementById('tfoot-pause');
   if(_tp) _tp.innerHTML=monthPause>0?minFmt(monthPause):'';
   document.getElementById('zt').classList.toggle('no-b2-kt',isFree);
@@ -388,7 +388,7 @@ function renderActionBar(uid,user,entry,isLeiter){
     const isManual=!!entry.carryoverManual;
     const lbl=document.getElementById('carryover-label');
     const lblText=isFree?'Stundenübertrag Vormonat (Std:Min):':'Übertrag Vormonat (Std:Min):';
-    if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:11px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
+    if(lbl) lbl.innerHTML=`${lblText} <span style="font-size:12px;font-weight:400;color:${isManual?'var(--warn)':'var(--ok)'}">${isManual?'manuell':'auto'}</span>`;
     // Eingereichte/genehmigte Monate: Übertrag sperren (ausgegraut, nicht editierbar).
     const _locked=entry.status==='submitted'||entry.status==='approved';
     const inp=document.getElementById('carryover-input');

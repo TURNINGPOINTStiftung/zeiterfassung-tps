@@ -264,7 +264,7 @@ function _styles(){
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
   .shop-tabs button{border:none;background:none;padding:8px 14px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
   .shop-tabs button.on{color:var(--primary,#203869);border-bottom-color:var(--primary,#203869)}
-  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn,#d97706);color:var(--on-primary,#fff);font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+  .shop-badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn,#d97706);color:var(--on-primary,#fff);font-size:12px;line-height:18px;text-align:center;margin-left:4px}
   .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:var(--text)}
   .shop-bar input[type=search]{flex:1;min-width:160px}
@@ -281,7 +281,7 @@ function _styles(){
   .shop-cb{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
   .shop-name{font-weight:700;font-size:15px;color:var(--text)}
   .shop-var{font-size:12px;color:var(--muted)}
-  .shop-cat{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--surface-2,#eef2f7);color:var(--muted,#4a5a6e);align-self:flex-start}
+  .shop-cat{display:inline-block;font-size:12px;padding:1px 7px;border-radius:9px;background:var(--surface-2,#eef2f7);color:var(--muted,#4a5a6e);align-self:flex-start}
   .shop-tot{font-size:22px;font-weight:700;color:var(--primary,#203869)}
   .shop-tot small{font-size:12px;font-weight:600;color:var(--muted)}
   .shop-low{font-size:12px;font-weight:700;color:var(--danger,#e5484d)}
@@ -301,7 +301,7 @@ function _styles(){
   .shop-row-done{padding:7px 12px;opacity:.92}
   .shop-det summary{cursor:pointer;font-size:12px;color:var(--primary,#203869);margin-top:3px}
   .shop-det[open] summary{margin-bottom:2px}
-  .shop-st{display:inline-block;font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:9px}
+  .shop-st{display:inline-block;font-size:12px;font-weight:700;color:#fff;padding:2px 8px;border-radius:9px}
   .shop-late{color:var(--danger,#c0392b);font-weight:700}
   .shop-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden}
   .shop-seg button{border:none;background:var(--surface,#fff);padding:5px 11px;font-size:12px;cursor:pointer;color:var(--text)}
@@ -524,17 +524,17 @@ function _shopImportPlan(aoa){
 function _shopImportPreview(){
   const pl=window._shopImportPlan; if(!pl) return;
   const nCh=pl.aend.reduce((s,a)=>s+a.ch.length,0);
-  const li=a=>a.length?`<ul style="margin:4px 0 10px;padding-left:18px;font-size:12.5px;max-height:28vh;overflow:auto">${a.join('')}</ul>`:'';
+  const li=a=>a.length?`<ul style="margin:4px 0 10px;padding-left:18px;font-size:13px;max-height:28vh;overflow:auto">${a.join('')}</ul>`:'';
   const neu=pl.neu.slice(0,150).map(n=>`<li><b>${esc(n.name)}</b>${n.variante?' · '+esc(n.variante):''} <span style="color:var(--muted)">(${esc((ARTEN[n.art]||{}).l||'')}${n.kategorie?', '+esc(n.kategorie):''})</span>${Object.keys(n.stock).length?' – '+Object.keys(n.stock).map(pid=>`${esc(placeLabel(pid))}: ${n.stock[pid]}`).join(', '):''}${n.teamUnbekannt?` <span style="color:var(--danger)">· Team „${esc(n.teamUnbekannt)}" unbekannt → für alle</span>`:''}</li>`);
   const aend=pl.aend.slice(0,150).map(a=>`<li><b>${esc(a.label)}</b>: ${a.ch.map(c=>`${esc(placeLabel(c.pid))} ${c.alt} → <b>${c.neu}</b>`).join(', ')}</li>`);
   const nothing=!pl.neu.length && !nCh;
   openModal(`<h3>⬆ Lager-Import – Vorschau</h3>
     <p style="font-size:13px;margin:0 0 10px">Noch ist nichts gespeichert. <b>${pl.neu.length}</b> neue Artikel · <b>${nCh}</b> Bestandsänderung${nCh===1?'':'en'} bei <b>${pl.aend.length}</b> Artikel${pl.aend.length===1?'':'n'}.</p>
-    ${pl.fehler.length?`<div style="font-size:12.5px;color:var(--danger);font-weight:600">⚠ Hinweise</div>${li(pl.fehler.map(f=>`<li style="color:var(--danger)">${esc(f)}</li>`))}`:''}
-    ${pl.unbekannt.length?`<div style="font-size:12.5px;color:var(--warn,#b45309)">Spalten ohne passenden Ort (werden ignoriert – Ort ggf. erst unter „📍 Orte" anlegen): <b>${pl.unbekannt.map(esc).join(', ')}</b></div>`:''}
+    ${pl.fehler.length?`<div style="font-size:13px;color:var(--danger);font-weight:600">⚠ Hinweise</div>${li(pl.fehler.map(f=>`<li style="color:var(--danger)">${esc(f)}</li>`))}`:''}
+    ${pl.unbekannt.length?`<div style="font-size:13px;color:var(--warn,#b45309)">Spalten ohne passenden Ort (werden ignoriert – Ort ggf. erst unter „📍 Orte" anlegen): <b>${pl.unbekannt.map(esc).join(', ')}</b></div>`:''}
     ${pl.neu.length?`<div style="font-size:13px;font-weight:700;margin-top:8px">＋ Neue Artikel</div>${li(neu)}${pl.neu.length>150?'<div class="small">… und weitere</div>':''}`:''}
     ${pl.aend.length?`<div style="font-size:13px;font-weight:700;margin-top:8px">✎ Bestände (Inventur)</div>${li(aend)}${pl.aend.length>150?'<div class="small">… und weitere</div>':''}`:''}
-    ${pl.skip.length?`<div style="font-size:12.5px;color:var(--muted)">Übersprungen:</div>${li(pl.skip.map(s=>`<li>${esc(s)}</li>`))}`:''}
+    ${pl.skip.length?`<div style="font-size:13px;color:var(--muted)">Übersprungen:</div>${li(pl.skip.map(s=>`<li>${esc(s)}</li>`))}`:''}
     ${pl.ohneName?`<div style="font-size:12px;color:var(--muted)">${pl.ohneName} Zeile${pl.ohneName===1?'':'n'} ohne Namen übersprungen.</div>`:''}
     ${nothing?'<div class="shop-empty">Keine Änderungen gefunden – Bestände stimmen bereits überein.</div>':''}
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>${nothing?'':`<button class="btn btn-primary" onclick="shopImportApply()">Übernehmen</button>`}</div>`, true);
@@ -1740,9 +1740,9 @@ function shopUnits(itemId){
       <label style="font-size:12px;display:flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer"><input type="checkbox" style="width:auto" ${us.length&&us.every(u=>_unitSel.has(u.id))?'checked':''} onchange="shopUnitSelAll(${jsq(it.id)},this.checked)"> alle angezeigten markieren</label></div>`:'';
   const rows=us.map(u=>{ const nt=nextTermin(u.termine); const ul=unitLoan(u.id);
     return `<div class="shop-pos-row"><input type="checkbox" style="width:auto" ${_unitSel.has(u.id)?'checked':''} ${ul?'disabled title="zugeordnet – erst zurückgeben"':''} onchange="shopUnitSel(${jsq(u.id)},this.checked)">
-      <span class="nm"><b>${esc(u.nr||'?')}</b>${_brandChip(u)}${u.serial?` <span style="color:var(--muted);font-size:11px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:11px">· ${esc(u.note)}</span>`:''}</span>
+      <span class="nm"><b>${esc(u.nr||'?')}</b>${_brandChip(u)}${u.serial?` <span style="color:var(--muted);font-size:12px">#${esc(u.serial)}</span>`:''}${u.note?` <span style="color:var(--muted);font-size:12px">· ${esc(u.note)}</span>`:''}</span>
       <span style="font-size:12px;white-space:nowrap">${ul?`<b style="color:${isZuord(ul)?_ZUORD_C:(_overdue(ul)?'#c0392b':'#2563eb')}">${isZuord(ul)?'👤':'🔁'} ${esc(bName(ul))}</b>`:esc(placeLabel(u.placeId))}</span>
-      ${nt?dueBadge(nt):'<span style="font-size:11px;color:var(--muted)">kein Termin</span>'}
+      ${nt?dueBadge(nt):'<span style="font-size:12px;color:var(--muted)">kein Termin</span>'}
       ${ul?`${isZuord(ul)?`<button type="button" class="shop-btn sm" title="An anderen Mitarbeiter übergeben" onclick="shopReassign(${jsq(ul.id)})">👤</button>`:''}<button type="button" class="shop-btn sm ok" title="${isZuord(ul)?'Zuordnung aufheben':'Zurückgeben'}" onclick="shopReturn(${jsq(ul.id)})">↩</button>`:`<button type="button" class="shop-btn sm" title="Zuordnen / ausleihen" onclick="shopLendUnit(${jsq(it.id)},${jsq(u.id)})">🔁</button>`}
       <button type="button" class="shop-btn sm" onclick="shopUnitEdit(${jsq(it.id)},${jsq(u.id)})">✎</button>
       <button type="button" class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" title="Ausmustern / verbraucht" onclick="shopUnitRetire(${jsq(it.id)},${jsq(u.id)})">🗑</button></div>`; }).join('');

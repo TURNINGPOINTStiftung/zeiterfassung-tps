@@ -167,7 +167,7 @@ function _previewRestore(blob, inputEl){
 
   restore.sort();
   _pending = { src, keys: restore };
-  const list = restore.map(k => '<span class="chip" style="font-size:11px;margin:2px">' + esc(_keyLabel(k)) + '</span>').join('');
+  const list = restore.map(k => '<span class="chip" style="font-size:12px;margin:2px">' + esc(_keyLabel(k)) + '</span>').join('');
   openModal('<h3 style="margin-bottom:8px">↩ Zeiterfassung wiederherstellen</h3>'
     + '<p style="font-size:13px;color:var(--muted);margin-bottom:10px">Folgende <b>' + restore.length + ' Monate</b> werden aus dem Backup in deine Zeiterfassung eingespielt:</p>'
     + '<div style="margin-bottom:12px;line-height:1.9">' + list + '</div>'
@@ -290,7 +290,7 @@ export async function showCloudSnapshots(){
   const repItems = items.filter(n => /_reports\.json$/.test(n));
   const _row = (n, isReport) => { const ym = n.slice(0,7);
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">'
-      + '<span>'+esc(ym)+(isReport?' <span class="chip" style="font-size:10px">Berichte</span>':'')+'</span>'
+      + '<span>'+esc(ym)+(isReport?' <span class="chip" style="font-size:12px">Berichte</span>':'')+'</span>'
       + '<button class="btn btn-outline btn-sm" onclick="ubDownloadCloud('+jsq(n)+')">⬇ Laden</button>'
       + '</div>'; };
   const body = (zeItems.length || repItems.length)
@@ -349,7 +349,7 @@ export function ownBackupSectionHtml(cu){
       + '</div>'
       + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
       + '<input type="checkbox" onchange="toggleAutoBackup(this)"' + (autoBackupOn() ? ' checked' : '') + '>'
-      + 'Automatische Monats-Sicherung am 10. aktivieren <span style="color:var(--muted);font-size:11px">(dieses Gerät)</span></label>';
+      + 'Automatische Monats-Sicherung am 10. aktivieren <span style="color:var(--muted);font-size:12px">(dieses Gerät)</span></label>';
   }
   return html;
 }

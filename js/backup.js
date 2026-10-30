@@ -101,7 +101,7 @@ export async function showAppBackups(){
   try{ names=await listAppBackups(); }
   catch(e){ openModal('<h3>☁ Automatische App-Backups</h3><p style="color:var(--danger)">Konnte nicht geladen werden ('+esc((e&&(e.code||e.message))||'')+').</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>'); return; }
   const rows=names.length
-    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.slice(0,10))+(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:10px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup('+jsq(n)+')">⬇ Laden</button></div>').join('')
+    ? names.map(n=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+esc(n.slice(0,10))+(/^\d{4}-\d{2}-01_/.test(n)?' <span class="chip" style="font-size:12px">dauerhaft</span>':'')+'</span><button class="btn btn-outline btn-sm" onclick="downloadAppBackup('+jsq(n)+')">⬇ Laden</button></div>').join('')
     : '<p style="color:var(--muted)">Noch keine App-Backups vorhanden.</p>';
   openModal('<h3 style="margin-bottom:6px">☁ Automatische App-Backups</h3>'
     +'<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Täglich automatisch (Server-Stand). Aufbewahrung 90 Tage, der 1. jedes Monats dauerhaft. Einspielen über „Backup einspielen (JSON)".</p>'
@@ -144,8 +144,8 @@ export async function showPlusBackups(){
   // Gerät hochgeladen (ältere Backups oder – ungeprüft – von irgendeiner Person); Einspielen nur mit Bestätigung.
   const KIND={ server:['Server','green'], vor:['Sicherung vor Einspielen',''], geraet:['vom Gerät','amber'] };
   const lbl=it=>{ const n=it.name, k=KIND[it.kind]||KIND.geraet;
-    return esc(n.slice(8,10)+'.'+n.slice(5,7)+'.'+n.slice(0,4))+' <span class="chip" style="font-size:10px">'+esc(k[0])+(it.kind==='geraet'&&it.by?': '+esc(it.by):'')+'</span>'
-      +(/^\d{4}-\d{2}-01_/.test(n)&&it.kind!=='vor'?' <span class="chip" style="font-size:10px">dauerhaft</span>':''); };
+    return esc(n.slice(8,10)+'.'+n.slice(5,7)+'.'+n.slice(0,4))+' <span class="chip" style="font-size:12px">'+esc(k[0])+(it.kind==='geraet'&&it.by?': '+esc(it.by):'')+'</span>'
+      +(/^\d{4}-\d{2}-01_/.test(n)&&it.kind!=='vor'?' <span class="chip" style="font-size:12px">dauerhaft</span>':''); };
   const rows=items.length ? items.map(it=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>${lbl(it)}</span>
       <span style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="plusBackupDownload(${jsq(it.name)})">⬇ Laden</button><button class="btn btn-warn btn-sm" onclick="plusRestoreAsk(${jsq(it.name)},${jsq(it.kind)},${jsq(it.by||'')})">↺ Einspielen</button></span></div>`).join('')
     : '<p style="color:var(--muted)">Noch keine automatischen Backups vorhanden.</p>';
@@ -171,8 +171,8 @@ function _askParts(src, avail, title, untrusted){
   _pending=Object.assign({}, src, { _untrusted:!!untrusted });
   openModal(`<h3>↺ Backup einspielen</h3><p style="font-size:13px;margin:0 0 10px">${title}</p>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">${_PARTS.map(([k,l])=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;${avail.includes(k)?'':'opacity:.45'}"><input type="checkbox" class="plus-rp" value="${k}" style="width:auto" ${avail.includes(k)?'':'disabled'}> ${l}</label>`).join('')}</div>
-    <div style="font-size:12.5px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe, Anmeldedaten und wer aktiv/archiviert ist bleiben wie jetzt. Die Zeichen &lt; und &gt; werden aus Texten entfernt.</div>
-    ${untrusted?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:8px;padding:10px 12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="plus-rp-untrusted" style="width:auto;margin-top:2px"> <span><b>Nicht vom Server erstellt.</b> ${esc(untrusted)} Ich habe geprüft, woher die Datei stammt, und will sie trotzdem einspielen. (Texte werden bereinigt, Rechte bleiben wie jetzt.)</span></label>`:''}
+    <div style="font-size:13px;background:var(--warn-bg);border:1.5px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px">⚠ Die angehakten Bereiche werden <b>für alle</b> durch den Stand des Backups ersetzt. Vorher sichert der Server den aktuellen Stand (erscheint danach in der Backup-Liste).<br>Rechte, Rollen, Zugriffe, Anmeldedaten und wer aktiv/archiviert ist bleiben wie jetzt. Die Zeichen &lt; und &gt; werden aus Texten entfernt.</div>
+    ${untrusted?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:8px;padding:10px 12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="plus-rp-untrusted" style="width:auto;margin-top:2px"> <span><b>Nicht vom Server erstellt.</b> ${esc(untrusted)} Ich habe geprüft, woher die Datei stammt, und will sie trotzdem einspielen. (Texte werden bereinigt, Rechte bleiben wie jetzt.)</span></label>`:''}
     <div class="form-group" style="margin-bottom:6px"><label for="plus-rp-pw" style="font-size:13px;font-weight:600">🔐 Zur Sicherheit: dein Passwort</label>
       <input type="password" id="plus-rp-pw" autocomplete="current-password" style="width:100%;box-sizing:border-box">
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Danach fragt die App einen neuen Code aus deiner Authenticator-App ab – erst dann wird eingespielt.</div></div>
@@ -227,7 +227,7 @@ export async function showAdminLog(){
   const rows=es.length ? es.map(x=>`<tr><td style="white-space:nowrap">${esc(new Date(x.ts||0).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'}))}</td><td>${esc(nm(x.by)||'?')}</td><td>${esc(x.action||'')}</td><td>${esc(x.target?nm(x.target):'')}</td></tr>`).join('')
     : '<tr><td colspan="4" style="color:var(--muted)">Noch keine Einträge (protokolliert wird seit v458).</td></tr>';
   openModal('<h3 style="margin-bottom:6px">📜 Verwaltungs-Protokoll</h3><p style="font-size:12px;color:var(--muted);margin-bottom:10px">Was über den Server geändert wurde: Passwörter, Rollen, Zugriffe, Anlegen, Sperren/Wiederherstellen, Zwei-Faktor, Backups. Neueste zuerst (letzte 300).</p>'
-    +'<div style="max-height:55vh;overflow:auto"><table class="vw-table" style="width:100%;font-size:12.5px"><thead><tr><th>Wann</th><th>Wer</th><th>Was</th><th>Wen/Was</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div style="max-height:55vh;overflow:auto"><table class="vw-table" style="width:100%;font-size:13px"><thead><tr><th>Wann</th><th>Wer</th><th>Was</th><th>Wen/Was</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
     +'<div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>', true);
 }
 try{ Object.assign(window, { showPlusBackups, plusBackupDownload, plusRestoreAsk, plusRestoreFile, plusRestoreRun, isBackupPlus, showAdminLog }); }catch(_){}

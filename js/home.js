@@ -78,13 +78,13 @@ function renderHomeCardsConfig(el){
       return `<tr><td style="padding:5px 8px;white-space:nowrap">
           <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i>0?'':'disabled'} onclick="homeCfgMove(${jsq(k)},-1)" title="nach oben">↑</button>
           <button class="btn btn-outline btn-sm" style="padding:1px 6px" ${adm&&i<order.length-1?'':'disabled'} onclick="homeCfgMove(${jsq(k)},1)" title="nach unten">↓</button></td>
-        <td style="padding:5px 8px"><b>${esc(c.l)}</b>${c.hint?`<div style="font-size:11px;color:var(--muted)">${esc(c.hint)}</div>`:''}</td>
+        <td style="padding:5px 8px"><b>${esc(c.l)}</b>${c.hint?`<div style="font-size:12px;color:var(--muted)">${esc(c.hint)}</div>`:''}</td>
         ${HOME_ROLES.map(([r])=>`<td style="text-align:center;padding:5px"><input type="checkbox" style="width:16px;height:16px;cursor:pointer" ${rs.includes(r)?'checked':''} ${adm?'':'disabled'} onchange="homeCfgSet(${jsq(k)},${jsq(r)},this.checked)"></td>`).join('')}</tr>`; }).join('');
     el.innerHTML=`<div style="margin-top:22px">
       <h3 style="margin:0 0 4px;color:var(--primary)">🏠 Startseite – Karten pro Rolle</h3>
       <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Welche Karten jede Rolle auf der Startseite sieht und in welcher Reihenfolge (gilt für alle mit eingeschalteter Startseite).${adm?'':' Ändern kann nur der Administrator-Account.'}</p>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:13px;min-width:620px">
-        <thead><tr><th></th><th style="text-align:left;padding:6px 8px">Karte</th>${HOME_ROLES.map(([,l])=>`<th style="font-size:11px;padding:6px 8px;text-align:center">${esc(l)}</th>`).join('')}</tr></thead>
+        <thead><tr><th></th><th style="text-align:left;padding:6px 8px">Karte</th>${HOME_ROLES.map(([,l])=>`<th style="font-size:12px;padding:6px 8px;text-align:center">${esc(l)}</th>`).join('')}</tr></thead>
         <tbody>${rows}</tbody></table></div>
       ${adm?'<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="homeCfgReset()">↺ Standard wiederherstellen</button>':''}</div>`;
   }catch(e){ console.error('renderHomeCardsConfig:',e); }
@@ -127,10 +127,10 @@ function _styles(){
   .home-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:6px}
   .home-row{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer}
   #home-todo .home-row.mine{border-left:4px solid var(--primary,#203869);padding-left:8px;background:var(--info-bg,#eef3fb);border-radius:6px;margin-top:2px}
-  .home-mine{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--primary,#203869);color:var(--on-primary,#fff);vertical-align:1px}
+  .home-mine{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--primary,#203869);color:var(--on-primary,#fff);vertical-align:1px}
   .home-row:first-of-type{border-top:none}.home-row:hover{color:var(--primary,#203869)}
   .home-row .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .home-pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;background:#e8eef8;color:var(--primary,#203869)}
+  .home-pill{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;background:#e8eef8;color:var(--primary,#203869)}
   .home-pill.red{background:var(--danger-bg,#fde8e8);color:#b42318}.home-pill.amber{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#92400e)}.home-pill.green{background:#e7f6e9;color:#1b5e20}
   .home-empty{font-size:13px;color:var(--muted);padding:4px 0}
   .home-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:10px;margin-top:14px}
@@ -149,12 +149,12 @@ function _styles(){
   .home-days{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
   .home-day{flex:1;min-width:90px;background:var(--surface-2,#f0f2f5);border-radius:10px;padding:6px 8px;font-size:12px;text-align:center}
   .home-notes .ze-notice{margin:0 0 6px;border-radius:10px;background:var(--warn-bg,#fff4e5);padding:8px 10px}
-  .home-notes .ze-notice .ar{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .home-notes .ze-notice .ar{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:2px}
   .home-news-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .home-news-h .home-h{margin-bottom:8px}
   .home-news-all{border:1px solid var(--border);background:var(--surface,#fff);color:var(--text);border-radius:6px;font-size:12px;padding:3px 9px;cursor:pointer;margin-bottom:8px}
   .home-chips{display:flex;gap:8px;flex-wrap:wrap}
-  .home-chip{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:20px;background:var(--surface,#fff);font-size:13.5px;max-width:100%}
+  .home-chip{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:20px;background:var(--surface,#fff);font-size:14px;max-width:100%}
   .home-chip .lbl{padding:6px 4px 6px 12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
   .home-chip .lbl:hover{color:var(--primary,#203869)}
   .home-chip .star{border:none;background:none;cursor:pointer;font-size:16px;padding:4px 10px 4px 4px;color:#b8bec7;line-height:1}
@@ -640,7 +640,7 @@ function _fillTiles(){
   const box=_el('home-tiles'); if(!box) return;
   const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>!['start','website','forum'].includes(b.dataset.mod) && b.style.display!=='none');
   const html=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('')
-    +LINKS.filter(x=>x.url).map(x=>`<a class="home-tile" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">${x.ic}</span>${esc(x.l)} <span style="font-size:11px;color:var(--muted)">↗</span></a>`).join('');
+    +LINKS.filter(x=>x.url).map(x=>`<a class="home-tile" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">${x.ic}</span>${esc(x.l)} <span style="font-size:12px;color:var(--muted)">↗</span></a>`).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   // Das ☰-Menü bekommt seine Rechte erst NACH dem Laden der CRM-Daten (crmSetupModuleBar, asynchron) –
   // beim App-Start ist die Startseite schneller. Darum Kacheln nachziehen, sobald sich das Menü ändert.

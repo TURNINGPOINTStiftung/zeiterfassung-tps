@@ -82,7 +82,7 @@ export function renderStempelView(){
     html+=`<div class="zs-form-card">
       <div><span class="zs-field-lbl">Zuordnung / Kategorie</span>
         <select id="zs-zuord"><option value="">– Keine –</option>${catOpts}</select></div>
-      <div><span class="zs-field-lbl">Bemerkung <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(optional)</span></span>
+      <div><span class="zs-field-lbl">Bemerkung <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px">(optional)</span></span>
         <input type="text" id="zs-note" placeholder="z.B. Besprechung, Akademie-Call…"></div>
     </div>`;
   }
@@ -203,7 +203,7 @@ function _zsShowStop(stamp){
       <select id="zs-zuord" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
         <option value="">– Keine –</option>${catOpts}
       </select></div>
-    <div class="form-group"><label>Bemerkung <span style="font-size:11px;color:var(--muted)">(optional)</span></label>
+    <div class="form-group"><label>Bemerkung <span style="font-size:12px;color:var(--muted)">(optional)</span></label>
       <input type="text" id="zs-note" placeholder="z.B. Besprechung, Akademie-Call…" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"></div>
     <div class="modal-btns">
       <button class="btn btn-danger btn-sm" onclick="cancelZeitstempel()" style="margin-right:auto">🗑 Verwerfen</button>

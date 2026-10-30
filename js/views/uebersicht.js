@@ -165,11 +165,11 @@ export function renderOverview(){
     const curIST=monthIST(curEntry,u);
     const curCarry=getEffectiveCarryH(u.id,u,oy,om);
     const canEditDpw=cu.role==='admin';   // Nutzerdaten ändert nur noch der Administrator-Account
-    const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw(${jsq(u.id)})">✏ ${Number(u.dpw)||5} Tage/Wo</button>`:'';
+    const dpwBtn=canEditDpw&&!isFree?`<button class="btn btn-outline btn-sm" style="font-size:12px;padding:2px 7px;margin-top:6px" onclick="event.stopPropagation();showEditDpw(${jsq(u.id)})">✏ ${Number(u.dpw)||5} Tage/Wo</button>`:'';
     const curStatus=curEntry.status||'draft';
     const isClickable=curStatus==='submitted'||curStatus==='approved'||curStatus==='rejected'||cu.role==='admin';
     const cardClick=isClickable?`onclick="openEmpMonth(${jsq(u.id)})" title="Zeiterfassung öffnen"`:`style="cursor:default" title="Noch nicht eingereicht"`;
-    const notSubmitted=!isClickable?`<div class="meta" style="margin-top:4px;font-size:11px;color:var(--muted)">📝 ${MONTHS[om-1]}: noch nicht eingereicht</div>`:'';
+    const notSubmitted=!isClickable?`<div class="meta" style="margin-top:4px;font-size:12px;color:var(--muted)">📝 ${MONTHS[om-1]}: noch nicht eingereicht</div>`:'';
     if(isFree){
       const curTotal=curIST+Math.round(curCarry*60);
       const curOverflow=maxH>0?Math.max(0,curTotal-maxH*60):0;
@@ -199,7 +199,7 @@ export function renderOverview(){
       <h3>${esc(u.name)} ${roleChip}</h3>
       <div class="meta">${esc(u.city||'–')} · ${esc(eu.wh)}h/Woche</div>
       <div class="meta" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:5px">
-        <span>🏖 Resturlaub: <strong>${vacLeft+_vs.carryLeft}&thinsp;T</strong> <span style="font-size:11px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, davon ${_vs.carryLeft} T aus ${oy-1}`:''})</span></span>
+        <span>🏖 Resturlaub: <strong>${vacLeft+_vs.carryLeft}&thinsp;T</strong> <span style="font-size:12px;color:var(--muted)">(${vacUpTo}/${_annualVac} bis ${MONTHS[om-1].slice(0,3)}${vacFuture>0?`, ${vacFuture} schon gebucht`:''}${_vs.carryLeft>0?`, davon ${_vs.carryLeft} T aus ${oy-1}`:''})</span></span>
         <span>⏱ ${MONTHS[om-1]}: <strong style="color:${diffColor}">${diffStr}</strong></span>
       </div>
       ${pending>0?`<div class="meta" style="margin-top:4px"><span style="color:var(--warn);font-weight:700">${pending} Monat${pending>1?'e':''} offen</span></div>`:''}
@@ -236,10 +236,10 @@ export function renderOverview(){
     if(cu.role==='geschaeftsfuehrer' && approvedUsers.length && notYetSent===0){
       return `<div class="team-send-bar">
         <span style="color:var(--ok);font-weight:600;font-size:13px">✓ ${approved}/${total} genehmigt · automatisch in die Buchhaltungsversion eingereicht</span>
-        ${sent?`<button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:''}
+        ${sent?`<button class="btn btn-outline btn-sm" style="font-size:12px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:''}
       </div>`;
     }
-    const sentInfo=(sent&&(sent.employeeIds||[]).length)?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:11px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:'';
+    const sentInfo=(sent&&(sent.employeeIds||[]).length)?`<span style="color:var(--ok);font-size:12px;font-weight:600">✓ Gesendet ${new Date(sent.submittedAt).toLocaleDateString('de-DE')} (${sentSet.size} MA)${sent.seenAt?' · von GF geöffnet':''}</span> <button class="btn btn-outline btn-sm" style="font-size:12px;padding:3px 8px" onclick="recallTeamReport(${jsq(team)},${oy},${om})">↩ Zurückziehen</button>`:'';
     const approvedIds=JSON.stringify(approvedUsers.map(u=>u.id));
     // Der GF "leitet nicht an sich selbst weiter" – für seine eigenen (direkt
     // geführten) Teams heißt die Aktion "Bericht einreichen", geht aber genauso
@@ -346,9 +346,9 @@ export function buildZuordSummary(employees,oy,om,d){
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;min-width:350px">
           <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
-            <th style="padding:6px 10px;text-align:left;font-size:11px;min-width:120px">Mitarbeiter</th>
-            ${visCats.map(cat=>`<th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap">${cat}</th>`).join('')}
-            <th style="padding:6px 8px;text-align:right;font-size:10px;white-space:nowrap;border-left:2px solid rgba(255,255,255,0.3)">Gesamt</th>
+            <th style="padding:6px 10px;text-align:left;font-size:12px;min-width:120px">Mitarbeiter</th>
+            ${visCats.map(cat=>`<th style="padding:6px 8px;text-align:right;font-size:12px;white-space:nowrap">${cat}</th>`).join('')}
+            <th style="padding:6px 8px;text-align:right;font-size:12px;white-space:nowrap;border-left:2px solid rgba(255,255,255,0.3)">Gesamt</th>
           </tr></thead>
           <tbody>${empRows}</tbody>
           <tfoot>${gesamtRow}</tfoot>
@@ -361,7 +361,7 @@ export function buildZuordSummary(employees,oy,om,d){
   if(!mTable&&!yTable) return '';
   return `<div style="margin-top:28px;background:var(--white);border-radius:8px;border:1px solid var(--border);padding:20px 24px">
     <h3 style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:2px">Stunden nach Zuordnung</h3>
-    <p style="font-size:11px;color:var(--muted);margin-bottom:0">Alle sichtbaren Mitarbeiter · ${MONTHS[om-1]} ${oy}</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:0">Alle sichtbaren Mitarbeiter · ${MONTHS[om-1]} ${oy}</p>
     ${mTable}
     ${yTable}
   </div>`;
@@ -409,7 +409,7 @@ export function openJahresübersicht(uid,y){
       ${isFree?'':`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:${diffColor};font-weight:700">${diffStr}</td>`}
       ${isFree?'':`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right">${vac>0?vac+'&thinsp;T':'–'}</td>`}
       ${isFree?'':`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right">${sick>0?sick+'&thinsp;T':'–'}</td>`}
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;color:${stColor};font-size:11px;font-weight:600">${stLabel}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;color:${stColor};font-size:12px;font-weight:600">${stLabel}</td>
     </tr>`;
   }).join('');
 
@@ -441,38 +441,38 @@ export function openJahresübersicht(uid,y){
   const MO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let zuordSection='';
   if(allCats.length>0){
-    const mHdr=MO.map(a=>`<th style="padding:5px 6px;text-align:right;font-size:10px;min-width:38px">${a}</th>`).join('');
+    const mHdr=MO.map(a=>`<th style="padding:5px 6px;text-align:right;font-size:12px;min-width:38px">${a}</th>`).join('');
     const catRows=allCats.map(cat=>{
       const rowTotal=Object.values(yearMap[cat]).reduce((a,v)=>a+v,0);
       const cells=Array.from({length:12},(_,i)=>{
         const min=yearMap[cat][i+1]||0;
-        return `<td style="padding:5px 6px;text-align:right;font-size:11px;color:${min>0?'var(--text)':'var(--border)'}">${min>0?minFmt(min):'–'}</td>`;
+        return `<td style="padding:5px 6px;text-align:right;font-size:12px;color:${min>0?'var(--text)':'var(--border)'}">${min>0?minFmt(min):'–'}</td>`;
       }).join('');
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:5px 8px;font-size:11px;font-weight:600;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis">${esc(cat)}</td>
+        <td style="padding:5px 8px;font-size:12px;font-weight:600;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis">${esc(cat)}</td>
         ${cells}
-        <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700;color:var(--primary);white-space:nowrap">${minFmt(rowTotal)}</td>
+        <td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700;color:var(--primary);white-space:nowrap">${minFmt(rowTotal)}</td>
       </tr>`;
     }).join('');
     const totalCells=Array.from({length:12},(_,i)=>{
       const s=allCats.reduce((a,cat)=>a+(yearMap[cat][i+1]||0),0);
-      return `<td style="padding:5px 6px;text-align:right;font-size:11px;font-weight:700">${s>0?minFmt(s):'–'}</td>`;
+      return `<td style="padding:5px 6px;text-align:right;font-size:12px;font-weight:700">${s>0?minFmt(s):'–'}</td>`;
     }).join('');
     const grand=allCats.reduce((a,cat)=>a+Object.values(yearMap[cat]).reduce((x,v)=>x+v,0),0);
     zuordSection=`
       <h4 style="margin:22px 0 10px;font-size:13px;font-weight:700;color:var(--primary);border-top:1px solid var(--border);padding-top:16px">Stunden nach Zuordnung</h4>
       <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
-          <th style="padding:5px 8px;text-align:left;font-size:10px;min-width:110px">Kategorie</th>
+          <th style="padding:5px 8px;text-align:left;font-size:12px;min-width:110px">Kategorie</th>
           ${mHdr}
-          <th style="padding:5px 8px;text-align:right;font-size:10px">Gesamt</th>
+          <th style="padding:5px 8px;text-align:right;font-size:12px">Gesamt</th>
         </tr></thead>
         <tbody>${catRows}</tbody>
         <tfoot><tr style="background:var(--primary,#1a3a5c);color:var(--on-primary,#fff)">
-          <td style="padding:5px 8px;font-size:11px;font-weight:700">Gesamt</td>
+          <td style="padding:5px 8px;font-size:12px;font-weight:700">Gesamt</td>
           ${totalCells}
-          <td style="padding:5px 8px;text-align:right;font-size:11px;font-weight:700">${minFmt(grand)}</td>
+          <td style="padding:5px 8px;text-align:right;font-size:12px;font-weight:700">${minFmt(grand)}</td>
         </tr></tfoot>
       </table>
       </div>`;
@@ -612,17 +612,17 @@ export function printJahresübersicht(uid,y){
     +'.cover-right .year-big{font-size:48px;font-weight:700;color:var(--primary,#1a3a5c);opacity:.15;line-height:1}'
     +'.emp-info{margin-bottom:24px;padding:14px 18px;background:var(--surface-2,#f4f7fb);border:1px solid var(--border,#dde1e7);border-radius:6px}'
     +'.emp-name{font-size:18px;font-weight:700;color:var(--primary,#1a3a5c);margin-bottom:4px}'
-    +'.emp-meta{font-size:11px;color:var(--muted,#7f8c8d)}'
+    +'.emp-meta{font-size:12px;color:var(--muted,#7f8c8d)}'
     +'th.l{text-align:left;padding-left:8px}td.l{text-align:left;padding-left:8px}'
     +'th.r,td.r{text-align:right}th.c,td.c{text-align:center}'
-    +'th{padding:8px 10px;font-size:11px}td{padding:7px 10px;font-size:12px}'
+    +'th{padding:8px 10px;font-size:12px}td{padding:7px 10px;font-size:12px}'
     +'tfoot td{background:var(--primary,#1a3a5c);color:var(--on-primary,#fff);font-weight:700;padding:8px 10px;font-size:12px}'
     +'.cover-section-title{font-size:13px;font-weight:700;color:var(--primary,#1a3a5c);margin:20px 0 8px;padding-top:16px;border-top:2px solid var(--border,#dde1e7)}'
     +'.month-page{max-width:940px;margin:0 auto}'
     +'.month-page .bh-page{padding-bottom:0}'
     +'.month-page .bh-hdr{padding-bottom:6px;margin-bottom:6px}'
     +'.month-page .bh-hdr-left .org{font-size:13px}'
-    +'.month-page .bh-hdr-right .ttl{font-size:11px}'
+    +'.month-page .bh-hdr-right .ttl{font-size:12px}'
     +'.month-page .bh-hdr-right .per{font-size:9px}'
     +'.month-page .bh-info{padding:5px 10px;margin-bottom:6px;gap:2px 16px}'
     +'.month-page .bh-ir{font-size:8.5px}'

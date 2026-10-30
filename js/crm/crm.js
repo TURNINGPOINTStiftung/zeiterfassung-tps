@@ -551,7 +551,7 @@ function injectStyles(){
   .verw-tab{background:none;border:none;border-bottom:3px solid transparent;padding:9px 15px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:8px 8px 0 0;transition:color .12s,background .12s}
   .verw-tab:hover{color:var(--primary);background:rgba(32,56,105,.05)}
   .verw-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
-  .verw-tabsep{align-self:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 6px 0 12px;margin-left:6px;border-left:1px solid var(--border);white-space:nowrap}
+  .verw-tabsep{align-self:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 6px 0 12px;margin-left:6px;border-left:1px solid var(--border);white-space:nowrap}
   .verw-tabsep.lead{border-left:none;margin-left:0;padding-left:2px}
   .crm-trees{display:flex;gap:6px;flex-wrap:wrap}
   .crm-tree-tab{background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:999px;padding:7px 15px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
@@ -564,7 +564,7 @@ function injectStyles(){
   .crm-bell:hover{filter:brightness(1.1)}
   .crm-bell:active{transform:translateY(1px)}
   .crm-bell.has-new{box-shadow:0 0 0 3px rgba(229,72,77,.35)}
-  .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:11px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
+  .crm-bell-badge{position:absolute;top:-7px;right:-7px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:12px;font-weight:800;line-height:19px;text-align:center;box-shadow:0 0 0 2px #fff}
   /* Suche + Glocke in der oberen (blauen) Modulleiste – als sauberes Paar (gleiche Höhe:
      Such-Pille + runder Glocken-Button), helle Varianten auf dunklem Grund. */
   #mb-crm-tools{display:flex;align-items:center;gap:8px}
@@ -584,7 +584,7 @@ function injectStyles(){
   .crm-notif-mt{font-size:12px;color:var(--muted);line-height:1.4;margin-top:1px;overflow-wrap:anywhere}
   .crm-notif-dot{width:8px;height:8px;border-radius:50%;background:var(--danger,#e5484d);flex:none}
   .crm-notif-empty{color:var(--muted);padding:14px 10px;text-align:center;font-size:13px}
-  .crm-notif-more{font-size:11.5px;color:var(--muted);padding:6px 10px;text-align:center}
+  .crm-notif-more{font-size:12px;color:var(--muted);padding:6px 10px;text-align:center}
   .crm-body{padding:18px 22px;overflow-y:auto;flex:1}
   .crm-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
   .crm-card{background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px;padding:15px 17px;cursor:pointer;transition:box-shadow .18s,border-color .18s,transform .12s;box-shadow:0 1px 2px rgba(32,56,105,.04)}
@@ -592,14 +592,14 @@ function injectStyles(){
   .crm-card h3{font-size:15px;font-weight:700;color:var(--primary);margin:0 0 4px}
   .crm-card .sub{font-size:12px;color:var(--muted);margin-bottom:8px;white-space:pre-line}
   .crm-card .meta{display:flex;gap:8px;flex-wrap:wrap}
-  .crm-chip{font-size:11px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
+  .crm-chip{font-size:12px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:3px 10px;color:var(--primary-l)}
   .crm-chip.warn{background:var(--warn-bg,#fff4e5);border-color:#ffd9a0;color:var(--warn-text,#b56a00)}
   /* Kontakt-Karten: kompakt, proportional zum Rest (nicht größer als normale Karten) */
   .crm-kontakt{padding:13px 15px}
   .crm-kontakt h3{font-size:14px;margin-bottom:3px}
   .crm-kontakt .sub{font-size:12px;color:var(--text);font-weight:500;margin-bottom:7px}
   .crm-kontakt .meta{gap:7px}
-  .crm-kontakt .meta .crm-chip{font-size:11px;font-weight:600;padding:3px 10px}
+  .crm-kontakt .meta .crm-chip{font-size:12px;font-weight:600;padding:3px 10px}
   .crm-empty{text-align:center;color:var(--muted);padding:60px 20px}
   .crm-detail-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .crm-detail-head h2{font-size:22px;font-weight:700;color:var(--primary);margin:0;flex:1;min-width:200px}
@@ -612,13 +612,13 @@ function injectStyles(){
   .crm-sec h4 .ttl{display:flex;align-items:center;gap:8px}
   .crm-sec h4 .hbtns{display:flex;gap:6px;flex-wrap:wrap}
   .crm-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 18px}
-  .crm-field label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block}
+  .crm-field label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block}
   .crm-field .v{font-size:14px;color:var(--text);margin-top:2px;white-space:pre-line}
   .crm-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);flex-wrap:wrap}
   .crm-row:first-of-type{border-top:none}
   .crm-row .grow{flex:1;min-width:140px}
   .crm-row .name{font-weight:600;color:var(--text)}
-  .crm-row .fn{font-size:11px;color:var(--on-primary,#fff);background:var(--primary-l);border-radius:10px;padding:2px 8px;white-space:nowrap}
+  .crm-row .fn{font-size:12px;color:var(--on-primary,#fff);background:var(--primary-l);border-radius:10px;padding:2px 8px;white-space:nowrap}
   .crm-row .small{font-size:12px;color:var(--muted)}
   .crm-x{background:none;border:none;color:var(--danger,#c0392b);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:5px}
   .crm-x:hover{background:var(--danger-bg,#fdecea)}
@@ -626,11 +626,11 @@ function injectStyles(){
   .crm-task:first-of-type{border-top:none}
   .crm-task.done .tx{text-decoration:line-through;color:var(--muted)}
   .crm-task .tx{font-weight:600;color:var(--text)}
-  .crm-tstatus{font-size:11px;font-weight:700;color:#fff;border-radius:12px;padding:2px 9px;white-space:nowrap}
+  .crm-tstatus{font-size:12px;font-weight:700;color:#fff;border-radius:12px;padding:2px 9px;white-space:nowrap}
   .crm-tsel{padding:6px 10px;border:1.5px solid var(--border);border-radius:9px;font-size:12px;background:var(--surface,#fff);color:var(--text);transition:border-color .15s,box-shadow .15s}
   .crm-tsel:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
   .crm-logitem{border-top:1px solid var(--border);padding:10px 0}
-  .crm-logitem .lh{font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;gap:8px}
+  .crm-logitem .lh{font-size:12px;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;gap:8px}
   .crm-logitem .lt{font-size:14px;color:var(--text);white-space:pre-line}
   .crm-logitem .ls{margin-top:6px;background:#eef7ee;border-left:3px solid var(--accent);border-radius:6px;padding:7px 10px;font-size:13px;color:#2c5e2e}
   .crm-add-inline{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
@@ -642,30 +642,30 @@ function injectStyles(){
   .crm-mic.rec{background:var(--danger-bg,#fdecea);border-color:var(--danger,#e74c3c);color:var(--danger,#c0392b);animation:crmPulse 1.1s infinite}
   @keyframes crmPulse{0%,100%{opacity:1}50%{opacity:.55}}
   .crm-modal-field{margin-bottom:14px}
-  .crm-modal-field label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:5px}
+  .crm-modal-field label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:5px}
   .crm-modal-field input,.crm-modal-field select,.crm-modal-field textarea{width:100%;box-sizing:border-box;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:var(--surface,#fff);color:var(--text);transition:border-color .15s,box-shadow .15s}
   .crm-modal-field input::placeholder,.crm-modal-field textarea::placeholder{color:#aab2bd}
   .crm-modal-field input:focus,.crm-modal-field select:focus,.crm-modal-field textarea:focus{outline:none;border-color:var(--primary-l);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
   .crm-ac-dd{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(32,56,105,.18);max-height:240px;overflow-y:auto;margin-top:4px}
   .crm-ac-item{padding:9px 13px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)} .crm-ac-item:last-child{border-bottom:none}
-  .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:11px;font-weight:400}
+  .crm-ac-item:hover,.crm-ac-item.on{background:var(--surface-2,#f4f7fb);color:var(--primary)} .crm-ac-item.on{font-weight:600} .crm-ac-tree{color:var(--muted);font-size:12px;font-weight:400}
   /* Seitenleiste: seit v502 global in css/styles.css (gilt für alle Fenster) */
   .crm-farben{display:flex;flex-wrap:wrap;gap:6px}
   .crm-farben label{cursor:pointer;display:inline-flex}
   .crm-farben input{position:absolute;opacity:0;width:1px;height:1px}
-  .crm-farben span{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#fff;font-size:10px;font-weight:700;border:2px solid transparent;box-shadow:0 0 0 1px var(--border)}
+  .crm-farben span{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#fff;font-size:12px;font-weight:700;border:2px solid transparent;box-shadow:0 0 0 1px var(--border)}
   .crm-farben input:checked+span{border-color:var(--text);box-shadow:0 0 0 2px var(--surface,#fff),0 0 0 4px var(--primary)}
   .crm-farben input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
   .vt-imp{margin:4px 0 12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--surface,#fff)}
   .vt-imp>summary{cursor:pointer;font-weight:700;color:var(--primary);font-size:14px}
   .ss-wrap{position:relative;flex:1 1 200px;min-width:160px}
   .crm-kn-folge .ss-wrap{flex:1 1 200px}
-  .ss-grp{padding:6px 12px 3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface-2,#f7f9fc)}
+  .ss-grp{padding:6px 12px 3px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--surface-2,#f7f9fc)}
   .sp-list{display:flex;flex-wrap:wrap;gap:5px;max-height:150px;overflow:auto}
   .sp-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;cursor:pointer;border:1px solid var(--border);border-radius:999px}
   .sp-item:has(input:checked){background:var(--info-bg,#e8f0fe);border-color:var(--primary);font-weight:600}
   .sp-wrap:not(.sp-all) .sp-item:not(:has(input:checked)){display:none}
-  .sp-wrap:not(.sp-all) .sp-list:not(:has(input:checked))::before{content:'Noch niemand ausgewählt – oben suchen oder „Liste“.';font-size:12.5px;color:var(--muted)}
+  .sp-wrap:not(.sp-all) .sp-list:not(:has(input:checked))::before{content:'Noch niemand ausgewählt – oben suchen oder „Liste“.';font-size:13px;color:var(--muted)}
   .crm-kp-in{width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface,#fff);color:var(--text)}
   .crm-ac-dd{max-height:260px;overflow-y:auto}
   .crm-ac-empty{padding:10px 13px;color:var(--muted);font-size:13px}
@@ -673,7 +673,7 @@ function injectStyles(){
   .crm-tt-btn{flex:1;padding:11px 12px;border:1.5px solid var(--border);border-radius:11px;background:var(--surface,#fff);color:var(--text);font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:all .12s}
   .crm-tt-btn:hover{border-color:var(--primary-l)}
   .crm-tt-btn.on{background:var(--primary);color:var(--on-primary,#fff);border-color:var(--primary)}
-  .crm-tt-hint{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.4}
+  .crm-tt-hint{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.4}
   .crm-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
   .btn-sm-crm{padding:8px 15px;font-size:13px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--primary);font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .05s}
   .btn-sm-crm:hover{border-color:var(--primary-l);background:var(--surface-2,#f5f8fd);box-shadow:0 2px 6px rgba(32,56,105,.08)}
@@ -698,20 +698,20 @@ function injectStyles(){
   .crm-tnode>.crm-task{border-top:none}
   .crm-check{width:18px;height:18px;cursor:pointer;flex-shrink:0;margin:0}
   .crm-subs{margin-left:14px;padding-left:12px;border-left:2px solid var(--border)}
-  .crm-tmeta{font-size:11px;color:var(--muted);margin-top:2px}
+  .crm-tmeta{font-size:12px;color:var(--muted);margin-top:2px}
   .crm-tnote{font-size:13px;color:var(--text);margin-top:4px;white-space:pre-line;background:rgba(0,0,0,.035);border-radius:6px;padding:5px 9px}
-  .crm-prog{font-size:11px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 9px;white-space:nowrap;flex-shrink:0}
+  .crm-prog{font-size:12px;font-weight:700;color:var(--primary);background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:2px 9px;white-space:nowrap;flex-shrink:0}
   .crm-stats{width:100%;border-collapse:collapse;font-size:13px}
-  .crm-stats th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
+  .crm-stats th{text-align:left;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px;padding:5px 8px;border-bottom:2px solid var(--border);white-space:nowrap}
   .crm-stats td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
-  .crm-delta{font-size:11px;font-weight:700}
+  .crm-delta{font-size:12px;font-weight:700}
   .crm-delta.up{color:var(--accent)} .crm-delta.down{color:var(--danger,#c0392b)}
   .crm-stat-year{margin-bottom:14px}
   .crm-stat-yhead{font-size:13px;font-weight:800;color:var(--primary);padding:2px 0 6px;letter-spacing:.3px}
-  .crm-stat-typ{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;color:#fff}
+  .crm-stat-typ{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;color:#fff}
   .crm-stat-typ.t-training{background:#0d8a8a} .crm-stat-typ.t-reihe{background:#2563eb} .crm-stat-typ.t-veranstaltung{background:#7b3fb3} .crm-stat-typ.t-sonstiges{background:var(--muted,#6b7280)}
   .crm-stat-notecell{white-space:normal;min-width:160px;max-width:320px}
-  .crm-stat-note{white-space:pre-line;font-size:12.5px;line-height:1.45}
+  .crm-stat-note{white-space:pre-line;font-size:13px;line-height:1.45}
   .crm-stat-act{white-space:nowrap;text-align:right}
   .crm-stat-quote{background:rgba(45,96,153,.08);border:1px solid var(--border);border-left:4px solid var(--primary);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:13px;color:var(--text)}
   .crm-koop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--border)}
@@ -719,21 +719,21 @@ function injectStyles(){
   .crm-koop-p{cursor:pointer;font-weight:600;color:var(--primary)}
   .crm-koop-p:hover{text-decoration:underline}
   .crm-koop-art{background:rgba(0,0,0,.05);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--text)}
-  .crm-koop-notetext{flex-basis:100%;width:100%;font-size:12.5px;color:var(--text);background:rgba(0,0,0,.035);border-radius:7px;padding:6px 10px;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
+  .crm-koop-notetext{flex-basis:100%;width:100%;font-size:13px;color:var(--text);background:rgba(0,0,0,.035);border-radius:7px;padding:6px 10px;margin-top:3px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
   .crm-koop-act{margin-left:auto;white-space:nowrap}
   .vw-card-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
-  .vw-card-opt{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface,#fff)}
+  .vw-card-opt{display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface,#fff)}
   .vw-card-opt input{width:auto;margin:0}
   .crm-share-opts{display:flex;flex-wrap:wrap;gap:10px}
   .crm-share-opts label{display:inline-flex;align-items:center;gap:6px;font-size:13px}
   .crm-share-opts input{width:auto;margin:0}
   .vw-table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
-  .vw-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
+  .vw-table th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:8px 12px;border-bottom:2px solid var(--border);white-space:nowrap}
   .vw-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
   .vw-table tbody tr{transition:background .12s}
   .vw-table tbody tr:hover{background:var(--surface-2,#f5f8fd)}
   .vw-name{font-weight:700;color:var(--primary)}
-  .vw-team{display:inline-block;font-size:11px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:2px 9px;margin:1px 3px 1px 0;color:var(--primary-l)}
+  .vw-team{display:inline-block;font-size:12px;font-weight:600;background:var(--surface-2,#eef2f8);border:1px solid #e0e6f0;border-radius:999px;padding:2px 9px;margin:1px 3px 1px 0;color:var(--primary-l)}
   .crm-viewtoggle{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
   .crm-viewtoggle button{background:var(--surface,#fff);border:none;padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
   .crm-viewtoggle button.active{background:var(--primary);color:var(--on-primary,#fff)}
@@ -743,7 +743,7 @@ function injectStyles(){
   .crm-projtab{background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer}
   .crm-projtab:hover{border-color:var(--primary-l)}
   .crm-projtab.active{background:var(--primary);color:var(--on-primary,#fff);border-color:var(--primary)}
-  .crm-projtab .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:4px;border-radius:9px;background:rgba(0,0,0,.16);font-size:11px;text-align:center}
+  .crm-projtab .cnt{display:inline-block;min-width:16px;padding:0 5px;margin-left:4px;border-radius:9px;background:rgba(0,0,0,.16);font-size:12px;text-align:center}
   .crm-projhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   .crm-projhead .crm-board-title{margin-bottom:0}
   .crm-projhist{margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
@@ -758,14 +758,14 @@ function injectStyles(){
   .vt-row .vt-addr{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .vt-row .crm-x{flex-shrink:0}
   .vt-row .vt-main{flex:1;min-width:0;display:flex;flex-direction:column;text-align:left}
-  .vt-row .vt-who{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vt-row .vt-who{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .vt-row .vt-addr{cursor:text}
   .vt-row .vt-addr:hover{text-decoration:underline dotted}
   .vt-row-bad{background:var(--danger-bg,#fdecea)}
   .vt-edit{flex:1;min-width:0;font-size:13px;padding:3px 6px}
   .vt-ok{color:#2e7d32;font-weight:700;flex-shrink:0}
-  .vt-bad{color:var(--danger,#c0392b);font-size:11px;font-weight:600;flex-shrink:0;white-space:nowrap}
-  .vt-fix{flex-shrink:0;border:1px solid var(--warn,#e0a800);background:var(--warn-bg,#fff8e1);color:#7a5a00;border-radius:10px;font-size:11px;padding:1px 7px;cursor:pointer;white-space:nowrap}
+  .vt-bad{color:var(--danger,#c0392b);font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap}
+  .vt-fix{flex-shrink:0;border:1px solid var(--warn,#e0a800);background:var(--warn-bg,#fff8e1);color:#7a5a00;border-radius:10px;font-size:12px;padding:1px 7px;cursor:pointer;white-space:nowrap}
   .pv-edit{display:flex;flex-direction:column;gap:5px;padding:8px;background:var(--bg,#f6f8fa);border-bottom:1px solid var(--border)}
   .pv-edit input,.pv-edit textarea{font-size:13px;padding:4px 6px}
   .vt-tools{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
@@ -781,7 +781,7 @@ function injectStyles(){
   .vw-ie-item:hover{border-color:var(--primary-l)}
   .vw-ie-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .kb-atts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-  .kb-att{font-size:11px;background:var(--surface-2,#eef2fa);border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kb-att{font-size:12px;background:var(--surface-2,#eef2fa);border:1px solid var(--border);border-radius:8px;padding:2px 8px;color:var(--primary);text-decoration:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kb-att:hover{background:#e2e9f6}
   .kb-cardbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .crm-contact{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:2px}
@@ -806,13 +806,13 @@ function injectStyles(){
   .kb-grip{cursor:grab;color:var(--muted);font-size:13px;line-height:1;user-select:none;flex-shrink:0}
   .kb-grip:active{cursor:grabbing}
   .kb-col-title{font-weight:700;color:var(--primary);font-size:14px;cursor:pointer;flex:1}
-  .kb-col-sub{font-size:11px;color:var(--muted);margin-top:-4px}
+  .kb-col-sub{font-size:12px;color:var(--muted);margin-top:-4px}
   .kb-cards{display:flex;flex-direction:column;gap:8px;min-height:8px;max-height:64vh;overflow-y:auto;overflow-x:hidden}   /* jede Spalte scrollt EINZELN */
   .kb-card{background:var(--surface,#fff);border:1px solid var(--border);border-radius:9px;padding:9px 10px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:grab}
   /* Ein-/Ausklappen (▾/▸) je Karte UND je Spalte */
-  .kb-toggle{background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:1px 3px;line-height:1;flex:0 0 auto;border-radius:5px}
+  .kb-toggle{background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:1px 3px;line-height:1;flex:0 0 auto;border-radius:5px}
   .kb-toggle:hover{background:rgba(0,0,0,.06);color:var(--primary)}
-  .kb-count{font-size:10px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.06);border-radius:999px;padding:1px 7px;margin-left:4px}
+  .kb-count{font-size:12px;font-weight:700;color:var(--muted);background:rgba(0,0,0,.06);border-radius:999px;padding:1px 7px;margin-left:4px}
   .kb-col.collapsed .kb-cards,.kb-col.collapsed .kb-qadd,.kb-col.collapsed .kb-col-sub,.kb-col.collapsed .kb-resize{display:none}
   .kb-col.collapsed{flex:0 0 auto!important;width:auto!important;min-width:150px;align-self:flex-start}
   .kb-card.collapsed .kb-card-body{display:none}
@@ -823,14 +823,14 @@ function injectStyles(){
   .kb-card:active{cursor:grabbing}
   .kb-card.done{opacity:.65}
   .kb-card-top{display:flex;align-items:flex-start;gap:7px}
-  .kb-card-title{font-weight:600;color:var(--text);font-size:13.5px;cursor:pointer}
+  .kb-card-title{font-weight:600;color:var(--text);font-size:14px;cursor:pointer}
   .kb-card.done .kb-card-title{text-decoration:line-through;color:var(--muted)}
   .kb-card-note{font-size:12px;color:var(--muted);margin-top:5px;white-space:pre-line}
   .kb-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
-  .kb-chip{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)}
+  .kb-chip{font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)}
   .kb-checklist{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px}
   /* Jeder Unterpunkt = eigener Chip (Rahmen + Grund) → klar voneinander abgehoben */
-  .kb-check{display:flex;align-items:center;gap:7px;font-size:12.5px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px}
+  .kb-check{display:flex;align-items:center;gap:7px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px}
   .kb-check.done{opacity:.7}
   .kb-check.done .kb-check-tx{text-decoration:line-through;color:var(--muted)}
   .kb-check-tx{cursor:pointer;flex:1;min-width:0;overflow-wrap:anywhere}
@@ -839,7 +839,7 @@ function injectStyles(){
   .kb-add,.kb-additem{background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;text-align:left;padding:4px 2px}
   .kb-add:hover,.kb-additem:hover{text-decoration:underline}
   /* Inline-Schnellerfassung: Aufgabe/Spalte/Schritt direkt tippen + Enter (kein Dialog nötig) */
-  .kb-qadd{width:100%;box-sizing:border-box;border:1px dashed var(--border);background:rgba(0,0,0,.02);border-radius:7px;padding:6px 9px;font-size:12.5px;color:var(--text);margin-top:6px;transition:border-color .12s,background .12s}
+  .kb-qadd{width:100%;box-sizing:border-box;border:1px dashed var(--border);background:rgba(0,0,0,.02);border-radius:7px;padding:6px 9px;font-size:13px;color:var(--text);margin-top:6px;transition:border-color .12s,background .12s}
   .kb-qadd::placeholder{color:var(--muted)}
   .kb-qadd:focus{outline:none;border-style:solid;border-color:var(--primary);background:var(--surface,#fff);box-shadow:0 0 0 3px rgba(45,96,153,.12)}
   .kb-qadd-step{font-size:12px;padding:4px 8px;margin-top:6px}
@@ -851,7 +851,7 @@ function injectStyles(){
   #crm-vboard .vb-title-in{flex:1;min-width:200px;font-size:18px;font-weight:800;color:var(--primary);border:1.5px solid transparent;border-radius:9px;padding:7px 11px;background:transparent;font-family:inherit}
   #crm-vboard .vb-title-in:hover{border-color:var(--border);background:var(--surface,#fff)}
   #crm-vboard .vb-title-in:focus{outline:none;border-color:var(--primary-l);background:var(--surface,#fff);box-shadow:0 0 0 3px rgba(32,56,105,.12)}
-  #crm-vboard .vb-hint{flex-basis:100%;font-size:12.5px;color:var(--muted);line-height:1.5;padding:2px 2px 0}
+  #crm-vboard .vb-hint{flex-basis:100%;font-size:13px;color:var(--muted);line-height:1.5;padding:2px 2px 0}
   #crm-vboard .vb-scroll{flex:1;overflow:hidden;padding:14px 16px;-webkit-overflow-scrolling:touch}
   /* Board füllt die ganze Fläche → Spalten sind volle Höhe, jede scrollt selbst, KEIN großer leerer Rand */
   #crm-vboard .kb-board{height:100%;align-items:stretch}
@@ -876,7 +876,7 @@ function injectStyles(){
   /* Kontaktnotizen mit History */
   .crm-kn-item{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--surface,#fff)}
   .crm-kn-latest .crm-kn-item{border-color:var(--primary);background:rgba(45,96,153,.05)}
-  .crm-kn-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px;flex-wrap:wrap}
+  .crm-kn-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:4px;flex-wrap:wrap}
   .crm-kn-more{margin:8px 0;border:1px dashed var(--border);border-radius:8px;padding:6px 10px}
   .crm-kn-more>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)}
   .crm-kn-grid{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
@@ -889,20 +889,20 @@ function injectStyles(){
   .crm-kn-folge{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;padding:6px;border:1px solid var(--border);border-radius:8px}
   .crm-kn-folge .kf-text{flex:1 1 180px;min-width:0}
   .crm-kn-who{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
-  .crm-kn-wl{font-size:12.5px;font-weight:700;color:var(--primary);margin-right:2px}
+  .crm-kn-wl{font-size:13px;font-weight:700;color:var(--primary);margin-right:2px}
   .crm-kn-wl:not(:first-child){margin-left:8px}
-  .crm-kn-chip{font-size:13.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--info-bg,#e8f0fe);color:var(--text)}
+  .crm-kn-chip{font-size:14px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--info-bg,#e8f0fe);color:var(--text)}
   .crm-kn-chip.ext{background:var(--surface-2,#f1f4f8);border:1px solid var(--border)}
   .crm-kn-folgen{margin-top:6px;display:flex;flex-direction:column;gap:4px}
-  .crm-kn-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;padding:4px 8px;border-radius:6px;background:var(--surface-2,#f4f7fb)}
+  .crm-kn-f{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;padding:4px 8px;border-radius:6px;background:var(--surface-2,#f4f7fb)}
   .crm-kn-ft{font-weight:700;color:var(--primary);white-space:nowrap}
   .crm-kn-fx{flex:1 1 160px;min-width:0}
   .crm-kn-fm{color:var(--muted);white-space:nowrap}
-  .crm-kn-st{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+  .crm-kn-st{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap}
   .crm-kn-st.ok{color:var(--ok,#16a34a)}
-  .crm-kn-ver>summary,.crm-kn-wd>summary{cursor:pointer;font-size:11.5px;color:var(--muted);margin-top:6px}
+  .crm-kn-ver>summary,.crm-kn-wd>summary{cursor:pointer;font-size:12px;color:var(--muted);margin-top:6px}
   .crm-kn-v{border-left:3px solid var(--border);padding-left:8px;margin:6px 0;opacity:.85}
-  .crm-kn-lg{font-size:11.5px;padding:0 4px;border-radius:4px}
+  .crm-kn-lg{font-size:12px;padding:0 4px;border-radius:4px}
   .crm-kn-step-h{border-left:3px solid var(--border);padding:2px 0 2px 10px;margin:8px 0}
   .crm-kn-diff{white-space:pre-wrap}
   .crm-kn-chg{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6}
@@ -911,9 +911,9 @@ function injectStyles(){
   .crm-kn-grid input,.crm-kn-grid select,.crm-kn-in{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:var(--surface,#fff);color:var(--text)}
   .crm-kn-wd .crm-kn-item{opacity:.6}
   .crm-kn-meta .crm-x{margin-left:auto}
-  .crm-kn-text{white-space:pre-line;font-size:13.5px;line-height:1.5;word-break:break-word}
+  .crm-kn-text{white-space:pre-line;font-size:14px;line-height:1.5;word-break:break-word}
   .crm-kn-hist{margin-top:8px}
-  .crm-kn-hist summary{cursor:pointer;font-size:12.5px;color:var(--primary);font-weight:600;padding:4px 0}
+  .crm-kn-hist summary{cursor:pointer;font-size:13px;color:var(--primary);font-weight:600;padding:4px 0}
   .crm-kn-hist[open] summary{margin-bottom:6px}
   /* Einheitlicher Anlege-Knopf mit Menü */
   .crm-neu-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -923,22 +923,22 @@ function injectStyles(){
   .crm-neu-menu button:hover{background:var(--hover,#eef3f9)}
   /* Status */
   .crm-statusrow{display:flex;align-items:center;gap:10px}
-  .crm-statuslabel{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-  .crm-status-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:var(--surface,#fff);color:var(--text)}
-  .crm-statusbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+  .crm-statuslabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .crm-status-select{padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface,#fff);color:var(--text)}
+  .crm-statusbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap}
   .crm-statusfilter{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-  .crm-sf-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
-  .crm-sf-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13.5px;background:var(--surface,#fff);color:var(--text);cursor:pointer}
+  .crm-sf-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  .crm-sf-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface,#fff);color:var(--text);cursor:pointer}
   /* Kategorie-Badge (analog Status) */
-  .crm-catbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+  .crm-catbadge{display:inline-block;padding:2px 9px;border-radius:999px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap}
   .crm-kuerzel{font-weight:600;color:var(--muted)}
   .crm-scbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 14px}
   /* Filter als Button + Popup-Menü */
   .crm-filterrow{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-  .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:var(--surface,#fff);color:var(--text);font-size:13.5px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+  .crm-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:999px;background:var(--surface,#fff);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
   .crm-filter-btn:hover{border-color:var(--primary-l)}
   .crm-filter-btn.on{border-color:var(--primary);background:var(--primary);color:var(--on-primary,#fff)}
-  .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:11px;font-weight:800}
+  .crm-filter-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--danger,#e5484d);color:var(--on-primary,#fff);font-size:12px;font-weight:800}
   .crm-sortsel{margin-left:auto;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface,#fff);color:var(--text);cursor:pointer}
   .crm-filter-count{font-size:12px;color:var(--muted)}
   .crm-filter-pop{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 20px);max-height:74vh;overflow-y:auto;background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:8px}
@@ -946,15 +946,15 @@ function injectStyles(){
   .crm-fside{flex:0 0 270px;position:sticky;top:8px;max-height:calc(100vh - 170px);overflow-y:auto;background:var(--surface,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);padding:8px}
   .crm-fmain{flex:1;min-width:0}
   @media(max-width:700px){ .crm-fwrap{flex-direction:column;gap:10px} .crm-fside{flex:none;width:100%;box-sizing:border-box;position:static;max-height:none} }
-  .crm-fpop-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
-  .crm-fpop-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13.5px}
+  .crm-fpop-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 8px 4px}
+  .crm-fpop-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:14px}
   .crm-fpop-item:hover{background:var(--surface-2,#f5f8fd)}
   .crm-fpop-item.on{background:var(--info-bg,#eef4ff)}
   .crm-fpop-item input{margin:0;width:auto;cursor:pointer;flex:none}
   .crm-fpop-dot{width:10px;height:10px;border-radius:50%;flex:none}
   .crm-fpop-lbl{flex:1;min-width:0}
   .crm-fpop-n{font-size:12px;color:var(--muted);font-weight:700}
-  .crm-fpop-empty{padding:8px 9px;font-size:12.5px;color:var(--muted)}
+  .crm-fpop-empty{padding:8px 9px;font-size:13px;color:var(--muted)}
   .crm-fpop-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 6px 4px;margin-top:4px;border-top:1px solid var(--border)}
   /* Schlagwort-Vorschläge */
   .crm-tag-suggest{display:none;position:absolute;left:0;right:0;top:100%;z-index:25;background:var(--surface,#fff);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.12);margin-top:2px;max-height:210px;overflow:auto;padding:4px}
@@ -1021,16 +1021,16 @@ function injectStyles(){
   .wf-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer}
   .wf-item:hover{box-shadow:0 2px 10px rgba(0,0,0,.08)}
   .wf-item h3{margin:0;font-size:15px}
-  .wf-item .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
-  .wf-badge{font-size:11px;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap}
+  .wf-item .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .wf-badge{font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap}
   .wf-badge.pub{background:#e3f3e3;color:#2f7a33;border:1px solid #bfe0bf}
   .wf-badge.draft{background:var(--surface-2,#eef2f8);color:#5a6b85;border:1px solid #dbe2ee}
   .wf-canvas{display:flex;flex-direction:column;align-items:center;padding:6px 0 40px}
   .wf-step{width:min(440px,94%);background:var(--surface,#fff);border:1px solid #e3e7ee;border-radius:10px;box-shadow:0 1px 5px rgba(0,0,0,.07);overflow:hidden}
-  .wf-step-hd{color:#fff;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
+  .wf-step-hd{color:#fff;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
   .wf-step-bd{padding:10px 13px}
   .wf-step-bd .t{font-weight:600;margin-bottom:2px}
-  .wf-step-bd .d{font-size:12.5px;color:#5a6b85;white-space:pre-line}
+  .wf-step-bd .d{font-size:13px;color:#5a6b85;white-space:pre-line}
   .wf-step-num{background:rgba(255,255,255,.28);border-radius:5px;padding:0 6px;margin-right:7px}
   .wf-conn{width:2px;height:22px;background:#c7cedd}
   .wf-acts{display:flex;gap:5px}
@@ -2524,7 +2524,7 @@ function memberFormHtml(k){
      <div class="vw-vpick">${postLists.map(v=>{ const inIt = k.id && ce && (v.adressen||[]).some(a=>a.src&&a.src.eid===ce.id&&a.src.kid===k.id);
         return `<label><input type="checkbox" class="crm-mf-pv" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
      <div class="small" style="color:var(--muted);margin-top:3px">Ohne eigene Adresse wird die Adresse des Eintrags verwendet.</div></div>` : '';
-  const vBlock = (lists.length && _R('vt_eintragen')) ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label>
+  const vBlock = (lists.length && _R('vt_eintragen')) ? `<div class="crm-modal-field"><label>✉️ Zu Verteiler hinzufügen <span style="font-size:12px;color:var(--muted)">(mehrere möglich)</span></label>
      <div class="vw-vpick">${lists.map(v=>{ const inIt = myMail && _normEmails(v.emails).some(e=>e.toLowerCase()===myMail);
         return `<label><input type="checkbox" class="crm-mf-vt" value="${esc(v.id)}" ${inIt?'checked':''}> ${esc(v.name||'(ohne Name)')}</label>`; }).join('')}</div>
      <div class="small" style="color:var(--muted);margin-top:3px">Wirkt nur mit hinterlegter E-Mail.</div></div>` : '';
@@ -2751,7 +2751,7 @@ function _kpList(idp){ if(idp==='crm-va'){ if(!Array.isArray(window._vaTeiln)) w
 function _kpSet(idp,arr){ arr=(arr||[]).map(o=>({tree:o.tree,eid:o.eid})); if(idp==='crm-va') window._vaTeiln=arr; else { window._crmKp=window._crmKp||{}; window._crmKp[idp]=arr; } }
 function _kpName(o){ try{ const e=getEntity(o.tree,o.eid); return (e&&e.stamm&&e.stamm.name)||o.eid; }catch(x){ return o.eid; } }
 function crmKpChips(idp,ro){ const l=_kpList(idp); if(!l.length) return '<span class="small" style="color:var(--muted)">Noch keine ausgewählt.</span>'; return l.map((o,i)=>`<span class="crm-chip">${esc(_kpName(o))}${ro?'':` <span onclick="crmKpRemove(${jsq(idp)},${i})" title="Entfernen" style="cursor:pointer;font-weight:800;margin-left:4px">✕</span>`}</span>`).join(''); }
-function crmKpHtml(idp,label,hint,ro){ return `<div class="crm-modal-field" style="position:relative"><label>${label}${hint?` <span style="font-size:11px;color:var(--muted)">${hint}</span>`:''}</label>
+function crmKpHtml(idp,label,hint,ro){ return `<div class="crm-modal-field" style="position:relative"><label>${label}${hint?` <span style="font-size:12px;color:var(--muted)">${hint}</span>`:''}</label>
    <div id="${idp}-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${crmKpChips(idp,ro)}</div>
    ${ro?'':`<input id="${idp}-in" class="crm-kp-in" type="text" autocomplete="off" placeholder="🔎 Name eingeben … (mehrere möglich)" oninput="crmKpSearch(${jsq(idp)},this.value)" onfocus="crmKpSearch(${jsq(idp)},this.value)" onkeydown="crmKpKey(event,${jsq(idp)})" onblur="setTimeout(()=>crmKpHide(${jsq(idp)}),150)">
    <div id="${idp}-dd" class="crm-ac-dd" style="display:none" onmousedown="event.preventDefault()"></div>`}</div>`; }
@@ -2871,7 +2871,7 @@ function crmEditTermin(tid){
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-te-note" value="${esc(t.note||'')}"${ro}></div>
    ${(canEdit||(t.teilnehmer&&t.teilnehmer.length))?crmKpHtml('crm-te','Weitere beteiligte Kontakte','optional',!canEdit):''}
    ${canAsg
-     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
+     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:12px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
    ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa(${jsq(tid)})" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
@@ -3734,7 +3734,7 @@ const FOERDER_STATUS=[
 function foerderStatusLabel(s){ const f=FOERDER_STATUS.find(x=>x[0]===s); return f?f[1]:(s||'–'); }
 function foerderBadge(s){
   const col={beantragt:['#8a5a00','#fff7e6'],genehmigt:['#1a7f37','#e9f8ee'],abgelehnt:['#b3261e','#fdecea'],abgeschlossen:['#3a4a5c','#eef1f5']}[s]||['#555','#eee'];
-  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:${cssColor(col[0],'#333')};background:${cssColor(col[1],'#eee')}">${esc(foerderStatusLabel(s))}</span>`;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;color:${cssColor(col[0],'#333')};background:${cssColor(col[1],'#eee')}">${esc(foerderStatusLabel(s))}</span>`;
 }
 function fmtEuro(n){ n=Number(n||0); return n.toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 // Status-Verlauf einer Förderung als Tooltip (nur wenn es echte Wechsel gab).
@@ -3831,7 +3831,7 @@ function nodeModal(o){
     const ctxTeam = (window._crmTaskCtx&&window._crmTaskCtx.kind==='veranstaltung'&&e.team)?[e.team]:[];
     const preTeams = (Array.isArray(n.teams)&&n.teams.length)?n.teams:ctxTeam;
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${preTeams.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
-    teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:11px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
+    teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:12px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
   } else if(vo){ teamRow=''; }   // Vorlage-Unterpunkt: keine Einzel-Zuweisung
   else {
@@ -3848,8 +3848,8 @@ function nodeModal(o){
    </div>`}
    <div class="crm-modal-field"><label>Beschreibung / Notiz</label><textarea id="crm-task-note" rows="3" placeholder="Details, Kontext, Notizen …">${esc(n.note||'')}</textarea></div>
    <details class="crm-modal-field"${(n.deps&&n.deps.length)?' open':''}>
-     <summary style="cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔗 Abhängig von …${(n.deps&&n.deps.length)?` (${n.deps.length})`:''}</summary>
-     <div style="font-size:11px;color:var(--muted);margin:6px 0">Diese Aufgabe startet erst, wenn die hier gewählten erledigt sind.</div>
+     <summary style="cursor:pointer;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">🔗 Abhängig von …${(n.deps&&n.deps.length)?` (${n.deps.length})`:''}</summary>
+     <div style="font-size:12px;color:var(--muted);margin:6px 0">Diese Aufgabe startet erst, wenn die hier gewählten erledigt sind.</div>
      <div id="crm-task-deps">${depsBoxHtml(e, n.id||null, n.deps)}</div>
    </details>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -4297,7 +4297,7 @@ function teamProjektFormHtml(p, isNew){
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Team-Projekt':'✎ Projekt'}</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-tp-name" value="${esc(p.name||'')}"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team"${(isNew||_kbMayManage(p))?'':' disabled title="Team ändern: nur mit Projektmanagement „Verwaltend\"'}>${teamOpts}</select></div>
-   <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link" class="crm-ss">${entityLinkOptions(linkSel)}</select></div>
+   <div class="crm-modal-field"><label>Zuordnung <span style="font-size:12px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link" class="crm-ss">${entityLinkOptions(linkSel)}</select></div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-tp-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -4411,7 +4411,7 @@ function crmNewMeinProjekt(){
   crmOpenModalShell();
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">＋ Eigenes Projekt</h3>
     <div class="crm-modal-field"><label>Name *</label><input id="crm-mp-name"></div>
-    <div class="crm-modal-field"><label>Zuordnung <span style="font-size:11px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-mp-link">${entityLinkOptions('')}</select></div>
+    <div class="crm-modal-field"><label>Zuordnung <span style="font-size:12px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-mp-link">${entityLinkOptions('')}</select></div>
     <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-mp-besch" rows="3"></textarea></div>
     <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
     <button class="btn-sm-crm primary" onclick="crmSaveMeinProjekt()">Anlegen</button></div>`);
@@ -4497,8 +4497,8 @@ function paintVeranstaltungDetail(){
         ${ortLine?`<div class="crm-field"><label>Wo</label><div class="v">${ortLine}</div></div>`:''}
         ${v.team?`<div class="crm-field"><label>Team</label><div class="v">${esc(v.team)}</div></div>`:''}
       </div>
-      <div style="margin-top:12px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">Beteiligte Einträge</label><div style="display:flex;gap:6px;flex-wrap:wrap">${teiln}</div></div>
-      <div style="margin-top:12px"><label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">👥 Zugewiesene Mitarbeiter</label><div style="display:flex;gap:6px;flex-wrap:wrap">${(v.mitarbeiter&&v.mitarbeiter.length)?staffNames(v.mitarbeiter).map(nm=>`<span class="crm-chip" style="font-size:12px">${esc(nm)}</span>`).join(''):'<span class="small" style="color:var(--muted)">Niemand zugewiesen.</span>'}</div></div>
+      <div style="margin-top:12px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">Beteiligte Einträge</label><div style="display:flex;gap:6px;flex-wrap:wrap">${teiln}</div></div>
+      <div style="margin-top:12px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">👥 Zugewiesene Mitarbeiter</label><div style="display:flex;gap:6px;flex-wrap:wrap">${(v.mitarbeiter&&v.mitarbeiter.length)?staffNames(v.mitarbeiter).map(nm=>`<span class="crm-chip" style="font-size:12px">${esc(nm)}</span>`).join(''):'<span class="small" style="color:var(--muted)">Niemand zugewiesen.</span>'}</div></div>
       ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
     </div>
     <div class="crm-sec">
@@ -4621,7 +4621,7 @@ function _vaFieldsHtml(v){
    ${crmKpHtml('crm-va','Beteiligte CRM-Kontakte','beliebig viele, per Suche')}
    ${_farbPickHtml('crm-va', v.farbe, true)}
    ${_canAssignStaff()
-     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
+     ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:12px;color:var(--muted)">(zugewiesen – erscheinen im Kalender auf ihrer Zeile)</span></label>${staffPickerHtml(v.mitarbeiter, 'crm-va')}</div>`
      : ((v.mitarbeiter&&v.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(v.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-va-besch" rows="3">${esc(v.beschreibung||'')}</textarea></div>`;
 }
@@ -4641,7 +4641,7 @@ function _terminFieldsHtml(t){
    <div class="crm-modal-field"><label>Ort</label><input id="crm-tf-ort" value="${esc(t.ort||'')}"></div>
    ${_farbPickHtml('crm-tf', t.farbe, false)}
    <div class="crm-modal-field"><label>Notiz</label><input id="crm-tf-note" value="${esc(t.note||'')}"></div>
-   ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:11px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter||[], 'crm-tf')}</div>`:''}`;
+   ${_canAssignStaff()?`<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:12px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter||[], 'crm-tf')}</div>`:''}`;
 }
 function veranstaltungFormHtml(v,isNew){
   return `<h3 style="color:var(--primary);margin:0 0 14px">${isNew?'＋ Veranstaltung':'✎ Veranstaltung'}</h3>
@@ -4878,13 +4878,13 @@ function _verteilerModal(v){
   Object.keys(window._vtDom).forEach(d=>{ if(window._vtDom[d]==='?') delete window._vtDom[d]; });   // Fehlversuche beim Öffnen erneut probieren
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">✉️ Verteiler</h3>
    <div class="crm-modal-field"><label>Name *</label><input id="crm-vt-name" value="${esc(v.name||'')}" placeholder="z. B. Alle Vereinsvorstände"></div>
-   <div class="crm-modal-field"><label>E-Mail-Adressen <span id="crm-vt-count" style="font-size:11px;color:var(--muted)"></span></label>
+   <div class="crm-modal-field"><label>E-Mail-Adressen <span id="crm-vt-count" style="font-size:12px;color:var(--muted)"></span></label>
      <div class="vt-add"><input id="crm-vt-input" placeholder="name@example.de (Enter = hinzufügen)" onkeydown="if(event.key==='Enter'){event.preventDefault();crmVerteilerAddInput();}">
      <button type="button" class="btn-sm-crm" onclick="crmVerteilerAddInput()">＋</button></div>
      <div id="crm-vt-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Adresse anklicken = korrigieren</span>
      <span id="crm-vt-checkbtn" class="small" style="color:var(--muted)"></span></div></div>
-   <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:11px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" class="crm-ss" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
+   <div class="crm-modal-field"><label>Personen hinzufügen <span style="font-size:12px;color:var(--muted)">(Nutzer mit hinterlegter Mailadresse)</span></label><select id="crm-vt-user" class="crm-ss" onchange="crmVerteilerAddUser()">${userOpts}</select></div>
    <div class="crm-modal-field"><label>Kontakte hinzufügen</label><select id="crm-vt-pick" class="crm-ss" onchange="crmVerteilerAddVerein()">${vereinOpts}</select></div>
    ${_R('vt_import')?_vtImpHtml('mail'):''}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -5177,7 +5177,7 @@ function _pvModal(v){
    <div class="crm-modal-field"><label>Name *</label><input id="crm-pv-name" value="${esc(v.name||'')}" placeholder="z. B. Weihnachtspost Vereine"></div>
    <div class="crm-modal-field"><label>Aus Kontakten / Einträgen übernehmen</label><select id="crm-pv-pick" class="crm-ss" onchange="crmPvAddPick()"><option value="">– auswählen –</option>${groups}</select></div>
    ${_R('vt_import')?_vtImpHtml('post'):''}
-   <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:11px;color:var(--muted)"></span></label>
+   <div class="crm-modal-field"><label>Empfänger <span id="crm-pv-count" style="font-size:12px;color:var(--muted)"></span></label>
      <div id="crm-pv-list" class="vt-list"></div>
      <div class="vt-tools"><span class="small" style="color:var(--muted)">Eintrag anklicken = korrigieren · 🔗 = mit Kontakt verknüpft (bleibt aktuell)</span>
      <button type="button" class="btn-sm-crm" onclick="crmPvAddManual()">＋ Adresse von Hand</button></div></div>
@@ -5315,7 +5315,7 @@ function crmPvLabels(id){
      <div class="small" style="color:var(--muted);margin-top:3px">Die Nummer steht auf der Packung der Etiketten.</div></div>
    <div class="crm-modal-field"><label>Beginnen bei Etikett Nr.</label><input id="crm-pvl-start" type="number" min="1" value="1" style="width:90px">
      <div class="small" style="color:var(--muted);margin-top:3px">Für angebrochene Bögen: zählt zeilenweise von links oben.</div></div>
-   <div class="crm-modal-field"><label>Feinjustierung <span style="font-size:11px;color:var(--muted)">(nur falls der Druck verrutscht, in mm)</span></label>
+   <div class="crm-modal-field"><label>Feinjustierung <span style="font-size:12px;color:var(--muted)">(nur falls der Druck verrutscht, in mm)</span></label>
      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="small">→ rechts</span><input id="crm-pvl-dx" type="number" step="0.5" value="${Number(p.dx)||0}" style="width:70px">
      <span class="small">↓ runter</span><input id="crm-pvl-dy" type="number" step="0.5" value="${Number(p.dy)||0}" style="width:70px"></div></div>
    <div class="small" style="margin:6px 0 2px">${n} Etikett${n===1?'':'en'}${ohne?` · <span style="color:var(--danger,#c0392b)">${ohne} Empfänger ohne Adresse werden übersprungen</span>`:''}</div>
@@ -6102,7 +6102,7 @@ function crmCfgCatEdit(key){
    <div class="crm-modal-field"><label>Bezeichnung *</label><input id="cfg-cat-label" value="${esc(c.label||'')}" placeholder="z. B. Förderpartner"></div>
    <div class="crm-modal-field"><label>Farbe (optional)</label><input id="cfg-cat-color" type="color" value="${esc(c.color||'#5b6b7d')}" style="width:64px;height:34px;padding:2px;cursor:pointer"></div>
    <div class="crm-modal-field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cfg-cat-stats" ${_catStats(c)?'checked':''} style="width:auto;margin:0"> Statistik / Weitermach-Quote für diese Kategorie</label><div class="small" style="color:var(--muted)">z. B. Vereine oder Segelschulen – schaltet den Statistik-Reiter an Kontakten dieser Kategorie frei.</div></div>
-   <div class="crm-modal-field"><label>Eigene Zusatzfelder <span style="font-size:11px;color:var(--muted)">(erscheinen beim Kontakt, sobald diese Kategorie angehakt ist)</span></label>
+   <div class="crm-modal-field"><label>Eigene Zusatzfelder <span style="font-size:12px;color:var(--muted)">(erscheinen beim Kontakt, sobald diese Kategorie angehakt ist)</span></label>
      <div id="cfg-cf-rows">${(Array.isArray(c.fields)?c.fields:[]).map(f=>_cfgCfRow(f)).join('')}</div>
      <button type="button" class="btn-sm-crm" onclick="crmCfgCfAdd()">＋ Feld</button></div>
    ${key?`<div class="small" style="color:var(--muted)">Schlüssel <code>${esc(key)}</code> ist fest und ändert sich nicht.</div>`:''}

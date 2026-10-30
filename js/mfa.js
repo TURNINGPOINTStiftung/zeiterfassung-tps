@@ -242,7 +242,7 @@ export async function mfaFillBadges(force){
   try{
     if(force||!_status||Date.now()-_statusAt>60000){ _status=new Set((await _fn({ action:'mfaStatus' })).on||[]); _statusAt=Date.now(); }
     els.forEach(el=>{ const k=String(el.dataset.mfa||'').toLowerCase().replace(/[^a-z0-9._-]/g,''); const on=_status.has(k);
-      el.innerHTML=on?'<span class="badge" title="Zwei-Faktor-Anmeldung eingeschaltet" style="background:var(--ok-bg);color:var(--ok-text);font-size:11px">🔐 2FA</span>':''; });
+      el.innerHTML=on?'<span class="badge" title="Zwei-Faktor-Anmeldung eingeschaltet" style="background:var(--ok-bg);color:var(--ok-text);font-size:12px">🔐 2FA</span>':''; });
   }catch(e){ /* Server-Teil fehlt oder offline → keine Anzeige */ }
 }
 
