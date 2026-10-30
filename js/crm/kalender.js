@@ -355,9 +355,13 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
 // ── Tag-Raster (Woche + Monat) ──
 function _dayGrid(days){
   const emps=_emps(); if(!emps.length) return '<div class="kal-empty">Keine Mitarbeiter vorhanden.</div>';
-  const abs=_abs(); const items=_events().concat(_termine()); const N=days.length;
+  const N=days.length;
   const myId=(window.cu&&window.cu.id)||'';
   const isoList=days.map(d=>d.iso);
+  // Nur was im angezeigten Zeitraum liegt zählt – sonst machte eine Doppelung in einem anderen Monat
+  // die Zeilen dauerhaft höher (v523, User 30.10.2026).
+  const inView=x=>overlap(x.von,x.bis||x.von,isoList[0],isoList[N-1]);
+  const abs=_abs().filter(inView); const items=_events().concat(_termine()).filter(inView);
   const NW=_NW(), DW=_mobile()?30:34;
   const cs='grid-template-columns:'+NW+'px repeat('+N+',minmax('+DW+'px,1fr));';
   const cfSet=new Set();
