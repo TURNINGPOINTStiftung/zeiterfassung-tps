@@ -238,8 +238,12 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-hei
 .ab-seg.on{background:var(--primary);color:var(--on-primary,#fff)}
 .ab-type-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px}
 .ab-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
-.ab-calbox .ab-cal-wrap{zoom:1;border:0}
-.ab-calbox .ab-cal-day{min-height:74px;padding:4px 5px}
+.ab-calbox .ab-cal-wrap{zoom:1;border:0;flex:1;display:flex;flex-direction:column}
+.ab-calbox .ab-cal-day{min-height:96px;padding:4px 5px}
+/* v520: alle Tagesfelder gleich hoch; der Kalender wächst mit der Liste daneben mit */
+.ab-grid{align-items:stretch}
+.ab-calbox{display:flex;flex-direction:column}
+.ab-calbox .ab-cal-grid{flex:1;grid-template-rows:auto;grid-auto-rows:minmax(96px,1fr)}
 .ab-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-left:4px solid var(--primary-l);background:var(--bg);border-radius:6px;margin-bottom:6px;font-size:13px}
 .ab-row-l{flex:1;min-width:0}
 .ab-card2{background:var(--white);border:1px solid var(--border);border-left:4px solid var(--primary-l);border-radius:8px;padding:10px 14px;margin-bottom:8px}
