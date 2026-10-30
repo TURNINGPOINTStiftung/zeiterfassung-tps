@@ -527,7 +527,7 @@ export function renderAbCalendar(){
       const dsX=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
       if(dsX.startsWith(`${y}-${String(m).padStart(2,'0')}`)){
         if(!dayMap[dsX]) dayMap[dsX]=[];
-        dayMap[dsX].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:r.type,userId:r.userId});
+        dayMap[dsX].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:_shownType(r),userId:r.userId});
       }
       cur.setDate(cur.getDate()+1);
     }
@@ -567,13 +567,18 @@ export function renderAbCalendar(){
 }
 
 // ── Farben je Art (v516, User 30.10.2026): Urlaub blau · Krank rot · Ausgleich grün · Sonstiges gelb ──
-const _AB_TYPES=[['Urlaub','Urlaub','info','#378ADD'],['AU/Krank','Krank','danger','#E24B4A'],['Arbeitszeitausgleich','Ausgleich','ok','#1D9E75'],['Sonstiges','Sonstiges','warn','#BA7517']];
+const _AB_TYPES=[['Urlaub','Urlaub','info','#378ADD'],['AU/Krank','Krank','danger','#E24B4A'],['Arbeitszeitausgleich','Ausgleich','ok','#1D9E75'],['Sonstiges','Sonstiges','warn','#BA7517'],['Abwesend','Abwesend','','#888780']];
 function _abType(t){ return _AB_TYPES.find(x=>x[0]===t) || _AB_TYPES[3]; }
-function _typeBg(t){ return `var(--${_abType(t)[2]}-bg)`; }
-function _typeFg(t){ return `var(--${_abType(t)[2]}-text)`; }
+function _typeBg(t){ const c=_abType(t)[2]; return c?`var(--${c}-bg)`:'var(--bg)'; }
+function _typeFg(t){ const c=_abType(t)[2]; return c?`var(--${c}-text)`:'var(--muted)'; }
 function _typeBar(t){ return _abType(t)[3]; }
+// Krankmeldungen anderer sehen nur Leitung, GF und Admin – für alle anderen „Abwesend" (v518, User 30.10.2026).
+// Hinweis: reine Anzeige; die Daten liegen weiter auf dem Gerät (Lesezugriff je Person = Prio 3).
+function _abSeesSick(cu){ cu=cu||window.cu; return !!(cu && (cu.role==='admin'||cu.role==='leitung'||cu.role==='geschaeftsfuehrer')); }
+function _shownType(r){ const cu=window.cu; return (r && r.type==='AU/Krank' && r.userId!==(cu&&cu.id) && !_abSeesSick(cu)) ? 'Abwesend' : (r&&r.type); }
 function _typeLegend(){
-  return '<div class="ab-type-legend">'+_AB_TYPES.map(([,l,c,b])=>`<span><span class="ab-dot" style="background:${b}"></span>${esc(l)}</span>`).join('')+'</div>';
+  const sick=_abSeesSick();
+  return '<div class="ab-type-legend">'+_AB_TYPES.filter(x=>sick?x[0]!=='Abwesend':true).map(([k,l,c,b])=>`<span><span class="ab-dot" style="background:${b}"></span>${esc(k==='AU/Krank'&&!sick?'Krank (eigene)':l)}</span>`).join('')+'</div>';
 }
 // Titel der Kalender-Navigation (Woche / Monat / Jahr)
 function _abCalTitle(){
@@ -630,15 +635,16 @@ export function renderAbwesenheiten(){
       canDelete?`<button class="btn btn-sm ab-mini ab-del" onclick="deleteVacRequest(${jsq(r.id)})">🗑 ${delLabel}</button>`:''].filter(Boolean).join('');
     const extra=r.status==='rejected'&&r.reviewNote?`<div style="font-size:12px;color:var(--danger-text);margin-top:4px">↩ Grund: ${esc(r.reviewNote)}</div>`:
                 r.status==='approved'&&r.reviewNote?`<div style="font-size:12px;color:var(--ok-text);margin-top:4px">✓ ${esc(r.reviewNote)}</div>`:'';
-    return `<div class="ab-card2" style="border-left-color:${_typeBar(r.type)}">
+    const st=_shownType(r);
+    return `<div class="ab-card2" style="border-left-color:${_typeBar(st)}">
       <div class="ab-c2-top">
         ${showName?`<strong>${esc(r.userName)}</strong>`:''}
-        <span class="ab-type" style="background:${_typeBg(r.type)};color:${_typeFg(r.type)}">${esc(_typeLabel(r.type))}</span>
+        <span class="ab-type" style="background:${_typeBg(st)};color:${_typeFg(st)}">${esc(_typeLabel(st))}</span>
         ${statusBadge(r.status)}
         <span class="ab-c2-sub">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?'beantragt '+new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</span>
       </div>
       <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''}</div>
-      ${r.note?`<div class="ab-c2-sub" style="margin-top:2px">💬 ${esc(r.note)}</div>`:''}
+      ${(r.note&&st===r.type)?`<div class="ab-c2-sub" style="margin-top:2px">💬 ${esc(r.note)}</div>`:''}
       ${extra}${rnBtns}${acts?`<div class="ab-c2-acts">${acts}</div>`:''}
     </div>`;
   };
@@ -676,8 +682,9 @@ export function renderAbwesenheiten(){
       if(isActive){ const rem=Math.round((end-noon)/86400000)+1; cls='active'; txt=rem<=1?'endet heute':`läuft · noch ${rem} Tage`; }
       else if(daysUntil<=14){ cls='soon'; txt=daysUntil===1?'ab morgen':`in ${daysUntil} Tagen`; }
       else { cls='later'; txt=`in ${daysUntil} Tagen`; }
-      return `<div class="ab-row" style="border-left-color:${_typeBar(r.type)}">
-        <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(r.type)}">${esc(_typeLabel(r.type))}</span></div>
+      const st=_shownType(r);
+      return `<div class="ab-row" style="border-left-color:${_typeBar(st)}">
+        <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(st)}">${esc(_typeLabel(st))}</span></div>
           <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}</div></div>
         <span class="upc-badge ${cls}">${txt}</span></div>`;
     };
@@ -740,7 +747,7 @@ function _buildDayMap(reqs,cu,filterFn){
     while(cur<=end){
       const ds=dateStr(cur.getFullYear(),cur.getMonth()+1,cur.getDate());
       if(!dayMap[ds]) dayMap[ds]=[];
-      dayMap[ds].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:r.type,userId:r.userId});
+      dayMap[ds].push({name:r.userName||((getUser(r.userId)||{}).name)||String(r.userId||'?'),type:_shownType(r),userId:r.userId});
       cur.setDate(cur.getDate()+1);
     }
   });
