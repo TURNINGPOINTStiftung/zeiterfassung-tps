@@ -711,7 +711,6 @@ export function renderKalender(){
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
-        ${_kr('kal_abo')?`<button class="kal-sel" style="cursor:pointer" onclick="kalAboOpen()" title="Eigene Termine in Outlook, Google oder am Handy anzeigen">📲 In Outlook / Handy</button>`:''}
         <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
       </div>
       <div class="kal-legend"${V==='liste'||V==='konflikt'?' style="display:none"':''}>

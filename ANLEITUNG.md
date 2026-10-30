@@ -330,7 +330,7 @@ Mitarbeitende wählst du über die **Suchfelder** (tippen, mit ↑/↓ und Enter
 braucht mindestens einen CRM-Kontakt.
 
 **📲 Kalender-Abo – Termine in Outlook, Google oder am Handy:**
-Im Kalender oben **„📲 In Outlook / Handy"** (oder **Profil → 📲 Kalender-Abo einrichten**) →
+**Profil** (Name oben rechts) → **„📲 Kalender-Abo einrichten"** →
 **„Abo-Link erstellen"**. Du bekommst zwei persönliche Links:
 
 1. **Meine Termine** – alle Termine und Veranstaltungen, denen **du zugewiesen** bist.
