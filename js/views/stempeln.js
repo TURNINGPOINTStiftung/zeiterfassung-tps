@@ -200,7 +200,7 @@ function _zsShowStop(stamp){
       <div style="font-size:22px;font-weight:700;color:var(--primary);margin-top:4px">${elapsed} &nbsp;·&nbsp; ${von} – ${bis}</div>
     </div>
     <div class="form-group"><label>Zuordnung / Kategorie</label>
-      <select id="zs-zuord" class="crm-ss" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+      <select id="zs-zuord" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
         <option value="">– Keine –</option>${catOpts}
       </select></div>
     <div class="form-group"><label>Bemerkung <span style="font-size:11px;color:var(--muted)">(optional)</span></label>
