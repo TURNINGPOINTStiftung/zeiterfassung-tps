@@ -77,6 +77,7 @@ export function filterLoginUsers(val){
   const q=(val||'').trim().toLowerCase();
   window._loginDropIdx=-1; // Highlight zurücksetzen bei neuem Filter
   if(!q){ dd.style.display='none'; return; }
+  try{ const live=getLoginDirUsers(); if(live.length) _loginUsers=live; }catch(e){}   // später eingetroffene Namensliste übernehmen
   const filtered=_loginUsers
     .filter(u=>u.name.toLowerCase().startsWith(q))
     .sort((a,b)=>a.name.localeCompare(b.name,'de'));
@@ -168,8 +169,25 @@ export async function doLogin(){
     const cand=f?dir.filter(x=>_fold(x.name)===f):[];
     if(cand.length===1) du=cand[0];   // nur übernehmen, wenn EINDEUTIG
   }
+  // v530: Namensliste noch nicht vom Server da (langsames Netz/VPN)? Bis zu 15 s darauf warten und erneut suchen.
+  if(!du && !window._loginDirLive && window._loginDirP){
+    errEl.textContent='Namensliste wird geladen …'; errEl.style.display='block';
+    try{ await Promise.race([window._loginDirP, new Promise(r=>setTimeout(r,15000))]); }catch(e){}
+    const dir2=getLoginDirUsers();
+    du=dir2.find(x=>_norm(x.name)===nName);
+    if(!du){ const f=_fold(name); const cand=f?dir2.filter(x=>_fold(x.name)===f):[]; if(cand.length===1) du=cand[0]; }
+  }
   if(!du){
-    errEl.textContent='Benutzer nicht gefunden.';
+    if(window._loginDirLive){ errEl.textContent='Benutzer nicht gefunden.'; }
+    else{
+      errEl.textContent='Benutzer nicht gefunden – die Namensliste konnte nicht geladen werden (keine Verbindung zur Datenbank).';
+      if(window.tpsPerf && window.tpsPerf.loginTest){
+        const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
+        a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline';
+        a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); };
+        errEl.appendChild(a);
+      }
+    }
     errEl.style.display='block'; return;
   }
   const pw=document.getElementById('login-pw').value;
@@ -218,7 +236,13 @@ export async function doLogin(){
   }
   window.cu=getUser(du.id);
   if(!window.cu){
-    errEl.textContent='Angemeldet, aber kein Nutzerprofil gefunden. Bitte an den Administrator wenden.';
+    // v530: Kam gar kein Datenstand vom Server (Datenbank nicht erreichbar, z. B. im VPN), liegt es an der Verbindung –
+    // nicht am Profil. Dann ehrlich so melden und den Verbindungstest anbieten.
+    if(window._offlineMode || window._cloudUnverified){
+      errEl.textContent='Anmeldung ok, aber die Daten konnten nicht geladen werden – keine Verbindung zur Datenbank.';
+      if(window.tpsPerf && window.tpsPerf.loginTest){ const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
+        a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline'; a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); }; errEl.appendChild(a); }
+    } else errEl.textContent='Angemeldet, aber kein Nutzerprofil gefunden. Bitte an den Administrator wenden.';
     errEl.style.display='block';
     try{ await firebase.auth().signOut(); }catch(_){}
     return;

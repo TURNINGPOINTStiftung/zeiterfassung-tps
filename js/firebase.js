@@ -100,15 +100,26 @@ export async function initFirebase(){
   window._loginDirReady=_loadLoginDir(_sess?15000:3000, !_sess);
   if(!_sess) await window._loginDirReady;
 }
+// v530: Die Namensliste wird zusätzlich auf dem Gerät gemerkt (tps_login_dir – nur Namen + Kennung, derselbe Inhalt
+// wie das ohnehin öffentlich lesbare loginDir). So findet die Anmeldemaske den Namen auch, wenn die Datenbank gerade
+// nicht (oder nur langsam, z. B. im VPN) erreichbar ist. Die Abfrage läuft nach Ablauf der Wartezeit WEITER
+// (window._loginDirP) – kommt die Liste später, steht sie sofort für Autovervollständigung und Anmeldung bereit.
+const _LOGIN_DIR_LS='tps_login_dir';
 function _loadLoginDir(ms, blocking){
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
-  return Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(ms)]).then(snap=>{
+  if(!(Array.isArray(window._loginDir)&&window._loginDir.length)){
+    try{ const c=JSON.parse(localStorage.getItem(_LOGIN_DIR_LS)||'null'); if(Array.isArray(c)&&c.length) window._loginDir=c; }catch(e){}
+  }
+  if(!window._loginDirP) window._loginDirP=firebase.database().ref('zeiterfassung/loginDir').once('value').then(snap=>{
     const dir=snap.val()||{};
     try{ window.tpsPerf&&window.tpsPerf.mark('loginDir'); }catch(e){}
     // id kommt aus dem WERT (dir[k].id), NICHT aus dem Schlüssel: Umlaut-Schlüssel werden von
     // Firebase verstümmelt (j?rg). Altbestand ohne id-im-Wert → Fallback auf den Schlüssel.
     window._loginDir=Object.keys(dir).map(k=>({id:(dir[k]&&dir[k].id)||k,name:(dir[k]&&dir[k].name)||k,email:(dir[k]&&dir[k].email)||''}));
-  }).catch(e=>{
+    window._loginDirLive=true;
+    try{ if(window._loginDir.length) localStorage.setItem(_LOGIN_DIR_LS, JSON.stringify(window._loginDir.map(u=>({id:u.id,name:u.name,email:''})))); }catch(e){}
+  });
+  return Promise.race([window._loginDirP,_timeout(ms)]).catch(e=>{
     console.warn('loginDir nicht erreichbar:',e.message);
     if(blocking) window._offlineMode=true;
     if(!(Array.isArray(window._loginDir)&&window._loginDir.length)){
