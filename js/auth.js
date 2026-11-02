@@ -186,6 +186,13 @@ export async function doLogin(){
       (res.reason==='no-access')                          ? 'Kein Zugriff – dieses Konto ist nicht freigeschaltet.' :
       (res.reason==='bad-pw')                             ? 'Falsches Passwort.' :
       ('Anmeldung fehlgeschlagen'+(res.msg?': '+res.msg:'.'));
+    // v529: Bei Verbindungsproblemen direkt in der Anmeldemaske prüfen können, woran es liegt (js/perf.js).
+    if(res.msg==='keine Verbindung' && window.tpsPerf && window.tpsPerf.loginTest){
+      const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
+      a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline';
+      a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); };
+      errEl.appendChild(a);
+    }
     errEl.style.display='block'; return;
   }
   try{ window.tpsPerf&&window.tpsPerf.mark('angemeldet'); }catch(e){}

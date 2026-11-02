@@ -147,12 +147,36 @@ async function _probe(url, ms){
   try{ await _fetchT(url, { mode:'no-cors' }, Math.max(1000, ms-(performance.now()-t))); return { ok:true, kind:'ok', ms:Math.round(performance.now()-t) }; }
   catch(e){ return _why(host, t, !!(e && e.name==='AbortError')); }
 }
+// v529: Proben wie die echte Anmeldung – POST mit Vorab-Nachfrage (Content-Type JSON + Kopfzeile wie Firebase)
+// und als Vergleich ohne Vorab-Nachfrage (text/plain). Gesendet werden absichtlich UNGÜLTIGE Testdaten
+// (kein Name, kein Passwort); erwartet ist eine Fehlerantwort 400 = „Dienst nimmt Anmeldungen an“.
+function _apiKey(){ try{ return firebase.app().options.apiKey||''; }catch(e){ return ''; } }
+async function _post(url, body, ctype, extra, ms){
+  const t=performance.now(); const host=new URL(url).host;
+  try{
+    const r=await _fetchT(url, { mode:'cors', method:'POST', headers:Object.assign({'Content-Type':ctype}, extra||{}), body }, ms);
+    const m=Math.round(performance.now()-t);
+    if(r.status>=500) return { ok:false, kind:'srv', ms:m, why:'Server antwortet mit Fehler '+r.status };
+    return { ok:true, kind:'ok', ms:m, note:'Antwort '+r.status+' – wie erwartet' };
+  }catch(e){ return _why(host, t, !!(e && e.name==='AbortError')); }
+}
+function _loginProbes(){
+  const k=encodeURIComponent(_apiKey()); const hdr={ 'X-Client-Version':'Chrome/JsCore/10.12.0/FirebaseCore-web' };
+  return [
+    ['Anmeldung: Senden ohne Vorab-Nachfrage', ()=>_post('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+k, '{}', 'text/plain', null, 10000)],
+    ['Anmeldung: mit Vorab-Nachfrage (wie echt)', ()=>_post('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key='+k, '{}', 'application/json', hdr, 10000)],
+    ['Anmelde-Token: mit Vorab-Nachfrage (wie echt)', ()=>_post('https://securetoken.googleapis.com/v1/token?key='+k, 'grant_type=refresh_token&refresh_token=test', 'application/x-www-form-urlencoded', hdr, 10000)],
+  ];
+}
 let _lastTest=null;
-async function runTest(){
+async function runTest(withLogin){
   const box=document.getElementById('perf-test'); if(!box) return;
   box.innerHTML='<div class="small">Teste … (bis zu 10 s je Adresse)</div>';
   const out=[];
-  for(const [name,url] of TESTS){ out.push([name, await _probe(url, 10000)]); }
+  if(withLogin){ for(const [name,fn] of _loginProbes()){ out.push([name, await fn()]); box.innerHTML='<div class="small">Teste … '+out.length+' erledigt</div>'; } }
+  // Einfaches Senden klappt, die Vorab-Nachfrage (wie bei der echten Anmeldung) nicht → klar benennen.
+  if(withLogin && out[0] && out[1] && out[0][1].ok && !out[1][1].ok) out[1][1].why='Vorab-Nachfrage wird abgewiesen (VPN/Filter) – so kann die Anmeldung nicht klappen';
+  for(const [name,url] of TESTS){ out.push([name, await _probe(url, 10000)]); box.innerHTML='<div class="small">Teste … '+out.length+' erledigt</div>'; }
   _lastTest={ at:new Date().toISOString(), online:navigator.onLine, transport:_transport(), out };
   box.innerHTML=_testHtml(_lastTest);
 }
@@ -174,6 +198,7 @@ function report(){
     { const q=_quelle(r); L.push('   Datenquelle: ZE '+q.ze+' · CRM '+q.crm+' · Kacheln aus '+q.kach+' · Datenbank '+q.db); }
     if(i.res) L.push('   Programmdateien: '+i.res.dateien+' Stück, '+i.res.groesseKB+' KB, davon übertragen '+i.res.uebertragenKB+' KB, '+i.res.ausCache+' aus Zwischenspeicher; HTML '+_f(i.res.htmlMs)+', Seite bereit '+_f(i.res.domMs)+(i.schnellstart?' · Schnellstart aus Gerätespeicher':'')+(p.dir!=null?' · Namensliste geladen nach: '+_f(p.dir):''));
   });
+  if(window._lastAuthErr){ const e=window._lastAuthErr; L.push(''); L.push('Letzter Anmeldefehler: '+e.code+' nach '+_f(e.ms)+(e.versuch===2?' (auch beim automatischen 2. Versuch)':'')+' – '+e.msg); }
   if(_lastTest){ L.push(''); L.push('Verbindungstest ('+new Date(_lastTest.at).toLocaleTimeString('de-DE')+', Live-Verbindung: '+_lastTest.transport+')');
     L.push('  Gerät meldet Netz: '+(_lastTest.online?'ja':'NEIN'));
     _lastTest.out.forEach(([n,r])=>L.push('  '+n+': '+(r.ok?'OK'+(r.note?' ('+r.note+')':''):'FEHLER – '+(r.why||''))+' '+_f(r.ms))); }
@@ -209,4 +234,16 @@ function open(){
     </div>`);
 }
 
-window.tpsPerf={ mark, info, art, snap, kb, done, open, test:runTest, copy:copyReport, clear:clearRuns, report };
+function loginTest(){
+  openModal(`<h3>🔌 Verbindung testen</h3>
+    <style>.perf-t{width:100%;border-collapse:collapse;font-size:13px}.perf-t td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}.perf-t .num{text-align:right;white-space:nowrap}</style>
+    <p class="small" style="margin:0 0 10px">Prüft, ob die Anmeldung und alle Dienste der App von diesem Gerät aus erreichbar sind (z. B. im VPN). Es werden nur ungültige Testdaten gesendet – kein Name, kein Passwort.</p>
+    <div id="perf-test"></div>
+    <div class="modal-btns" style="flex-wrap:wrap">
+      <button class="btn btn-outline" onclick="closeModal()">Schließen</button>
+      <button class="btn btn-ok" onclick="tpsPerf.copy()">📋 Ergebnis kopieren</button>
+    </div>`);
+  runTest(true);
+}
+
+window.tpsPerf={ mark, info, art, snap, kb, done, open, test:runTest, loginTest, copy:copyReport, clear:clearRuns, report };

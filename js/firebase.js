@@ -37,9 +37,23 @@ export async function authenticate(id, email, typedPw, verifyFn){
   // nicht mehr (waren für alle Freigeschalteten lesbar), damit entfällt auch der frühere Übergangs-
   // Fallback über das berechenbare Stabil-Passwort. Konten, die noch auf dem Stabil-Passwort stehen,
   // zeigt Verwaltung → „Konten prüfen"; sie bekommen ein Einmal-Passwort.
-  try{ await auth.signInWithEmailAndPassword(acct, typedPw); return {ok:true, migrated:false}; }
+  // v529: Bei „keine Verbindung“ (z. B. wackeliges Netz/VPN) nach 2 s EINMAL automatisch erneut versuchen.
+  // Der letzte Fehler wird (ohne Name/Passwort) für den Verbindungstest der Anmeldemaske gemerkt.
+  const _try=()=>auth.signInWithEmailAndPassword(acct, typedPw);
+  const _t0=Date.now();
+  try{
+    try{ await _try(); }
+    catch(e1){
+      if(!(e1 && e1.code==='auth/network-request-failed')) throw e1;
+      window._lastAuthErr={ code:e1.code, msg:String(e1.message||'').slice(0,200), ms:Date.now()-_t0, versuch:1, at:new Date().toISOString() };
+      await new Promise(r=>setTimeout(r,2000));
+      await _try();
+    }
+    return {ok:true, migrated:false};
+  }
   catch(e){
     const c=(e&&e.code)||'';
+    window._lastAuthErr={ code:c, msg:String((e&&e.message)||'').slice(0,200), ms:Date.now()-_t0, versuch:(window._lastAuthErr&&window._lastAuthErr.versuch===1&&c==='auth/network-request-failed')?2:1, at:new Date().toISOString() };
     // Zwei-Faktor eingerichtet: Code aus der Authenticator-App abfragen (js/mfa.js).
     if(c==='auth/multi-factor-auth-required'){
       try{ await mfaResolve(e); return {ok:true, migrated:false}; }
