@@ -198,6 +198,7 @@ function report(){
     { const q=_quelle(r); L.push('   Datenquelle: ZE '+q.ze+' · CRM '+q.crm+' · Kacheln aus '+q.kach+' · Datenbank '+q.db); }
     if(i.res) L.push('   Programmdateien: '+i.res.dateien+' Stück, '+i.res.groesseKB+' KB, davon übertragen '+i.res.uebertragenKB+' KB, '+i.res.ausCache+' aus Zwischenspeicher; HTML '+_f(i.res.htmlMs)+', Seite bereit '+_f(i.res.domMs)+(i.schnellstart?' · Schnellstart aus Gerätespeicher':'')+(p.dir!=null?' · Namensliste geladen nach: '+_f(p.dir):''));
   });
+  try{ const n=Array.isArray(window._loginDir)?window._loginDir.length:0; L.push(''); L.push('Namensliste: '+n+' Namen · Quelle: '+(window._loginDirSrc||'keine')+' · vom Server geladen: '+(window._loginDirLive?'ja':'nein')); }catch(e){}
   if(window._lastAuthErr){ const e=window._lastAuthErr; L.push(''); L.push('Letzter Anmeldefehler: '+e.code+' nach '+_f(e.ms)+(e.versuch===2?' (auch beim automatischen 2. Versuch)':'')+' – '+e.msg); }
   if(_lastTest){ L.push(''); L.push('Verbindungstest ('+new Date(_lastTest.at).toLocaleTimeString('de-DE')+', Live-Verbindung: '+_lastTest.transport+')');
     L.push('  Gerät meldet Netz: '+(_lastTest.online?'ja':'NEIN'));

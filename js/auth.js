@@ -144,6 +144,14 @@ export function selectLoginUser(name){
   setTimeout(()=>document.getElementById('login-pw')?.focus(),50);
 }
 
+// Link „Verbindung testen“ unter einer Fehlermeldung der Anmeldemaske (js/perf.js loginTest, v529+).
+function _testLink(errEl){
+  if(!(window.tpsPerf && window.tpsPerf.loginTest)) return;
+  const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
+  a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline';
+  a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); };
+  errEl.appendChild(a);
+}
 export async function doLogin(){
   const errEl=document.getElementById('login-err');
   const inp=document.getElementById('login-user-input');
@@ -178,16 +186,16 @@ export async function doLogin(){
     if(!du){ const f=_fold(name); const cand=f?dir2.filter(x=>_fold(x.name)===f):[]; if(cand.length===1) du=cand[0]; }
   }
   if(!du){
-    if(window._loginDirLive){ errEl.textContent='Benutzer nicht gefunden.'; }
-    else{
-      errEl.textContent='Benutzer nicht gefunden – die Namensliste konnte nicht geladen werden (keine Verbindung zur Datenbank).';
-      if(window.tpsPerf && window.tpsPerf.loginTest){
-        const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
-        a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline';
-        a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); };
-        errEl.appendChild(a);
-      }
-    }
+    const _dl=getLoginDirUsers();
+    errEl.textContent=window._loginDirLive ? 'Benutzer nicht gefunden.'
+      : (_dl.length ? 'Benutzer nicht gefunden (die aktuelle Namensliste konnte nicht geladen werden – keine Verbindung zur Datenbank).'
+                    : 'Benutzer nicht gefunden – die Namensliste konnte nicht geladen werden (keine Verbindung zur Datenbank).');
+    // v531: Kurze Diagnose (wie viele Namen, woher), damit Verbindungsprobleme von Tippfehlern unterscheidbar sind.
+    const sm=document.createElement('div'); sm.className='small'; sm.style.cssText='margin-top:4px;opacity:.85;font-weight:400';
+    sm.textContent='Namensliste: '+_dl.length+' Namen · Quelle: '+(window._loginDirSrc||'keine')+(window._loginDirLive?'':' · Server nicht erreicht');
+    errEl.appendChild(sm);
+    window._lastAuthErr={ code:'name-nicht-gefunden', msg:sm.textContent, ms:0, versuch:1, at:new Date().toISOString() };
+    _testLink(errEl);
     errEl.style.display='block'; return;
   }
   const pw=document.getElementById('login-pw').value;
@@ -205,12 +213,7 @@ export async function doLogin(){
       (res.reason==='bad-pw')                             ? 'Falsches Passwort.' :
       ('Anmeldung fehlgeschlagen'+(res.msg?': '+res.msg:'.'));
     // v529: Bei Verbindungsproblemen direkt in der Anmeldemaske prüfen können, woran es liegt (js/perf.js).
-    if(res.msg==='keine Verbindung' && window.tpsPerf && window.tpsPerf.loginTest){
-      const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
-      a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline';
-      a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); };
-      errEl.appendChild(a);
-    }
+    if(res.msg==='keine Verbindung') _testLink(errEl);
     errEl.style.display='block'; return;
   }
   try{ window.tpsPerf&&window.tpsPerf.mark('angemeldet'); }catch(e){}
@@ -240,8 +243,7 @@ export async function doLogin(){
     // nicht am Profil. Dann ehrlich so melden und den Verbindungstest anbieten.
     if(window._offlineMode || window._cloudUnverified){
       errEl.textContent='Anmeldung ok, aber die Daten konnten nicht geladen werden – keine Verbindung zur Datenbank.';
-      if(window.tpsPerf && window.tpsPerf.loginTest){ const a=document.createElement('a'); a.href='#'; a.textContent='Verbindung testen';
-        a.style.cssText='display:block;margin-top:6px;font-weight:700;text-decoration:underline'; a.onclick=ev=>{ ev.preventDefault(); window.tpsPerf.loginTest(); }; errEl.appendChild(a); }
+      _testLink(errEl);
     } else errEl.textContent='Angemeldet, aber kein Nutzerprofil gefunden. Bitte an den Administrator wenden.';
     errEl.style.display='block';
     try{ await firebase.auth().signOut(); }catch(_){}

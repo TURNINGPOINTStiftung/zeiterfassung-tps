@@ -108,7 +108,7 @@ const _LOGIN_DIR_LS='tps_login_dir';
 function _loadLoginDir(ms, blocking){
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   if(!(Array.isArray(window._loginDir)&&window._loginDir.length)){
-    try{ const c=JSON.parse(localStorage.getItem(_LOGIN_DIR_LS)||'null'); if(Array.isArray(c)&&c.length) window._loginDir=c; }catch(e){}
+    try{ const c=JSON.parse(localStorage.getItem(_LOGIN_DIR_LS)||'null'); if(Array.isArray(c)&&c.length){ window._loginDir=c; window._loginDirSrc='Gerätespeicher'; } }catch(e){}
   }
   if(!window._loginDirP) window._loginDirP=firebase.database().ref('zeiterfassung/loginDir').once('value').then(snap=>{
     const dir=snap.val()||{};
@@ -116,14 +116,14 @@ function _loadLoginDir(ms, blocking){
     // id kommt aus dem WERT (dir[k].id), NICHT aus dem Schlüssel: Umlaut-Schlüssel werden von
     // Firebase verstümmelt (j?rg). Altbestand ohne id-im-Wert → Fallback auf den Schlüssel.
     window._loginDir=Object.keys(dir).map(k=>({id:(dir[k]&&dir[k].id)||k,name:(dir[k]&&dir[k].name)||k,email:(dir[k]&&dir[k].email)||''}));
-    window._loginDirLive=true;
+    window._loginDirLive=true; window._loginDirSrc='Server';
     try{ if(window._loginDir.length) localStorage.setItem(_LOGIN_DIR_LS, JSON.stringify(window._loginDir.map(u=>({id:u.id,name:u.name,email:''})))); }catch(e){}
   });
   return Promise.race([window._loginDirP,_timeout(ms)]).catch(e=>{
     console.warn('loginDir nicht erreichbar:',e.message);
     if(blocking) window._offlineMode=true;
     if(!(Array.isArray(window._loginDir)&&window._loginDir.length)){
-      try{ const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(ls&&Array.isArray(ls.users)) window._loginDir=ls.users.map(u=>({id:u.id,name:u.name,email:u.email||''})); }catch(_){}
+      try{ const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(ls&&Array.isArray(ls.users)){ window._loginDir=ls.users.map(u=>({id:u.id,name:u.name,email:u.email||''})); window._loginDirSrc='Datenstand'; } }catch(_){}
     }
   });
 }
