@@ -252,6 +252,7 @@ export function ensureCrmReady(){
       const ls = localStorage.getItem(CRM_LS_KEY);
       if(ls) _cache = _normalize(JSON.parse(ls));
     }catch(e){}
+    try{ window.tpsPerf&&window.tpsPerf.info({crmLokal:!!_cache}); }catch(e){}
     if(!_cache) _cache = freshCrm();
 
     // 2) Firebase (best effort, isoliert)

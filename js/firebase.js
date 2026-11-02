@@ -69,24 +69,38 @@ export async function initFirebase(){
   window._pendingSync=false;
   window.loadFullData = loadFullData;
 
+  // Verbindung zur Datenbank von Anfang an beobachten (v527): Steht nach 3 s keine Verbindung, gilt die
+  // App als offline → Änderungen gehen sofort in die dauerhafte Warteschlange, Hinweis „Offline – Stand von …“.
+  _watchConnection();
+  setTimeout(()=>{ if(window._fbConnected!==true){ window._offlineMode=true; try{ window.tpsPerf&&window.tpsPerf.mark('offline'); }catch(e){} _netChip(); } }, 3000);
+
   // Persistierten Anmeldestatus abwarten (für Auto-Login auf bekannten Geräten).
   try{ await _awaitAuthReady(); }catch(e){}
   try{ window.tpsPerf&&window.tpsPerf.mark('authBereit'); }catch(e){}
 
   // SICHERHEIT: Vor dem Login NUR das öffentliche Namensverzeichnis lesen (keine Daten).
+  // v527: Bei bestehender Anmeldung mit lokalem Datenstand wird NICHT mehr darauf gewartet (die Liste braucht
+  // nur die Anmeldemaske) – sie lädt nebenher. Ohne Sitzung höchstens 3 s warten (früher 6 s), dann gemerkte Namen.
+  let _sess=false;
+  try{ _sess=!!(firebase.auth().currentUser && localStorage.getItem('tp_zt_session') && localStorage.getItem(STORAGE_KEY)); }catch(e){}
+  window._loginDirReady=_loadLoginDir(_sess?15000:3000, !_sess);
+  if(!_sess) await window._loginDirReady;
+}
+function _loadLoginDir(ms, blocking){
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
-  try{
-    const snap=await Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(6000)]);
+  return Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(ms)]).then(snap=>{
     const dir=snap.val()||{};
     try{ window.tpsPerf&&window.tpsPerf.mark('loginDir'); }catch(e){}
     // id kommt aus dem WERT (dir[k].id), NICHT aus dem Schlüssel: Umlaut-Schlüssel werden von
     // Firebase verstümmelt (j?rg). Altbestand ohne id-im-Wert → Fallback auf den Schlüssel.
     window._loginDir=Object.keys(dir).map(k=>({id:(dir[k]&&dir[k].id)||k,name:(dir[k]&&dir[k].name)||k,email:(dir[k]&&dir[k].email)||''}));
-  }catch(e){
+  }).catch(e=>{
     console.warn('loginDir nicht erreichbar:',e.message);
-    window._offlineMode=true;
-    try{ const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(ls&&Array.isArray(ls.users)) window._loginDir=ls.users.map(u=>({id:u.id,name:u.name,email:u.email||''})); }catch(_){}
-  }
+    if(blocking) window._offlineMode=true;
+    if(!(Array.isArray(window._loginDir)&&window._loginDir.length)){
+      try{ const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); if(ls&&Array.isArray(ls.users)) window._loginDir=ls.users.map(u=>({id:u.id,name:u.name,email:u.email||''})); }catch(_){}
+    }
+  });
 }
 
 // Nach erfolgreichem Login (allowlistete Sitzung): volle Daten laden, migrieren,
@@ -101,10 +115,13 @@ export async function loadFullData(){
     fbData=snap.val();
     try{ if(window.tpsPerf&&!window._perfZeDone){ window._perfZeDone=true; const k=window.tpsPerf.kb(fbData); window.tpsPerf.mark('zeFertig',{zeKB:k.kb,zeJsonMs:k.ms}); } }catch(e){}
     window._offlineMode=false;
+    _noteSync();
   } catch(e){
     console.warn('Firebase nicht erreichbar, Offline-Modus:',e.message);
     window._offlineMode=true;
+    try{ window.tpsPerf&&window.tpsPerf.info({zeTimeout:true}); }catch(_){}
   }
+  _netChip();
 
   let lsData=null;
   try{ const ls=localStorage.getItem(STORAGE_KEY); if(ls) lsData=JSON.parse(ls); }catch(e){}
@@ -184,7 +201,7 @@ function _applyFirebaseSnap(val){
 }
 function _applyFirebaseSnapInner(val){
   // Echter Cloud-Stand ist da → „unbestätigt"-Sperre aufheben (Writes dürfen wieder in die Cloud).
-  if(Array.isArray(val.users)&&val.users.length>0) window._cloudUnverified=false;
+  if(Array.isArray(val.users)&&val.users.length>0){ window._cloudUnverified=false; _noteSync(); }
   // Cloud bestätigt → evtl. noch offene (offline eingereihte) Änderungen gezielt nachholen.
   try{ flushPendingWrites(); }catch(e){}
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
@@ -238,10 +255,35 @@ function _setupRealtimeSync(){
 function _watchConnection(){
   if(_connWatch) return; _connWatch=true;
   try{ firebase.database().ref('.info/connected').on('value', s=>{
+    // window._fbConnected: echter Verbindungsstand – data.js reiht Änderungen ohne Verbindung sofort dauerhaft ein.
+    window._fbConnected=(s.val()===true);
     if(s.val()===true){ try{ window.tpsPerf&&window.tpsPerf.mark('verbunden'); }catch(e){} _wasConnected=true; window._offlineMode=false; try{ flushPendingWrites(); }catch(e){} }
-    else if(_wasConnected){ window._offlineMode=true; }   // erst nach einer echten Verbindung als „offline“ werten
+    else if(_wasConnected){ window._offlineMode=true; }   // erst nach einer echten Verbindung als „offline“ werten (Start: 3-s-Regel in initFirebase)
+    _netChip();
   }); }catch(e){}
 }
+// Zeitpunkt des letzten echten Server-Stands (für „Offline – Stand von …“). Keine Personendaten.
+function _noteSync(){ try{ localStorage.setItem('tps_last_sync', String(Date.now())); }catch(e){} }
+// Dezenter Hinweis oben rechts, solange die Daten nicht vom Server bestätigt sind. Klick = sofort neu versuchen.
+function _netChip(){
+  try{
+    const off=!!window._offlineMode && window._fbConnected!==true;
+    let el=document.getElementById('net-chip');
+    if(!off || !window.cu){ if(el) el.remove(); return; }
+    const host=document.querySelector('#module-bar .header-right'); if(!host) return;
+    if(!el){ el=document.createElement('button'); el.id='net-chip'; el.type='button'; el.className='net-chip no-print';
+      el.onclick=()=>{ try{ window.retrySyncNow&&window.retrySyncNow(); window.toast&&window.toast('Verbindung wird erneut versucht …',''); }catch(e){} };
+      host.insertBefore(el, host.firstChild); }
+    let t=0; try{ t=parseInt(localStorage.getItem('tps_last_sync')||'0',10)||0; }catch(e){}
+    let stand='';
+    if(t){ const d=new Date(t), heute=new Date().toDateString()===d.toDateString();
+      stand=heute? d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})
+                 : d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+', '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); }
+    el.innerHTML='📴 Offline<span class="net-chip-x">'+(stand?' – Stand von '+stand:' – gespeicherter Stand')+'</span>';
+    el.title='Keine Verbindung zur Datenbank. Angezeigt wird der zuletzt auf diesem Gerät gespeicherte Stand'+(stand?' ('+stand+')':'')+'. Änderungen werden gespeichert und automatisch übertragen, sobald die Verbindung wieder steht. Klicken = jetzt neu versuchen.';
+  }catch(e){}
+}
+window._netChip=_netChip;
 // Für den Klick auf das „nicht synchronisiert“-Kärtchen: Offline-Annahme verwerfen und sofort neu versuchen.
 export function retrySyncNow(){
   window._offlineMode=false;
@@ -263,6 +305,7 @@ export async function _pollFirebase(){
 
 export function initFirebaseEvents(){
   setInterval(()=>{ if(!document.hidden) _pollFirebase(); },30000);
+  setInterval(_netChip, 5000);   // Offline-Hinweis aktuell halten (z. B. nach dem Anmelden)
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollFirebase(); });
   window.addEventListener('online',()=>{
     window._offlineMode=false;
@@ -276,7 +319,7 @@ export function initFirebaseEvents(){
     }
   });
   window.addEventListener('offline',()=>{
-    window._offlineMode=true;
+    window._offlineMode=true; _netChip();
     window.toast?.('📵 Offline – Änderungen werden lokal gespeichert.','');
   });
 }

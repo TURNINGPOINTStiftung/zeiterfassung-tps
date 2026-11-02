@@ -39,6 +39,7 @@ function kb(v){ const t=performance.now(); let n=0; try{ n=JSON.stringify(v||nul
 
 // Verbindungsart der Live-Datenbank: Long-Polling erzeugt sichtbare Netzanfragen „.lp?“, WebSocket nicht.
 function _transport(){
+  if(window._fbConnected===false) return 'nicht verbunden';
   try{ const lp=performance.getEntriesByType('resource').some(e=>/firebase(io|database)\.(com|app)\/\.lp\?/.test(e.name)||/\/\.lp\?/.test(e.name));
     return lp?'Long-Polling (Ausweichweg)':'WebSocket'; }catch(e){ return '?'; }
 }
@@ -61,6 +62,15 @@ function _env(){
 function done(){ mark('kacheln'); _env(); }
 
 // ── Auswertung je Start ──────────────────────────────────────────────
+// Woher kamen die Daten? (v527) – Gerätespeicher und/oder Server, und ob der Server überhaupt erreicht wurde.
+function _quelle(r){
+  const m=r.m||{}, i=r.i||{}, d=(a,b)=>(m[a]!=null&&m[b]!=null)?m[b]-m[a]:null;
+  const ze=(i.schnellstart?'Gerätespeicher → ':'')+(m.zeFertig!=null?'Server nach '+_f(d('zeStart','zeFertig')):(i.zeTimeout?'Server NICHT erreicht':'Server ausstehend'));
+  const crm=m.crmStart==null?'nicht geladen':((i.crmLokal?'Gerätespeicher → ':'')+(m.crmFertig!=null?'Server nach '+_f(d('crmStart','crmFertig')):'Server NICHT erreicht'));
+  const kach=m.kacheln==null?'–':(i.kachelnAusCache?'Gerätespeicher':'Server');
+  const db=m.verbunden!=null?'verbunden nach '+_f(m.verbunden):(m.offline!=null?'NICHT verbunden (offline nach 3 s)':'keine Verbindung');
+  return { ze, crm, kach, db };
+}
 function _phases(r){
   const m=r.m||{}, d=(a,b)=>(m[a]!=null&&m[b]!=null&&m[b]>=m[a])?m[b]-m[a]:null;
   const login=r.art==='Anmeldung';
@@ -91,19 +101,51 @@ const TESTS=[
   ['Server-Funktion (2. Aufruf)', PW_FUNCTION_URL+'/ping'],
   ['Wetterdienst',                'https://api.open-meteo.com/v1/forecast?latitude=53.55&longitude=9.99&current=temperature_2m'],
 ];
-function _probe(url, ms){
-  const t=performance.now();
-  if(url==='ws') return new Promise(res=>{
-    let ws, fin=false; const end=(ok,why)=>{ if(fin) return; fin=true; try{ ws&&ws.close(); }catch(e){} res({ ok, ms:Math.round(performance.now()-t), why }); };
-    try{ ws=new WebSocket('wss://'+DB_HOST+'/.ws?v=5&ns=zeiterfassung-tps-default-rtdb'); ws.onopen=()=>end(true); ws.onerror=()=>end(false,'blockiert'); }catch(e){ end(false, e.message); }
-    setTimeout(()=>end(false,'Zeitüberschreitung'), ms);
-  });
+// v527: unterscheidet Zeitüberschreitung, Gerät offline, Adresse nicht auffindbar, Verbindung abgewiesen/gesperrt
+// und Fehlerantwort des Servers. Der Browser verrät bei einem Netzwerkfehler nicht, WARUM er scheiterte – deshalb
+// fragt der Test zusätzlich einen öffentlichen Namensdienst (Cloudflare), ob die Adresse grundsätzlich existiert.
+function _fetchT(url, opt, ms){
   const ac=('AbortController' in window)?new AbortController():null;
   const to=setTimeout(()=>{ try{ ac&&ac.abort(); }catch(e){} }, ms);
-  return fetch(url, { mode:'no-cors', cache:'no-store', credentials:'omit', signal:ac?ac.signal:undefined })
-    .then(()=>({ ok:true, ms:Math.round(performance.now()-t) }))
-    .catch(e=>({ ok:false, ms:Math.round(performance.now()-t), why:(e&&e.name==='AbortError')?'Zeitüberschreitung':'blockiert / nicht erreichbar' }))
-    .finally(()=>clearTimeout(to));
+  return fetch(url, Object.assign({ cache:'no-store', credentials:'omit', signal:ac?ac.signal:undefined }, opt||{})).finally(()=>clearTimeout(to));
+}
+const _dnsCache={};
+function _dns(host){
+  if(_dnsCache[host]) return _dnsCache[host];
+  return _dnsCache[host]=_fetchT('https://cloudflare-dns.com/dns-query?name='+encodeURIComponent(host)+'&type=A', { headers:{accept:'application/dns-json'} }, 5000)
+    .then(r=>r.json()).then(j=>(j && j.Status===0 && (j.Answer||[]).length)?'ok':'nx').catch(()=>'?');
+}
+async function _why(host, t0, timedOut){
+  const ms=Math.round(performance.now()-t0);
+  if(timedOut) return { ok:false, kind:'timeout', ms, why:'Zeitüberschreitung (keine Antwort in 10 s)' };
+  if(navigator.onLine===false) return { ok:false, kind:'offline', ms, why:'Gerät meldet: kein Netz' };
+  const d=await _dns(host);
+  if(d==='nx') return { ok:false, kind:'dns', ms, why:'Adresse nicht auffindbar (Namensauflösung)' };
+  if(d==='ok') return { ok:false, kind:'blocked', ms, why:'Verbindung abgewiesen – Adresse existiert, Netz/VPN/Filter sperrt vermutlich' };
+  return { ok:false, kind:'net', ms, why:'Netzwerkfehler (Ursache nicht feststellbar)' };
+}
+async function _probe(url, ms){
+  const t=performance.now();
+  if(url==='ws') return new Promise(res=>{
+    let ws, fin=false;
+    const end=(ok,timedOut)=>{ if(fin) return; fin=true; try{ ws&&ws.close(); }catch(e){}
+      if(ok) res({ ok:true, kind:'ok', ms:Math.round(performance.now()-t) }); else _why(DB_HOST, t, timedOut).then(res); };
+    try{ ws=new WebSocket('wss://'+DB_HOST+'/.ws?v=5&ns=zeiterfassung-tps-default-rtdb'); ws.onopen=()=>end(true); ws.onerror=()=>end(false,false); }catch(e){ end(false,false); }
+    setTimeout(()=>end(false,true), ms);
+  });
+  const host=new URL(url).host;
+  // 1) mit Antwort-Details (geht bei Diensten, die das erlauben) → Statuscode lesbar
+  try{
+    const r=await _fetchT(url, { mode:'cors' }, ms);
+    const m=Math.round(performance.now()-t);
+    if(r.status>=500) return { ok:false, kind:'srv', ms:m, why:'Server antwortet mit Fehler '+r.status };
+    return { ok:true, kind:'ok', ms:m, note:r.status>=400?'Antwort '+r.status+' – Dienst erreichbar':'' };
+  }catch(e){
+    if(e && e.name==='AbortError') return _why(host, t, true);
+  }
+  // 2) ohne Antwort-Details (Dienst erlaubt keine Details) → nur „erreichbar ja/nein“
+  try{ await _fetchT(url, { mode:'no-cors' }, Math.max(1000, ms-(performance.now()-t))); return { ok:true, kind:'ok', ms:Math.round(performance.now()-t) }; }
+  catch(e){ return _why(host, t, !!(e && e.name==='AbortError')); }
 }
 let _lastTest=null;
 async function runTest(){
@@ -115,7 +157,7 @@ async function runTest(){
   box.innerHTML=_testHtml(_lastTest);
 }
 function _testHtml(t){
-  return `<table class="perf-t"><tbody>${t.out.map(([n,r])=>`<tr><td>${esc(n)}</td><td style="color:${r.ok?'var(--success)':'var(--danger)'};font-weight:700">${r.ok?'✓ erreichbar':'✗ '+esc(r.why||'Fehler')}</td><td class="num">${_f(r.ms)}</td></tr>`).join('')}</tbody></table>
+  return `<table class="perf-t"><tbody>${t.out.map(([n,r])=>`<tr><td>${esc(n)}</td><td style="color:${r.ok?'var(--success)':'var(--danger)'};font-weight:700">${r.ok?'✓ erreichbar'+(r.note?' <span class="small" style="color:var(--muted);font-weight:400">'+esc(r.note)+'</span>':''):'✗ '+esc(r.why||'Fehler')}</td><td class="num">${_f(r.ms)}</td></tr>`).join('')}</tbody></table>
     <div class="small" style="margin-top:6px">Live-Verbindung dieser Sitzung: <b>${esc(t.transport)}</b></div>`;
 }
 
@@ -129,10 +171,12 @@ function report(){
     L.push([r.art||'?', new Date(r.at).toLocaleString('de-DE'), _f(p.p0), _f(p.a), _f(p.b), _f(p.c), _f(p.ges),
       _f(p.ze)+' / '+(i.zeKB??'?')+' KB'+(i.zeJsonMs!=null?' (+'+i.zeJsonMs+' ms Rechnen)':''), _f(p.crm)+' / '+(i.crmKB??'?')+' KB',
       i.transport||'?', (i.zeSnaps||0)+'× '+(i.zeSnapMs||0)+' ms / '+(i.crmSnaps||0)+'× '+(i.crmSnapMs||0)+' ms'].join(' | '));
-    if(i.res) L.push('   Programmdateien: '+i.res.dateien+' Stück, '+i.res.groesseKB+' KB, davon übertragen '+i.res.uebertragenKB+' KB, '+i.res.ausCache+' aus Zwischenspeicher; HTML '+_f(i.res.htmlMs)+', Seite bereit '+_f(i.res.domMs)+(i.schnellstart?' · Schnellstart aus Gerätespeicher':'')+(p.dir!=null?' · Namensliste vor Start: '+_f(p.dir):''));
+    { const q=_quelle(r); L.push('   Datenquelle: ZE '+q.ze+' · CRM '+q.crm+' · Kacheln aus '+q.kach+' · Datenbank '+q.db); }
+    if(i.res) L.push('   Programmdateien: '+i.res.dateien+' Stück, '+i.res.groesseKB+' KB, davon übertragen '+i.res.uebertragenKB+' KB, '+i.res.ausCache+' aus Zwischenspeicher; HTML '+_f(i.res.htmlMs)+', Seite bereit '+_f(i.res.domMs)+(i.schnellstart?' · Schnellstart aus Gerätespeicher':'')+(p.dir!=null?' · Namensliste geladen nach: '+_f(p.dir):''));
   });
   if(_lastTest){ L.push(''); L.push('Verbindungstest ('+new Date(_lastTest.at).toLocaleTimeString('de-DE')+', Live-Verbindung: '+_lastTest.transport+')');
-    _lastTest.out.forEach(([n,r])=>L.push('  '+n+': '+(r.ok?'OK':'FEHLER ('+(r.why||'')+')')+' '+_f(r.ms))); }
+    L.push('  Gerät meldet Netz: '+(_lastTest.online?'ja':'NEIN'));
+    _lastTest.out.forEach(([n,r])=>L.push('  '+n+': '+(r.ok?'OK'+(r.note?' ('+r.note+')':''):'FEHLER – '+(r.why||''))+' '+_f(r.ms))); }
   return L.join('\n');
 }
 function copyReport(){
@@ -148,7 +192,8 @@ function open(){
   const rows=rs.map(r=>{ const p=_phases(r), i=r.i||{};
     return `<tr><td>${esc(r.art||'?')}${i.schnellstart?' <span class="small">(Gerätespeicher)</span>':''}<div class="small">${esc(new Date(r.at).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}</div></td>
       <td class="num">${_f(p.p0)}</td><td class="num">${_f(p.a)}</td><td class="num">${_f(p.b)}</td><td class="num">${_f(p.c)}</td><td class="num"><b>${_f(p.ges)}</b></td>
-      <td class="num">${_f(p.ze)}<div class="small">${i.zeKB??'?'} KB</div></td><td class="num">${_f(p.crm)}<div class="small">${i.crmKB??'?'} KB</div></td></tr>`; }).join('');
+      <td class="num">${_f(p.ze)}<div class="small">${i.zeKB??'?'} KB</div></td><td class="num">${_f(p.crm)}<div class="small">${i.crmKB??'?'} KB</div></td></tr>
+      ${(()=>{ const q=_quelle(r); return `<tr><td colspan="8" class="small" style="color:var(--muted)">Daten: ZE ${esc(q.ze)} · CRM ${esc(q.crm)} · Kacheln aus ${esc(q.kach)} · Datenbank ${esc(q.db)}</td></tr>`; })()}`; }).join('');
   openModal(`<h3>⏱️ Ladezeit &amp; Verbindung</h3>
     <style>.perf-t{width:100%;border-collapse:collapse;font-size:13px}.perf-t td,.perf-t th{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}.perf-t th{font-size:12px;color:var(--muted);font-weight:600}.perf-t .num{text-align:right;white-space:nowrap}.perf-wrap{overflow-x:auto}</style>
     <p class="small" style="margin:0 0 10px">Die letzten Starts auf <b>diesem Gerät</b>. 0 = Programm laden · a = Anmeldung · b = bis die erste Ansicht steht · c = bis alle Startseiten-Kacheln fertig sind. Rechts: wie lange das Laden der Daten dauerte und wie groß sie sind.</p>

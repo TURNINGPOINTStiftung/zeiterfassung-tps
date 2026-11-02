@@ -232,6 +232,7 @@ export async function doLogin(){
   try{ window.tpsPerf&&window.tpsPerf.mark('appSichtbar'); }catch(e){}
   try{ window.initApp?.(); } catch(e){ console.error('initApp Fehler:',e); }
   try{ window.tpsPerf&&window.tpsPerf.mark('ansicht'); }catch(e){}
+  try{ window._netChip&&window._netChip(); }catch(e){}
   try{ window.updateAbBadge?.(); } catch(e){ console.error('updateAbBadge Fehler:',e); }
 }
 
@@ -240,7 +241,7 @@ export async function doLogin(){
 // Wichtig auf geteilten Geräten. Noch nicht übertragene Änderungen werden vorher nachgeholt;
 // klappt das nicht, wird nachgefragt statt still zu verwerfen. Geräte-Einstellungen (gemerkter
 // Name, Zoom, zuletzt geöffnetes Modul, KI-Adresse) bleiben erhalten.
-const _LOGOUT_CLEAR=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tps_crm_v1', 'tps_crm_pending_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session'];
+const _LOGOUT_CLEAR=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tps_crm_v1', 'tps_crm_pending_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session', 'tps_last_sync'];
 // Personenbezogene Reste je Nutzer (Favoriten/zuletzt geöffnet, Wetter-Ort, Warenkorb, Lager-Quittungen) – Audit 14.10.2026.
 // Der Messe-Ausgang (tps_messe_v2) bleibt bewusst: dort liegen noch nicht übertragene Erfassungen.
 const _LOGOUT_PREFIX=['tp_zt_premigrate_','tps_home_recent_','tps_home_favs_','tps_home_geo_','tps_shop_cart_','tps_shop_ack2_','tps_shop_soll_ack_','tps_shop_od_ack_','tps_shop_due_ack_'];
@@ -257,6 +258,7 @@ export async function doLogout(){
     if(m>0 && !confirm(m+' CRM-/Lager-Änderung'+(m===1?' wurde':'en wurden')+' noch nicht an den Server übertragen (keine Verbindung?).\n\nBeim Abmelden gehen sie verloren. Trotzdem abmelden?')) return;
   }catch(e){}
   window.cu=null; window.viewEmpId=null;
+  try{ const c=document.getElementById('net-chip'); if(c) c.remove(); }catch(e){}
   try{ await firebase.auth().signOut(); }catch(e){ console.warn('signOut:',e&&e.message); }
   try{
     _LOGOUT_CLEAR.forEach(k=>localStorage.removeItem(k));

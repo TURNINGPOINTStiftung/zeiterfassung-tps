@@ -651,7 +651,9 @@ function _cloudUpdate(upd){
   if(window._cloudUnverified && !window._allowDataShrink) return Promise.resolve();
   try{ upd=JSON.parse(JSON.stringify(upd)); }catch(e){}   // undefined entfernen (Firebase wirft sonst)
   // Offline → gezielte Pfade in die (reload-feste) Warteschlange statt „alles später neu schreiben".
-  if(window._offlineMode){ _queuePending(upd); return Promise.resolve(); }
+  // v527: auch solange die Datenbank-Verbindung (noch) nicht steht (_fbConnected===false) – sonst lägen
+  // Änderungen nur im Arbeitsspeicher und gingen beim Schließen der App verloren. Nachgeholt wird beim Verbinden.
+  if(window._offlineMode || window._fbConnected===false){ _queuePending(upd); return Promise.resolve(); }
   const ref=window._fbRef; if(!ref) return Promise.resolve();
   let p; try{ const r=_toRoot(upd); p=r?ref.root.update(r):ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
   return (p||Promise.resolve()).catch(e=>{

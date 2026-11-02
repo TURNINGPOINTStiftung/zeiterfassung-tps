@@ -197,7 +197,9 @@ export function renderHome(){
     _renderedHidden=JSON.stringify([hid, _prefs()&&_prefs().layouts||null]);
     // Persönliche Einstellungen kommen aus den CRM-Daten – sind die beim ersten Zeichnen noch nicht da,
     // einmal nachzeichnen, sobald geladen (nur wenn sich etwas geändert hat).
-    try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule==='start' && !_arranging && JSON.stringify([_hiddenCards(), _prefs()&&_prefs().layouts||null])!==_renderedHidden) renderHome(); }); }catch(e){}
+    try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._activeModule!=='start' || _arranging) return;
+      if(JSON.stringify([_hiddenCards(), _prefs()&&_prefs().layouts||null])!==_renderedHidden) renderHome();
+      else if(!_crmServerSeen){ _crmServerSeen=true; if(_crmFromCache){ _fillTodo(); _fillRecent(); } } }); }catch(e){}
     const slot=k=>`<div class="home-slot" data-k="${k}"><button class="home-x" title="Karte ausblenden" onpointerdown="event.stopPropagation()" onclick="homeHideCard(${jsq(k)},true)">✕</button>${BOX[k]()}</div>`;
     const hiddenAvail=avail.filter(k=>hid.includes(k));
     root.innerHTML=`<div class="home-wrap${_arranging?' home-arrange':''}">
@@ -412,6 +414,20 @@ function _flat(arr,out){ (arr||[]).forEach(t=>{ if(!t) return; out.push(t); _fla
 function _overviewMode(cu){ return !!cu; }
 const _MINE='';   // „du“-Kärtchen entfernt (User 26.10.2026: zu auffällig) – Markierung nur über die blaue Hinterlegung
 function _crmOpenOk(){ try{ const ma=window.crmModuleAccess?window.crmModuleAccess(window.cu):null; return !ma || ma.crm!=='kein' || ma.kanban!=='kein'; }catch(e){ return false; } }
+// v527: Kacheln, die CRM-Daten brauchen, warten nicht mehr auf den Server: Liegt ein CRM-Stand auf dem Gerät,
+// wird SOFORT damit gezeichnet und nach dem Server-Stand einmal aufgefrischt (renderHome). Ohne lokalen Stand
+// höchstens 4 s warten. (ensureCrmReady selbst bleibt unverändert – Stellen, die schreiben, warten weiter auf den Server.)
+let _crmServerSeen=false, _crmFromCache=false;
+function _crmSoon(){
+  try{
+    if(!CD.ensureCrmReady) return Promise.resolve();
+    const p=CD.ensureCrmReady(); let local=false;
+    try{ local=!!localStorage.getItem('tps_crm_v1'); }catch(e){}
+    if(_crmServerSeen) return p;
+    if(local){ _crmFromCache=true; try{ window.tpsPerf&&window.tpsPerf.info({kachelnAusCache:true}); }catch(e){} return Promise.resolve(); }
+    return Promise.race([p, new Promise(r=>setTimeout(r,4000))]);
+  }catch(e){ return Promise.resolve(); }
+}
 async function _fillTodo(){
   const box=_el('home-todo'); if(!box) return;
   const rows=[]; const today=isoDay(new Date()); const in7=isoDay(new Date(Date.now()+7*864e5));
@@ -424,7 +440,7 @@ async function _fillTodo(){
   }catch(e){}
   // CRM (Daten ggf. erst laden)
   try{
-    if(CD.ensureCrmReady) await CD.ensureCrmReady();
+    await _crmSoon();
     const me=(window.cu&&window.cu.id)||'';
     const tasks=[];
     const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(t.assigneeId===me && t.status!=='erledigt') tasks.push({kind,id:o.id,name,t}); }); };
@@ -550,7 +566,7 @@ function homeOpenItem(key){
 const _chip=(x,fav)=>{ const inf=_info(x.key); if(!inf) return '';
   return `<span class="home-chip"><span class="lbl" onclick="homeOpenItem(${jsq(x.key)})" title="Öffnen">${esc(inf.icon)} ${esc(inf.label)}</span><button class="star${fav?' on':''}" onclick="homeFavToggle(${jsq(x.key)})" title="${fav?'Aus den Favoriten entfernen':'Als Favorit merken'}" aria-label="Favorit">${fav?'★':'☆'}</button></span>`; };
 async function _fillRecent(){
-  try{ if(CD.ensureCrmReady) await CD.ensureCrmReady(); }catch(e){}
+  try{ await _crmSoon(); }catch(e){}
   _migrateFavs();
   const favs=_favList(); const fKeys=new Set(favs.map(x=>x.key));
   const fb=_el('home-favs');
@@ -603,7 +619,7 @@ async function _fillSys(){
   }catch(e){}
   // Letztes automatisches Tages-Backup (frisch vom Server, sonst aus dem Cache)
   let last=''; try{ last=(d._fixes&&d._fixes.lastAppBackup)||''; }catch(e){}
-  try{ if(window.firebase && firebase.database){ const v=(await firebase.database().ref('zeiterfassung/_fixes/lastAppBackup').once('value')).val(); if(v) last=v; } }catch(e){}
+  try{ if(window.firebase && firebase.database){ const v=(await Promise.race([firebase.database().ref('zeiterfassung/_fixes/lastAppBackup').once('value'), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),2500))])).val(); if(v) last=v; } }catch(e){}
   const today=isoDay(new Date()), yest=isoDay(new Date(Date.now()-864e5));
   const bState=!last?['amber','unbekannt']:(last===today?['green','heute ✓']:(last===yest?['green','gestern']:['red',fmtD(last)+String(last).slice(0,4)]));
   const bkClick=isAdm?'onclick="window.showAppBackups&&showAppBackups()"':((window.isBackupPlus&&window.isBackupPlus(cu))?'onclick="window.showPlusBackups&&showPlusBackups()"':'style="cursor:default"');
@@ -688,7 +704,10 @@ async function _fillWeather(){
         +'&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m'
         +'&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant'
         +'&wind_speed_unit=kn&timezone=Europe%2FBerlin&forecast_days=3';
-      const r=await fetch(url); const j=await r.json(); if(!j||!j.current) throw new Error('keine Daten');
+      // Zeitlimit 6 s: ein langsamer Wetterdienst darf die Startseite nicht aufhalten (Messung c)
+      const ac=('AbortController' in window)?new AbortController():null; const to=setTimeout(()=>{ try{ ac&&ac.abort(); }catch(e){} },6000);
+      let j; try{ const r=await fetch(url, ac?{signal:ac.signal}:undefined); j=await r.json(); } finally{ clearTimeout(to); }
+      if(!j||!j.current) throw new Error('keine Daten');
       w={ ts:Date.now(), c:j.current, d:j.daily }; _lsSet(ck,w);
     }
     const c=w.c, kn=Math.round(c.wind_speed_10m), g=Math.round(c.wind_gusts_10m), dir=c.wind_direction_10m;

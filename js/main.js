@@ -352,6 +352,7 @@ initFirebase().then(async function(){
     try{ window.tpsPerf&&window.tpsPerf.mark('appSichtbar'); }catch(e){}
     try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
     try{ window.tpsPerf&&window.tpsPerf.mark('ansicht'); }catch(e){}
+    try{ window._netChip&&window._netChip(); }catch(e){}
     try{ updateAbBadge(); }catch(e){}
   };
 
@@ -400,6 +401,8 @@ initFirebase().then(async function(){
     }
   }catch(e){ console.error('Auto-Login Fehler:',e); }
   // Keine Sitzung → erst JETZT Splash weg und Login-Bildschirm zeigen.
+  // (Lief ein Auto-Login-Versuch, lädt die Namensliste evtl. noch nebenher – höchstens 3 s darauf warten.)
+  try{ if(window._loginDirReady) await Promise.race([window._loginDirReady, new Promise(r=>setTimeout(r,3000))]); }catch(e){}
   _hideSplash();
   try{ populateLoginDropdown(); }
   catch(e){

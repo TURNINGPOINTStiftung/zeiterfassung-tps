@@ -222,7 +222,8 @@ export async function startZeitstempel(){
   const k=entryKey(cu.id,sy,sm);
   if(!window._offlineMode&&getDataCache()){
     try{
-      const snap=await window._fbRef.child('entries').child(k).once('value');
+      // Höchstens 2,5 s auf den frischen Monatsstand warten – ohne Verbindung mit dem lokalen Stand weiter.
+      const snap=await Promise.race([window._fbRef.child('entries').child(k).once('value'), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),2500))]);
       const val=snap.val(); if(val) getDataCache().entries[k]=val;
     }catch(e){}
   }

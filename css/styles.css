@@ -957,6 +957,10 @@ html :is(.ab-h3,.ab-box-h,.upcoming-section h3,.s-box > h3,.team-section h3,.uf-
 html :is(.crm-sec h4 .ttl,.crm-sec > h4){font-size:var(--fs-title)!important}
 html :is(.crm-card h3,.emp-card h3,.ab-c2-top strong,.kal-cftitle,.home-h){font-size:var(--fs-title)}
 
+/* Offline-Hinweis in der Kopfleiste (v527, js/firebase.js _netChip) */
+html .net-chip{display:inline-flex;align-items:center;gap:2px;min-height:32px;padding:4px 10px;border-radius:999px;border:1.5px solid var(--warn,#e0a800);
+  background:var(--warn-bg,#fff3cd);color:var(--warn-text,#856404);font-size:var(--fs-xs);font-weight:700;cursor:pointer;white-space:nowrap;font-family:var(--font)}
+@media (max-width:640px){ html .net-chip .net-chip-x{display:none} }
 /* Kleintext nie unter 12 px */
 html :is(.small,.ab-c2-sub,.crm-chip,.badge,.kal-cfsub,.home-sub,.upc-badge,.ab-type){font-size:var(--fs-xs)}
 /* v525: restliche Knöpfe auf die zwei Größen */
