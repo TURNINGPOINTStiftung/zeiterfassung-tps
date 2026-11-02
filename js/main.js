@@ -1,4 +1,5 @@
 // ── Core modules ──────────────────────────────────────────────────
+import './perf.js';   // Ladezeit-Messung (v526) – zuerst, damit window.tpsPerf früh bereitsteht
 import { getUser, setDataCache } from './data.js';
 import { _TPS_LOGO, EMAILJS_PUBLIC_KEY, STORAGE_KEY, DATA_EPOCH } from './config.js';
 import { initFirebase, initFirebaseEvents } from './firebase.js';
@@ -326,6 +327,7 @@ try{ if(window.emailjs&&EMAILJS_PUBLIC_KEY) window.emailjs.init({publicKey:EMAIL
   const el=document.getElementById(id); if(el) el.src=_TPS_LOGO;
 });
 
+try{ window.tpsPerf&&window.tpsPerf.mark('js'); }catch(e){}   // alle Programmteile geladen
 initZoom();
 initAuthEvents();
 
@@ -347,7 +349,9 @@ initFirebase().then(async function(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').classList.add('visible');
     _hideSplash();
+    try{ window.tpsPerf&&window.tpsPerf.mark('appSichtbar'); }catch(e){}
     try{ initApp(); }catch(e){ console.error('Auto-Login Fehler:',e); /* kein doLogout – Nutzer eingeloggt lassen */ }
+    try{ window.tpsPerf&&window.tpsPerf.mark('ansicht'); }catch(e){}
     try{ updateAbBadge(); }catch(e){}
   };
 
@@ -384,6 +388,7 @@ initFirebase().then(async function(){
         const ls=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
         if(ls&&Array.isArray(ls.users)&&ls.users.some(x=>x&&x.id===savedId)){ setDataCache(ls); fast=true; }
       }catch(_){}
+      try{ window.tpsPerf&&window.tpsPerf.art(fast?'Wiederaufruf':'Wiederaufruf ohne Gerätespeicher'); window.tpsPerf&&window.tpsPerf.info({schnellstart:fast}); }catch(e){}
       if(fast){
         _showApp(savedId);
         window.loadFullData().then(()=>{ try{ window.cu=getUser(savedId); }catch(_){} }).catch(e=>console.error('loadFullData (Hintergrund):',e));

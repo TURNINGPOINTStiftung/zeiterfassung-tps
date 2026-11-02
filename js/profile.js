@@ -78,6 +78,7 @@ export function openProfileModal(){
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">🔄 App aktualisieren</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Holt die neueste Version (Cache leeren & neu laden) – z. B. nach einem Update.</div>
     <button class="btn btn-outline" onclick="forceAppUpdate()" style="width:100%">🔄 App jetzt aktualisieren</button>
+    ${window.tpsPerf?`<button class="btn btn-outline" onclick="tpsPerf.open()" style="width:100%;margin-top:8px">⏱️ Ladezeit &amp; Verbindung prüfen</button>`:''}
     <div class="modal-btns">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
       <button class="btn btn-ok" onclick="saveProfile()">Speichern</button>

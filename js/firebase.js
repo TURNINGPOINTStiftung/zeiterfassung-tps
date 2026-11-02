@@ -71,12 +71,14 @@ export async function initFirebase(){
 
   // Persistierten Anmeldestatus abwarten (für Auto-Login auf bekannten Geräten).
   try{ await _awaitAuthReady(); }catch(e){}
+  try{ window.tpsPerf&&window.tpsPerf.mark('authBereit'); }catch(e){}
 
   // SICHERHEIT: Vor dem Login NUR das öffentliche Namensverzeichnis lesen (keine Daten).
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   try{
     const snap=await Promise.race([firebase.database().ref('zeiterfassung/loginDir').once('value'),_timeout(6000)]);
     const dir=snap.val()||{};
+    try{ window.tpsPerf&&window.tpsPerf.mark('loginDir'); }catch(e){}
     // id kommt aus dem WERT (dir[k].id), NICHT aus dem Schlüssel: Umlaut-Schlüssel werden von
     // Firebase verstümmelt (j?rg). Altbestand ohne id-im-Wert → Fallback auf den Schlüssel.
     window._loginDir=Object.keys(dir).map(k=>({id:(dir[k]&&dir[k].id)||k,name:(dir[k]&&dir[k].name)||k,email:(dir[k]&&dir[k].email)||''}));
@@ -93,9 +95,11 @@ export async function loadFullData(){
   const _fbRef=window._fbRef||firebase.database().ref('zeiterfassung');
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   let fbData=null;
+  try{ window.tpsPerf&&window.tpsPerf.mark('zeStart'); }catch(e){}
   try{
     const snap=await Promise.race([_fbRef.once('value'),_timeout(8000)]);
     fbData=snap.val();
+    try{ if(window.tpsPerf&&!window._perfZeDone){ window._perfZeDone=true; const k=window.tpsPerf.kb(fbData); window.tpsPerf.mark('zeFertig',{zeKB:k.kb,zeJsonMs:k.ms}); } }catch(e){}
     window._offlineMode=false;
   } catch(e){
     console.warn('Firebase nicht erreichbar, Offline-Modus:',e.message);
@@ -174,6 +178,11 @@ export async function loadFullData(){
 
 function _applyFirebaseSnap(val){
   if(!val||!getData()) return;
+  const _pt=performance.now();
+  try{ _applyFirebaseSnapInner(val); }
+  finally{ try{ window.tpsPerf&&window.tpsPerf.snap('ze', performance.now()-_pt); }catch(e){} }
+}
+function _applyFirebaseSnapInner(val){
   // Echter Cloud-Stand ist da → „unbestätigt"-Sperre aufheben (Writes dürfen wieder in die Cloud).
   if(Array.isArray(val.users)&&val.users.length>0) window._cloudUnverified=false;
   // Cloud bestätigt → evtl. noch offene (offline eingereihte) Änderungen gezielt nachholen.
@@ -229,7 +238,7 @@ function _setupRealtimeSync(){
 function _watchConnection(){
   if(_connWatch) return; _connWatch=true;
   try{ firebase.database().ref('.info/connected').on('value', s=>{
-    if(s.val()===true){ _wasConnected=true; window._offlineMode=false; try{ flushPendingWrites(); }catch(e){} }
+    if(s.val()===true){ try{ window.tpsPerf&&window.tpsPerf.mark('verbunden'); }catch(e){} _wasConnected=true; window._offlineMode=false; try{ flushPendingWrites(); }catch(e){} }
     else if(_wasConnected){ window._offlineMode=true; }   // erst nach einer echten Verbindung als „offline“ werten
   }); }catch(e){}
 }

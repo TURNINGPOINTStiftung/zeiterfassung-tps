@@ -212,8 +212,10 @@ export function renderHome(){
         ${cardOn('tiles',cu) && !hid.includes('tiles')?'<div class="home-tiles-wrap"><div class="home-tiles" id="home-tiles"></div></div>':''}
       </div></div>`;
     if(_arranging) _armDrag();
-    _fillStamp(); _fillNotes(); _fillTiles(); _fillTeam(); _fillRecent(); _fillSys();
-    _fillTodo(); _fillWeather();
+    _fillStamp(); _fillNotes(); _fillTiles(); _fillTeam(); const _pR=_fillRecent(); _fillSys();
+    const _pT=_fillTodo(), _pW=_fillWeather();
+    // Ladezeit-Messung (v526): Startseite steht – wann sind die nachladenden Kacheln fertig?
+    try{ if(window.tpsPerf){ window.tpsPerf.mark('startseite'); Promise.allSettled([_pR,_pT,_pW]).then(()=>window.tpsPerf.done()); } }catch(e){}
     clearInterval(_tick);
     _tick=setInterval(()=>{ if(window._activeModule!=='start'){ clearInterval(_tick); _tick=null; _arranging=false; return; } _fillStamp(); _fillNotes(); }, 5000);
   }catch(e){ console.error('renderHome:',e); }

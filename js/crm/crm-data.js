@@ -261,7 +261,9 @@ export function ensureCrmReady(){
         // Änderungs-Verlauf (Backup) liegt in einem SEPARATEN Ref, damit er den
         // normalen CRM-Sync nicht aufbläht. Wird nur bei Bedarf (Admin) gelesen.
         try{ _histRef = firebase.database().ref('crm_history'); pruneHistory(HISTORY_MS); }catch(e){ _histRef=null; }
+        try{ window.tpsPerf&&window.tpsPerf.mark('crmStart'); }catch(e){}
         const snap = await _ref.once('value');
+        try{ if(window.tpsPerf){ const k=window.tpsPerf.kb(snap.val()); window.tpsPerf.mark('crmFertig',{crmKB:k.kb}); } }catch(e){}
         // ── Cloud ist Quelle der Wahrheit ──────────────────────────────
         // Nur die EIGENEN, noch nicht bestätigten Änderungen dieses Geräts (Warteschlange)
         // werden über den Cloud-Stand gelegt und nachgeholt – nichts sonst. So kann ein Gerät
@@ -285,6 +287,7 @@ export function ensureCrmReady(){
         let _snapT=null, _lsT=null, _lastS=null;
         const _applySnap = () => {
           _snapT=null; const s=_lastS; if(!s) return;
+          const _pt=performance.now();
           try{
             const v = s.val();
             _cache = _normalize(v);
@@ -303,6 +306,7 @@ export function ensureCrmReady(){
             // Mitteilungsleiste (Shop-Bestellungen) auffrischen
             try{ window.renderZeNotices && window.renderZeNotices(); }catch(e){}
           }catch(e){ console.warn('CRM Snapshot Fehler (ignoriert):', e); }
+          try{ window.tpsPerf&&window.tpsPerf.snap('crm', performance.now()-_pt); }catch(e){}
         };
         _ref.on('value', s => { _lastS=s; if(!_snapT) _snapT=setTimeout(_applySnap, 400); });   // Änderungen bündeln
       }

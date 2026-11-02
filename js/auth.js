@@ -175,6 +175,7 @@ export async function doLogin(){
   const pw=document.getElementById('login-pw').value;
   if(!pw){ errEl.textContent='Bitte Passwort eingeben.'; errEl.style.display='block'; return; }
   errEl.textContent='Anmeldung läuft …'; errEl.style.display='block';
+  try{ window.tpsPerf&&window.tpsPerf.art('Anmeldung'); window.tpsPerf&&window.tpsPerf.mark('loginKlick'); }catch(e){}
   // Echte Firebase-Anmeldung (mit sanfter Migration über das Stabil-Passwort).
   let res;
   try{ res=await authenticate(du.id, du.email, pw, verifyPw); }
@@ -187,6 +188,7 @@ export async function doLogin(){
       ('Anmeldung fehlgeschlagen'+(res.msg?': '+res.msg:'.'));
     errEl.style.display='block'; return;
   }
+  try{ window.tpsPerf&&window.tpsPerf.mark('angemeldet'); }catch(e){}
   // Angemeldet + freigeschaltet → volle Daten laden.
   // SCHNELLSTART auf bekannten Geräten: gibt es einen brauchbaren lokalen Stand mit genau
   // diesem Nutzer, zeigen wir die App SOFORT daraus. loadFullData (Merge, Migration,
@@ -200,6 +202,7 @@ export async function doLogin(){
       setDataCache(ls); _fastStart=true;
     }
   }catch(e){}
+  try{ window.tpsPerf&&window.tpsPerf.info({schnellstart:_fastStart}); }catch(e){}
   if(_fastStart){
     // NICHT awaiten → App erscheint sofort; cu nach dem Hintergrund-Laden auffrischen.
     window.loadFullData().then(()=>{ try{ window.cu=getUser(du.id); }catch(_){} }).catch(e=>console.error('loadFullData (Hintergrund):',e));
@@ -226,7 +229,9 @@ export async function doLogin(){
   // Neu angemeldet → immer vorn starten (Startseite, falls in der Verwaltung freigeschaltet),
   // keine gemerkte Ansicht (#/…) aus einer früheren Sitzung wiederherstellen (User-Vorgabe).
   try{ window.navResetInitial?.(); history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  try{ window.tpsPerf&&window.tpsPerf.mark('appSichtbar'); }catch(e){}
   try{ window.initApp?.(); } catch(e){ console.error('initApp Fehler:',e); }
+  try{ window.tpsPerf&&window.tpsPerf.mark('ansicht'); }catch(e){}
   try{ window.updateAbBadge?.(); } catch(e){ console.error('updateAbBadge Fehler:',e); }
 }
 
