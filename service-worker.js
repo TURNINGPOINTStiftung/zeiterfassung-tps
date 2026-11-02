@@ -1,8 +1,8 @@
-// TPS Zeiterfassung – Service Worker v49
+// TPS Zeiterfassung – Service Worker v50
 // Strategie: netzwerk-first für frische Versionen, Antworten werden aber gecacht,
 // damit bei Netzwerk-Aussetzern die letzte gute Version statt "rohem HTML" kommt.
 // KEIN automatisches Neuladen offener Tabs mehr (verursachte stoerendes Aufblitzen).
-const CACHE = 'tps-ze-v531';
+const CACHE = 'tps-ze-v532';
 
 const SDK_URLS = [
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
@@ -77,7 +77,12 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches.open(CACHE).then(cache =>
       cache.match(e.request).then(cached => {
-        const network = fetch(e.request)
+        // v532: IMMER beim Server nachfragen (cache:'no-cache' → bei unveränderter Datei nur kurze 304-Antwort).
+        // Vorher kamen die Programmteile ohne Versionsnummer in der Adresse (app.js, firebase.js …) bis zu
+        // 10 Minuten aus dem Browser-Zwischenspeicher (GitHub Pages: max-age=600) → nach einem Update lief
+        // ein Gemisch aus alter und neuer Version, „App aktualisieren“ half dagegen nicht.
+        const network = fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+          .then(res => (res.redirected && e.request.mode === 'navigate') ? fetch(e.request) : res)
           .then(res => {
             if (res && res.status === 200 && res.type === 'basic') cache.put(e.request, res.clone());
             return res;

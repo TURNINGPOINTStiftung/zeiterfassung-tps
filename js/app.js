@@ -60,12 +60,16 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||!!(cu.perms&&cu.perms.zugriff_verwaltung);   // Versionsnummer für Admin + System-Verwaltung
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v531':'';
+  if(_hv) _hv.textContent=_showVer?'v532':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
       .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
       .then(function(){ return (navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)?navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.update();}));}):null; })
+      // v532: alle geladenen Programmteile einmal am Browser-Zwischenspeicher vorbei neu holen – sonst liefert er
+      // nach einem Update bis zu 10 Min. alte Dateien (GitHub Pages max-age=600).
+      .then(function(){ try{ var u=performance.getEntriesByType('resource').map(function(e){return e.name;}).filter(function(n){ return n.indexOf(location.origin)===0 && /\.(js|css)(\?|$)/.test(n); });
+        u.push(location.href.split('#')[0]); return Promise.all(u.map(function(x){ return fetch(x,{cache:'reload'}).catch(function(){}); })); }catch(e){ return null; } })
       .catch(function(){})
       .then(function(){ location.reload(); });
   };
