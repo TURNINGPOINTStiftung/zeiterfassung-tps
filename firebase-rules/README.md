@@ -229,6 +229,21 @@ sha256 (raw @f4c4c61): 256f5d16bd03f2e4037f3f442cbd6f095a5204fcc21e3bddb11144b15
 **Reihenfolge:** tpsPw mit `fineGrants` deployen → App v511 live → Administrator öffnet die App (schreibt `grants/r_*`, in der Konsole
 prüfen, dass z. B. `grants/r_crm_bearbeiten` Einträge hat) → v12 veröffentlichen. Rückweg: CANDIDATE-v11.json.
 
+## Kandidat 2026-11-03: CANDIDATE-v14.json – Kiosk-Konten (Messe-Tablet), NOCH NICHT LIVE
+= v13 + Kiosk-Kennzeichen `zeiterfassung/kiosk/<uid>` (nur Admin schreibt, nur Wahrheitswert; das Konto selbst darf sein Kennzeichen lesen):
+- Kiosk-Konten lesen `zeiterfassung`, `ze_audit`, `crm`, `crm_history` und `messe` nicht mehr (`loginDir` bleibt öffentlich).
+- Neu `messe/kioskEvents/<ev>` = `{ name, createdAt }` (keine PIN, keine Kategorien): lesen alle Messe-Berechtigten inkl. Kiosk,
+  schreiben wie `messe/events` (`r_me_va` / `r_me_va_loeschen`), Kiosk nie.
+- `messe/entries/$ev/$id`: Kiosk nur neu anlegen bzw. denselben Eintrag (gleiches `dev` + `ts`) erneut senden; kein Ändern/Löschen.
+  Veranstaltungen, Übertrag-Vermerke und Sammel-Löschungen für Kiosk gesperrt.
+Test im Testprojekt 03.11.2026 (Abschnitte auf `rt_*` umbenannt, vollständiger v14-Inhalt vom Compiler akzeptiert): 31 Fälle, alle wie erwartet
+(Kiosk: 18 Lese-/Schreibfälle, Personal: 6, Admin/Kennzeichen: 3, ohne Anmeldung: 1, Warmlauf 1, loginDir 1). Testdaten gelöscht,
+Original-Regeln zurück (PUT ohne Anmeldung → 401).
+sha256 (raw @d89f7a1): e2436851706d3f0a8ada92ddda4b07809ad063d7b36d2988e4c8a9616f61f761 · Prüfwort `kioskEvents` = 1 Treffer.
+**Reihenfolge:** tpsPw (Kiosk ausgeschlossen) deployen → App mit Kiosk-Modus live → v14 veröffentlichen → Personal öffnet einmal den
+Messemodus (füllt `kioskEvents`) → Admin setzt im Mitarbeiterdialog den Haken „Kiosk-Konto“ → Passwort des Messe-Kontos ändern.
+Rückweg: CANDIDATE-v13.json.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
