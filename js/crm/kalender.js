@@ -147,7 +147,7 @@ let _cfScope='', _cfDays=28;
 const _CF_SCOPES=[['eigene','Betrifft mich'],['team','Meine Teams'],['alle','Alle']];
 function _cfScopesAllowed(){ const r=_scope('kal_konflikte'); if(!r) return []; const i=_CF_SCOPES.findIndex(x=>x[0]===r); return _CF_SCOPES.slice(0, i+1); }
 function _cfScopeNow(){ const al=_cfScopesAllowed(); if(!al.length) return ''; if(!al.some(x=>x[0]===_cfScope)) _cfScope=al[al.length-1][0]; return _cfScope; }
-function _taskConflicts(scope, days){
+function _taskConflicts(scope, days, noFilter){
   if(!scope) return [];
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){ all=[]; }
   const me=(window.cu&&window.cu.id)||''; const my=new Set(_myTeams()); const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
@@ -158,8 +158,8 @@ function _taskConflicts(scope, days){
     const emp=n.assigneeId||''; const teams=a.teamsEff||[];
     const inScope = scope==='alle' || emp===me || (scope==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || teams.some(t=>my.has(t))));
     if(!inScope) return;
-    if(curTeam && curTeam!=='@me' && !((tOf[emp]||[]).includes(curTeam) || teams.includes(curTeam))) return;
-    if(curTeam==='@me' && emp!==me) return;
+    if(!noFilter && curTeam && curTeam!=='@me' && !((tOf[emp]||[]).includes(curTeam) || teams.includes(curTeam))) return;
+    if(!noFilter && curTeam==='@me' && emp!==me) return;
     const t={ id:n.id, text:n.text||'Aufgabe', due, emp, kind:a.kind, cid:a.containerId, tree:a.tree, teams,
       src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:'') };
     const is=emp ? _taskIssue(t, abs) : (due<today ? 'überfällig seit '+_deDate(due) : '');
@@ -186,6 +186,17 @@ function _taskConflictSection(personal){
   if(up.length) h+='<div class="kal-cfmon">Nächste '+(_cfDays===28?'4 Wochen':'3 Monate')+' ('+up.length+')</div>'+up.map(row).join('');
   h+='</div></div><div class="kal-cfh" style="margin:18px 0 6px">📅 Veranstaltungen &amp; Termine</div>';
   return h;
+}
+// Für die Startseite (home.js, Release A Schritt 4): was MICH betrifft – unabhängig von der Kalender-Auswahl.
+// → { tasks:[Aufgaben mit Konflikt], events:[mir zugewiesene Veranstaltungen/Termine, während ich abwesend bin] }
+function kalMyConflicts(days){
+  const me=(window.cu&&window.cu.id)||''; if(!me || !_scope('kal_konflikte')) return { tasks:[], events:[] };
+  days=days||28; const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
+  const tasks=_taskConflicts('eigene', days, true).map(t=>Object.assign(t, { issue:/vor Fälligkeit abwesend$/.test(t.issue)?'du bist vor der Frist abwesend':t.issue }));
+  const myAbs=_abs().filter(a=>a.emp===me);
+  const events=_events().concat(_termine()).filter(e=>(e.mitarbeiter||[]).includes(me) && (e.bis||e.von)>=today && e.von<=until && myAbs.some(a=>overlap(a.von,a.bis,e.von,e.bis||e.von)))
+    .map(e=>({ typ:e.typ, id:e.id, tree:e.tree||'', eid:e.eid||'', titel:e.titel, von:e.von, bis:e.bis||e.von }));
+  return { tasks, events };
 }
 function kalSetCfScope(v){ _cfScope=v; renderKalender(); }
 function kalSetCfDays(n){ _cfDays=n===91?91:28; renderKalender(); }
@@ -937,4 +948,4 @@ function kalAboCopy(id){ const i=document.getElementById(id||'kal-abo-url'); if(
 
 Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
 Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
-Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays });
+Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts });
