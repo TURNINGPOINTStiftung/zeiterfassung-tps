@@ -658,20 +658,7 @@ function _yearGrid(months, title){
     yItems.forEach(it=>{ h+=namedMark(it); });
     h+='</div></div>';
   }
-  // Aufgabenlast je Team und Monat (Schritt 5): Zahl = fällige offene Aufgaben; Farbe = Aufgaben je anwesender Person,
-  // darunter die Abwesenheitstage im Team (Mo–Fr, nur Urlaub/Ausgleich). Sichtbar mit dem Recht „Fälligkeiten anderer sehen".
-  if(_scope('kal_faellig') && curTeam!=='@me'){
-    const L=_teamLoad(months, emps, abs);
-    const rows=_teamsOrdered(emps).filter(t=>(!curTeam||t===curTeam) && L[t]);
-    if(rows.length){
-      h+='<div class="kal-teamrow">Aufgabenlast je Team</div>';
-      rows.forEach(t=>{ h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" title="'+esc(t)+'">'+esc(t)+'</div>';
-        months.forEach((o,i)=>{ const c=L[t][i]; const lv=c.n===0?'':(c.perHead<3?'l1':(c.perHead<6?'l2':'l3'));
-          const tip=t+' · '+MON_ABBR[o.m-1]+' '+o.y+': '+c.n+' fällige Aufgabe'+(c.n===1?'':'n')+' · '+c.absDays+' Abwesenheitstage · '+c.people+' Person'+(c.people===1?'':'en');
-          h+='<div class="kal-load '+lv+'" style="grid-column:'+(i+2)+'" data-tip="'+esc(tip)+'"><b>'+(c.n||'–')+'</b>'+(c.absDays?'<span>'+c.absDays+' T. abw.</span>':'')+'</div>'; });
-        h+='</div>'; });
-    }
-  }
+  // „Aufgabenlast je Team" entfernt (Planung): Team-Themen stehen auf der Teamseite (Projektplan/Redaktionsplan)
   // Mitarbeiter – Abwesenheiten (voll) + schmale Zuweisungs-Marker
   _rowTeams(emps).forEach(t=>{
     if(curTeam&&t!==curTeam) return;
