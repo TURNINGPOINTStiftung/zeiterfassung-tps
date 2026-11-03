@@ -570,8 +570,9 @@ function _lockAdminOnlyFields(target){
 // Firebase-Konto selbst – das kann die App prinzipbedingt nicht (offene Server-Phase).
 function _genTempPw(){
   const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const a=new Uint32Array(10); try{ (self.crypto||window.crypto).getRandomValues(a); }catch(e){}
-  let s=''; for(let i=0;i<10;i++){ s+=c[(a[i]||(i*7+3))%c.length]; }
+  // 14 Zeichen: Server (tpsPw) verlangt seit 26.10.2026 mindestens 12 – mit 10 scheiterte „Startpasswort erzeugen“ (Fehler „pw“).
+  const a=new Uint32Array(14); try{ (self.crypto||window.crypto).getRandomValues(a); }catch(e){}
+  let s=''; for(let i=0;i<14;i++){ s+=c[(a[i]||(i*7+3))%c.length]; }
   return s;
 }
 // Firebase-Konto-Passwort einer anderen Person setzen – nur über die Cloud Function tpsPw
@@ -581,7 +582,7 @@ async function _adminFn(payload){
   const tok=await me.getIdToken();
   const r=await fetch(PW_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(payload)});
   let j={}; try{ j=await r.json(); }catch(_){}
-  if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':(j.error==='mfa-required'?'Diese Admin-Aktion braucht eine Anmeldung mit Zwei-Faktor-Code. Bitte ab- und wieder anmelden (mit Code aus der Authenticator-App).':('Server: '+(j.error||r.status))));
+  if(!r.ok||!j.ok) throw new Error(j.error==='no-account'?'Kein Login-Konto vorhanden – bitte „Zugang neu aufsetzen".':(j.error==='mfa-required'?'Diese Admin-Aktion braucht eine Anmeldung mit Zwei-Faktor-Code. Bitte ab- und wieder anmelden (mit Code aus der Authenticator-App).':(j.error==='pw'?'Passwort zu kurz – mindestens 12 Zeichen.':('Server: '+(j.error||r.status)))));
   return j;
 }
 async function _adminSetFirebasePw(id,newPw){ return _adminFn({action:'set',id,newPw}); }
