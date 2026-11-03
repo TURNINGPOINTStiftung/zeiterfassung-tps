@@ -4288,9 +4288,10 @@ function paintTeamDetail(){
   })();
   const isOea = !!team && team===oeaCfg().team;   // Redaktionsplan nur auf der ÖA-Teamseite (Release C)
   const redTab = isOea && window._crmRedTab==='redaktion';
-  const tabs = isOea ? `<div class="red-seg" style="display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden;margin:0 0 12px">
-      <button style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;background:${redTab?'var(--surface,#fff)':'var(--primary,#203869)'};color:${redTab?'var(--primary-d,#15263a)':'var(--on-primary,#fff)'}" onclick="crmRedSet('tab','uebersicht')">Übersicht</button>
-      <button style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;background:${redTab?'var(--primary,#203869)':'var(--surface,#fff)'};color:${redTab?'var(--on-primary,#fff)':'var(--primary-d,#15263a)'}" onclick="crmRedSet('tab','redaktion')">Redaktionsplan</button></div>` : '';
+  const ppTab = !isOea && window._crmRedTab==='projekt';   // Projektplan: für jedes Team (früher Projekte-Spur im Kalender-Jahr); beim ÖA-Team übernimmt das der Redaktionsplan
+  const _tb=(k,l,on)=>`<button aria-pressed="${on}" style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;min-height:38px;background:${on?'var(--primary,#203869)':'var(--surface,#fff)'};color:${on?'var(--on-primary,#fff)':'var(--primary-d,#15263a)'}" onclick="crmRedSet('tab','${k}')">${l}</button>`;
+  const tabs = `<div class="red-seg" style="display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden;margin:0 0 12px">
+      ${_tb('uebersicht','Übersicht',!redTab&&!ppTab)}${isOea?_tb('redaktion','Redaktionsplan',redTab):_tb('projekt','Projektplan',ppTab)}</div>`;
   const _tc=(t)=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--muted)':_TC[i%_TC.length]; };
   const _visT=(_kanbanSeesAll(window.cu)?zeTeams():visibleKanbanTeams(window.cu));
   const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
@@ -4306,7 +4307,7 @@ function paintTeamDetail(){
     </div>
     ${tabs}
     ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmGoVerwOea()">⚙ ÖA-Team in der Verwaltung festlegen</button></div>`:''}
-    ${redTab ? oeaRedaktionHtml() : (window._planActive ? _planTeamOverview(team) : `${teamTaskSec}
+    ${redTab ? oeaRedaktionHtml() : ppTab ? _planProjektplan(team) : (window._planActive ? _planTeamOverview(team) : `${teamTaskSec}
     ${_view?vaSec:''}
     ${projektSec}`)}
   </div>`;
@@ -4371,6 +4372,7 @@ function _oeaRange(){
 function _oeaLabel(r){ if(r.v==='woche') return 'KW '+_oKw(r.days[0])+' · '+r.days[0].getDate()+'.'+(r.days[0].getMonth()+1)+'. – '+r.days[6].getDate()+'.'+(r.days[6].getMonth()+1)+'.'; if(r.v==='monat') return ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][r.days[0].getMonth()]+' '+r.days[0].getFullYear(); return String(r.y); }
 function crmRedSet(k, v){
   if(k==='tab') window._crmRedTab=v; else if(k==='view') window._crmRedView=v; else if(k==='kanal') window._crmRedKanal=v;
+  else if(k==='pp'){ const t=localISODate(); const r=String(window._crmPpRef||t).slice(0,7)+'-01'; window._crmPpRef = v===0 ? t : _oIso(new Date(+r.slice(0,4), +r.slice(5,7)-1+12*v, 1, 12)); }
   else if(k==='nav'){ const r=_oeaRange(); const ref=_oParse(window._crmRedRef||localISODate());
     if(v===0) window._crmRedRef=localISODate();
     else if(r.v==='woche') window._crmRedRef=_oIso(_oAdd(ref,7*v));
@@ -4567,6 +4569,82 @@ function oeaRedaktionHtml(){
 }
 
 // ── Planung: Team-Übersicht nach Prototyp (offene Aufgaben 6 Wochen + ohne Frist | Veranstaltungen, Projekte) ──
+// ══════════════════════════════════════════════════════════════════
+//  PROJEKTPLAN eines Teams (Planung → Teams → Team → Projektplan)
+//  12 Monate ab dem gewählten Monat: je Projekt ein Balken (Start–Ende) und Punkte für offene Aufgaben
+//  mit Frist. Gehört zum Team (früher im Kalender-Jahr für alle sichtbar). Handy: Liste statt Zeitleiste.
+// ══════════════════════════════════════════════════════════════════
+function _planProjektplan(team){
+  const ohne=team==='Ohne Team'; const today=localISODate();
+  const ref=String(window._crmPpRef||today).slice(0,7)+'-01'; const y0=+ref.slice(0,4), m0=+ref.slice(5,7);
+  const months=[]; for(let i=0;i<12;i++){ const d=new Date(y0,m0-1+i,1,12); months.push({ y:d.getFullYear(), m:d.getMonth()+1, dim:new Date(d.getFullYear(),d.getMonth()+1,0).getDate() }); }
+  const pad=n=>String(n).padStart(2,'0'); const Y0=ref, last=months[11], Y1=last.y+'-'+pad(last.m)+'-'+pad(last.dim);
+  const CUM=[]; let tot=0; months.forEach(o=>{ CUM.push(tot); tot+=o.dim; });
+  const doy=iso=>{ const y=+iso.slice(0,4), m=+iso.slice(5,7), d=+iso.slice(8,10); const i=months.findIndex(o=>o.y===y&&o.m===m); return i<0?(iso<Y0?0:tot-1):CUM[i]+d-1; };
+  const pct=iso=>doy(iso<Y0?Y0:(iso>Y1?Y1:iso))/tot*100;
+  const MON=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+  const fd=s=>s?fmtDate(Date.parse(s)).replace(/\.\d{4}$/,'.'):'';
+  const col=(()=>{ const ts=zeTeams(); const i=ts.indexOf(team); return i<0?'var(--primary,#203869)':'var(--team-'+((i%8)+1)+')'; })();
+  const projs=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed).map(p=>{
+    const leaves=flatTasks(p).map(x=>x.ref||x).filter(t=>!(Array.isArray(t.children)&&t.children.length));
+    const open=leaves.filter(t=>t.status!=='erledigt'); const done=leaves.length-open.length;
+    return { p, von:p.start?String(p.start).slice(0,10):'', bis:String(p.ende||p.start||'').slice(0,10), leaves, open, done, over:open.filter(t=>t.due&&String(t.due).slice(0,10)<today).length };
+  }).sort((a,b)=>String(a.von||'9').localeCompare(String(b.von||'9')));
+  const dated=projs.filter(x=>x.von && x.bis>=Y0 && x.von<=Y1), undated=projs.filter(x=>!x.von), outside=projs.filter(x=>x.von && !(x.bis>=Y0 && x.von<=Y1));
+  const nav=`<div class="pp-nav"><span class="pp-seg"><button aria-label="12 Monate zurück" onclick="crmRedSet('pp',-1)">‹</button><button onclick="crmRedSet('pp',0)">Heute</button><button aria-label="12 Monate weiter" onclick="crmRedSet('pp',1)">›</button></span>
+    <b>${MON[m0-1]} ${String(y0).slice(2)} – ${MON[last.m-1]} ${String(last.y).slice(2)}</b>
+    ${_kbManage()?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</div>`;
+  const grid='grid-template-columns:200px '+months.map(o=>o.dim+'fr').join(' ');
+  const tline=(today>=Y0&&today<=Y1)?`<div class="pp-today" style="left:${pct(today)}%"></div>`:'';
+  const wl=months.slice(1).map((o,i)=>`<div class="pp-mline" style="left:${CUM[i+1]/tot*100}%"></div>`).join('');
+  const row=x=>{ const p=x.p; const l=pct(x.von), w=Math.max(0.6,pct(x.bis)-l+(1/tot*100));
+    // offene Aufgaben mit Frist je Woche (Montag) zusammengefasst: Zahl, rot wenn davon welche überfällig
+    const wk={}; x.open.forEach(t=>{ const d=String(t.due||'').slice(0,10); if(!d||d<Y0||d>Y1) return; const dt=new Date(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10),12); dt.setDate(dt.getDate()-((dt.getDay()+6)%7));
+      let k=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate()); if(k<Y0) k=Y0; (wk[k]=wk[k]||{n:0,o:0,t:[]}); wk[k].n++; if(d<today) wk[k].o++; if(wk[k].t.length<6) wk[k].t.push((t.text||'Aufgabe')+' · '+fd(d)); });
+    const dots=Object.keys(wk).map(k=>{ const g=wk[k]; const tip=g.n+' offen in der Woche ab '+fd(k)+(g.o?' ('+g.o+' überfällig)':'')+': '+g.t.join(', ')+(g.n>g.t.length?' …':'');
+      return `<span class="pp-dot${g.o?' over':''}" style="left:${pct(k)}%" title="${esc(tip)}">${g.n}</span>`; }).join('');
+    return `<div class="pp-row" style="${grid}"><div class="pp-name"><b>${esc(p.name||'Projekt')}</b><span>${x.open.length} offen${x.over?` · <em>${x.over} überfällig</em>`:''}</span></div>
+      <div class="pp-track">${wl}${tline}<button class="pp-bar" style="left:${l}%;width:${w}%;background:${col}" onclick="crmOpenTeamProjekt(${jsq(p.id)})" title="${esc((p.name||'Projekt')+' · '+fd(x.von)+'–'+fd(x.bis))}"><span>${esc(p.name||'Projekt')}</span></button>${dots}</div></div>`; };
+  const head=`<div class="pp-row pp-head" style="${grid}"><div class="pp-name">Projekt</div>${months.map(o=>`<div class="pp-mh">${MON[o.m-1]}${o.y!==y0?" '"+String(o.y).slice(2):''}</div>`).join('')}</div>`;
+  const time=`<div class="pp-time red-scroll" role="region" aria-label="Projektplan als Zeitleiste" tabindex="0"><div class="pp-grid">${head}${dated.map(row).join('')||`<div class="plan-empty" style="padding:14px">Keine Projekte mit Zeitraum in diesen 12 Monaten.</div>`}</div></div>`;
+  const item=x=>{ const p=x.p; const n=x.leaves.length; const prc=n?Math.round(x.done/n*100):0;
+    return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div>
+      <div class="plan-row"><span class="plan-tag">${x.von?fd(x.von)+'–'+fd(x.bis):'ohne Zeitraum'}</span><span class="plan-tag">${x.open.length} offen</span>${x.over?`<span class="plan-tag crit">${x.over} überfällig</span>`:''}</div>
+      ${n?`<div class="pp-prog" role="img" aria-label="${prc} % erledigt"><span style="width:${prc}%;background:${col}"></span></div>`:''}</div></div>`; };
+  const list=`<div class="pp-list">${dated.concat(outside).map(item).join('')||'<div class="plan-empty">Keine Projekte mit Zeitraum.</div>'}</div>`;
+  const rest=undated.length||outside.length?`<section class="plan-card pp-rest" style="margin-top:14px"><div class="plan-h"><h2>Ohne Zeitraum${outside.length?' oder außerhalb':''}</h2><span class="plan-sub">Start und Ende im Projekt eintragen, dann erscheint es in der Zeitleiste</span></div>${undated.concat(outside).map(item).join('')}</section>`:'';
+  return `<style>
+    .pp-nav{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 12px}
+    .pp-seg{display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden}
+    .pp-seg button{border:0;background:var(--surface,#fff);color:var(--primary-d,#15263a);font:inherit;font-size:14px;font-weight:600;padding:7px 12px;min-height:38px;min-width:38px;cursor:pointer}
+    .pp-seg button+button{border-left:1px solid var(--border,#c3cedb)}
+    @media(max-width:640px){ .pp-seg button{min-height:42px;min-width:42px} }
+    .pp-grid{min-width:960px}
+    .pp-row{display:grid;align-items:stretch;border-bottom:1px solid var(--border,#dce3ec)}
+    .pp-head{background:var(--primary,#203869);color:var(--on-primary,#fff);font-weight:700;border-radius:9px 9px 0 0}
+    .pp-head .pp-name,.pp-mh{padding:8px 10px;font-size:13px}
+    .pp-mh{text-align:center;border-left:1px solid rgba(255,255,255,.18)}
+    .pp-name{padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0;font-size:14px}
+    .pp-name b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pp-name span{font-size:12px;color:var(--muted,#5d7086)} .pp-name em{font-style:normal;color:var(--danger,#c0392b);font-weight:600}
+    .pp-track{grid-column:2 / -1;position:relative;min-height:50px}
+    .pp-mline{position:absolute;top:0;bottom:0;width:1px;background:var(--border,#dce3ec)}
+    .pp-today{position:absolute;top:0;bottom:0;width:2px;background:var(--warn,#b45309);z-index:1}
+    .pp-bar{position:absolute;top:9px;height:22px;border:0;border-radius:6px;color:#fff;font:inherit;font-size:12px;font-weight:700;text-align:left;padding:0 8px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;z-index:2}
+    .pp-bar span{text-shadow:0 1px 1px rgba(0,0,0,.35)}
+    .pp-bar:focus-visible{outline:2px solid var(--text,#15263a);outline-offset:2px}
+    .pp-dot{position:absolute;top:34px;min-width:18px;height:16px;padding:0 3px;margin-left:-2px;border-radius:8px;background:var(--surface,#fff);border:1.5px solid var(--primary,#203869);color:var(--primary-d,#15263a);font-size:12px;font-weight:700;line-height:13px;text-align:center;z-index:3;box-sizing:border-box}
+    .pp-dot.over{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:#fff}
+    .pp-track{min-height:56px}
+    .pp-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted,#5d7086);margin:8px 2px 0;align-items:center}
+    .pp-legend i{display:inline-block;vertical-align:middle;margin-right:5px}
+    .pp-prog{height:6px;border-radius:3px;background:var(--surface-3,#e4e9f1);margin-top:8px;overflow:hidden} .pp-prog span{display:block;height:100%}
+    .plan-tag.crit{color:var(--danger,#c0392b);border-color:var(--danger,#c0392b)}
+    .pp-list{display:none}
+    @media(max-width:640px){ .pp-time,.pp-legend{display:none} .pp-list{display:block} .pp-rest{display:none} }
+  </style>${nav}${time}
+  <div class="pp-legend"><span><i style="width:18px;height:10px;border-radius:3px;background:${col}"></i>Projekt (Start–Ende, antippen öffnet)</span><span><i class="pp-dot" style="position:static;margin:0 5px 0 0;display:inline-block;font-style:normal">3</i>offene Aufgaben mit Frist in dieser Woche</span><span><i class="pp-dot over" style="position:static;margin:0 5px 0 0;display:inline-block;font-style:normal">1</i>davon überfällig</span><span><i style="width:2px;height:12px;background:var(--warn,#b45309)"></i>heute</span></div>
+  ${list}${rest}`;
+}
 function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };

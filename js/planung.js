@@ -69,7 +69,7 @@ function _label(){
     document.querySelectorAll('.mb-mod').forEach(b=>b.classList.toggle('active', b.dataset.mod==='planung')); }catch(e){}
 }
 function _teamsVisible(){ try{ const d=getData()||{}; return Array.isArray(d.teams)?d.teams.slice():[]; }catch(e){ return []; } }
-function _myTeams(){ const u=window.cu||{}; return [u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); }
+function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
 function _openPm(tab){
   if(tab==='teams'){
     let t=window._planTeam;
@@ -133,9 +133,18 @@ function _whoCard(){
   let emps=[]; try{ emps=window.kalVisibleEmps?window.kalVisibleEmps():_emps().filter(u=>u.id===me()); }catch(e){ emps=_emps().filter(u=>u.id===me()); }
   const today=iso(now);
   let h=`<div class="plan-who" style="grid-template-columns:minmax(64px,140px) repeat(5,minmax(0,1fr))"><div></div>${days.map(d=>`<div class="plan-whoh${iso(d)===today?' today':''}">${DOW[dowMon(d)]} ${d.getDate()}.</div>`).join('')}`;
-  emps.forEach(u=>{ h+=`<div class="plan-whon">${esc(u.name)}</div>`+days.map(d=>{ const x=iso(d); const ab=abs.some(a=>a.emp===u.id&&a.von<=x&&x<=a.bis); return `<div class="plan-whoc${ab?' abw':''}">${ab?'Abwesend':''}</div>`; }).join(''); });
+  // Nur die eigenen Teams (Haupt- + Zweit-/Dritt-Teams aus der Verwaltung); wer keinem Team angehört, sieht alle (Rechte oben)
+  const tOf=u=>[...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))];
+  const myT=_myTeams();
+  const groups=[]; const shown=new Set();
+  if(myT.length){ myT.forEach(t=>{ const g=emps.filter(u=>!shown.has(u.id) && tOf(u).includes(t)); g.forEach(u=>shown.add(u.id)); if(g.length) groups.push([t,g]); }); }
+  else groups.push(['',emps]);
+  const cell=u=>`<div class="plan-whon">${esc(u.name)}</div>`+days.map(d=>{ const x=iso(d); const ab=abs.some(a=>a.emp===u.id&&a.von<=x&&x<=a.bis); return `<div class="plan-whoc${ab?' abw':''}">${ab?'Abwesend':''}</div>`; }).join('');
+  groups.forEach(([t,g])=>{ if(t && myT.length>1) h+=`<div class="plan-whot">${esc(t)}</div>`; g.forEach(u=>{ h+=cell(u); }); });
   h+='</div>';
-  return `<section class="plan-card plan-wide"><div class="plan-h"><h2>Wer ist diese Woche da?</h2><span class="plan-sub">KW ${kw} · nur „Abwesend", ohne Grund</span></div>${emps.length?h:'<div class="plan-empty">Keine Personen sichtbar.</div>'}</section>`;
+  const n=groups.reduce((a,g)=>a+g[1].length,0);
+  const sub=myT.length?(myT.length>1?'deine Teams':'dein Team')+': '+myT.map(esc).join(', ')+' · ':'';
+  return `<section class="plan-card plan-wide"><div class="plan-h"><h2>Wer ist diese Woche da?</h2><span class="plan-sub">${sub}KW ${kw} · nur „Abwesend", ohne Grund</span></div>${n?h:'<div class="plan-empty">Keine Personen sichtbar.</div>'}</section>`;
 }
 function renderPlanungStart(){
   const root=document.getElementById('planung-root'); if(!root) return;
@@ -193,6 +202,7 @@ function _styles(){
   .plan-who > *{min-width:0}
   .plan-whoh{font-size:12px;color:var(--muted,#5d7086);text-align:center;font-family:ui-monospace,Consolas,monospace}
   .plan-whoh.today{color:var(--primary,#203869);font-weight:700}
+  .plan-whot{grid-column:1 / -1;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#5d7086);padding:8px 0 2px}
   .plan-whon{font-size:14px;color:var(--primary-d,#15263a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .plan-whoc{height:22px;border-radius:5px;background:var(--ok-bg,#e3f3e9);font-size:12px;color:var(--on-primary,#fff);display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;white-space:nowrap}
   @media(max-width:640px){ .plan-whoc{font-size:0} .plan-whoc.abw::after{content:'abw.';font-size:12px} .plan-whoh{font-size:12px} }

@@ -67,7 +67,7 @@ let weekStart=_mondayOf(_now);                          // Woche
 // Feine Rechte (v510, js/rechte.js): Wert eines Kalender-Rechts der angemeldeten Person.
 // Admin/ohne rechte.js: alles wie bisher.
 function _kr(k){ try{ const u=window.cu; if(!u||u.role==='admin'||!window.tpsRechteOf) return k==='kal_ansehen'?'alle':true; return window.tpsRechteOf(u)[k]; }catch(e){ return k==='kal_ansehen'?'alle':true; } }
-function _myTeams(){ const u=window.cu||{}; return [u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); }
+function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
 // Umfang eines Sichtrechts mit Optionen (alle|team|eigene); '' = gar nicht. Admin/ohne rechte.js → alle.
 function _scope(k){ const v=_kr(k); if(v===true) return 'alle'; return (v==='alle'||v==='team'||v==='eigene') ? v : ''; }
 const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray(it.mitarbeiter)&&it.mitarbeiter.includes(me); };
@@ -343,6 +343,12 @@ function _emps(){ const d=getData()||{}; let l=(d.users||[]).filter(u=>u&&u.id&&
   return l; }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
+// Alle Teams einer Person (Haupt- + Zweit-/Dritt-Teams aus der Verwaltung)
+function _teamsOfU(u){ return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
+// Zeilen im Kalender: bei gewähltem Team alle Mitglieder (auch Zweit-/Dritt-Team), bei „Alle Teams" jede Person einmal unter ihrem Hauptteam
+function _rowTeams(emps){ const base=_teamsOrdered(emps); if(curTeam && curTeam!=='@me' && !base.includes(curTeam) && emps.some(u=>_teamsOfU(u).includes(curTeam))) base.push(curTeam); return base; }
+function _rowMembers(emps,t){ return emps.filter(u=> (curTeam && curTeam!=='@me') ? _teamsOfU(u).includes(t) : _teamOf(u)===t); }
+function _guest(u,t){ const m=_teamOf(u); return m!==t?'<span class="kal-guest">Hauptteam '+esc(m)+'</span>':''; }
 // Handy (schmal): schmale Namensspalte mit Kurznamen („Mia M."), Standardansicht „Liste" (User 14.10.2026)
 const _mobile=()=>{ try{ return window.matchMedia('(max-width: 640px)').matches; }catch(e){ return false; } };
 const _NW=()=>_mobile()?96:180;
@@ -414,6 +420,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-load{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;border-right:1px solid var(--border,#c3cedb);font-size:13px;color:var(--muted,#5d7086);line-height:1.15}
   .kal-load b{font-size:15px;color:var(--primary-d,#15263a);font-variant-numeric:tabular-nums}
   .kal-load span{font-size:12px}
+  .kal-guest{display:block;font-size:12px;font-weight:400;color:var(--muted,#5d7086);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .kal-load.l1{background:var(--ok-bg,#e7f6e9)} .kal-load.l2{background:var(--warn-bg,#fef3c7)} .kal-load.l3{background:var(--danger-bg,#fde8e8)}
   .kal-cfsec{margin:0 0 6px}
   .kal-cfhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 6px}
@@ -558,10 +565,10 @@ function _dayGrid(days){
     h+='</div>';
   }
   // Mitarbeiter nach Team – Abwesenheiten (voll) + schmale Zuweisungs-Marker
-  _teamsOrdered(emps).forEach(t=>{
+  _rowTeams(emps).forEach(t=>{
     if(curTeam&&t!==curTeam) return;
     h+='<div class="kal-teamrow">'+esc(t)+'</div>';
-    emps.filter(u=>_teamOf(u)===t).forEach(u=>{
+    _rowMembers(emps,t).forEach(u=>{
       const myAbs=abs.filter(a=>a.emp===u.id);
       // Kopien: die Spur (_lane) gilt je Person, die Objekte werden auch fürs Band oben benutzt
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0).map(it=>Object.assign({},it));
@@ -574,7 +581,7 @@ function _dayGrid(days){
       const laneH=(rowTot/aRows).toFixed(2);
       const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>';
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+_guest(u,t)+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
       myAsg.forEach(it=>{ h+=asgBar(it, myAbs, asgLanes); });   // heller Balken zuerst – Abwesenheit liegt darüber
       myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+((absLanes<=1||a._alone)?'1 / -1':((a._lane+1)+' / span 1'))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
@@ -630,9 +637,10 @@ function _yearGrid(months, title){
   h+='</div>';
   h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.filter((w,i,a)=>!(a[i+1] && a[i+1].doy-w.doy<4)).map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
   // Spur „Projekte" (Release B, Schritt 5): Team-Projekte mit Zeitraum (eigene persönliche Projekte nur für die Person selbst)
-  const _tcol=_teamColor();
-  const projs=_projekte().filter(p=>inYear(p.von,p.bis)&&(!curTeam||curTeam==='@me'||p.team===curTeam));
+  // Projekte stehen seit der Planung im Projektplan des Teams (Planung → Teams → Projektplan), nicht mehr hier
+  const projs=[];
   if(projs.length){
+    const _tcol=_teamColor();
     const pN=Math.max(1,_laneAssign(projs));
     h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:var(--primary,#203869)">Projekte</div>'+mcells();
     h+='<div class="kal-track" style="min-height:'+(pN*mH+6)+'px">'+wlines+todayLine;
@@ -665,10 +673,10 @@ function _yearGrid(months, title){
     }
   }
   // Mitarbeiter – Abwesenheiten (voll) + schmale Zuweisungs-Marker
-  _teamsOrdered(emps).forEach(t=>{
+  _rowTeams(emps).forEach(t=>{
     if(curTeam&&t!==curTeam) return;
     h+='<div class="kal-teamrow">'+esc(t)+'</div>';
-    emps.filter(u=>_teamOf(u)===t).forEach(u=>{
+    _rowMembers(emps,t).forEach(u=>{
       const myAbs=abs.filter(a=>a.emp===u.id&&inYear(a.von,a.bis));
       const myAsg=items.filter(it=>(it.mitarbeiter||[]).indexOf(u.id)>=0&&inYear(it.von,it.bis)).map(it=>Object.assign({},it));
       const combY=myAbs.concat(myAsg);
@@ -678,7 +686,7 @@ function _yearGrid(months, title){
       const rowH=42;                 // alle Zeilen gleich hoch
       const segH=(rowH-6)/aL;        // Spuren (Abwesenheit + Termine) teilen sich die Höhe
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>'+mcells();
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+_guest(u,t)+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
       myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs, yAsgL); });   // heller Balken (z1), bei Überschneidung in Spuren
       myAbs.forEach(a=>{ h+=absMark(a, u.name, segH); });    // Abwesenheit darüber (z2)
@@ -923,13 +931,15 @@ export function renderKalender(){
     const root=document.getElementById('kalender-root'); if(!root) return;
     _bindTips(root);
     if(!_vChosen && _mobile()) V='liste';   // Handy: beim ersten Öffnen mit der Liste starten
-    const tabs=[['liste','Liste'],['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']];
+    if(V==='jahr' && _mobile()) V='monat';  // Handy: keine Jahresansicht (zu klein), stattdessen Monat
+    const tabs=[['liste','Liste'],['woche','Woche'],['monat','Monat'],['jahr','Jahr'],['konflikt','Konflikte']].filter(t=>!(t[0]==='jahr' && _mobile()));
     const _sc=_kr('kal_ansehen');
     if(_sc==='eigene') curTeam='@me';
     else if(_sc==='team' && (curTeam==='' || (curTeam!=='@me' && !_myTeams().includes(curTeam)))) curTeam=_myTeams()[0]||'@me';
     const emps=_emps(); const personal=curTeam==='@me';
     const kalCanManage=_kalAccess().anlegen;   // Recht „Termine anlegen" bzw. „Veranstaltungen anlegen"
-    const _tl=_sc==='team' ? _teamsOrdered(emps).filter(t=>_myTeams().includes(t)) : _teamsOrdered(emps);
+    const _allT=[...new Set(_teamsOrdered(emps).concat(...emps.map(_teamsOfU)))];
+    const _tl=_sc==='team' ? _allT.filter(t=>_myTeams().includes(t)) : _allT;
     const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>'].concat(_sc==='alle'?['<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>']:[])
       .concat(_sc==='eigene'?[]:_tl.map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=((window._planActive&&window.planBarHtml)?window.planBarHtml('kalender'):'')+`<div class="kal-wrap">
