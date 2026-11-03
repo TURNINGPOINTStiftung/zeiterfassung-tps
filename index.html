@@ -88,6 +88,7 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
       <button class="mb-menu" id="mb-menu-btn" onclick="toggleModuleMenu()" aria-label="Modul wechseln" title="Modul wechseln">☰</button>
       <div class="mb-dropdown" id="mb-dropdown" style="display:none">
         <button class="mb-mod" data-mod="start" onclick="switchModule('start')" style="display:none">🏠 Start</button>
+        <button class="mb-mod" data-mod="planung" onclick="switchModule('planung')" style="display:none">📅 Planung</button>
         <button class="mb-mod active" data-mod="zeiterfassung" onclick="switchModule('zeiterfassung')">Zeiterfassung</button>
         <button class="mb-mod" data-mod="website" onclick="switchModule('website')">Website</button>
         <button class="mb-mod" data-mod="forum" onclick="switchModule('forum')">Forum</button>
@@ -420,6 +421,10 @@ try{var _t=localStorage.getItem('tps_theme');if(_t==='dark'||_t==='light')docume
 
   <div id="mod-anleitung" class="mod-frame" style="display:none">
     <div id="anleitung-root"></div>
+  </div>
+
+  <div id="mod-planung" class="mod-frame" style="display:none">
+    <div id="planung-root"></div>
   </div>
 
   <div id="mod-verwaltung" class="mod-frame" style="display:none">

@@ -160,7 +160,7 @@ export function initApp(){
   setTimeout(function(){ try{ window.runAutoBackup&&window.runAutoBackup(); }catch(e){} }, 20000);
 }
 
-const MODULE_LABELS={start:'Start',zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',shop:'Lager',verwaltung:'Verwaltung'};
+const MODULE_LABELS={planung:'Planung',start:'Start',zeiterfassung:'Zeiterfassung',website:'Website',forum:'Forum',crm:'CRM',kanban:'Projektmanagement',verteiler:'Verteiler',ki:'KI',auswertung:'Auswertung',kalender:'Kalender',shop:'Lager',verwaltung:'Verwaltung'};
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display=(d.style.display==='none'||!d.style.display)?'block':'none'; }
@@ -168,6 +168,10 @@ export function closeModuleMenu(){ const d=document.getElementById('mb-dropdown'
 
 // Wechsel zwischen Modulen (Zeiterfassung / Website / Forum / CRM / Verwaltung)
 export function switchModule(name){
+  // Planung (js/planung.js) = gemeinsamer Bereich: von außen aufgerufen → Reiter wählen (Start/Kalender/Teams/Veranstaltung);
+  // planGo ruft für Kalender/Projektmanagement wieder switchModule auf (mit _planInternal). Jeder andere Wechsel verlässt die Planung.
+  if(name==='planung' && !window._planInternal && window.planGo){ window.planGo(window._planTab||'start'); return; }
+  if(!window._planInternal) window._planActive=false;
   window._activeModule=name;
   try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
   document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active',t.dataset.mod===name));
@@ -181,7 +185,7 @@ export function switchModule(name){
   // Projektmanagement + Verteiler sind eigene ☰-Pfade, nutzen aber denselben #mod-crm-Rahmen (gemeinsame CRM-Engine).
   const frame = (name==='kanban'||name==='verteiler') ? 'crm' : name;
   try{ document.body.classList.toggle('mod-start', name==='start'); }catch(e){}
-  ['website','forum','crm','auswertung','verwaltung','ki','kalender','shop','anleitung','start'].forEach(m=>{
+  ['website','forum','crm','auswertung','verwaltung','ki','kalender','shop','anleitung','start','planung'].forEach(m=>{
     const el=document.getElementById('mod-'+m);
     if(el) el.style.display=(frame===m)?'flex':'none';
   });
@@ -198,6 +202,7 @@ export function switchModule(name){
   if(name==='shop'){ try{ window.renderShop&&window.renderShop(); }catch(e){ console.error('Shop Render-Fehler (ignoriert):',e); } }
   if(name==='anleitung'){ try{ window.renderAnleitung&&window.renderAnleitung(); }catch(e){ console.error('Anleitung Render-Fehler (ignoriert):',e); } }
   if(name==='start'){ try{ window.renderHome&&window.renderHome(); }catch(e){ console.error('Startseite Render-Fehler (ignoriert):',e); } }
+  if(name==='planung'){ try{ window.renderPlanungStart&&window.renderPlanungStart(); }catch(e){ console.error('Planung Render-Fehler (ignoriert):',e); } }
   // Suche/Glocke der oberen Leiste ans aktive Modul angleichen (in CRM-Pfaden füllen, sonst leeren)
   try{ window.crmUpdateTopTools&&window.crmUpdateTopTools(); }catch(e){}
   // Mitteilungsleiste zeigt nur die Mitteilungen des offenen Bereichs

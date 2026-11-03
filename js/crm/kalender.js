@@ -117,7 +117,9 @@ function _workdaysBefore(iso,n){ const out=[iso]; let dt=_parse(iso); while(out.
 function _taskIssue(t, abs){
   if(t.due<_todayISO()) return 'überfällig seit '+_deDate(t.due);
   const ds=_workdaysBefore(t.due,2);
-  if((abs||[]).some(a=>a.emp===t.emp && ds.some(x=>overlap(a.von,a.bis,x,x)))) return _short(empName(t.emp))+' vor Fälligkeit abwesend';
+  if(t.emp && (abs||[]).some(a=>a.emp===t.emp && ds.some(x=>overlap(a.von,a.bis,x,x)))) return _short(empName(t.emp))+' vor Fälligkeit abwesend';
+  // Freigabe-Person (ÖA-Beitrag) am Fälligkeitstag oder am Vortag abwesend
+  if(t.frei){ const fd=[t.due, _iso(_addDays(_parse(t.due),-1))]; if((abs||[]).some(a=>a.emp===t.frei && fd.some(x=>overlap(a.von,a.bis,x,x)))) return 'Freigabe: '+_short(empName(t.frei))+' abwesend'; }
   return '';
 }
 function _dueMark(tasks, emp, iso, abs, col){
@@ -153,16 +155,19 @@ function _taskConflicts(scope, days, noFilter){
   const me=(window.cu&&window.cu.id)||''; const my=new Set(_myTeams()); const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
   const d=getData()||{}; const tOf={}; (d.users||[]).forEach(u=>{ if(u&&u.id) tOf[u.id]=[u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); });
   const abs=_abs(); const out=[];
-  all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt') return;
+  const vaMine=new Set(); try{ (listVeranstaltungen()||[]).forEach(v=>{ if(v&&Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me)) vaMine.add(v.id); }); }catch(e){}
+  all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt'||(Array.isArray(n.children)&&n.children.length)) return;
     const due=String(n.due).slice(0,10); if(due>until) return;
     const emp=n.assigneeId||''; const teams=a.teamsEff||[];
-    const inScope = scope==='alle' || emp===me || (scope==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || teams.some(t=>my.has(t))));
+    // „betrifft mich": mir zugewiesen, ich gebe frei, oder Aufgabe einer Veranstaltung, in der ich eingeplant bin
+    const mine = emp===me || n.freigabeId===me || (a.kind==='veranstaltung' && vaMine.has(a.containerId));
+    const inScope = scope==='alle' || mine || (scope==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || teams.some(t=>my.has(t))));
     if(!inScope) return;
     if(!noFilter && curTeam && curTeam!=='@me' && !((tOf[emp]||[]).includes(curTeam) || teams.includes(curTeam))) return;
-    if(!noFilter && curTeam==='@me' && emp!==me) return;
-    const t={ id:n.id, text:n.text||'Aufgabe', due, emp, kind:a.kind, cid:a.containerId, tree:a.tree, teams,
+    if(!noFilter && curTeam==='@me' && !mine) return;
+    const t={ id:n.id, text:n.text||'Aufgabe', due, emp, frei:n.freigabeId||'', kanal:n.kanal||'', kind:a.kind, cid:a.containerId, tree:a.tree, teams,
       src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:'') };
-    const is=emp ? _taskIssue(t, abs) : (due<today ? 'überfällig seit '+_deDate(due) : '');
+    const is=_taskIssue(t, abs);
     if(is) out.push(Object.assign(t, { issue:is, over:due<today }));
   });
   return out.sort((x,y)=>x.due<y.due?-1:x.due>y.due?1:String(x.text).localeCompare(String(y.text),'de'));
@@ -192,7 +197,8 @@ function _taskConflictSection(personal){
 function kalMyConflicts(days){
   const me=(window.cu&&window.cu.id)||''; if(!me || !_scope('kal_konflikte')) return { tasks:[], events:[] };
   days=days||28; const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
-  const tasks=_taskConflicts('eigene', days, true).map(t=>Object.assign(t, { issue:/vor Fälligkeit abwesend$/.test(t.issue)?'du bist vor der Frist abwesend':t.issue }));
+  const myShort=_short(empName(me));
+  const tasks=_taskConflicts('eigene', days, true).map(t=>Object.assign(t, { issue:(t.emp===me&&/vor Fälligkeit abwesend$/.test(t.issue))?'du bist vor der Frist abwesend':t.issue }));
   const myAbs=_abs().filter(a=>a.emp===me);
   const events=_events().concat(_termine()).filter(e=>(e.mitarbeiter||[]).includes(me) && (e.bis||e.von)>=today && e.von<=until && myAbs.some(a=>overlap(a.von,a.bis,e.von,e.bis||e.von)))
     .map(e=>({ typ:e.typ, id:e.id, tree:e.tree||'', eid:e.eid||'', titel:e.titel, von:e.von, bis:e.bis||e.von }));
@@ -295,6 +301,8 @@ function kalNewItem(){ window._crmModalReturn='kalender'; if(window.crmNewItem) 
 //  nutzen ohne CRM → kein Klick (nur Tooltip via data-tip bleibt)
 function _clk(it){
   const a=_kalAccess();
+  // In der Planung öffnet eine Veranstaltung ihre Seite (Aufgaben-Board, Vorlage) – gleicher Bereich, kein Fenster
+  if(window._planActive && it.typ==='va' && it.id && a.hasCrm) return { cls:' kal-clickable', on:' onclick="planVaSet('+jsq(it.id)+')"' };
   if(a.verwaltend){
     if(it.typ==='va' && it.id) return { cls:' kal-clickable', on:' onclick="kalOpenVeranstaltung('+jsq(it.id)+')"' };
     if(it.typ==='termin' && it.tree && it.eid) return { cls:' kal-clickable', on:' onclick="kalOpenTermin('+jsq(it.tree)+','+jsq(it.eid)+','+jsq(it.id)+')"' };
@@ -922,9 +930,9 @@ export function renderKalender(){
     const _tl=_sc==='team' ? _teamsOrdered(emps).filter(t=>_myTeams().includes(t)) : _teamsOrdered(emps);
     const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>'].concat(_sc==='alle'?['<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>']:[])
       .concat(_sc==='eigene'?[]:_tl.map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
-    root.innerHTML=`<div class="kal-wrap">
-      <div class="kal-h">📅 Kalender</div>
-      <p class="kal-sub">${personal?'Deine persönliche Ansicht: alle Veranstaltungen &amp; Termine (deine hervorgehoben) plus deine Abwesenheiten.':'Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.'}</p>
+    root.innerHTML=((window._planActive&&window.planBarHtml)?window.planBarHtml('kalender'):'')+`<div class="kal-wrap">
+      ${window._planActive?'':`<div class="kal-h">📅 Kalender</div>`}
+      <p class="kal-sub"${window._planActive?' style="display:none"':''}>${personal?'Deine persönliche Ansicht: alle Veranstaltungen &amp; Termine (deine hervorgehoben) plus deine Abwesenheiten.':'Veranstaltungen aus dem CRM gegen die Abwesenheiten aller Mitarbeiter — damit sichtbar ist, was passt und was kollidiert.'}</p>
       <div class="kal-bar">
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
@@ -951,7 +959,9 @@ let _vChosen=false;
 function kalSetView(v){ V=v; _vChosen=true; renderKalender(); }
 // Zurück-Taste (js/nav.js): Ansicht (Woche/Monat/Jahr/Konflikte) gehört zum „Ort" in der App
 try{ (window._navRegs=window._navRegs||{}).kalender={ get:()=>({v:V}), set:s=>{ if(s&&s.v){ V=s.v; _vChosen=true; } }, path:s=>s.v, parse:p=>({v:String(p).split('/')[0]}) }; }catch(e){}
-function kalSetTeam(t){ curTeam=t; renderKalender(); }
+function kalSetTeam(t){ curTeam=t; if(window._planActive && t!=='@me') window._planTeam=t; renderKalender(); }
+function kalSetTeamSilent(t){ curTeam=t||''; }   // Planung: gemeinsames Team übernehmen, ohne zu zeichnen
+function kalGotoDate(d){ try{ const dt=_parse(d); curY=dt.getFullYear(); curM=dt.getMonth()+1; weekStart=_mondayOf(dt); renderKalender(); }catch(e){} }
 function kalToday(){ const n=new Date(); curY=n.getFullYear(); curM=n.getMonth()+1; weekStart=_mondayOf(n); renderKalender();
   if(V==='liste') try{ const t=document.getElementById('kal-ag-today'); if(t) t.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} }
 function kalSetSaison(s){ curSaison=s; renderKalender(); }
@@ -1003,4 +1013,11 @@ function kalAboCopy(id){ const i=document.getElementById(id||'kal-abo-url'); if(
 
 Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
 Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
-Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts, kalOpenProjekt });
+// Hinweise zu EINER Aufgabe (für Teamseite/Redaktionsplan): [{lv:'crit'|'warn', t:Text}] – gleiche Regeln wie oben
+function kalTaskIssues(n){
+  const out=[]; if(!n||n.status==='erledigt') return out;
+  if(n.due){ const is=_taskIssue({ due:String(n.due).slice(0,10), emp:n.assigneeId||'', frei:n.freigabeId||'' }, _abs()); if(is) out.push({ lv:'crit', t:is }); }
+  if(n.kanal && n.bildrechte!==true && ['freigabe','geplant'].includes(n.phase)) out.push({ lv:'warn', t:'Bildrechte offen' });
+  return out;
+}
+Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts, kalOpenProjekt, kalSetTeamSilent, kalGotoDate, kalTaskIssues });

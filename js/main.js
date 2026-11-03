@@ -70,6 +70,7 @@ import './crm/crm.js';
 import './crm/auswertung.js';
 import './crm/ki.js';
 import './crm/kalender.js';
+import './planung.js';   // Planung: gemeinsamer Bereich Kalender + Projektmanagement (registriert window.planGo …)
 import './crm/shop.js';
 import { initAccessClaims } from './claims.js';   // Freigabe-Markierung (Custom Claim) für Storage
 import './anleitung.js';   // 📖 Anleitung (ANLEITUNG.md als eigener Bereich)
