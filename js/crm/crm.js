@@ -4285,6 +4285,7 @@ function paintTeamDetail(){
       <h2>👥 ${esc(team)}</h2>
     </div>
     ${tabs}
+    ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmRedSettings()">⚙ ÖA-Team festlegen</button></div>`:''}
     ${redTab ? oeaRedaktionHtml() : `${teamTaskSec}
     ${_view?vaSec:''}
     ${projektSec}`}
@@ -4305,7 +4306,8 @@ function oeaCfg(){
   const ablauf=(Array.isArray(c.oeaAblauf)&&c.oeaAblauf.filter(okAb).length>=2)?c.oeaAblauf.filter(okAb):OEA_ABLAUF_STD;
   const kanaele=(Array.isArray(c.oeaKanaele)&&c.oeaKanaele.filter(Boolean).length)?c.oeaKanaele.filter(Boolean).map(String):OEA_KANAELE_STD;
   let team=(typeof c.oeaTeam==='string'&&c.oeaTeam)?c.oeaTeam:'';
-  if(!team) team=zeTeams().find(t=>/^(ÖA|OEA|Öffentlichkeit)/i.test(String(t)))||'';
+  // Automatisch: Team mit „ÖA“/„Öffentlichkeit“ im Namen (z. B. „Marketing & Öffentlichkeitsarbeit“), sonst „Marketing“/„Kommunikation“
+  if(!team){ const ts=zeTeams().map(String); team=ts.find(t=>/(^|[^A-Za-zÄÖÜäöüß])(ÖA|OEA)([^A-Za-zÄÖÜäöüß]|$)|Öffentlichkeit/i.test(t)) || ts.find(t=>/Marketing|Kommunikation|Presse/i.test(t)) || ''; }
   return { ablauf, kanaele, team };
 }
 function oeaPhaseOf(n){
