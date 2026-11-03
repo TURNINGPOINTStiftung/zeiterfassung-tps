@@ -817,7 +817,7 @@ function userForm(u={}){
       <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
         <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
         <input type="date" id="uf-param-change-date" value="${localISODate().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Greift nur, wenn du unten einen Wert änderst. Vergangene Monate rechnen dann weiter mit den bisherigen Werten (SOLL & Überträge bleiben korrekt).</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Gilt ab dem Monatsersten dieses Datums für diesen und alle folgenden Monate; frühere Monate rechnen weiter mit den bisherigen Werten. Rückwirkend korrigieren: Datum zurücksetzen und speichern – auch wenn der Wert unten schon stimmt.</div>
         ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:12px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
       </div>
       <div class="uf-grid2">
@@ -1215,13 +1215,27 @@ export async function saveEditUser(id){
   // Gültig-ab bewahren, damit vergangene Monate weiter mit den damaligen Werten rechnen.
   const _pk=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
   const _pnorm=(k,v)=>k==='holidaysLikeSunday'?(v!==false?'1':'0'):(k==='sollWorkdays'?(v?'1':'0'):String(v??''));
-  const _pchg=existing&&_pk.some(k=>_pnorm(k,existing[k])!==_pnorm(k,u[k]));
-  if(existing&&_pchg){
-    const cd=document.getElementById('uf-param-change-date')?.value||(localISODate().slice(0,8)+'01');
-    let ph=Array.isArray(existing.paramHistory)?existing.paramHistory.slice():[];
-    if(!ph.length){ const base={fromDate:'2000-01-01'}; _pk.forEach(k=>base[k]=existing[k]); ph.push(base); } // Alt-Werte gelten "seit jeher"
-    const rec={fromDate:cd}; _pk.forEach(k=>rec[k]=u[k]);
-    ph=ph.filter(h=>h.fromDate!==cd); ph.push(rec);
+  // v534: Rückwirkende Änderungen gelten auch für SPÄTERE Verlaufseinträge (vorher überschrieb z. B. ein
+  // Eintrag „ab 01.07.“ mit den alten Stunden die neue Änderung „ab 01.05.“ → Wert sprang zurück).
+  // Stichtag = Monatserster (SOLL wird monatsweise berechnet; ein Datum mitten im Monat griff erst im Folgemonat).
+  const _cdDef=localISODate().slice(0,8)+'01';
+  const _cdIn=document.getElementById('uf-param-change-date')?.value||_cdDef;
+  const cd=/^\d{4}-\d{2}-\d{2}$/.test(_cdIn)?_cdIn.slice(0,8)+'01':_cdDef;
+  let ph=existing&&Array.isArray(existing.paramHistory)?existing.paramHistory.filter(h=>h&&h.fromDate).map(h=>Object.assign({},h)):[];
+  ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
+  const _atCd=k=>{ let b=null; for(const h of ph){ if(h.fromDate<=cd&&(!b||h.fromDate>b.fromDate)) b=h; } if(!b&&ph.length) b=ph[0]; return (b&&b[k]!==undefined)?b[k]:existing[k]; };
+  // Geändert = anders als bisher. Bei abweichendem Datum (rückwirkende Korrektur) zusätzlich: anders als im
+  // LETZTEN späteren Verlaufseintrag – bzw. ohne späteren Eintrag anders als am Stichtag. Zwischenstufen
+  // (z. B. Urlaub 6 → 12 ab Juli) bleiben so erhalten, wenn ihr Endwert dem Formular entspricht.
+  const _last=ph.filter(h=>h.fromDate>cd).pop()||null;
+  const _retro=k=>_last?(_last[k]!==undefined&&_pnorm(k,_last[k])!==_pnorm(k,u[k])):(_pnorm(k,_atCd(k))!==_pnorm(k,u[k]));
+  const _chg=new Set(existing?_pk.filter(k=>_pnorm(k,existing[k])!==_pnorm(k,u[k]) || (cd!==_cdDef && _retro(k))):[]);
+  if(existing&&_chg.size){
+    if(!ph.length){ const base={fromDate:'2000-01-01'}; _pk.forEach(k=>{ if(existing[k]!==undefined) base[k]=existing[k]; }); ph.push(base); } // Alt-Werte gelten "seit jeher"
+    const rec={fromDate:cd}; _pk.forEach(k=>{ const v=_chg.has(k)?u[k]:_atCd(k); if(v!==undefined) rec[k]=v; });
+    ph=ph.filter(h=>h.fromDate!==cd);
+    ph.forEach(h=>{ if(h.fromDate>cd) _chg.forEach(k=>{ if(u[k]!==undefined) h[k]=u[k]; }); });
+    ph.push(rec);
     ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
     u.paramHistory=ph;
   } else if(existing&&existing.paramHistory){
