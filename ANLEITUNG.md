@@ -319,19 +319,23 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
 - **Was ansteht:** deine offenen Aufgaben aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇 –
   getrennt nach **Überfällig**, **Diese Woche**, **Später**. Daneben **⚠ Hinweise** (was dich in den nächsten
   4 Wochen betrifft: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
-  eingeplant bist), **Meine Termine** (14 Tage) und **Wer ist diese Woche da?** (nur „Abwesend", nie der Grund).
+  eingeplant bist), **Meine Termine** (14 Tage) und **Wer ist diese Woche da?** (die Personen deiner Teams,
+  nur „Abwesend", nie der Grund).
 - **Kalender:** Woche/Monat mit **Fälligkeiten** (Zahl am Tag auf der Zeile der zuständigen Person, **rot** bei
   Konflikt: überfällig, Person am Tag oder an den 2 Arbeitstagen davor abwesend, oder Freigabe-Person am Tag/Vortag
-  abwesend). **Jahr** = die nächsten 12 Monate mit **Projekten** (Teamfarbe), Veranstaltungen und der
-  **Aufgabenlast je Team und Monat** (grün/gelb/rot nach Aufgaben je anwesender Person, darunter Abwesenheitstage).
+  abwesend). **Jahr** = die nächsten 12 Monate mit Veranstaltungen und Abwesenheiten (am Handy gibt es kein Jahr).
+  Im Kalender steht jede Person in ihrem **Hauptteam**.
   **Konflikte** = Aufgaben und Termine mit Konflikt („Betrifft mich / Meine Teams / Alle", 4 Wochen oder 3 Monate).
   Klick auf eine Veranstaltung öffnet ihre Seite im Reiter **Veranstaltung**.
-- **Teams:** Team-Leiste oben, darunter die Personen des Teams (Leitung, „+ anderes Team" für Gäste).
+- **Teams:** Team-Leiste oben, darunter die Personen des Teams (Leitung, „+ anderes Team" für Gäste). Wer in der
+  Verwaltung mehreren Teams zugeordnet ist, erscheint in jedem dieser Teams.
   **Übersicht** = offene Aufgaben des Teams (6 Wochen + ohne Frist, mit Hinweisen wie „vor Fälligkeit abwesend",
   „Team · niemand", „Bildrechte offen"), Veranstaltungen und Projekte. Eine Aufgabe gehört zu ihrem eigenen Team,
   sonst zum **federführenden** Team ihrer Veranstaltung bzw. ihres Projekts; beteiligte Teams sehen nur, was ihnen
   ausdrücklich zugeteilt ist.
-- **Redaktionsplan** (nur beim ÖA-Team): „Wer ist da" als Woche/Monat/Jahr, Kanal-Filter, Last je Woche
+- **Projektplan** (jedes Team): „Wer ist da" als Woche/Monat/Jahr mit den Aufgaben des Teams, Last je Woche und
+  das Board **Offen → In Arbeit → Erledigt** (Spalte per Auswahl ändern; Recht „Aufgaben bearbeiten und verschieben").
+- **Redaktionsplan** (beim ÖA-Team statt Projektplan): „Wer ist da" als Woche/Monat/Jahr, Kanal-Filter, Last je Woche
   (Beiträge zu anwesenden Personentagen) und das Board nach dem **ÖA-Ablauf** Idee → In Arbeit → Freigabe →
   Geplant → Veröffentlicht (Spalte per Auswahl ändern; der Status folgt automatisch). Aus „Freigabe" weiter darf
   nur, wer das Recht „Beiträge freigeben" hat, oder die eingetragene Freigabe-Person. „Anstehende Veranstaltungen
@@ -340,7 +344,8 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
 - **Veranstaltung:** Auswahl oben; Wann, Teams (federführend/beteiligt), beteiligte Einträge, Mitarbeitende;
   Aufgaben-Board mit „x offen · ohne Frist · niemand zuständig"; **Vorlage anwenden** mit Vorschau
   (Aufgabe, Spalte, Versatz, Team, → fällig). Fristen = Starttag + Versatz, zugewiesen wird niemand.
-- **Team-Projekte** können einen **Zeitraum** bekommen (Projekt ✎) – dann erscheinen sie im Kalender-Jahr.
+- **Team-Projekte** können einen **Zeitraum** bekommen (Projekt ✎) – er steht in der Team-Übersicht und im Jahr
+  des Projekt- bzw. Redaktionsplans.
 - Am **Handy** lassen sich Leisten und breite Tabellen seitlich wischen.
 
 ### Kalender & Abo in Outlook / am Handy
