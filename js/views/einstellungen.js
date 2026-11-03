@@ -1,9 +1,9 @@
-import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL } from '../config.js';
+import { DEFAULT_CATS, DEFAULT_TEAM_CATS, DEFAULT_PERMISSIONS, PW_FUNCTION_URL, MONTHS } from '../config.js';
 import { getData, getUser, mutate, getCustomRoles, _fk, STAMM_FIELDS } from '../data.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate, jsArg as jsq } from '../utils.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
-import { vacDailyMin, annualVacDays } from '../calc.js';
+import { vacDailyMin, annualVacDays, monthSOLL, effUserAt } from '../calc.js';
 
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
 // Schreibende Verwaltungs-Aktionen (Nutzer, Passwörter, Konten, Datenkorrekturen) nur noch
@@ -814,12 +814,8 @@ function userForm(u={}){
         <div class="form-group"><label>Austritt <span style="font-size:12px;color:var(--muted)">(letzter Arbeitstag, optional)</span></label><input id="uf-exit" type="date" value="${esc(u.exitDate||'')}" oninput="ufAutoAdjust()"></div>
       </div>
       <div id="uf-vac-info" style="font-size:12px;color:var(--primary);background:#eef3fb;border-radius:6px;padding:6px 10px;margin:-4px 0 10px;display:none"></div>
-      <div class="form-group" style="background:rgba(0,0,0,.03);padding:8px 10px;border-radius:6px">
-        <label style="font-size:12px">Änderungen an Stunden / Urlaub / Rolle gültig ab</label>
-        <input type="date" id="uf-param-change-date" value="${localISODate().slice(0,8)}01" style="max-width:160px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Gilt ab dem Monatsersten dieses Datums für diesen und alle folgenden Monate; frühere Monate rechnen weiter mit den bisherigen Werten. Rückwirkend korrigieren: Datum zurücksetzen und speichern – auch wenn der Wert unten schon stimmt.</div>
-        ${(()=>{ const ph=Array.isArray(u.paramHistory)?u.paramHistory:[]; if(!ph.length) return ''; const rows=ph.slice().sort((a,b)=>a.fromDate<b.fromDate?1:-1).map(h=>`<div style="font-size:12px;color:var(--muted);padding:2px 0">ab ${esc(h.fromDate)}: ${h.wh??'?'} h/Wo · ${h.dpw??'?'} Tage/Wo · ${h.al??'?'} Urlaubstage${h.role?' · '+esc(h.role):''}</div>`).join(''); return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">📁 Parameter-Verlauf (${ph.length})</summary>${rows}</details>`; })()}
-      </div>
+      ${u.id?_ufPInit(u):''}
+      <div id="uf-param-inputs"${u.id?' style="display:none"':''}>
       <div class="uf-grid2">
         <div class="form-group"><label>Wochenarbeitszeit (h)</label><input id="uf-wh" type="number" min="1" max="60" value="${esc(u.wh||20)}" data-orig="${esc(u.wh||20)}" oninput="ufAutoAdjust('wh')"></div>
         <div class="form-group"><label>Arbeitstage / Woche</label><input id="uf-dpw" type="number" min="1" max="7" value="${esc(u.dpw||5)}" data-orig="${esc(u.dpw||5)}" oninput="ufAutoAdjust('dpw')"></div>
@@ -830,6 +826,7 @@ function userForm(u={}){
           <input id="uf-vhpd" type="number" min="1" max="24" step="0.5" value="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" data-orig="${esc(u.vacHoursPerDay||Math.round(vacDailyMin(u)/60*10)/10)}" oninput="this.dataset.touched='1'">
         </div>
       </div>
+      </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-allowhalf" ${u.allowHalfVac!==false?' checked':''} style="width:auto;cursor:pointer">
@@ -839,15 +836,16 @@ function userForm(u={}){
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
-          Feiertage = kein SOLL / kein Urlaubsabzug
+          Feiertage zählen nicht zum Soll und kosten keinen Urlaubstag
         </label>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Aus: Feiertage an Arbeitstagen müssen gearbeitet bzw. mit Urlaub belegt werden.${u.id?' Eine Änderung gilt ab diesem Monat.':''}</div>
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-sollwd"${u.sollWorkdays?' checked':''} style="width:auto;cursor:pointer">
           SOLL arbeitstaggenau berechnen <span style="font-size:12px;color:var(--muted)">(statt pauschal 4× Wochenstunden)</span>
         </label>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.${u.id?' '+_ufSollExample(u)+' Eine Änderung gilt ab diesem Monat.':''}</div>
       </div>
       <div id="uf-werkstudent-fields" data-haslecture="${((Array.isArray(u.lecturePeriods)&&u.lecturePeriods.length)||(Array.isArray(u.lectureFreeDays)&&u.lectureFreeDays.length))?'1':''}" style="display:none">
         <div class="uf-section-head">🎓 Werkstudent – Vorlesungszeiten</div>
@@ -977,6 +975,169 @@ export function _resolveUfRole(){
 //  • Stunden oder Tage geändert → „Stunden/Urlaubstag" mitziehen, WENN er bisher genau dem
 //    Tagessoll (Std/Tage) entsprach (bei Teilzeit mit festen 8 h bleibt er unverändert).
 //  • Anzeige des anteiligen Urlaubsanspruchs bei Eintritt/Austritt im Jahr.
+// ── Arbeitszeit & Urlaub: eigener Verlauf je Wert (v535) ─────────────────────────────
+// Verlauf (Strang) eines Werts = [{from:'YYYY-MM-01', v}] – nur echte Wechsel, aufsteigend.
+// Änderungen im Dialog sammeln sich in _ufPE und werden erst mit „Speichern“ geschrieben.
+const _UF_PKEYS=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
+const _UF_ROWKEYS=['wh','dpw','al','vacHoursPerDay'];
+const _UF_ROWLBL={wh:'Wochenarbeitszeit',dpw:'Arbeitstage pro Woche',al:'Jahresurlaub',vacHoursPerDay:'Stunden je Urlaubstag'};
+let _ufPE=null;   // {uid, strands:{k:[...]}, open:k|null}
+function _ufPn(k,v){
+  if(k==='holidaysLikeSunday') return v!==false?'1':'0';
+  if(k==='sollWorkdays') return v?'1':'0';
+  if(k==='maxHours'||k==='vacHoursPerDay') return String(Number(v)||0);
+  return String(v??'');
+}
+function _ufCollapse(k,s){
+  const a=s.slice().sort((x,y)=>x.from<y.from?-1:x.from>y.from?1:0), out=[];
+  a.forEach(e=>{ if(out.length&&out[out.length-1].from===e.from){ out[out.length-1]=e; return; }
+    if(!out.length||_ufPn(k,out[out.length-1].v)!==_ufPn(k,e.v)) out.push(e); });
+  return out;
+}
+function _ufStrand(user,k){
+  const ph=(Array.isArray(user&&user.paramHistory)?user.paramHistory:[]).filter(h=>h&&h.fromDate&&h[k]!==undefined);
+  const s=_ufCollapse(k,ph.map(h=>({from:h.fromDate,v:h[k]})));
+  return s.length?s:[{from:'2000-01-01',v:user?user[k]:undefined}];
+}
+function _ufValAt(s,date){ let b=null; for(const e of s){ if(e.from<=date) b=e; } return (b||s[0]||{}).v; }
+function _ufSetFrom(k,s,from,v,replaceLater){
+  const n=s.filter(e=>e.from!==from&&!(replaceLater&&e.from>from)); n.push({from,v});
+  return _ufCollapse(k,n);
+}
+function _ufBuildHistory(strands){
+  const by={};
+  Object.keys(strands).forEach(k=>(strands[k]||[]).forEach(e=>{ if(e.v===undefined||e.v===null) return; (by[e.from]=by[e.from]||{fromDate:e.from})[k]=e.v; }));
+  return Object.keys(by).sort().map(d=>by[d]);
+}
+function _ufMonLbl(from){ return from<='2000-01-01'?'seit jeher':`seit ${MONTHS[Number(from.slice(5,7))-1]} ${from.slice(0,4)}`; }
+function _ufShort(from){ return from<='2000-01-01'?'Anfang':`${from.slice(5,7)}/${from.slice(0,4)}`; }
+// Person mit den (ggf. geänderten) Verläufen – für Anzeige und Vorschau
+function _ufPUser(strands){
+  const ex=getUser(_ufPE&&_ufPE.uid)||{}; const st=Object.assign({},strands||(_ufPE&&_ufPE.strands)||{});
+  _UF_PKEYS.forEach(k=>{ if(!st[k]) st[k]=_ufStrand(ex,k); });
+  const u=Object.assign({},ex,{paramHistory:_ufBuildHistory(st)});
+  const cur=localISODate().slice(0,8)+'01'; _UF_ROWKEYS.forEach(k=>{ const v=_ufValAt(st[k],cur); if(v!==undefined) u[k]=v; });
+  return u;
+}
+function _ufFmt(k,v,user){
+  if(v===undefined||v===null||v===''||(k==='vacHoursPerDay'&&!Number(v))) return k==='vacHoursPerDay'?`${Math.round(vacDailyMin(user)/60*10)/10} h (automatisch)`:'–';
+  return k==='wh'||k==='vacHoursPerDay'?`${String(v).replace('.',',')} h`:`${String(v).replace('.',',')} Tage`;
+}
+function _ufH(min){ return (Math.round(min/6)/10).toLocaleString('de-DE'); }
+function _ufSollExample(u){
+  try{ const now=new Date(), y=now.getFullYear(), m=now.getMonth()+1; const eu=effUserAt(u,y,m);
+    const a=monthSOLL(Object.assign({},u,{paramHistory:null},eu,{sollWorkdays:false}),y,m), b=monthSOLL(Object.assign({},u,{paramHistory:null},eu,{sollWorkdays:true}),y,m);
+    return `Beispiel ${MONTHS[m-1]}: aus = ${_ufH(a)} h, an = ${_ufH(b)} h.`; }catch(e){ return ''; }
+}
+function _ufPInit(u){
+  _ufPE={uid:u.id, strands:{}, open:null};
+  return `<div id="uf-prows">${_ufPRowsHtml()}</div>`;
+}
+function _ufPRowsHtml(){
+  if(!_ufPE) return '';
+  const pu=_ufPUser(), cur=localISODate().slice(0,8)+'01', now=new Date(), y=now.getFullYear(), m=now.getMonth()+1;
+  const rows=_UF_ROWKEYS.map(k=>{
+    const s=(_ufPE.strands[k]||_ufStrand(getUser(_ufPE.uid)||{},k));
+    const curE=s.filter(e=>e.from<=cur).pop()||s[0];
+    let sub='';
+    if(k==='wh'){ try{ sub=`= ${_ufH(monthSOLL(pu,y,m))} h Soll im ${MONTHS[m-1]}`; }catch(e){} }
+    if(k==='al'){ try{ const a=annualVacDays(pu,y); if(Number(a)!==Number(curE.v)) sub=`Anspruch ${y}: ${String(a).replace('.',',')} Tage`; }catch(e){} }
+    const fut=s.filter(e=>e.from>cur);
+    const since=curE?_ufMonLbl(curE.from):'';
+    const chg=!!_ufPE.strands[k];
+    const hist=s.length>1?`<div style="font-size:12px;color:var(--muted);margin-top:4px">Verlauf: ${s.map((e,i)=>`<span style="display:inline-block;background:var(--surface-2,rgba(0,0,0,.05));border-radius:6px;padding:1px 6px;margin:2px 4px 2px 0">${i===0?'':'ab '+_ufShort(e.from)+': '}${esc(_ufFmt(k,e.v,pu))}${i>0?` <a href="#" title="Diesen Wechsel entfernen" style="color:var(--danger,#b91c1c);text-decoration:none" onclick="event.preventDefault();ufPDel(${jsq(k)},${jsq(e.from)})">✕</a>`:''}</span>`).join('')}</div>`:'';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1 1 150px;font-size:13px;color:var(--muted)">${esc(_UF_ROWLBL[k])}</div>
+        <div style="flex:2 1 200px"><b>${esc(_ufFmt(k,curE&&curE.v,pu))}</b> <span style="font-size:12px;color:var(--muted)">${esc(sub)}${sub?' · ':''}${esc(since)}${fut.length?' · geplant: '+fut.map(e=>esc(_ufFmt(k,e.v,pu))+' ab '+_ufShort(e.from)).join(', '):''}${chg?' · <b style="color:var(--warn,#b45309)">geändert – wird mit „Speichern“ übernommen</b>':''}</span></div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="ufPOpen(${jsq(k)})">Ändern</button>
+      </div>${hist}
+      <div id="uf-pe-${k}">${_ufPE.open===k?_ufPEditorHtml(k):''}</div>
+    </div>`;
+  }).join('');
+  return `<div style="font-size:12px;color:var(--muted);margin:-2px 0 4px">Jeder Wert hat seinen eigenen Verlauf – eine Änderung betrifft nur diesen Wert.</div>${rows}<div style="height:10px"></div>`;
+}
+function _ufRerender(){ const el=document.getElementById('uf-prows'); if(el) el.innerHTML=_ufPRowsHtml(); }
+function _ufPEditorHtml(k){
+  const s=_ufPE.strands[k]||_ufStrand(getUser(_ufPE.uid)||{},k);
+  const cur=localISODate().slice(0,8)+'01', now=new Date(), cy=now.getFullYear();
+  const v0=_ufValAt(s,cur);
+  const ys=[]; for(let y=cy-3;y<=cy+1;y++) ys.push(y);
+  const step=k==='dpw'?'1':'0.5', max=k==='wh'?'60':(k==='dpw'?'7':(k==='al'?'60':'24'));
+  return `<div style="margin-top:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface-2,rgba(0,0,0,.02))">
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px">${esc(_UF_ROWLBL[k])} ändern</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><div style="font-size:12px;color:var(--muted)">Neuer Wert</div><input id="uf-pe-v" type="number" min="0" max="${max}" step="${step}" value="${esc(v0==null||(k==='vacHoursPerDay'&&!Number(v0))?'':v0)}" style="width:110px" oninput="ufPPreview(${jsq(k)})"></div>
+      <div><div style="font-size:12px;color:var(--muted)">Gilt ab</div>
+        <select id="uf-pe-m" onchange="ufPPreview(${jsq(k)})" style="width:auto">${MONTHS.map((n,i)=>`<option value="${i+1}"${i===now.getMonth()?' selected':''}>${n}</option>`).join('')}</select>
+        <select id="uf-pe-y" onchange="ufPPreview(${jsq(k)})" style="width:auto">${ys.map(y=>`<option${y===cy?' selected':''}>${y}</option>`).join('')}</select></div>
+    </div>
+    <div id="uf-pe-prev" style="margin-top:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn btn-outline btn-sm" onclick="ufPClose()">Abbrechen</button>
+      <button type="button" class="btn btn-ok btn-sm" onclick="ufPApply(${jsq(k)})">Übernehmen</button>
+    </div></div>`;
+}
+function _ufPRead(k){
+  const vRaw=document.getElementById('uf-pe-v')?.value;
+  const v=k==='dpw'?parseInt(vRaw,10):parseFloat(String(vRaw||'').replace(',','.'));
+  const mm=Number(document.getElementById('uf-pe-m')?.value||1), yy=Number(document.getElementById('uf-pe-y')?.value||new Date().getFullYear());
+  return { v, ok:!isNaN(v)&&v>=(k==='al'?0:(k==='vacHoursPerDay'?0:1)), from:`${yy}-${String(mm).padStart(2,'0')}-01`, later:!!document.getElementById('uf-pe-later')?.checked, y:yy, m:mm };
+}
+export function ufPOpen(k){ if(!_ufPE) return; _ufPE.open=k; _ufRerender(); ufPPreview(k); }
+export function ufPClose(){ if(!_ufPE) return; _ufPE.open=null; _ufRerender(); }
+export function ufPDel(k,from){
+  if(!_ufPE) return;
+  const s=(_ufPE.strands[k]||_ufStrand(getUser(_ufPE.uid)||{},k)).filter(e=>e.from!==from);
+  if(!s.length) return;
+  _ufPE.strands[k]=_ufCollapse(k,s); _ufRerender();
+}
+export function ufPPreview(k){
+  const box=document.getElementById('uf-pe-prev'); if(!box||!_ufPE) return;
+  const r=_ufPRead(k);
+  if(!r.ok){ box.innerHTML='<div style="font-size:12px;color:var(--danger,#b91c1c)">Bitte einen gültigen Wert eingeben.</div>'; return; }
+  const s0=_ufPE.strands[k]||_ufStrand(getUser(_ufPE.uid)||{},k);
+  const later=s0.filter(e=>e.from>r.from);
+  const keepLaterBox=document.getElementById('uf-pe-later');
+  const replaceLater=keepLaterBox?keepLaterBox.checked:true;
+  const s1=_ufSetFrom(k,s0,r.from,r.v,replaceLater);
+  const before=_ufPUser(), after=_ufPUser(Object.assign({},_ufPE.strands,{[k]:s1}));
+  const now=new Date(), cy=now.getFullYear(), cm=now.getMonth()+1;
+  const L=[];
+  const oldV=_ufValAt(s0,r.from);
+  if(_ufPn(k,oldV)===_ufPn(k,r.v)&&!(replaceLater&&later.length)) L.push(`Ab ${MONTHS[r.m-1]} ${r.y} gilt bereits ${esc(_ufFmt(k,r.v,after))} – keine Änderung.`);
+  else L.push(`Ab ${MONTHS[r.m-1]} ${r.y}: <b>${esc(_ufFmt(k,r.v,after))}</b> statt ${esc(_ufFmt(k,oldV,before))}.`);
+  if(r.y*100+r.m>cy*100+cm) L.push('Liegt in der Zukunft – bis dahin gilt der bisherige Wert.');
+  // Auswirkung auf das Soll (bis einschließlich laufendem Monat)
+  if(k==='wh'||k==='dpw'){
+    const diff=[]; let y=r.y, m=r.m, n=0, tot=0;
+    while(y*100+m<=cy*100+cm && n<36){ const a=monthSOLL(before,y,m), b=monthSOLL(after,y,m); if(a!==b){ diff.push({y,m,a,b}); tot+=b-a; } n++; m++; if(m>12){m=1;y++;} }
+    if(diff.length){
+      const same=diff.every(d=>d.a===diff[0].a&&d.b===diff[0].b);
+      L.push(same?`Soll ${diff.length>1?`${MONTHS[diff[0].m-1]} ${diff[0].y} – ${MONTHS[diff[diff.length-1].m-1]} ${diff[diff.length-1].y}`:`${MONTHS[diff[0].m-1]} ${diff[0].y}`}: <b>${_ufH(diff[0].b)} h statt ${_ufH(diff[0].a)} h</b> pro Monat.`
+        :`Soll ändert sich in ${diff.length} Monat(en), zusammen ${tot>0?'+':''}${_ufH(tot)} h.`);
+      const d=getData()||{}, ent=d.entries||{};
+      const sub=diff.filter(x=>{ const e=ent[`${_ufPE.uid}_${x.y}_${String(x.m).padStart(2,'0')}`]; return e&&(e.status==='submitted'||e.status==='approved'); });
+      if(sub.length) L.push(`⚠ ${sub.map(x=>MONTHS[x.m-1].slice(0,3)+' '+x.y).join(', ')} ${sub.length>1?'sind':'ist'} schon eingereicht/genehmigt – der Stundenübertrag ändert sich (${(()=>{ const t=sub.reduce((s,x)=>s+x.b-x.a,0); return (t>0?'+':'')+_ufH(t); })()} h).`);
+    } else if(r.y*100+r.m<=cy*100+cm) L.push(k==='dpw'?'Das Soll ändert sich dadurch nicht (pauschal 4 × Wochenstunden).':'Das Soll ändert sich dadurch nicht.');
+  }
+  if(k==='al'){ const yrs=[]; for(let y=r.y;y<=Math.max(cy,r.y);y++){ const a=annualVacDays(before,y), b=annualVacDays(after,y); if(a!==b) yrs.push(`${y}: ${String(b).replace('.',',')} statt ${String(a).replace('.',',')} Tage`); } if(yrs.length) L.push('Urlaubsanspruch '+yrs.join(' · ')+'.'); }
+  if(k==='vacHoursPerDay') L.push('Urlaubstage ab diesem Monat werden mit dem neuen Wert angerechnet.');
+  L.push('Andere Werte bleiben unverändert.');
+  const laterHtml=later.length?`<label style="display:flex;gap:6px;align-items:flex-start;font-size:12px;margin-top:6px;cursor:pointer"><input type="checkbox" id="uf-pe-later" ${replaceLater?'checked':''} style="width:auto" onchange="ufPPreview(${jsq(k)})"> Spätere Änderungen dieses Werts (${later.map(e=>esc(_ufFmt(k,e.v,before))+' ab '+_ufShort(e.from)).join(', ')}) ersetzen</label>`:'';
+  box.innerHTML=`<div style="background:var(--warn-bg,#fef3c7);color:var(--warn-text,#92400e);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.6">${L.join('<br>')}</div>${laterHtml}`;
+}
+export function ufPApply(k){
+  if(!_ufPE) return;
+  const r=_ufPRead(k);
+  if(!r.ok){ toast('Bitte einen gültigen Wert eingeben.','err'); return; }
+  const s0=_ufPE.strands[k]||_ufStrand(getUser(_ufPE.uid)||{},k);
+  const lb=document.getElementById('uf-pe-later');
+  _ufPE.strands[k]=_ufSetFrom(k,s0,r.from,r.v,lb?lb.checked:true);
+  _ufPE.open=null; _ufRerender();
+}
+window.ufPOpen=ufPOpen; window.ufPClose=ufPClose; window.ufPDel=ufPDel; window.ufPPreview=ufPPreview; window.ufPApply=ufPApply;
+
 export function ufAutoAdjust(src){
   const $=id=>document.getElementById(id);
   const wh=$('uf-wh'), dpw=$('uf-dpw'), al=$('uf-al'), vh=$('uf-vhpd'); if(!wh||!dpw||!al) return;
@@ -1211,33 +1372,23 @@ export async function saveEditUser(id){
   } else {
     delete u.teamHistory;   // NIE undefined setzen – Firebase .update() wirft sonst
   }
-  // Parameter-Historie: bei Änderung von Stunden/Urlaub/Rolle etc. die ALTEN Werte mit
-  // Gültig-ab bewahren, damit vergangene Monate weiter mit den damaligen Werten rechnen.
-  const _pk=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
-  const _pnorm=(k,v)=>k==='holidaysLikeSunday'?(v!==false?'1':'0'):(k==='sollWorkdays'?(v?'1':'0'):String(v??''));
-  // v534: Rückwirkende Änderungen gelten auch für SPÄTERE Verlaufseinträge (vorher überschrieb z. B. ein
-  // Eintrag „ab 01.07.“ mit den alten Stunden die neue Änderung „ab 01.05.“ → Wert sprang zurück).
-  // Stichtag = Monatserster (SOLL wird monatsweise berechnet; ein Datum mitten im Monat griff erst im Folgemonat).
-  const _cdDef=localISODate().slice(0,8)+'01';
-  const _cdIn=document.getElementById('uf-param-change-date')?.value||_cdDef;
-  const cd=/^\d{4}-\d{2}-\d{2}$/.test(_cdIn)?_cdIn.slice(0,8)+'01':_cdDef;
-  let ph=existing&&Array.isArray(existing.paramHistory)?existing.paramHistory.filter(h=>h&&h.fromDate).map(h=>Object.assign({},h)):[];
-  ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
-  const _atCd=k=>{ let b=null; for(const h of ph){ if(h.fromDate<=cd&&(!b||h.fromDate>b.fromDate)) b=h; } if(!b&&ph.length) b=ph[0]; return (b&&b[k]!==undefined)?b[k]:existing[k]; };
-  // Geändert = anders als bisher. Bei abweichendem Datum (rückwirkende Korrektur) zusätzlich: anders als im
-  // LETZTEN späteren Verlaufseintrag – bzw. ohne späteren Eintrag anders als am Stichtag. Zwischenstufen
-  // (z. B. Urlaub 6 → 12 ab Juli) bleiben so erhalten, wenn ihr Endwert dem Formular entspricht.
-  const _last=ph.filter(h=>h.fromDate>cd).pop()||null;
-  const _retro=k=>_last?(_last[k]!==undefined&&_pnorm(k,_last[k])!==_pnorm(k,u[k])):(_pnorm(k,_atCd(k))!==_pnorm(k,u[k]));
-  const _chg=new Set(existing?_pk.filter(k=>_pnorm(k,existing[k])!==_pnorm(k,u[k]) || (cd!==_cdDef && _retro(k))):[]);
-  if(existing&&_chg.size){
-    if(!ph.length){ const base={fromDate:'2000-01-01'}; _pk.forEach(k=>{ if(existing[k]!==undefined) base[k]=existing[k]; }); ph.push(base); } // Alt-Werte gelten "seit jeher"
-    const rec={fromDate:cd}; _pk.forEach(k=>{ const v=_chg.has(k)?u[k]:_atCd(k); if(v!==undefined) rec[k]=v; });
-    ph=ph.filter(h=>h.fromDate!==cd);
-    ph.forEach(h=>{ if(h.fromDate>cd) _chg.forEach(k=>{ if(u[k]!==undefined) h[k]=u[k]; }); });
-    ph.push(rec);
-    ph.sort((a,b)=>a.fromDate<b.fromDate?-1:1);
-    u.paramHistory=ph;
+  // Parameter-Verlauf (v535): JEDER Wert hat seinen eigenen Verlauf (siehe calc.js effUserAt).
+  // Stunden, Tage, Urlaub, Std/Urlaubstag ändert der Dialog über „Ändern“ (Wert + ab Monat, _ufPE).
+  // Direkt im Formular geänderte Werte (Rolle, Bundesland, Schalter, Limit) gelten ab diesem Monat.
+  const _pe=(_ufPE&&_ufPE.uid===id)?_ufPE.strands:{};
+  const _cur=localISODate().slice(0,8)+'01';
+  const _strands={}; let _anyP=Object.keys(_pe).length>0;
+  if(existing){
+    _UF_PKEYS.forEach(k=>{
+      _strands[k]=_pe[k]||_ufStrand(existing,k);
+      if(_pe[k]||_UF_ROWKEYS.includes(k)) return;
+      if(_ufPn(k,existing[k])!==_ufPn(k,u[k])){ _strands[k]=_ufSetFrom(k,_strands[k],_cur,u[k],false); _anyP=true; }
+    });
+  }
+  if(existing&&_anyP){
+    u.paramHistory=_ufBuildHistory(_strands);
+    // Gespeicherte Werte = die im LAUFENDEN Monat gültigen (eine Änderung ab einem künftigen Monat greift erst dann)
+    _UF_ROWKEYS.forEach(k=>{ const v=_ufValAt(_strands[k],_cur); if(v!==undefined&&v!==null&&v!=='') u[k]=v; });
   } else if(existing&&existing.paramHistory){
     u.paramHistory=existing.paramHistory;
   } else {

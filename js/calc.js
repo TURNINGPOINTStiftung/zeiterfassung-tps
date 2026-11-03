@@ -70,21 +70,28 @@ export function vacDailyMin(user){
 export function _isAZADay(dd){ return !!(dd&&(dd.b1zuord==='Arbeitszeitausgleich'||dd.b1bem==='Arbeitszeitausgleich')); }
 
 // Historische Parameter: liefert den User mit den Werten, die im Monat (y,m) GALTEN.
-// user.paramHistory=[{fromDate:'YYYY-MM-DD', wh,dpw,al,vacHoursPerDay,role,sollWorkdays,holidaysLikeSunday,bundesland,maxHours}]
-// Ohne Historie (oder Monat vor dem ersten Eintrag → frühester Eintrag) wird der aktuelle User
-// zurückgegeben. So rechnen vergangene Monate mit den DAMALIGEN Werten statt rückwirkend mit den heutigen.
+// user.paramHistory=[{fromDate:'YYYY-MM-DD', <nur die Werte, die sich an diesem Tag ändern>}]
+// v535: JEDER Wert hat seinen eigenen Verlauf – je Wert gilt der letzte Eintrag (fromDate ≤ Monat), der
+// DIESEN Wert enthält. Ein späterer Eintrag nur für den Urlaub lässt die Stunden also unberührt.
+// Alte Einträge mit allen Werten (Gesamtpaket) rechnen damit genauso wie bisher.
+// Monat vor dem ersten Eintrag eines Werts → frühester Eintrag dieses Werts; ohne Eintrag → aktueller Wert.
 export const _PARAM_KEYS=['wh','dpw','al','vacHoursPerDay','role','sollWorkdays','holidaysLikeSunday','bundesland','maxHours'];
 export function effUserAt(user,y,m){
   const hist=user&&Array.isArray(user.paramHistory)?user.paramHistory:null;
   if(!hist||!hist.length||!y||!m) return user;
   const key=`${y}-${String(m).padStart(2,'0')}-01`;
-  let best=null;
-  for(const h of hist){ if(h&&h.fromDate&&h.fromDate<=key&&(!best||h.fromDate>best.fromDate)) best=h; }
-  if(!best){ for(const h of hist){ if(h&&h.fromDate&&(!best||h.fromDate<best.fromDate)) best=h; } } // vor 1. Eintrag → frühester
-  if(!best) return user;
-  const clone=Object.assign({},user);
-  _PARAM_KEYS.forEach(k=>{ if(best[k]!==undefined) clone[k]=best[k]; });
-  return clone;
+  let clone=null;
+  _PARAM_KEYS.forEach(k=>{
+    let best=null, first=null;
+    for(const h of hist){
+      if(!h||!h.fromDate||h[k]===undefined) continue;
+      if(h.fromDate<=key&&(!best||h.fromDate>best.fromDate)) best=h;
+      if(!first||h.fromDate<first.fromDate) first=h;
+    }
+    const b=best||first;
+    if(b){ if(!clone) clone=Object.assign({},user); clone[k]=b[k]; }
+  });
+  return clone||user;
 }
 
 // ── Beschäftigungszeitraum (Eintritt / Austritt) ─────────────────────────────────
