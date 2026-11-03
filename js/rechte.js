@@ -43,6 +43,8 @@ export const RECHTE = [
     { k:'kal_va',          nr:'2.7', label:'Veranstaltungen anlegen/bearbeiten' },
     { k:'kal_va_loeschen', nr:'2.8', label:'Veranstaltungen löschen' },
     { k:'kal_abo',         nr:'2.9', label:'Kalender-Abo (Outlook)' },
+    { k:'kal_faellig',     nr:'2.10', label:'Fälligkeiten anderer sehen', opts:[['alle','alle'],['team','eigenes Team'],['eigene','nur eigene']] },
+    { k:'kal_konflikte',   nr:'2.11', label:'Konflikte sehen', opts:[['alle','alle'],['team','eigene Teams'],['eigene','nur was mich betrifft']] },
   ]},
   { area:'kanban', icon:'🗂️', label:'Projektmanagement', items:[
     { k:'pm_ansehen',       nr:'3.1', label:'Boards sehen', opts:[['teams','eigene Teams'],['alle','alle']] },
@@ -90,6 +92,7 @@ const TEAM = {
   crm_ansehen:'alle', crm_anlegen:true, crm_stamm:true, crm_personen:true, crm_notizen:true, crm_notizen_fremd:true,
   crm_aufgaben:true, crm_termine:true, crm_statistik:true, crm_foerder:true, crm_koop:true, crm_dateien:true,
   kal_ansehen:'alle', kal_abw:true, kal_eigene:true, kal_zuweisen:true, kal_fremde:true, kal_loeschen:'eigene', kal_va:true, kal_abo:true,
+  kal_faellig:'team', kal_konflikte:'eigene',
   pm_ansehen:'teams', pm_aufg_bearb:true, pm_aufg_neu:true, pm_proj_eigen:true,
   vt_nutzen:true, vt_eintragen:true, vt_anlegen:true,
   me_formular:true, me_liste:true, me_uebertragen:true,
@@ -97,7 +100,7 @@ const TEAM = {
 };
 const LEITUNG = Object.assign({}, TEAM, {
   crm_loeschen:true, crm_notiz_purge:true, crm_export:true,
-  kal_loeschen:'alle', kal_va_loeschen:true,
+  kal_loeschen:'alle', kal_va_loeschen:true, kal_konflikte:'team',
   pm_ansehen:'alle', pm_proj_team:true, pm_proj_loeschen:true,
   vt_import:true, vt_loeschen:true, vt_export:true,
   me_eintrag_loeschen:true, me_va:true, me_va_loeschen:true,
@@ -107,7 +110,7 @@ export const VORLAGEN = [
   { key:'team',       label:'Team',          hint:'überall ansehen, anlegen und bearbeiten – nichts löschen, keine Einstellungen', vals:_pick(TEAM) },
   { key:'leitung',    label:'Leitung',       hint:'wie Team, zusätzlich löschen, Team-Projekte, Messe-Veranstaltungen', vals:_pick(LEITUNG) },
   { key:'verwaltung', label:'Verwaltung',    hint:'alles', vals:_all(true) },
-  { key:'lesen',      label:'Nur lesen',     hint:'überall nur ansehen', vals:_pick({ crm_ansehen:'alle', kal_ansehen:'alle', kal_abw:true, kal_abo:true, pm_ansehen:'teams', vt_nutzen:true, la_ansehen:true }) },
+  { key:'lesen',      label:'Nur lesen',     hint:'überall nur ansehen', vals:_pick({ crm_ansehen:'alle', kal_ansehen:'alle', kal_abw:true, kal_abo:true, kal_faellig:'team', kal_konflikte:'eigene', pm_ansehen:'teams', vt_nutzen:true, la_ansehen:true }) },
   { key:'verein',     label:'Verein (extern)', hint:'nur den eigenen Verein: Personen, Notizen, Statistik', vals:_pick({ crm_ansehen:'verein', crm_personen:true, crm_notizen:true, crm_statistik:true }) },
   { key:'keine',      label:'Keine',         hint:'keine dieser Bereiche', vals:_all(false) },
 ];
@@ -134,6 +137,9 @@ function _legacy(u){
     kal_ansehen: on('kalender') ? 'alle' : false, kal_abw: on('kalender'),
     kal_eigene: kalEdit, kal_zuweisen: kalEdit, kal_fremde: kalEdit,
     kal_loeschen: kalEdit ? 'alle' : false, kal_va: kalEdit||full, kal_va_loeschen: kalEdit||full, kal_abo: true,
+    // Fälligkeiten/Konflikte (Release A): GF alles, Leitung ihre Teams, sonst Team bzw. „betrifft mich"
+    kal_faellig: on('kalender') ? (u.role==='geschaeftsfuehrer'?'alle':'team') : false,
+    kal_konflikte: on('kalender') ? (u.role==='geschaeftsfuehrer'?'alle':(u.role==='leitung'?'team':'eigene')) : false,
     pm_ansehen: kb ? (seesAll?'alle':'teams') : false, pm_aufg_bearb: kb, pm_aufg_neu: kb, pm_proj_eigen: true,
     pm_proj_team: kbAdm, pm_proj_loeschen: kbAdm, pm_vorlagen: kb||crm,
     vt_nutzen: vt, vt_eintragen: vt, vt_anlegen: vt&&full, vt_import: vt&&full, vt_loeschen: vt&&full, vt_export: vt,
