@@ -55,7 +55,9 @@ function planGo(tab, opts){
       if(opts.date && window.kalGotoDate) window.kalGotoDate(opts.date);
     } else if(tab==='teams' || tab==='veranstaltung'){
       window.switchModule('kanban');
-      setTimeout(()=>{ try{ _openPm(tab); }catch(e){ console.warn('Planung:',e); } }, 0);
+      // keep: Ort steht schon fest (Zurück-Taste, Sprung aus Kalender/Startseite) → nur zeichnen, nicht umsetzen
+      if(!opts.keep || (tab==='veranstaltung' && !window._crmVaSel) || (tab==='teams' && !window._crmTeamSel && !window._crmTeamProjSel))
+        setTimeout(()=>{ try{ _openPm(tab); }catch(e){ console.warn('Planung:',e); } }, 0);
     } else {
       window.switchModule('planung');
     }
@@ -92,7 +94,7 @@ function planVaSet(id){ window._planVa=id; planGo('veranstaltung'); }
 function _abs(){ const out=[]; try{ const vr=(getData()||{}).vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return;
   if(r.type!=='Urlaub' && r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10) }); }); }catch(e){} return out; }
 function _emps(){ try{ return ((getData()||{}).users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.archived); }catch(e){ return []; } }
-function _teamCol(t){ const ts=_teamsVisible(); const C=['#1f6fb2','#b4531f','#2f7d4f','#7a4bb0','#b0306a','#2f8a8a','#8a6d1f','#4b5fb0']; const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':C[i%C.length]; }
+function _teamCol(t){ const ts=_teamsVisible(); const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':'var(--team-'+((i%8)+1)+')'; }
 const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };
 function _srcTag(a){ const ic=a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'); return `<span class="plan-tag">${ic} ${esc(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))}</span>`; }
 function _open(a){ return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
@@ -151,12 +153,16 @@ function _styles(){
   if(document.getElementById('plan-styles')) return;
   const st=document.createElement('style'); st.id='plan-styles';
   st.textContent=`
+  /* Teamfarben (Planung, Kalender-Jahr, Teamseite) – hell/dunkel, keine festen Farben im Code */
+  :root{--team-1:#1f6fb2;--team-2:#b4531f;--team-3:#2f7d4f;--team-4:#7a4bb0;--team-5:#b0306a;--team-6:#2f8a8a;--team-7:#8a6d1f;--team-8:#4b5fb0}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--team-1:#6aa8e8;--team-2:#e3925f;--team-3:#6cc08f;--team-4:#b493e0;--team-5:#e57aa6;--team-6:#6cc7c7;--team-7:#d4b25c;--team-8:#8f9fe8} }
+  html[data-theme="dark"]{--team-1:#6aa8e8;--team-2:#e3925f;--team-3:#6cc08f;--team-4:#b493e0;--team-5:#e57aa6;--team-6:#6cc7c7;--team-7:#d4b25c;--team-8:#8f9fe8}
   #planung-root{flex:1;min-height:0;overflow:auto;background:var(--bg,#f3f5f9)}
   .plan-bar{display:flex;flex-wrap:nowrap;gap:6px;padding:10px 12px;margin:14px 18px 0;background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .plan-bar::-webkit-scrollbar{display:none}
   .plan-tab{flex:none;white-space:nowrap}
   .plan-tab .pl-short{display:none}
-  @media(max-width:640px){ .plan-tab .pl-long{display:none} .plan-tab .pl-short{display:inline} .plan-tab{padding:8px 11px;font-size:14px} }
+  @media(max-width:640px){ .plan-tab .pl-long{display:none} .plan-tab .pl-short{display:inline} .plan-tab{padding:8px 12px;font-size:14px;min-height:42px} .crm-team-chips .btn-sm-crm,.red-ph,.red-seg button,.plan-item{min-height:42px} }
   .plan-tab{border:0;background:transparent;color:var(--muted,#5d7086);font:inherit;font-size:15px;font-weight:600;padding:9px 14px;border-radius:9px;cursor:pointer}
   .plan-tab:hover{color:var(--primary-d,#15263a);background:var(--surface-2,#f4f7fb)}
   .plan-tab.on{background:var(--primary,#203869);color:var(--on-primary,#fff)}
@@ -187,8 +193,8 @@ function _styles(){
   .plan-whoh{font-size:12px;color:var(--muted,#5d7086);text-align:center;font-family:ui-monospace,Consolas,monospace}
   .plan-whoh.today{color:var(--primary,#203869);font-weight:700}
   .plan-whon{font-size:14px;color:var(--primary-d,#15263a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .plan-whoc{height:22px;border-radius:5px;background:var(--ok-bg,#e3f3e9);font-size:11px;color:var(--on-primary,#fff);display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;white-space:nowrap}
-  @media(max-width:640px){ .plan-whoc{font-size:0} .plan-whoc.abw::after{content:'abw.';font-size:10px} .plan-whoh{font-size:11px} }
+  .plan-whoc{height:22px;border-radius:5px;background:var(--ok-bg,#e3f3e9);font-size:12px;color:var(--on-primary,#fff);display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;white-space:nowrap}
+  @media(max-width:640px){ .plan-whoc{font-size:0} .plan-whoc.abw::after{content:'abw.';font-size:12px} .plan-whoh{font-size:12px} }
   .plan-whoc.abw{background:var(--info,#2563eb)}
   `;
   document.head.appendChild(st);

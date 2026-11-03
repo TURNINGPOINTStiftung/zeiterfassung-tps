@@ -19,6 +19,7 @@ Sie ist nach Themen gegliedert – am Ende findest du einen Abschnitt mit häufi
 7. [Monat einreichen](#7-monat-einreichen)
 8. [Abwesenheiten (Urlaub, Krank …)](#8-abwesenheiten-urlaub-krank-)
 9. [Weitere Bereiche: CRM, Projekte, Kalender, Lager](#9-weitere-bereiche-crm-projekte-kalender-lager)
+   - [Planung: Kalender und Projektmanagement](#planung-kalender-und-projektmanagement)
    - [Kalender & Abo in Outlook / am Handy](#kalender--abo-in-outlook--am-handy)
 10. [Für Leitung & Geschäftsführung](#10-für-leitung--geschäftsführung)
 11. [Für Administratoren & System-Verwaltung](#11-für-administratoren--system-verwaltung)
@@ -118,8 +119,8 @@ Karten wie **Wetter & Wind**, **Stempeln**, **Was ansteht**, **Mitteilungen**, *
 und **Kacheln** zu allen Bereichen. Mit **„Anordnen"** verschiebst oder versteckst du Karten;
 ⭐ merkt sich Favoriten. Welche Karten erscheinen, stellst du im **Profil** unter „Meine Startseite" ein.
 
-**Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, Projektmanagement,
-Kalender, Lager, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
+**Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, **Planung** – das sind
+Kalender und Projektmanagement zusammen –, Lager, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.
 Diese Anleitung findest du direkt in der App unter **☰ → Anleitung** bzw. als Kachel auf der Startseite
 (mit Suchfeld; der Administrator kann sie pro Rolle oder Person ausblenden).
 
@@ -293,10 +294,11 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
   Intern) – alle gleichrangig. Pflichtangaben beim Anlegen: Name, Adresse oder Sitz sowie E-Mail oder Telefon.
   Kategorien können **eigene Zusatzfelder** haben (Verwaltung → CRM → Kategorie ✎), z. B. bei Fundraising
   „Antragsfrist“; sie erscheinen beim Kontakt als eigener Block, sobald die Kategorie angehakt ist.
-- **Projektmanagement:** Team-Boards mit Aufgaben (offen / in Arbeit / erledigt) und Veranstaltungen.
-- **Kalender:** Veranstaltungen und Termine neben den Abwesenheiten aller Mitarbeitenden – Konflikte
-  auf einen Blick. **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.
-  Ausführlich: [Kalender & Abo](#kalender--abo-in-outlook--am-handy).
+- **Planung (Kalender + Projektmanagement):** ein gemeinsamer Bereich mit der Leiste
+  **Was ansteht · Kalender · Projektmanagement · Teams · Veranstaltung** – Kalender = *wann*,
+  Projektmanagement = *was*, beide zeigen dieselben Aufgaben. Ausführlich: [Planung](#planung-kalender-und-projektmanagement).
+  Die Zugriffe bleiben getrennt einstellbar (Verwaltung → Mitarbeiter → Zugriffe → Kalender bzw. Projektmanagement):
+  **Nutzen** = ansehen, **Verwaltend** = Termine und Veranstaltungen anlegen.
 - **Lager:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
   **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
   „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
@@ -308,6 +310,38 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
   einmal angemeldet gewesen sein („Angemeldet bleiben“). Das Personal öffnet mit der **PIN der Veranstaltung**
   (gilt auf allen Geräten) die Liste und **überträgt ins CRM** – danach werden die Besucherdaten im Messemodus gelöscht
   und stehen nur noch im CRM. Freigabe: Verwaltung → Mitarbeiter → Zugriffe → Messemodus „Nutzen“.
+
+### Planung: Kalender und Projektmanagement
+
+**☰ → Planung.** Oben die Leiste mit vier Reitern; das gewählte **Team** bleibt beim Wechseln erhalten.
+Die Startseite der App (🏠 Start) bleibt davon unberührt.
+
+- **Was ansteht:** deine offenen Aufgaben aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇 –
+  getrennt nach **Überfällig**, **Diese Woche**, **Später**. Daneben **⚠ Hinweise** (was dich in den nächsten
+  4 Wochen betrifft: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
+  eingeplant bist), **Meine Termine** (14 Tage) und **Wer ist diese Woche da?** (nur „Abwesend", nie der Grund).
+- **Kalender:** Woche/Monat mit **Fälligkeiten** (Zahl am Tag auf der Zeile der zuständigen Person, **rot** bei
+  Konflikt: überfällig, Person am Tag oder an den 2 Arbeitstagen davor abwesend, oder Freigabe-Person am Tag/Vortag
+  abwesend). **Jahr** = die nächsten 12 Monate mit **Projekten** (Teamfarbe), Veranstaltungen und der
+  **Aufgabenlast je Team und Monat** (grün/gelb/rot nach Aufgaben je anwesender Person, darunter Abwesenheitstage).
+  **Konflikte** = Aufgaben und Termine mit Konflikt („Betrifft mich / Meine Teams / Alle", 4 Wochen oder 3 Monate).
+  Klick auf eine Veranstaltung öffnet ihre Seite im Reiter **Veranstaltung**.
+- **Teams:** Team-Leiste oben, darunter die Personen des Teams (Leitung, „+ anderes Team" für Gäste).
+  **Übersicht** = offene Aufgaben des Teams (6 Wochen + ohne Frist, mit Hinweisen wie „vor Fälligkeit abwesend",
+  „Team · niemand", „Bildrechte offen"), Veranstaltungen und Projekte. Eine Aufgabe gehört zu ihrem eigenen Team,
+  sonst zum **federführenden** Team ihrer Veranstaltung bzw. ihres Projekts; beteiligte Teams sehen nur, was ihnen
+  ausdrücklich zugeteilt ist.
+- **Redaktionsplan** (nur beim ÖA-Team): „Wer ist da" als Woche/Monat/Jahr, Kanal-Filter, Last je Woche
+  (Beiträge zu anwesenden Personentagen) und das Board nach dem **ÖA-Ablauf** Idee → In Arbeit → Freigabe →
+  Geplant → Veröffentlicht (Spalte per Auswahl ändern; der Status folgt automatisch). Aus „Freigabe" weiter darf
+  nur, wer das Recht „Beiträge freigeben" hat, oder die eingetragene Freigabe-Person. „Anstehende Veranstaltungen
+  ohne ÖA-Aufgaben" → **ÖA-Paket anwenden**. Einstellungen (ÖA-Team, Kanäle, Phasen): **Verwaltung → CRM →
+  „Planung · Redaktionsplan der ÖA"**.
+- **Veranstaltung:** Auswahl oben; Wann, Teams (federführend/beteiligt), beteiligte Einträge, Mitarbeitende;
+  Aufgaben-Board mit „x offen · ohne Frist · niemand zuständig"; **Vorlage anwenden** mit Vorschau
+  (Aufgabe, Spalte, Versatz, Team, → fällig). Fristen = Starttag + Versatz, zugewiesen wird niemand.
+- **Team-Projekte** können einen **Zeitraum** bekommen (Projekt ✎) – dann erscheinen sie im Kalender-Jahr.
+- Am **Handy** lassen sich Leisten und breite Tabellen seitlich wischen.
 
 ### Kalender & Abo in Outlook / am Handy
 

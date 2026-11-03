@@ -170,7 +170,11 @@ export function closeModuleMenu(){ const d=document.getElementById('mb-dropdown'
 export function switchModule(name){
   // Planung (js/planung.js) = gemeinsamer Bereich: von außen aufgerufen → Reiter wählen (Start/Kalender/Teams/Veranstaltung);
   // planGo ruft für Kalender/Projektmanagement wieder switchModule auf (mit _planInternal). Jeder andere Wechsel verlässt die Planung.
-  if(name==='planung' && !window._planInternal && window.planGo){ window.planGo(window._planTab||'start'); return; }
+  if(!window._planInternal && window.planGo){
+    const pb=document.querySelector('.mb-mod[data-mod="planung"]'); const planOn=!!(pb && pb.style.display!=='none');
+    if(name==='planung'){ window.planGo('start'); return; }
+    if(planOn && (name==='kalender' || name==='kanban')){ window.planGo(name==='kalender'?'kalender':(window._crmMode==='veranstaltungen'?'veranstaltung':'teams'), { keep:true }); return; }
+  }
   if(!window._planInternal) window._planActive=false;
   window._activeModule=name;
   try{ localStorage.setItem('tp_zt_module', name); }catch(e){}

@@ -4287,7 +4287,7 @@ function paintTeamDetail(){
   const tabs = isOea ? `<div class="red-seg" style="display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden;margin:0 0 12px">
       <button style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;background:${redTab?'var(--surface,#fff)':'var(--primary,#203869)'};color:${redTab?'var(--primary-d,#15263a)':'var(--on-primary,#fff)'}" onclick="crmRedSet('tab','uebersicht')">Übersicht</button>
       <button style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;background:${redTab?'var(--primary,#203869)':'var(--surface,#fff)'};color:${redTab?'var(--on-primary,#fff)':'var(--primary-d,#15263a)'}" onclick="crmRedSet('tab','redaktion')">Redaktionsplan</button></div>` : '';
-  const _tc=(t)=>{ const ts=zeTeams(); const C=['#1f6fb2','#b4531f','#2f7d4f','#7a4bb0','#b0306a','#2f8a8a','#8a6d1f','#4b5fb0']; const i=ts.indexOf(t); return i<0?'var(--muted)':C[i%C.length]; };
+  const _tc=(t)=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--muted)':_TC[i%_TC.length]; };
   const _visT=(_kanbanSeesAll(window.cu)?zeTeams():visibleKanbanTeams(window.cu));
   const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
   const _mem=team==='Ohne Team'?[]:zeUsers().filter(u=>u.id!=='admin'&&u.role!=='admin'&&(u.team===team||(Array.isArray(u.teams)&&u.teams.includes(team))));
@@ -4301,7 +4301,7 @@ function paintTeamDetail(){
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:auto">${memChips}</div>
     </div>
     ${tabs}
-    ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmRedSettings()">⚙ ÖA-Team festlegen</button></div>`:''}
+    ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmGoVerwOea()">⚙ ÖA-Team in der Verwaltung festlegen</button></div>`:''}
     ${redTab ? oeaRedaktionHtml() : (window._planActive ? _planTeamOverview(team) : `${teamTaskSec}
     ${_view?vaSec:''}
     ${projektSec}`)}
@@ -4326,6 +4326,7 @@ function oeaCfg(){
   if(!team){ const ts=zeTeams().map(String); team=ts.find(t=>/(^|[^A-Za-zÄÖÜäöüß])(ÖA|OEA)([^A-Za-zÄÖÜäöüß]|$)|Öffentlichkeit/i.test(t)) || ts.find(t=>/Marketing|Kommunikation|Presse/i.test(t)) || ''; }
   return { ablauf, kanaele, team };
 }
+window.crmOeaTeam=()=>{ try{ return oeaCfg().team; }catch(e){ return ''; } };
 function oeaPhaseOf(n){
   const ab=oeaCfg().ablauf; if(n&&n.phase&&ab.some(x=>x.key===n.phase)) return n.phase;
   const st=(n&&n.status)||'offen';
@@ -4384,7 +4385,7 @@ function _oeaWhoHtml(r, posts, members, abs){
     const t=oeaCfg().team;
     const projs=listTeamProjekte(t).filter(p=>p.start&&!p.owner&&!p.closed);
     const vas=teamVeranstaltungen(t).filter(v=>v.start&&!v.closed);
-    let h='<div class="red-scroll"><table class="red-y"><thead><tr><th></th>'+ms.map(o=>'<th>'+_O_MON[o.m]+'</th>').join('')+'</tr></thead><tbody>';
+    let h='<div class="red-scroll" tabindex="0" role="region" aria-label="Wer ist da (seitlich scrollbar)"><table class="red-y"><thead><tr><th></th>'+ms.map(o=>'<th>'+_O_MON[o.m]+'</th>').join('')+'</tr></thead><tbody>';
     h+='<tr><th>📂 Projekte</th>'+ms.map(o=>{ const l=projs.filter(p=>String(p.start).slice(0,10)<=o.b&&String(p.ende||p.start).slice(0,10)>=o.a); return '<td>'+l.map(p=>'<div class="red-yp" title="'+esc(p.name||'')+'">'+esc(p.name||'Projekt')+'</div>').join('')+'</td>'; }).join('')+'</tr>';
     h+='<tr><th>📅 Veranstaltungen</th>'+ms.map(o=>{ const n=vas.filter(v=>String(v.start).slice(0,10)<=o.b&&String(v.ende||v.start).slice(0,10)>=o.a).length; return '<td class="num">'+(n||'')+'</td>'; }).join('')+'</tr>';
     const kan=oeaCfg().kanaele.concat(['']);
@@ -4397,7 +4398,7 @@ function _oeaWhoHtml(r, posts, members, abs){
     return h+'</tbody></table></div><div class="red-hint">Zahlen = Beiträge mit Datum im Monat · Gesamtlast eingefärbt nach Beiträgen je anwesender Person · unten die Abwesenheitstage (Mo–Fr) je Person.</div>';
   }
   const days=r.days; const isW=r.v==='woche';
-  let h='<div class="red-scroll"><table class="red-g'+(isW?' wk':' mo')+'"><thead><tr><th></th>'+days.map(d=>{ const iso=_oIso(d); return '<th class="'+(_oDow(d)>=5?'we ':'')+(iso===today?'today':'')+'">'+_O_DOW[_oDow(d)]+'<br><b>'+d.getDate()+'</b></th>'; }).join('')+'</tr></thead><tbody>';
+  let h='<div class="red-scroll" tabindex="0" role="region" aria-label="Wer ist da (seitlich scrollbar)"><table class="red-g'+(isW?' wk':' mo')+'"><thead><tr><th></th>'+days.map(d=>{ const iso=_oIso(d); return '<th class="'+(_oDow(d)>=5?'we ':'')+(iso===today?'today':'')+'">'+_O_DOW[_oDow(d)]+'<br><b>'+d.getDate()+'</b></th>'; }).join('')+'</tr></thead><tbody>';
   const row=(label, id)=>{ let s='<tr><th class="red-p">'+label+'</th>'; days.forEach(d=>{ const iso=_oIso(d); const we=_oDow(d)>=5; const ab=id&&absOn(id,iso); const ps=posts.filter(a=>a.node.due===iso&&(id?a.node.assigneeId===id:!a.node.assigneeId));
       const cf=ps.some(a=>(window.kalTaskIssues?window.kalTaskIssues(a.node):[]).some(x=>x.lv==='crit'));
       s+='<td class="'+(ab?'abw ':(id&&!we?'da ':''))+(we?'we':'')+'">'+(ab&&isW?'<div class="red-abw">Abwesend</div>':'')+(isW?ps.map(a=>_oeaPostChip(a,false)).join(''):(ps.length?'<span class="red-n'+(cf?' cf':'')+'" title="'+esc(ps.map(a=>(a.node.kanal?a.node.kanal+': ':'')+a.node.text).join(' · '))+'">'+ps.length+'</span>':''))+'</td>'; });
@@ -4474,6 +4475,10 @@ function crmRedMove(kind, tree, cid, tid, dir){
     if(to.base==='erledigt'){ g.node.doneAt=g.node.doneAt||new Date().toISOString(); g.node.doneBy=g.node.doneBy||curKuerzel(); } else { g.node.doneAt=''; g.node.doneBy=''; } });
   window._crmTaskCtx=null; paintTeamDetail();
 }
+function crmGoVerwOea(){
+  try{ window.switchModule('verwaltung'); }catch(e){}
+  [150,700,1600].forEach(ms=>setTimeout(()=>{ try{ if(window.verwShowTab) window.verwShowTab('crm'); const el=document.getElementById('verw-oea'); if(el) el.scrollIntoView({block:'start'}); }catch(e){} }, ms));
+}
 function crmRedSettings(){
   if(!_R('crm_einst')){ toast('Einstellen darf, wer CRM-Einstellungen ändern darf.','err'); return; }
   const c=oeaCfg();
@@ -4493,7 +4498,9 @@ function crmRedSettingsSave(){
   cfg.oeaKanaele=String(val('red-s-kan')||'').split(',').map(s=>s.trim().replace(/[<>"'`]/g,'').slice(0,40)).filter(Boolean).slice(0,20);
   const lbl=[...document.querySelectorAll('.red-s-lbl')], bs=[...document.querySelectorAll('.red-s-base')];
   cfg.oeaAblauf=lbl.map((el,i)=>({ key:el.dataset.key, label:(el.value||'').trim().replace(/[<>"'`]/g,'').slice(0,30)||el.dataset.key, base:bs[i]?bs[i].value:'offen' }));
-  saveCrmConfig(cfg); crmCloseModal(); paintTeamDetail(); toast('Gespeichert ✓','ok');
+  saveCrmConfig(cfg); crmCloseModal();
+  if(document.getElementById('verw-crmcfg') && window._activeModule==='verwaltung') paintVerwConfig(); else paintTeamDetail();
+  toast('Gespeichert ✓','ok');
 }
 function oeaRedaktionHtml(){
   const c=oeaCfg(); const r=_oeaRange(); const kanal=window._crmRedKanal||'';
@@ -4514,7 +4521,7 @@ function oeaRedaktionHtml(){
     .red-g.wk td{min-width:110px} .red-g.mo td{min-width:30px;text-align:center}
     .red-g th.today{color:var(--primary,#203869)} .red-g .we{background:var(--surface-2,#f7f9fc)}
     .red-p{white-space:nowrap;font-weight:600;color:var(--primary-d,#15263a);position:sticky;left:0;background:var(--surface,#fff);z-index:1}
-    td.abw{background:var(--info-bg,#e3ecfb)} .red-abw{font-size:11px;font-weight:700;color:var(--info,#2563eb)}
+    td.abw{background:var(--info-bg,#e3ecfb)} .red-abw{font-size:12px;font-weight:700;color:var(--info,#2563eb)}
     .red-chip{display:block;width:100%;text-align:left;margin:2px 0;padding:3px 6px;border-radius:6px;border:1px solid var(--border,#cdd7e2);background:var(--surface,#fff);font:inherit;font-size:12px;cursor:pointer;color:var(--primary-d,#15263a)}
     .red-chip.ph-freigabe{border-color:var(--warn,#d97706)} .red-chip.ph-veroeffentlicht{opacity:.6}
     .red-n{display:inline-block;min-width:20px;border-radius:10px;border:1.5px solid var(--primary,#203869);font-weight:800;color:var(--primary,#203869)}
@@ -4532,11 +4539,11 @@ function oeaRedaktionHtml(){
     .red-m{color:var(--ok,#2d8a4e)} .red-src{font-size:12px;color:var(--muted,#5d7086);margin-top:3px}
     .red-mv{display:flex;gap:6px;justify-content:flex-end;margin-top:6px} .red-empty{color:var(--muted,#5d7086);font-size:13px;padding:4px}
     td.da{background:var(--ok-bg,#e3f3e9)} .red-n.cf{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:var(--on-primary,#fff)}
-    .red-guest{font-size:11px;font-weight:400;color:var(--muted,#5d7086)}
+    .red-guest{font-size:12px;font-weight:400;color:var(--muted,#5d7086)}
     .red-kw{font-size:12px;color:var(--muted,#5d7086);font-family:ui-monospace,Consolas,monospace;text-align:left}
     .red-kwbar{height:6px;border-radius:3px;background:var(--surface-2,#e9eef5);margin-top:4px;overflow:hidden} .red-kwbar span{display:block;height:100%;background:var(--ok,#2d8a4e)} .red-kwbar span.l2{background:var(--warn,#d97706)} .red-kwbar span.l3{background:var(--danger,#c0392b)}
     .red-tag{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--muted,#5d7086)}
-    .red-tag.k{font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.04em;color:var(--primary-d,#15263a)}
+    .red-tag.k{font-family:ui-monospace,Consolas,monospace;font-size:12px;letter-spacing:.04em;color:var(--primary-d,#15263a)}
     .red-tag.w{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#7a4a00);border-color:transparent} .red-tag.c{background:var(--danger-bg,#fde8e8);color:var(--danger,#b42318);border-color:transparent}
     .red-fr{font-size:13px;color:var(--muted,#5d7086);margin:6px 0} .red-off{color:var(--warn-text,#7a4a00)}
     .red-ph{width:100%;margin-top:6px;font:inherit;font-size:13px;padding:5px 8px;border:1.5px solid var(--border,#cdd7e2);border-radius:8px;background:var(--surface,#fff);color:var(--primary-d,#15263a)}
@@ -4546,7 +4553,7 @@ function oeaRedaktionHtml(){
     <span class="red-seg">${seg('view','woche','Woche')}${seg('view','monat','Monat')}${seg('view','jahr','Jahr')}</span>
     <span><button class="btn-sm-crm" onclick="crmRedSet('nav',-1)">‹</button> <b>${esc(_oeaLabel(r))}</b> <button class="btn-sm-crm" onclick="crmRedSet('nav',1)">›</button> <button class="btn-sm-crm" onclick="crmRedSet('nav',0)">Heute</button></span>
     <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)">Kanal <select onchange="crmRedSet('kanal',this.value)" aria-label="Kanal" style="font:inherit;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${kanOpts}</select></label>
-    ${_R('crm_einst')?'<button class="btn-sm-crm" onclick="crmRedSettings()">⚙ Einstellen</button>':''}
+    ${_R('crm_einst')?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
   </div>
   <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, posts, members, abs)}</div>
   <div class="crm-sec"><h4><span class="ttl">🗂 Beiträge nach Ablauf</span></h4>
@@ -4558,7 +4565,7 @@ function oeaRedaktionHtml(){
 // ── Planung: Team-Übersicht nach Prototyp (offene Aufgaben 6 Wochen + ohne Frist | Veranstaltungen, Projekte) ──
 function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
-  const _tc=t=>{ const ts=zeTeams(); const C=['#1f6fb2','#b4531f','#2f7d4f','#7a4bb0','#b0306a','#2f8a8a','#8a6d1f','#4b5fb0']; const i=ts.indexOf(t); return i<0?'var(--primary)':C[i%C.length]; };
+  const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks();
   const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until))
@@ -6406,7 +6413,11 @@ function _cfgWork(){
     // (die bisherigen Bereiche), damit ohne Konfiguration nichts verloren geht.
     categories: (c&&Array.isArray(c.categories)&&c.categories.length) ? _clone(c.categories) : trees.map(t=>({ key:t.key, label:t.label, color:'', stats:t.key==='vereine' })),
     // Zugriffs-Matrix: pathAccess[pfad][rolle] = true|false (fehlt = „Standard"). MUSS hier erhalten bleiben.
-    pathAccess: (c&&c.pathAccess&&typeof c.pathAccess==='object') ? _clone(c.pathAccess) : {}
+    pathAccess: (c&&c.pathAccess&&typeof c.pathAccess==='object') ? _clone(c.pathAccess) : {},
+    // Redaktionsplan der ÖA (Planung): MUSS hier ebenfalls erhalten bleiben, sonst löscht jedes Speichern die Einstellungen
+    oeaTeam: (c&&typeof c.oeaTeam==='string') ? c.oeaTeam : '',
+    oeaKanaele: (c&&Array.isArray(c.oeaKanaele)) ? _clone(c.oeaKanaele) : [],
+    oeaAblauf: (c&&Array.isArray(c.oeaAblauf)) ? _clone(c.oeaAblauf) : []
   };
 }
 function _slug(label, takenArr){
@@ -6466,7 +6477,17 @@ function paintVerwConfig(){
   const curCard=Array.isArray(_cf0.__all)?_cf0.__all:(Array.isArray(_cf0[_t0])?_cf0[_t0]:[]);
   const cardChecks=_cardFieldDefs(cardSel).map(d=>`<label class="vw-card-opt"><input type="checkbox" ${curCard.includes(d.key)?'checked':''} onchange="crmCfgCardToggle(${jsq(cardSel)},${jsq(d.key)},this.checked)"> ${esc(d.label)}</label>`).join('');
 
+  const _oc=oeaCfg();
   host.innerHTML = `
+  <div class="crm-sec" id="verw-oea">
+    <h4><span class="ttl">📣 Planung · Redaktionsplan der ÖA</span><button class="btn-sm-crm primary" onclick="crmRedSettings()">✎ Einstellen</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:6px">Gilt für Planung → Teams → ÖA-Team → Redaktionsplan.</div>
+    <table class="vw-table"><tbody>
+      <tr><td>ÖA-Team</td><td>${_oc.team?esc(_oc.team):'<span style="color:var(--muted)">nicht erkannt – bitte wählen</span>'}${(getCrmConfig()||{}).oeaTeam?'':' <span class="small" style="color:var(--muted)">(automatisch)</span>'}</td></tr>
+      <tr><td>Kanäle</td><td>${_oc.kanaele.map(esc).join(', ')}</td></tr>
+      <tr><td>Ablauf</td><td>${_oc.ablauf.map(p=>esc(p.label)+' <span class="small" style="color:var(--muted)">→ '+esc(({offen:'Offen',inarbeit:'In Arbeit',erledigt:'Erledigt'})[p.base]||p.base)+'</span>').join(' · ')}</td></tr>
+    </tbody></table>
+  </div>
   <div class="crm-sec">
     <h4><span class="ttl">🏷️ Kategorien</span><button class="btn-sm-crm primary" onclick="crmCfgCatEdit('')">＋ Kategorie</button></h4>
     <div class="small" style="color:var(--muted);margin-bottom:8px">Alle Kategorien sind gleichrangig und frei erweiterbar. Über ✎ lassen sich je Kategorie <b>eigene Zusatzfelder</b> anlegen (📝 = hat Zusatzfelder). Löschen blendet die Kategorie nur aus – <b>Zuordnungen an Kontakten bleiben erhalten</b>.</div>
@@ -7089,7 +7110,7 @@ Object.assign(window, {
   crmOpenTask, crmAddChild, crmTaskTeamChange, crmSaveTask, crmSaveChild,
   crmDeleteNode, crmToggleDone,
   crmQaKey, crmQuickAddColumn, crmQuickAddChildInline,
-  crmApplyVorlagePick, crmApplyVorlage, crmPlanApplyVorlage, paintVeranstaltungDetail, crmRedSet, crmRedMove, crmRedPhaseSet, crmRedPaketPick, crmRedPaketApply, crmRedSettings, crmRedSettingsSave,
+  crmApplyVorlagePick, crmApplyVorlage, crmPlanApplyVorlage, paintVeranstaltungDetail, crmGoVerwOea, crmRedSet, crmRedMove, crmRedPhaseSet, crmRedPaketPick, crmRedPaketApply, crmRedSettings, crmRedSettingsSave,
   // Kanban-Board
   crmSetTaskView, crmDragStart, crmColDragStart, crmDragOver, crmDropOnColumn, crmToggleHideDone,
   crmKbToggleCollapse, crmKbResizeStart,

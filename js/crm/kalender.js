@@ -54,9 +54,11 @@ let curSaison='';                      // '' = ganzes Jahr | 'sommer' (Apr–Sep
 function _saisonMonths(){
   if(curSaison==='sommer') return [4,5,6,7,8,9].map(m=>({y:curY,m}));
   if(curSaison==='winter') return [{y:curY,m:10},{y:curY,m:11},{y:curY,m:12},{y:curY+1,m:1},{y:curY+1,m:2},{y:curY+1,m:3}];
+  // Planung (wie Prototyp): „Ganzes Jahr“ = 12 Monate ab dem gewählten Monat (z. B. Nov 26 – Okt 27)
+  if(window._planActive) return [...Array(12)].map((_,i)=>{ const mm=curM+i; return { y:curY+Math.floor((mm-1)/12), m:((mm-1)%12)+1 }; });
   return [1,2,3,4,5,6,7,8,9,10,11,12].map(m=>({y:curY,m}));
 }
-function _saisonLabel(){ if(curSaison==='sommer') return 'Sommer '+curY+' (Apr–Sep)'; if(curSaison==='winter') return 'Winter '+curY+'/'+String(curY+1).slice(2)+' (Okt–Mär)'; return String(curY); }
+function _saisonLabel(){ if(!curSaison && window._planActive){ const ms=_saisonMonths(); const a=ms[0], b=ms[11]; return MON_ABBR[a.m-1]+' '+String(a.y).slice(2)+' – '+MON_ABBR[b.m-1]+' '+String(b.y).slice(2); } if(curSaison==='sommer') return 'Sommer '+curY+' (Apr–Sep)'; if(curSaison==='winter') return 'Winter '+curY+'/'+String(curY+1).slice(2)+' (Okt–Mär)'; return String(curY); }
 const _now=new Date();
 let curY=_now.getFullYear(), curM=_now.getMonth()+1;   // Monat
 let weekStart=_mondayOf(_now);                          // Woche
@@ -207,8 +209,8 @@ function kalMyConflicts(days){
 function kalSetCfScope(v){ _cfScope=v; renderKalender(); }
 function kalSetCfDays(n){ _cfDays=n===91?91:28; renderKalender(); }
 // ── Projekte mit Zeitraum + Aufgabenlast (Release B, Schritt 5) ──
-const _TEAM_COLS=['#1f6fb2','#b4531f','#2f7d4f','#7a4bb0','#b0306a','#2f8a8a','#8a6d1f','#4b5fb0'];
-function _teamColor(){ const d=getData()||{}; const ts=Array.isArray(d.teams)?d.teams:[]; return t=>{ const i=ts.indexOf(t); return i<0?'#5d7086':_TEAM_COLS[i%_TEAM_COLS.length]; }; }
+const _TEAM_COLS=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)'];
+function _teamColor(){ const d=getData()||{}; const ts=Array.isArray(d.teams)?d.teams:[]; return t=>{ const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':_TEAM_COLS[i%_TEAM_COLS.length]; }; }
 function _projekte(){ const me=(window.cu&&window.cu.id)||''; let ps=[]; try{ ps=Object.values((getCrm()||{}).teamprojekte||{}); }catch(e){}
   return ps.filter(p=>p&&p.start&&!p.closed&&(!p.owner||p.owner===me)).map(p=>{ let open=0; const walk=a=>(a||[]).forEach(n=>{ if(n&&n.status!=='erledigt') open++; walk(n&&n.children); }); walk(p.todos);
     return { id:p.id, name:p.name||'Projekt', team:p.team||'', von:String(p.start).slice(0,10), bis:String(p.ende||p.start).slice(0,10), open }; }); }
@@ -397,7 +399,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-kwrow{position:sticky;top:38px;z-index:4;background:var(--surface-2,#f4f7fb);border-bottom:1px solid var(--border,#dce3ec)}
   .kal-kwrow .kal-name{background:var(--surface-2,#f4f7fb);font-size:12px;color:var(--muted,#5d7086)}
   .kal-kwtrack{grid-column:2 / -1;grid-row:1;position:relative;min-height:22px}
-  .kal-kwlab{position:absolute;top:4px;font-size:12px;font-weight:600;color:#8598ab;padding-left:2px}
+  .kal-kwlab{position:absolute;top:4px;font-size:12px;font-weight:600;color:var(--muted,#5d7086);padding-left:2px}
   .kal-empty{padding:26px;text-align:center;color:var(--muted,#5d7086);font-size:14px}
   .kal-tip{position:fixed;z-index:99999;background:var(--primary-d,#15263a);color:var(--on-primary,#fff);font-size:15px;font-weight:600;padding:10px 14px;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.32);pointer-events:none;max-width:400px;white-space:normal;line-height:1.4;display:none}
   .kal-clickable{cursor:pointer} .kal-clickable:hover{filter:brightness(1.12)}
@@ -726,7 +728,7 @@ function _conflictList(){
     h+='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+sub+'</div>';
     if(cnt) h+='<div class="kal-chips">'+absentList.map(a=>{const m=KMETA[a.type];return '<span class="kal-chip" style="background:'+m.c+'">'+esc(empName(a.emp))+' · '+m.lbl+'</span>';}).join('')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'var(--danger-bg,#fbe4df);color:var(--danger-text,#a8321f)':'var(--ok-bg,#dff1e7);color:var(--ok-text,#14532d)')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
     return h;
   };
   return tsec+_cfTimeline(items, row, 'Ab heute stehen keine Veranstaltungen oder Termine an.');
@@ -838,7 +840,7 @@ function _persConflict(){
     const dl=e.von===e.bis?_deDateY(e.von):(_deDateY(e.von)+' – '+_deDateY(e.bis));
     let h='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
-    h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
+    h+='</div><div class="kal-badge" style="background:'+(cnt?'var(--danger-bg,#fbe4df);color:var(--danger-text,#a8321f)':'var(--ok-bg,#dff1e7);color:var(--ok-text,#14532d)')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
     return h; };
   return tsec+_cfTimeline(mine, row, 'Ab heute sind dir keine Veranstaltungen oder Termine zugewiesen.');
 }

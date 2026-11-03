@@ -103,7 +103,9 @@ function fromHash(h){
 // Darf der Nutzer dorthin? (Rechte stecken in der Oberfläche: sichtbare Menüpunkte/Reiter)
 function _allowed(s){
   try{
-    if(s.mod!=='zeiterfassung'){ const b=document.querySelector('.mb-mod[data-mod="'+s.mod+'"]'); if(!b || b.style.display==='none') return false; }
+    if(s.mod!=='zeiterfassung'){ const vis=m=>{ const b=document.querySelector('.mb-mod[data-mod="'+m+'"]'); return !!(b && b.style.display!=='none'); };
+      // Kalender/Projektmanagement sind seit der Planung kein eigener Menüpunkt mehr – erreichbar über „Planung"
+      if(!(vis(s.mod) || ((s.mod==='kalender'||s.mod==='kanban') && vis('planung')))) return false; }
     // ZE-Reiter ohne Recht (ausgeblendet) → nur das Modul öffnen, Reiter wie üblich
     if(s.mod==='zeiterfassung' && s.v && ![...document.querySelectorAll('.nav-tab[data-view="'+s.v+'"]')].some(t=>t.style.display!=='none')) s.v='';
     return true;
