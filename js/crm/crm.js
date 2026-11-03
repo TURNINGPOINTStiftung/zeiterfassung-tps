@@ -3262,7 +3262,8 @@ function listAllTasks(opts){
     try{
       if(k==='veranstaltung') listVeranstaltungen().forEach(v=>{ if(!v || (v.closed&&!incl)) return; normTasks(v);
         walk(v.todos, { kind:k, containerId:v.id, containerName:v.titel||'', tree:'', eid:'', pid:'', projName:'', owner:'', closed:!!v.closed }, vaTeams(v).slice(0,1)); });
-      else if(k==='teamprojekt') listTeamProjekte().forEach(p=>{ if(!p || (p.closed&&!incl)) return; normTasks(p);
+      // Persönliche Projekte (owner) gehören nur ihrer Person – nie in fremde Listen, Team-Ansichten oder Zählungen
+      else if(k==='teamprojekt') listTeamProjekte().forEach(p=>{ if(!p || (p.closed&&!incl)) return; if(p.owner && p.owner!==((window.cu&&window.cu.id)||'')) return; normTasks(p);
         walk(p.todos, { kind:k, containerId:p.id, containerName:p.name||'', tree:'', eid:'', pid:'', projName:'', owner:p.owner||'', closed:!!p.closed }, p.team?[p.team]:[]); });
       else if(k==='entity') getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
         (e.projekte||[]).forEach(p=>{ if(!p || (p.closed&&!incl)) return;
@@ -4184,7 +4185,7 @@ function crmOpenEntryFromTeam(tree,eid){ window._crmMode='kontakte'; window._crm
 function crmOpenTeamProjekt(id){ window._crmProjReturn='team'; window._crmTeamProjSel=id; paintTeamProjektDetail(); }
 function crmBackToTeamProjekte(){
   window._crmTeamProjSel=null;
-  if(window._crmProjReturn==='meine'){ window._crmProjReturn=null; window._crmMode='meine'; paintMeine(); }
+  if(window._crmProjReturn==='meine'){ window._crmProjReturn=null; window._crmMode='meine'; if(window._planActive && window.planGo){ window._crmMode='teams'; window.planGo('start'); return; } paintMeine(); }
   else paintTeamDetail();
 }
 
@@ -4358,7 +4359,7 @@ function oeaCheckMove(n, from, to){
   return '';
 }
 // Beiträge = Aufgaben (Blätter) des ÖA-Teams aus allen Behältern
-function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>(a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
+function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>!a.owner && (a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
 function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&(u.team===t||(Array.isArray(u.teams)&&u.teams.includes(t)))); }catch(e){ return []; } }
 // Abwesenheiten wie im Kalender: nur genehmigter Urlaub/Ausgleich, nie der Grund
 function _oeaAbs(){ const out=[]; try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(r.type!=='Urlaub'&&r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }
@@ -4589,7 +4590,7 @@ function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
-  const all=listAllTasks();
+  const all=listAllTasks().filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
   const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
@@ -4650,7 +4651,7 @@ function paintTeamProjektDetail(){
   const todos = taskBoardHtml(p);
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
-      <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${window._crmProjReturn==='meine'?'Meine Aufgaben':esc(p.team||'Team')}</button>
+      <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${window._crmProjReturn==='meine'?(window._planActive?'Was ansteht':'Meine Aufgaben'):esc(p.team||'Team')}</button>
       <h2>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>
       <button class="btn-sm-crm" onclick="${p.closed?'crmReopenProjekt':'crmCloseProjekt'}()">${p.closed?'↺ Wieder öffnen':'✓ Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditTeamProjekt()">✎ Bearbeiten</button>
@@ -4750,7 +4751,7 @@ function crmDeleteTeamProjekt(){
   if(!confirm(`Projekt „${p.name||''}" wirklich löschen?`)) return;
   const ret=window._crmProjReturn;
   deleteTeamProjekt(p.id); window._crmTeamProjSel=null;
-  if(ret==='meine'){ window._crmProjReturn=null; window._crmMode='meine'; paintMeine(); } else paintTeamDetail();
+  if(ret==='meine'){ window._crmProjReturn=null; window._crmMode='meine'; if(window._planActive && window.planGo){ window._crmMode='teams'; window.planGo('start'); } else paintMeine(); } else paintTeamDetail();
   toast('Gelöscht.','');
 }
 function crmCloseProjekt(){
@@ -4835,7 +4836,9 @@ function crmSaveMeinProjekt(){
   _applyLink(p, val('crm-mp-link'));
   saveTeamProjekt(p);
   window._crmMode='meine'; window._crmProjReturn='meine'; window._crmTeamProjSel=id;
-  crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
+  crmCloseModal();
+  if(window._planActive && window._activeModule==='planung' && window.planOpenMyProj){ window.planOpenMyProj(id); } else paintTeamProjektDetail();
+  toast('Projekt angelegt ✓','ok');
 }
 
 // ══════════════════════════════════════════════════════════════════

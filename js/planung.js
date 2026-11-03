@@ -102,15 +102,32 @@ function _open(a){ return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
   const today=iso(new Date()); const wkEnd=iso(addD(new Date(), 6-dowMon(new Date())));
-  const mine=all.filter(a=>a.node.assigneeId===me() && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length))
+  const mine=all.filter(a=>(a.node.assigneeId===me() || (a.kind==='teamprojekt' && a.owner===me())) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const groups=[['Überfällig',mine.filter(a=>a.node.due&&a.node.due<today),'crit'],['Diese Woche',mine.filter(a=>a.node.due&&a.node.due>=today&&a.node.due<=wkEnd),''],['Später',mine.filter(a=>!a.node.due||a.node.due>wkEnd),'']];
   const row=a=>{ const n=a.node; const col=_teamCol((a.teamsEff||[])[0]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
+    return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(n.assigneeId&&n.assigneeId!==me())?`<span class="plan-tag">→ ${esc(_uName(n.assigneeId))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
   const body=groups.filter(g=>g[1].length).map(g=>`<div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].map(row).join('')}`).join('')
-    || '<div class="plan-empty">Dir ist gerade keine offene Aufgabe zugewiesen. Aufgaben mit Frist und zuständiger Person erscheinen hier und im Kalender.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugewiesen · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
+    || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und alle offenen Aufgaben aus deinen eigenen Projekten.</div>';
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt oder aus meinen eigenen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>${_myProjCard()}`;
 }
+function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
+// Meine Projekte (persönlich, owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
+function _myProjCard(){
+  let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.owner===me()); }catch(e){}
+  const can=(()=>{ try{ const u=window.cu; return !u||u.role==='admin'||!window.tpsRechteOf||!!window.tpsRechteOf(u).pm_proj_eigen; }catch(e){ return true; } })();
+  if(!ps.length && !can) return '';
+  const cnt=p=>{ let n=0; const w=a=>(a||[]).forEach(t=>{ if(!t) return; if(!(Array.isArray(t.children)&&t.children.length) && t.status!=='erledigt') n++; w(t.children); }); w(p.todos); return n; };
+  const open=ps.filter(p=>!p.closed).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de')), closed=ps.filter(p=>p.closed);
+  const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
+  return `<section class="plan-card" style="margin-top:14px"><div class="plan-h"><h2>📂 Meine Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
+    <div class="plan-sub" style="margin:-4px 0 8px">nur für dich sichtbar · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
+    ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
+    ${closed.length?`<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted,#5d7086);font-weight:600;font-size:13px">Abgeschlossen (${closed.length})</summary>${closed.map(row).join('')}</details>`:''}</section>`;
+}
+// Persönliches Projekt im Projektmanagement-Teil der Planung öffnen; „Zurück" führt wieder zu „Was ansteht"
+function planOpenMyProj(id){ try{ window._crmTeamProjSel=id; window._crmMode='meine'; window._crmProjReturn='meine'; planGo('teams',{keep:true}); setTimeout(()=>{ try{ window.crmOpenMeinProjekt&&window.crmOpenMeinProjekt(id); }catch(e){} },0); }catch(e){ console.warn('Planung:',e); } }
+function planNewMyProj(){ try{ window.crmNewMeinProjekt&&window.crmNewMeinProjekt(); }catch(e){ console.warn('Planung:',e); } }
 function _hintCard(){
   let cf={ tasks:[], events:[] }; try{ cf=window.kalMyConflicts?window.kalMyConflicts(28):cf; }catch(e){}
   const rows=cf.tasks.filter(t=>!t.over).map(t=>`<div class="plan-item" role="button" tabindex="0" onclick="crmMeineOpen(${jsq(t.kind)},${jsq(t.tree||'')},${jsq(t.cid)},${jsq(t.id)})"><span class="plan-barc" style="background:var(--danger,#c0392b)"></span><div class="plan-main"><div class="plan-t">${esc(t.text)} <span class="plan-sub">· ${t.kanal?'Beitrag '+esc(t.kanal):'Aufgabe'}</span></div><div class="plan-row"><span class="plan-tag crit">${esc(t.issue)}</span><span class="plan-tag">${esc(t.src)}</span></div></div><span class="plan-when">${esc(fmt(t.due))}</span></div>`)
@@ -211,7 +228,7 @@ function _styles(){
   document.head.appendChild(st);
 }
 
-try{ Object.assign(window, { planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
+try{ Object.assign(window, { planOpenMyProj, planNewMyProj, planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
 export { renderPlanungStart };
 // Tastatur: Einträge mit role=button per Enter/Leertaste öffnen
 document.addEventListener('keydown', e=>{ if(e.key!=='Enter' && e.key!==' ') return; const t=e.target; if(!t || !t.classList || !t.classList.contains('plan-item') || t.getAttribute('role')!=='button') return; e.preventDefault(); t.click(); });

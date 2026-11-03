@@ -316,11 +316,14 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 **☰ → Planung.** Oben die Leiste mit vier Reitern; das gewählte **Team** bleibt beim Wechseln erhalten.
 Die Startseite der App (🏠 Start) bleibt davon unberührt.
 
-- **Was ansteht:** deine offenen Aufgaben aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇 –
+- **Was ansteht:** alles, was dir zugeteilt ist, und alle offenen Aufgaben aus deinen **eigenen Projekten**
+  (aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇) –
   getrennt nach **Überfällig**, **Diese Woche**, **Später**. Daneben **⚠ Hinweise** (was dich in den nächsten
   4 Wochen betrifft: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
   eingeplant bist), **Meine Termine** (14 Tage) und **Wer ist diese Woche da?** (die Personen deiner Teams,
   nur „Abwesend", nie der Grund).
+  Darunter **📂 Meine Projekte**: nur für dich sichtbar; öffnen zum Bearbeiten, Abschließen oder Löschen, „＋ Projekt" legt
+  ein neues an. Eigene Projekte erscheinen nie bei den Teams oder „übergreifend".
 - **Kalender:** Woche/Monat mit **Fälligkeiten** (Zahl am Tag auf der Zeile der zuständigen Person, **rot** bei
   Konflikt: überfällig, Person am Tag oder an den 2 Arbeitstagen davor abwesend, oder Freigabe-Person am Tag/Vortag
   abwesend). **Jahr** = die nächsten 12 Monate mit Veranstaltungen und Abwesenheiten (am Handy gibt es kein Jahr).
