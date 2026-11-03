@@ -1627,6 +1627,7 @@ function taskNodeHtml(c, n, depth){
   if(depth===0 && n.teams && n.teams.length) parts.push('👥 '+n.teams.join(', '));
   if(n.assigneeName) parts.push('👤 '+n.assigneeName);
   if(n.due) parts.push('📅 '+fmtDate(Date.parse(n.due)));
+  if(_isVorlageCtx() && _offOk(n.offsetTage)) parts.push('⏱ '+_offLabel(n.offsetTage));
   if(done && n.doneAt) parts.push('✓ erledigt '+fmtDate(Date.parse(n.doneAt))+(n.doneBy?' ('+n.doneBy+')':''));
   const meta=parts.map(esc).join(' · ');
   const kids=n.children||[];
@@ -1703,7 +1704,7 @@ function kbCardHtml(c, n){
          <span class="crm-tstatus" style="background:${cssColor(st.color)}">${esc(st.label)}</span>
          ${kids.length?`<span class="crm-prog">✓ ${done}/${kids.length}</span>`:''}
          ${n.assigneeName?`<span class="kb-chip">👤 ${esc(n.assigneeName)}</span>`:''}
-         ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}
+         ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}${(_isVorlageCtx()&&_offOk(n.offsetTage))?`<span class="kb-chip">⏱ ${esc(_offLabel(n.offsetTage))}</span>`:''}
          ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
        </div>`:''}
       ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
@@ -3227,6 +3228,10 @@ function _knExtraHtml(n, e, part){
 // teamsEff = Team-Erbregel: eigene teams[] → sonst die der Hauptaufgabe → sonst das Team des Behälters
 // (Veranstaltung v.team, Projekt p.team; Einträge haben kein Behälter-Team). Nur lesen – ändert nichts außer der
 // üblichen Normalisierung (normTasks/migEntityProjekte), die alle Ansichten ohnehin vornehmen.
+// Teams einer Veranstaltung (Release B, Schritt 6): teams[] mit teams[0] = federführend; Altbestand nur v.team.
+// Gespeichert wird übergangsweise beides (team = teams[0]), damit ältere App-Stände weiter das Team sehen.
+function vaTeams(v){ if(!v) return []; const a=Array.isArray(v.teams)?v.teams.filter(Boolean):[]; if(a.length) return [...new Set(a)]; return v.team?[v.team]:[]; }
+window.crmVaTeams=vaTeams;
 function listAllTasks(opts){
   opts=opts||{}; const kinds=Array.isArray(opts.kinds)?opts.kinds:['veranstaltung','teamprojekt','entity']; const incl=!!opts.includeClosed;
   const out=[];
@@ -3239,7 +3244,7 @@ function listAllTasks(opts){
   kinds.forEach(k=>{
     try{
       if(k==='veranstaltung') listVeranstaltungen().forEach(v=>{ if(!v || (v.closed&&!incl)) return; normTasks(v);
-        walk(v.todos, { kind:k, containerId:v.id, containerName:v.titel||'', tree:'', eid:'', pid:'', projName:'', owner:'', closed:!!v.closed }, v.team?[v.team]:[]); });
+        walk(v.todos, { kind:k, containerId:v.id, containerName:v.titel||'', tree:'', eid:'', pid:'', projName:'', owner:'', closed:!!v.closed }, vaTeams(v).slice(0,1)); });
       else if(k==='teamprojekt') listTeamProjekte().forEach(p=>{ if(!p || (p.closed&&!incl)) return; normTasks(p);
         walk(p.todos, { kind:k, containerId:p.id, containerName:p.name||'', tree:'', eid:'', pid:'', projName:'', owner:p.owner||'', closed:!!p.closed }, p.team?[p.team]:[]); });
       else if(k==='entity') getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
@@ -3863,7 +3868,11 @@ function nodeModal(o){
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${preTeams.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:12px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
-  } else if(vo){ teamRow=''; }   // Vorlage-Unterpunkt: keine Einzel-Zuweisung
+  } else if(vo){   // Vorlage-Unterpunkt: keine Person, aber optional Team(s) (Release B, Schritt 7)
+    const pre=Array.isArray(n.teams)?n.teams:[];
+    const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${pre.includes(tm)?'checked':''}> ${esc(tm)}</label>`).join('');
+    teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst erbt der Punkt das Team der Hauptaufgabe)</span></label><div style="padding:4px 0">${teamBoxes}</div></div>`;
+  }
   else {
     const it = tp ? (e.team?[e.team]:[]) : (o.inheritTeam||[]);
     const itLabel = it.join(', ');
@@ -3872,7 +3881,7 @@ function nodeModal(o){
   openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(o.titel)}</h3>
    <div class="crm-modal-field"><label>${o.isTop?'Aufgabe':'Unterpunkt'} *</label><input id="crm-task-text" value="${esc(n.text||'')}"></div>
    ${teamRow}
-   ${vo?'':`<div style="display:flex;gap:10px;flex-wrap:wrap">
+   ${vo?`<div class="crm-modal-field"><label>Fällig – Versatz in Tagen zum Start <span style="font-size:12px;color:var(--muted)">(z. B. -14 = zwei Wochen vorher, 0 = am Starttag, leer = ohne Frist)</span></label><input id="crm-task-offset" type="number" step="1" min="-365" max="365" value="${_offOk(n.offsetTage)?esc(String(n.offsetTage)):''}" style="max-width:140px"></div>`:`<div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="crm-task-due" type="date" value="${esc(n.due||'')}"></div>
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Status</label><select id="crm-task-status">${statusOpts}</select></div>
    </div>`}
@@ -3912,6 +3921,12 @@ function _readNodeForm(e, isTop){
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
   if(isTop && _ctxAllowsTeams()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe (Eintrag/Veranstaltung/Vorlage)
+  if(_isVorlageCtx()){   // Vorlage: Versatz statt Datum, Team auch für Unterpunkte, nie eine Person
+    const ov=String(val('crm-task-offset')||'').trim(); const o=ov===''?null:Math.round(Number(ov));
+    rec.offsetTage=(o===null||!isFinite(o))?null:Math.max(-365,Math.min(365,o));
+    if(!isTop) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);
+    rec.due=''; rec.assigneeId=''; rec.assigneeName='';
+  }
   return rec;
 }
 function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
@@ -3990,6 +4005,7 @@ function crmQuickAddChildInline(parentId, text, focusId, prepend){
 }
 // ── Vorlage auf den Eintrag anwenden ───────────────────────────────
 function crmApplyVorlagePick(){
+  if(!_R('pm_vorlage_anwenden')){ toast('Dafür fehlt das Recht „Vorlage anwenden“.','err'); return; }
   const vs=listVorlagen();
   if(!vs.length){ if(confirm('Es gibt noch keine Vorlagen.\nJetzt eine anlegen?')) crmOpenVorlagen(); return; }
   crmOpenModalShell();
@@ -4017,18 +4033,24 @@ function normVorlage(v){
 function _vCount(v){ normVorlage(v); return (v.todos||[]).length; }
 // Kern: baut die Vorlage in den AKTUELLEN Container (ctx) – ohne UI-Nebenwirkungen.
 // Liefert die Anzahl Hauptaufgaben (0 = nichts/Fehler).
+// Versatz-Helfer (Release B, Schritt 7)
+function _offOk(o){ return typeof o==='number' && isFinite(o); }
+function _offLabel(o){ return o===0?'am Start':(o<0?(-o)+' T. vor Start':o+' T. nach Start'); }
+function _addDaysIso(iso, n){ const p=String(iso||'').slice(0,10).split('-').map(Number); if(p.length!==3||!p[0]) return ''; return localISODate(new Date(p[0],p[1]-1,p[2]+n,12)); }
 function _applyVorlageCore(id){
   const v=getVorlage(id); if(!v) return 0;
   normVorlage(v);
+  const _cStart=(()=>{ try{ const c=curContainer(); return (c&&c.start)?String(c.start).slice(0,10):''; }catch(e){ return ''; } })();   // Veranstaltung/Projekt mit Start
   const idMap={};
   flatNodes(v.todos).forEach(x=>{ idMap[x.id]=newId(); });
   const build=(n,depth)=>{
-    const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:'', status:'offen',
+    const node={ id:idMap[n.id], text:n.text, note:n.note||'', assigneeId:'', assigneeName:'', due:(_cStart&&_offOk(n.offsetTage))?_addDaysIso(_cStart, n.offsetTage):'', status:'offen',
       deps:(n.deps||[]).map(d=>idMap[d]).filter(Boolean),
       attachments:(n.attachments||[]).map(a=>({ ...a, id:newId() })),
       children:(n.children||[]).map(ch=>build(ch,depth+1)) };
     // Team(s) der Vorlagen-Top-Aufgabe in die Instanz übernehmen (mehrere; Legacy n.team als Fallback).
     if(depth===0) node.teams = _ctxAllowsTeams() ? ((Array.isArray(n.teams)&&n.teams.length)?n.teams.slice():(n.team?[n.team]:[])) : [];
+    else if(_ctxAllowsTeams() && Array.isArray(n.teams) && n.teams.length) node.teams=n.teams.slice();   // Unterpunkt mit eigenem Team
     return node;
   };
   const mains=(v.todos||[]).map(n=>build(n,0));
@@ -4069,7 +4091,7 @@ function teamTasks(team){
   const out=[]; const ohne=(team==='Ohne Team');
   const all=listAllTasks({ kinds:['veranstaltung','entity','teamprojekt'] });
   all.forEach(a=>{ if(a.kind!=='veranstaltung' || a.depth!==0) return;
-    const v=getVeranstaltung(a.containerId)||{}; const match = ohne ? !v.team : (v.team===team); if(!match || a.node.status==='erledigt') return;
+    const v=getVeranstaltung(a.containerId)||{}; const match = ohne ? (!vaTeams(v).length && !(a.node.teams||[]).length) : (a.teamsEff||[]).includes(team); if(!match || a.node.status==='erledigt') return;
     out.push({kind:'veranstaltung', id:a.containerId, origin:(a.containerName||'Veranstaltung'), oicon:'📅', node:a.node}); });
   // Einträge: je Projekt zuerst die Hauptaufgaben mit Team-Tag, dann Aufgaben aus Kontaktnotizen (Unterpunkte „Aus Kontaktnotizen“)
   const byProj=new Map(); all.forEach(a=>{ if(a.kind!=='entity') return; const k=a.tree+'|'+a.eid+'|'+a.pid; if(!byProj.has(k)) byProj.set(k,[]); byProj.get(k).push(a); });
@@ -4099,7 +4121,7 @@ function crmTeamTaskOpen(kind,tree,id,tid){ _teamTaskSetCtx(kind,tree,id,tid); c
 window.crmTeamTaskOpen=crmTeamTaskOpen;
 // Veranstaltungen eines Teams (Ohne Team = ohne team-Zuordnung / übergeordnet)
 function teamVeranstaltungen(team){
-  return listVeranstaltungen().filter(v=> team==='Ohne Team' ? !v.team : (v.team===team));
+  return listVeranstaltungen().filter(v=> team==='Ohne Team' ? !vaTeams(v).length : vaTeams(v).includes(team));
 }
 // Zählung für die Team-Kacheln: Veranstaltungen (gesamt / anstehend)
 function teamCounts(team){
@@ -4130,7 +4152,7 @@ function crmBackToTeamProjekte(){
 function teamProjektCounts(team){
   try{
     const ps=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
-    let openN=0; ps.forEach(p=>{ openN+=flatTasks(p).filter(t=>t.status!=='erledigt').length; });
+    let openN=0; ps.forEach(p=>{ if(!p.closed) openN+=flatTasks(p).filter(t=>t.status!=='erledigt').length; });
     return { total:ps.length, open:openN };
   }catch(e){ return { total:0, open:0 }; }
 }
@@ -4198,7 +4220,7 @@ function paintTeamDetail(){
   </div>`;
   // Eigenständige Team-Projekte (persönliche ausschließen)
   const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
-  const projCardHtml=p=>{ const all=flatTasks(p); const openN=all.filter(t=>t.status!=='erledigt').length;
+  const projCardHtml=p=>{ const all=flatTasks(p); const openN=p.closed?0:all.filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenTeamProjekt(${jsq(p.id)})">
       <h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}</div>
@@ -4329,6 +4351,11 @@ function teamProjektFormHtml(p, isNew){
    <div class="crm-modal-field"><label>Name *</label><input id="crm-tp-name" value="${esc(p.name||'')}"></div>
    <div class="crm-modal-field"><label>Team</label><select id="crm-tp-team"${(isNew||_kbMayManage(p))?'':' disabled title="Team ändern: nur mit Projektmanagement „Verwaltend\"'}>${teamOpts}</select></div>
    <div class="crm-modal-field"><label>Zuordnung <span style="font-size:12px;color:var(--muted)">(Verein / Sozialakteur …)</span></label><select id="crm-tp-link" class="crm-ss">${entityLinkOptions(linkSel)}</select></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Zeitraum von <span style="font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0">(optional)</span></label><input id="crm-tp-start" type="date" value="${esc(p.start||'')}"></div>
+     <div class="crm-modal-field" style="flex:1;min-width:140px"><label>bis</label><input id="crm-tp-ende" type="date" value="${esc(p.ende||'')}"></div>
+   </div>
+   <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px">Mit Zeitraum erscheint das Projekt in der Jahresansicht des Kalenders.</div>
    <div class="crm-modal-field"><label>Beschreibung</label><textarea id="crm-tp-besch" rows="3">${esc(p.beschreibung||'')}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
    <button class="btn-sm-crm primary" onclick="crmSaveTeamProjekt(${isNew?'true':'false'})">${isNew?'Anlegen':'Speichern'}</button></div>`;
@@ -4347,9 +4374,10 @@ function crmEditTeamProjekt(){
 function crmSaveTeamProjekt(isNew){
   const name=val('crm-tp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const team=val('crm-tp-team'); const beschreibung=val('crm-tp-besch'); const link=val('crm-tp-link');
+  const start=val('crm-tp-start'); let ende=val('crm-tp-ende'); if(ende && (!start || ende<start)) ende=start||'';   // Zeitraum (Schritt 5)
   if(isNew){
     const id=newId();
-    const p={ id, name, team, beschreibung, createdAt:Date.now(),
+    const p={ id, name, team, beschreibung, start, ende, createdAt:Date.now(),
       createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] };
     _applyLink(p, link);
     saveTeamProjekt(p);
@@ -4357,7 +4385,7 @@ function crmSaveTeamProjekt(isNew){
     crmCloseModal(); paintTeamProjektDetail(); toast('Projekt angelegt ✓','ok');
   } else {
     const p=getTeamProjekt(window._crmTeamProjSel); if(!p) return;
-    p.name=name; if(_kbMayManage(p)) p.team=team; p.beschreibung=beschreibung; _applyLink(p, link);
+    p.name=name; if(_kbMayManage(p)) p.team=team; p.beschreibung=beschreibung; p.start=start; p.ende=ende; _applyLink(p, link);
     p.updatedByKuerzel=curKuerzel(); p.updatedByName=curName();
     saveTeamProjekt(p);
     crmCloseModal(); paintTeamProjektDetail(); toast('Gespeichert ✓','ok');
@@ -4475,7 +4503,7 @@ function vaTeilnChip(t,i,removable){
 // direkt oben in der Teams-Ansicht (kein eigener Reiter mehr nötig).
 function veranstaltungenListHtml(){
   const all=listVeranstaltungen();
-  const card=v=>{ const op=flatNodes(v.todos).filter(t=>t.status!=='erledigt').length;
+  const card=v=>{ const op=v.closed?0:flatNodes(v.todos).filter(t=>t.status!=='erledigt').length;   // abgeschlossen: keine „offen"-Zählung (Schritt 10)
     return `<div class="crm-card" onclick="crmOpenVeranstaltung(${jsq(v.id)})">
       <h3>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
       <div class="sub">${vaDateLabel(v)||'—'}${v.online?' · Online':(v.ortOderLink?' · '+esc(v.ortOderLink):'')}</div>
@@ -4525,7 +4553,7 @@ function paintVeranstaltungDetail(){
       <div class="crm-fields">
         <div class="crm-field"><label>Wann</label><div class="v">${vaDateLabel(v)||'—'}</div></div>
         ${ortLine?`<div class="crm-field"><label>Wo</label><div class="v">${ortLine}</div></div>`:''}
-        ${v.team?`<div class="crm-field"><label>Team</label><div class="v">${esc(v.team)}</div></div>`:''}
+        ${vaTeams(v).length?`<div class="crm-field"><label>Team${vaTeams(v).length>1?'s':''}</label><div class="v">${esc(vaTeams(v)[0])}${vaTeams(v).length>1?' <span style="color:var(--muted)">(federführend)</span> · '+vaTeams(v).slice(1).map(esc).join(', '):''}</div></div>`:'<div class="crm-field"><label>Team</label><div class="v" style="color:var(--muted)">übergreifend</div></div>'}
       </div>
       <div style="margin-top:12px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">Beteiligte Einträge</label><div style="display:flex;gap:6px;flex-wrap:wrap">${teiln}</div></div>
       <div style="margin-top:12px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:6px">👥 Zugewiesene Mitarbeiter</label><div style="display:flex;gap:6px;flex-wrap:wrap">${(v.mitarbeiter&&v.mitarbeiter.length)?staffNames(v.mitarbeiter).map(nm=>`<span class="crm-chip" style="font-size:12px">${esc(nm)}</span>`).join(''):'<span class="small" style="color:var(--muted)">Niemand zugewiesen.</span>'}</div></div>
@@ -4637,7 +4665,9 @@ function _farbVal(idp){ const r=document.querySelector('input[name="'+idp+'-farb
 function _vaFieldsHtml(v){
   v=v||{};
   const uv=_splitUhr(v.uhrzeit);
-  const teamOpts=['<option value="">– kein Team –</option>'].concat(zeTeams().map(tm=>`<option ${v.team===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  const vt=vaTeams(v), lead=vt[0]||''; const _tOk=!v.id || _R('pm_va_teams');
+  const teamOpts=['<option value="">– übergreifend (kein Team) –</option>'].concat(zeTeams().map(tm=>`<option ${lead===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:6px;margin:0 12px 4px 0;font-size:14px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--text)"><input type="checkbox" class="crm-va-team2" value="${esc(tm)}" ${vt.slice(1).includes(tm)?'checked':''}${_tOk?'':' disabled'} style="width:auto"> ${esc(tm)}</label>`).join('');
   return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">
      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Von *</label><input id="crm-va-start" type="date" value="${esc(v.start||'')}"></div>
@@ -4647,7 +4677,8 @@ function _vaFieldsHtml(v){
    </div>
    <div class="crm-modal-field"><label style="display:inline-flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:var(--text)"><input type="checkbox" id="crm-va-online" ${v.online?'checked':''} style="width:auto"> 💻 Online-Treffen</label></div>
    <div class="crm-modal-field"><label>Ort / Link</label><input id="crm-va-ort" value="${esc(v.ortOderLink||'')}" placeholder="Adresse oder Meeting-Link"></div>
-   <div class="crm-modal-field"><label>Team</label><select id="crm-va-team">${teamOpts}</select></div>
+   <div class="crm-modal-field"><label>Team (federführend)</label><select id="crm-va-team"${_tOk?'':' disabled title="Teams ändern: dafür fehlt das Recht „Teams einer Veranstaltung ändern“"'}>${teamOpts}</select></div>
+   ${zeTeams().length>1?`<div class="crm-modal-field"><label>Beteiligte Teams <span style="font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0">(sehen nur Aufgaben, die ihnen zugeteilt sind)</span></label><div>${teamBoxes}</div></div>`:''}
    ${crmKpHtml('crm-va','Beteiligte CRM-Kontakte','beliebig viele, per Suche')}
    ${_farbPickHtml('crm-va', v.farbe, true)}
    ${_canAssignStaff()
@@ -4750,8 +4781,12 @@ function crmSaveVeranstaltung(isNew){
   const start=val('crm-va-start'); if(!start){ toast('Bitte ein Startdatum wählen.','err'); return; }
   const rec={ titel, start, ende:val('crm-va-ende'), uhrzeit:_joinUhr(val('crm-va-uhrvon'),val('crm-va-uhrbis')),
     online:!!(document.getElementById('crm-va-online')&&document.getElementById('crm-va-online').checked),
-    ortOderLink:val('crm-va-ort'), team:val('crm-va-team'), beschreibung:val('crm-va-besch'), farbe:_farbVal('crm-va'),
+    ortOderLink:val('crm-va-ort'), beschreibung:val('crm-va-besch'), farbe:_farbVal('crm-va'),
     teilnehmer:(window._vaTeiln||[]).map(t=>({tree:t.tree,eid:t.eid})) };
+  if(isNew || _R('pm_va_teams')){   // Teams: federführend + beteiligte (teams[0] = federführend), team übergangsweise mit
+    const lead=val('crm-va-team'); const more=[...document.querySelectorAll('.crm-va-team2:checked')].map(x=>x.value).filter(t=>t&&t!==lead);
+    rec.teams=[...new Set([lead].concat(more).filter(Boolean))]; rec.team=rec.teams[0]||'';
+  }
   if(_canAssignStaff()) rec.mitarbeiter=readStaffPicker('crm-va');   // sonst bestehende Zuweisung NICHT überschreiben
   if(isNew){
     const id=newId();

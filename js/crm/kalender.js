@@ -200,6 +200,31 @@ function kalMyConflicts(days){
 }
 function kalSetCfScope(v){ _cfScope=v; renderKalender(); }
 function kalSetCfDays(n){ _cfDays=n===91?91:28; renderKalender(); }
+// ── Projekte mit Zeitraum + Aufgabenlast (Release B, Schritt 5) ──
+const _TEAM_COLS=['#1f6fb2','#b4531f','#2f7d4f','#7a4bb0','#b0306a','#2f8a8a','#8a6d1f','#4b5fb0'];
+function _teamColor(){ const d=getData()||{}; const ts=Array.isArray(d.teams)?d.teams:[]; return t=>{ const i=ts.indexOf(t); return i<0?'#5d7086':_TEAM_COLS[i%_TEAM_COLS.length]; }; }
+function _projekte(){ const me=(window.cu&&window.cu.id)||''; let ps=[]; try{ ps=Object.values((getCrm()||{}).teamprojekte||{}); }catch(e){}
+  return ps.filter(p=>p&&p.start&&!p.closed&&(!p.owner||p.owner===me)).map(p=>{ let open=0; const walk=a=>(a||[]).forEach(n=>{ if(n&&n.status!=='erledigt') open++; walk(n&&n.children); }); walk(p.todos);
+    return { id:p.id, name:p.name||'Projekt', team:p.team||'', von:String(p.start).slice(0,10), bis:String(p.ende||p.start).slice(0,10), open }; }); }
+function _teamLoad(months, emps, abs){
+  let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){ all=[]; }
+  const tOf={}; emps.forEach(u=>{ tOf[u.id]=_teamOf(u); });
+  const out={}; const teams=_teamsOrdered(emps);
+  teams.forEach(t=>{ out[t]=months.map(o=>{ const people=emps.filter(u=>_teamOf(u)===t).length; return { n:0, people, absDays:0, wd:0, perHead:0, y:o.y, m:o.m }; }); });
+  months.forEach((o,i)=>{ const dim=_daysInMonth(o.y,o.m); let wd=0; const days=[]; for(let d=1;d<=dim;d++){ const dt=new Date(o.y,o.m-1,d,12); if(_dowMon(dt)<5){ wd++; days.push(_iso(dt)); } }
+    teams.forEach(t=>{ const c=out[t][i]; c.wd=wd;
+      emps.filter(u=>_teamOf(u)===t).forEach(u=>{ const mine=abs.filter(a=>a.emp===u.id); c.absDays+=days.filter(x=>mine.some(a=>overlap(a.von,a.bis,x,x))).length; }); }); });
+  all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt') return; const due=String(n.due).slice(0,10); const y=+due.slice(0,4), m=+due.slice(5,7);
+    const i=months.findIndex(o=>o.y===y&&o.m===m); if(i<0) return;
+    const ts=new Set(a.teamsEff||[]); if(n.assigneeId&&tOf[n.assigneeId]) ts.add(tOf[n.assigneeId]);
+    ts.forEach(t=>{ if(out[t]) out[t][i].n++; }); });
+  teams.forEach(t=>out[t].forEach(c=>{ const present=c.wd?Math.max(0.5,(c.people*c.wd-c.absDays)/c.wd):c.people; c.perHead=present?c.n/present:c.n; }));
+  return out;
+}
+function kalOpenProjekt(id){
+  try{ window.switchModule&&window.switchModule('crm'); }catch(e){}
+  setTimeout(()=>{ try{ window._crmMode='teams'; if(window.crmOpenTeamProjekt) window.crmOpenTeamProjekt(id); }catch(e){} }, 300);
+}
 function kalSetDue(on){ _showDue=!!on; try{ localStorage.setItem('tps_kal_due', on?'1':'0'); }catch(e){} renderKalender(); }
 // CRM-Termine (auf Kontakten: e.termine) einsammeln – über alle Bäume/Einträge.
 function _termine(){ const out=[]; try{
@@ -376,6 +401,10 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-due:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:1px}
   .kal-pdue{background:var(--surface,#fff);color:var(--primary,#203869);border:1.5px solid var(--primary,#203869)}
   .kal-pdue.cf{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:var(--on-primary,#fff)}
+  .kal-load{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;border-right:1px solid var(--border,#c3cedb);font-size:13px;color:var(--muted,#5d7086);line-height:1.15}
+  .kal-load b{font-size:15px;color:var(--primary-d,#15263a);font-variant-numeric:tabular-nums}
+  .kal-load span{font-size:11px}
+  .kal-load.l1{background:var(--ok-bg,#e7f6e9)} .kal-load.l2{background:var(--warn-bg,#fef3c7)} .kal-load.l3{background:var(--danger-bg,#fde8e8)}
   .kal-cfsec{margin:0 0 6px}
   .kal-cfhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 6px}
   .kal-cfh{font-size:16px;font-weight:800;color:var(--primary-d,#15263a)}
@@ -590,6 +619,18 @@ function _yearGrid(months, title){
   months.forEach((o,i)=>{ const lbl=MON_ABBR[o.m-1]+(o.y!==_first.y?(" '"+String(o.y).slice(2)):''); h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+lbl+'</div>'; });
   h+='</div>';
   h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
+  // Spur „Projekte" (Release B, Schritt 5): Team-Projekte mit Zeitraum (eigene persönliche Projekte nur für die Person selbst)
+  const _tcol=_teamColor();
+  const projs=_projekte().filter(p=>inYear(p.von,p.bis)&&(!curTeam||curTeam==='@me'||p.team===curTeam));
+  if(projs.length){
+    const pN=Math.max(1,_laneAssign(projs));
+    h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" style="color:var(--primary,#203869)">Projekte</div>'+mcells();
+    h+='<div class="kal-track" style="min-height:'+(pN*mH+6)+'px">'+wlines+todayLine;
+    projs.forEach(p=>{ const w=spanPct(p.von,p.bis); const tip='📂 '+p.name+(p.team?' · '+p.team:'')+' · '+_deDate(p.von)+(p.bis!==p.von?'–'+_deDate(p.bis):'')+(p.open?' · '+p.open+' offen':'');
+      const on=_kalAccess().hasCrm?' onclick="kalOpenProjekt('+jsq(p.id)+')"':'';
+      h+='<div class="kal-ev-mark'+(on?' kal-clickable':'')+'" style="left:'+leftPct(p.von)+'%;width:'+w+'%;top:'+(3+p._lane*mH)+'px;height:'+(mH-3)+'px;background:'+_tcol(p.team)+'" data-tip="'+esc(tip)+'"'+on+'>📂 '+esc(p.name)+'</div>'; });
+    h+='</div></div>';
+  }
   // Band = ALLE Events/Termine, benannt
   const yItems=items.filter(it=>inYear(it.von,it.bis));
   if(yItems.length){
@@ -598,6 +639,20 @@ function _yearGrid(months, title){
     h+='<div class="kal-track" style="min-height:'+(bN*mH+6)+'px">'+wlines+todayLine;
     yItems.forEach(it=>{ h+=namedMark(it); });
     h+='</div></div>';
+  }
+  // Aufgabenlast je Team und Monat (Schritt 5): Zahl = fällige offene Aufgaben; Farbe = Aufgaben je anwesender Person,
+  // darunter die Abwesenheitstage im Team (Mo–Fr, nur Urlaub/Ausgleich). Sichtbar mit dem Recht „Fälligkeiten anderer sehen".
+  if(_scope('kal_faellig') && curTeam!=='@me'){
+    const L=_teamLoad(months, emps, abs);
+    const rows=_teamsOrdered(emps).filter(t=>(!curTeam||t===curTeam) && L[t]);
+    if(rows.length){
+      h+='<div class="kal-teamrow">Aufgabenlast je Team</div>';
+      rows.forEach(t=>{ h+='<div class="kal-row" style="'+cs+'"><div class="kal-name" title="'+esc(t)+'">'+esc(t)+'</div>';
+        months.forEach((o,i)=>{ const c=L[t][i]; const lv=c.n===0?'':(c.perHead<3?'l1':(c.perHead<6?'l2':'l3'));
+          const tip=t+' · '+MON_ABBR[o.m-1]+' '+o.y+': '+c.n+' fällige Aufgabe'+(c.n===1?'':'n')+' · '+c.absDays+' Abwesenheitstage · '+c.people+' Person'+(c.people===1?'':'en');
+          h+='<div class="kal-load '+lv+'" style="grid-column:'+(i+2)+'" data-tip="'+esc(tip)+'"><b>'+(c.n||'–')+'</b>'+(c.absDays?'<span>'+c.absDays+' T. abw.</span>':'')+'</div>'; });
+        h+='</div>'; });
+    }
   }
   // Mitarbeiter – Abwesenheiten (voll) + schmale Zuweisungs-Marker
   _teamsOrdered(emps).forEach(t=>{
@@ -948,4 +1003,4 @@ function kalAboCopy(id){ const i=document.getElementById(id||'kal-abo-url'); if(
 
 Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
 Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
-Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts });
+Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts, kalOpenProjekt });
