@@ -2853,7 +2853,8 @@ function crmDeleteTermin(tid){
 function crmEditTermin(tid){
   injectStyles();   // falls direkt aus dem Kalender geöffnet (CRM evtl. noch nie gerendert)
   const e=curEntity(); if(!e){ toast('Kein Kontakt geöffnet.','err'); return; }
-  const t=(e.termine||[]).find(x=>x.id===tid); if(!t){ toast('Termin nicht gefunden.','err'); return; }
+  const t=(e.termine||[]).find(x=>x.id===tid);
+  if(!t){ if(getVeranstaltung(tid)){ crmOpenVeranstaltung(tid); return; } toast('Termin nicht gefunden.','err'); return; }   // hat inzwischen ein Board (gleiche ID)
   const canAsg=_canAssignStaff();
   const canEdit=(_R('crm_termine')||_R('kal_fremde'));     // CRM „nutzen" darf nur ansehen (read-only)
   const ro = canEdit?'':' disabled';
@@ -2875,7 +2876,7 @@ function crmEditTermin(tid){
      ? `<div class="crm-modal-field"><label>👥 Mitarbeiter <span style="font-size:12px;color:var(--muted)">(zugewiesen – erscheinen im Kalender)</span></label>${staffPickerHtml(t.mitarbeiter, 'crm-te')}</div>`
      : ((t.mitarbeiter&&t.mitarbeiter.length)?`<div class="crm-modal-field"><label>👥 Mitarbeiter</label><div style="font-size:13px;color:var(--muted)">${staffNames(t.mitarbeiter).map(esc).join(', ')}</div></div>`:'')}
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
-   ${canEdit?`<button class="btn-sm-crm" onclick="crmTerminToVa(${jsq(tid)})" title="Aus dem Termin eine Veranstaltung mit eigenem Kanban machen">🎪 In Veranstaltung umwandeln</button>`:''}
+   ${(canEdit&&_R('kal_va'))?`<button class="btn-sm-crm" onclick="crmTerminToVa(${jsq(tid)})" title="Der Termin bekommt ein Aufgaben-Board (Aufgaben, Vorlagen) – Datum, Uhrzeit, Farbe, Kontakte, Mitarbeitende und Verweise bleiben erhalten">📋 Aufgaben-Board einschalten</button>`:''}
    ${(window._crmModalReturn==='kalender'&&_kalHasCrm())?`<button class="btn-sm-crm" onclick="kalGotoTermin()">Zum Termin ↗</button>`:''}
    ${canEdit?`<button class="btn-sm-crm primary" onclick="crmSaveTerminEdit(${jsq(tid)})">Speichern</button>`:''}</div>`);
   _crmSide();
@@ -3205,10 +3206,14 @@ function _knExtraHtml(n, e, part){
       if(t) open=` onclick="crmMeineOpen('entity',${jsq(window._crmTree)},${jsq(e.id)},${jsq(f.ref.tid)})" style="cursor:pointer" title="Aufgabe öffnen"`;
     } else if(f.ref && f.ref.kind==='termin' && e){
       const t=(e.termine||[]).find(x=>x.id===f.ref.tid);
+      const vb=t?null:getVeranstaltung(f.ref.tid);   // Termin hat inzwischen ein Aufgaben-Board (gleiche ID)
       if(t){ live.text=t.titel||f.text; live.datum=t.datum||''; live.uhr=t.uhr||'';
         const ma=staffNames(t.mitarbeiter||[]); if(ma.length) live.wer=ma.join(', '); }
-      stand = t ? '<span class="crm-kn-st">📅 im Kalender</span>' : '<span class="crm-kn-st">gelöscht</span>';
+      else if(vb){ live.text=vb.titel||f.text; live.datum=vb.start||''; live.uhr=vb.uhrzeit||'';
+        const ma=staffNames(vb.mitarbeiter||[]); if(ma.length) live.wer=ma.join(', '); }
+      stand = t ? '<span class="crm-kn-st">📅 im Kalender</span>' : (vb ? '<span class="crm-kn-st">📋 mit Board</span>' : '<span class="crm-kn-st">gelöscht</span>');
       if(t) open=` onclick="crmEditTermin(${jsq(f.ref.tid)})" style="cursor:pointer" title="Termin öffnen"`;
+      else if(vb) open=` onclick="crmOpenVeranstaltung(${jsq(vb.id)})" style="cursor:pointer" title="Termin mit Board öffnen"`;
     }
     const wer=live.wer;
     const dat=live.datum?fmtDate(Date.parse(live.datum))+(live.uhr?' '+live.uhr:''):'';
@@ -5006,18 +5011,34 @@ function crmNewType(t){
 function crmSaveNewItem(){ const _va=(window._crmNewType||'termin')==='veranstaltung'; if(_va?!_R('kal_va'):!(_R('crm_termine')||_R('kal_eigene'))){ toast('Dafür fehlt die Berechtigung.','err'); return; } if((window._crmNewType||'termin')==='veranstaltung') crmSaveVeranstaltung(true); else crmSaveTermin(); }
 // Termin → Veranstaltung (mit Kanban) umwandeln: neue Veranstaltung aus den Termindaten
 // anlegen (Kontakt als Beteiligter), dann den Termin am Kontakt entfernen.
+// Termin → Aufgaben-Board (Umbauplan Release D, Schritt 5b – erster Teil). Früher („In Veranstaltung umwandeln")
+// bekam die Veranstaltung eine NEUE ID; Uhrzeit, Farbe, weitere Kontakte und Verweise aus Kontaktnotizen gingen verloren.
+// Jetzt: gleiche ID, alle Felder übernommen (uhr → uhrzeit, farbe, alle Kontakte als teilnehmer, mitarbeiter,
+// Ersteller); Verweise in Kontaktnotizen (ref.tid) finden den Termin über die gleiche ID weiter (siehe Kontaktnotizen).
+// Die vollständige Zusammenlegung aller Termine in einen Knoten folgt mit dem Umbau der Leserechte (0b–0d).
+function _terminAsVa(t, home){
+  const kont=[]; const add=k=>{ if(k&&k.tree&&k.eid&&!kont.some(x=>x.tree===k.tree&&x.eid===k.eid)) kont.push({ tree:k.tree, eid:k.eid }); };
+  add(home); (Array.isArray(t.teilnehmer)?t.teilnehmer:[]).forEach(add);
+  const va={ id:t.id, titel:t.titel||'', start:t.datum||'', ende:(t.bis&&t.bis!==t.datum)?t.bis:'', uhrzeit:t.uhr||'', online:false, ortOderLink:t.ort||'',
+    team:'', teams:[], beschreibung:t.note||'', farbe:t.farbe||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter.slice():[], teilnehmer:kont,
+    todos:[], closed:false, fromTermin:{ tree:(home&&home.tree)||'', eid:(home&&home.eid)||'', at:Date.now() },
+    createdAt:t.createdAt||Date.now(), createdById:t.createdById||((window.cu&&window.cu.id)||''), createdByKuerzel:t.createdByKuerzel||curKuerzel(), createdByName:curName() };
+  return va;
+}
 function crmTerminToVa(tid){
+  if(!_R('kal_va')){ toast('Dafür fehlt das Recht „Veranstaltungen anlegen/bearbeiten“.','err'); return; }
   const e=curEntity(); if(!e) return; const t=(e.termine||[]).find(x=>x.id===tid); if(!t) return;
+  if(getVeranstaltung(tid)){ toast('Für diesen Termin gibt es schon ein Board.','err'); return; }
   const backToKal=(window._crmModalReturn==='kalender');
   const tree=window._crmTree, eid=window._crmSelId;
-  const id=newId();
-  saveVeranstaltung({ id, titel:t.titel||'', start:t.datum||'', ende:t.bis||'', uhrzeit:'', online:false, ortOderLink:t.ort||'', team:'', beschreibung:t.note||'', mitarbeiter:Array.isArray(t.mitarbeiter)?t.mitarbeiter:[], teilnehmer:(tree&&eid)?[{tree,eid}]:[], todos:[], closed:false, createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() });
+  const va=_terminAsVa(t, (tree&&eid)?{tree,eid}:null);
+  saveVeranstaltung(va);
   mutateEntity(x=>{ x.termine=(x.termine||[]).filter(y=>y.id!==tid); });
-  window._crmVaSel=id;
+  window._crmVaSel=va.id;
   crmCloseModal();
   if(backToKal){ try{ window.renderKalender&&window.renderKalender(); }catch(_e){} }
   else { window._crmMode='veranstaltungen'; paintVeranstaltungDetail(); }
-  toast('In Veranstaltung umgewandelt ✓','ok');
+  toast('Aufgaben-Board eingeschaltet ✓ – Termin bleibt mit allen Angaben erhalten','ok');
 }
 function crmNewVeranstaltung(){ injectStyles(); window._crmVaReturn=null; window._vaTeiln=[]; crmOpenModalShell(); openModal(veranstaltungFormHtml({}, true)); _crmSide(); }
 function crmEditVeranstaltung(){
