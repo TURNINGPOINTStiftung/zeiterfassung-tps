@@ -444,8 +444,13 @@ async function _fillTodo(){
     const me=(window.cu&&window.cu.id)||'';
     const tasks=[];
     const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(t.assigneeId===me && t.status!=='erledigt') tasks.push({kind,id:o.id,name,t}); }); };
-    (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
-    (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
+    if(window.crmListAllTasks){   // gemeinsame Sammelstelle (crm.js, Release A)
+      window.crmListAllTasks({ kinds:['veranstaltung','teamprojekt'] }).forEach(a=>{ if(a.node.assigneeId===me && a.node.status!=='erledigt')
+        tasks.push({ kind:a.kind, id:a.containerId, name:a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':'Projekt'), t:a.node }); });
+    } else {
+      (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
+      (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
+    }
     tasks.forEach(a=>{ const due=a.t.due||''; const over=due&&due<today;
       rows.push({ sort:due||'9999', html:`<div class="home-row mine" onclick="crmMeineOpen(${jsq(a.kind)},'',${jsq(a.id)},${jsq(a.t.id)})"><span>☑️</span><span class="tx">${esc(a.t.text||'Aufgabe')} <span class="home-sub">· ${esc(a.name)}</span></span>${due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(due)}</span>`:''}</div>` }); });
     (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>{
