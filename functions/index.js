@@ -79,23 +79,26 @@ const BASIC_ROLES = ['mitarbeiter', 'berater', 'freiberuflich'];
 const R_KEYS = ['crm_ansehen', 'crm_anlegen', 'crm_stamm', 'crm_personen', 'crm_notizen', 'crm_notizen_fremd', 'crm_aufgaben', 'crm_termine',
   'crm_statistik', 'crm_foerder', 'crm_koop', 'crm_dateien', 'crm_loeschen', 'crm_notiz_purge', 'crm_export', 'crm_import', 'crm_einst',
   'kal_ansehen', 'kal_abw', 'kal_eigene', 'kal_zuweisen', 'kal_fremde', 'kal_loeschen', 'kal_va', 'kal_va_loeschen', 'kal_abo',
+  'kal_faellig', 'kal_konflikte',
   'pm_ansehen', 'pm_aufg_bearb', 'pm_aufg_neu', 'pm_proj_eigen', 'pm_proj_team', 'pm_proj_loeschen', 'pm_vorlagen',
   'vt_nutzen', 'vt_eintragen', 'vt_anlegen', 'vt_import', 'vt_loeschen', 'vt_export',
   'me_formular', 'me_liste', 'me_uebertragen', 'me_eintrag_loeschen', 'me_va', 'me_va_loeschen',
   'la_ansehen', 'la_bestellen', 'la_ausleihen', 'la_best_bearb', 'la_bestand', 'la_artikel', 'la_einst'];
-const R_OPTS = { crm_ansehen: ['alle', 'kat', 'verein'], kal_ansehen: ['alle', 'team', 'eigene'], kal_loeschen: ['eigene', 'alle'], pm_ansehen: ['teams', 'alle'] };
+const R_OPTS = { crm_ansehen: ['alle', 'kat', 'verein'], kal_ansehen: ['alle', 'team', 'eigene'], kal_loeschen: ['eigene', 'alle'], pm_ansehen: ['teams', 'alle'],
+  kal_faellig: ['alle', 'team', 'eigene'], kal_konflikte: ['alle', 'team', 'eigene'] };
 const rAll = on => Object.fromEntries(R_KEYS.map(k => [k, on ? (R_OPTS[k] ? R_OPTS[k][(k === 'kal_loeschen' || k === 'pm_ansehen') ? 1 : 0] : true) : false]));
 const rPick = v => Object.assign(rAll(false), v);
 const R_TEAM = { crm_ansehen: 'alle', crm_anlegen: true, crm_stamm: true, crm_personen: true, crm_notizen: true, crm_notizen_fremd: true,
   crm_aufgaben: true, crm_termine: true, crm_statistik: true, crm_foerder: true, crm_koop: true, crm_dateien: true,
   kal_ansehen: 'alle', kal_abw: true, kal_eigene: true, kal_zuweisen: true, kal_fremde: true, kal_loeschen: 'eigene', kal_va: true, kal_abo: true,
+  kal_faellig: 'team', kal_konflikte: 'eigene',
   pm_ansehen: 'teams', pm_aufg_bearb: true, pm_aufg_neu: true, pm_proj_eigen: true, vt_nutzen: true, vt_eintragen: true, vt_anlegen: true,
   me_formular: true, me_liste: true, me_uebertragen: true, la_ansehen: true, la_bestellen: true, la_ausleihen: true };
-const R_LEITUNG = Object.assign({}, R_TEAM, { crm_loeschen: true, crm_notiz_purge: true, crm_export: true, kal_loeschen: 'alle', kal_va_loeschen: true,
+const R_LEITUNG = Object.assign({}, R_TEAM, { crm_loeschen: true, crm_notiz_purge: true, crm_export: true, kal_loeschen: 'alle', kal_va_loeschen: true, kal_konflikte: 'team',
   pm_ansehen: 'alle', pm_proj_team: true, pm_proj_loeschen: true, vt_import: true, vt_loeschen: true, vt_export: true,
   me_eintrag_loeschen: true, me_va: true, me_va_loeschen: true, la_best_bearb: true });
 const R_TPL = { team: rPick(R_TEAM), leitung: rPick(R_LEITUNG), verwaltung: rAll(true),
-  lesen: rPick({ crm_ansehen: 'alle', kal_ansehen: 'alle', kal_abw: true, kal_abo: true, pm_ansehen: 'teams', vt_nutzen: true, la_ansehen: true }),
+  lesen: rPick({ crm_ansehen: 'alle', kal_ansehen: 'alle', kal_abw: true, kal_abo: true, kal_faellig: 'team', kal_konflikte: 'eigene', pm_ansehen: 'teams', vt_nutzen: true, la_ansehen: true }),
   verein: rPick({ crm_ansehen: 'verein', crm_personen: true, crm_notizen: true, crm_statistik: true }), keine: rAll(false) };
 // Eingabe aus der App prüfen (nur bekannte Vorlagen/Rechte/Werte) → { tpl, x, kats } oder null
 function cleanRechte(r) {
