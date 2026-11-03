@@ -229,7 +229,7 @@ sha256 (raw @f4c4c61): 256f5d16bd03f2e4037f3f442cbd6f095a5204fcc21e3bddb11144b15
 **Reihenfolge:** tpsPw mit `fineGrants` deployen → App v511 live → Administrator öffnet die App (schreibt `grants/r_*`, in der Konsole
 prüfen, dass z. B. `grants/r_crm_bearbeiten` Einträge hat) → v12 veröffentlichen. Rückweg: CANDIDATE-v11.json.
 
-## Kandidat 2026-11-03: CANDIDATE-v14.json – Kiosk-Konten (Messe-Tablet), NOCH NICHT LIVE
+## Stand 2026-11-03: CANDIDATE-v14.json ist LIVE – Kiosk-Konten (Messe-Tablet) (App v536, tpsPw @69e5914 = rev tpspw-00019-wob) – veröffentlicht von Moritz per Cloud Shell, Live-Text = Datei (57.076 Zeichen, identisch), messe/kioskEvents gefüllt
 = v13 + Kiosk-Kennzeichen `zeiterfassung/kiosk/<uid>` (nur Admin schreibt, nur Wahrheitswert; das Konto selbst darf sein Kennzeichen lesen):
 - Kiosk-Konten lesen `zeiterfassung`, `ze_audit`, `crm`, `crm_history` und `messe` nicht mehr (`loginDir` bleibt öffentlich).
 - Neu `messe/kioskEvents/<ev>` = `{ name, createdAt }` (keine PIN, keine Kategorien): lesen alle Messe-Berechtigten inkl. Kiosk,
