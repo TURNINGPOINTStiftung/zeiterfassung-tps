@@ -135,7 +135,7 @@ export function initApp(){
   let _lastMod='zeiterfassung';
   try{ _lastMod=localStorage.getItem('tp_zt_module')||'zeiterfassung'; }catch(e){}
   const _canVerw = isAdmin || hasPermission('zugriff_verwaltung',cu);
-  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || _lastMod==='shop' || _lastMod==='anleitung' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
+  const _modOk = _lastMod==='zeiterfassung' || _lastMod==='planung' || _lastMod==='crm' || _lastMod==='kanban' || _lastMod==='verteiler' || _lastMod==='kalender' || _lastMod==='shop' || _lastMod==='anleitung' || (isMgr && (_lastMod==='auswertung'||_lastMod==='ki')) || (isAdmin && (_lastMod==='website'||_lastMod==='forum')) || (_canVerw && _lastMod==='verwaltung');
   // CRM-only-Nutzer landen immer im CRM (Zeiterfassung ist für sie ausgeblendet)
   // Startseite (pro Mitarbeiter in der Verwaltung schaltbar, Standard: nur Admin) hat Vorrang
   let _startHome=false; try{ _startHome=!!(window.homeEnabled&&window.homeEnabled(cu)); }catch(e){}

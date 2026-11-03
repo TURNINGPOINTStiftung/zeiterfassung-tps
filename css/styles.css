@@ -22,6 +22,8 @@
   --shadow-1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);
   --shadow-2:0 10px 30px rgba(16,24,40,.14);
   --focus:0 0 0 3px rgba(52,84,140,.35);
+  /* Teamfarben (Planung, Kalender, Teamseite) */
+  --team-1:#1f6fb2; --team-2:#b4531f; --team-3:#2f7d4f; --team-4:#7a4bb0; --team-5:#b0306a; --team-6:#2f8a8a; --team-7:#8a6d1f; --team-8:#4b5fb0;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
@@ -35,6 +37,7 @@
     --border:#2b3a55; --border-strong:#3b4d6d;
     --text:#e6ebf3; --muted:#9aa7bb; --row-alt:#182236; --weekend:#2a2416;
     --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 12px 32px rgba(0,0,0,.55); --focus:0 0 0 3px rgba(122,160,234,.45);
+    --team-1:#6aa8e8; --team-2:#e3925f; --team-3:#6cc08f; --team-4:#b493e0; --team-5:#e57aa6; --team-6:#6cc7c7; --team-7:#d4b25c; --team-8:#8f9fe8;
     color-scheme:dark;
   }
 }
@@ -48,6 +51,7 @@
   --border:#2b3a55; --border-strong:#3b4d6d;
   --text:#e6ebf3; --muted:#9aa7bb; --row-alt:#182236; --weekend:#2a2416;
   --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 12px 32px rgba(0,0,0,.55); --focus:0 0 0 3px rgba(122,160,234,.45);
+  --team-1:#6aa8e8; --team-2:#e3925f; --team-3:#6cc08f; --team-4:#b493e0; --team-5:#e57aa6; --team-6:#6cc7c7; --team-7:#d4b25c; --team-8:#8f9fe8;
   color-scheme:dark;
 }
 body{font-family:Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-text-size-adjust:100%;text-size-adjust:100%}

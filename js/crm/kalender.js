@@ -413,7 +413,7 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-pdue.cf{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:var(--on-primary,#fff)}
   .kal-load{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;border-right:1px solid var(--border,#c3cedb);font-size:13px;color:var(--muted,#5d7086);line-height:1.15}
   .kal-load b{font-size:15px;color:var(--primary-d,#15263a);font-variant-numeric:tabular-nums}
-  .kal-load span{font-size:11px}
+  .kal-load span{font-size:12px}
   .kal-load.l1{background:var(--ok-bg,#e7f6e9)} .kal-load.l2{background:var(--warn-bg,#fef3c7)} .kal-load.l3{background:var(--danger-bg,#fde8e8)}
   .kal-cfsec{margin:0 0 6px}
   .kal-cfhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 6px}
@@ -628,7 +628,7 @@ function _yearGrid(months, title){
   h+='<div class="kal-row kal-head" style="'+cs+'"><div class="kal-name">'+esc(title||'Mitarbeiter')+'</div>';
   months.forEach((o,i)=>{ const lbl=MON_ABBR[o.m-1]+(o.y!==_first.y?(" '"+String(o.y).slice(2)):''); h+='<div class="kal-mh" style="grid-column:'+(i+2)+'">'+lbl+'</div>'; });
   h+='</div>';
-  h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
+  h+='<div class="kal-row kal-kwrow" style="'+cs+'"><div class="kal-name">KW</div><div class="kal-kwtrack">'+weeks.filter((w,i,a)=>!(a[i+1] && a[i+1].doy-w.doy<4)).map(w=>'<div class="kal-kwlab" style="left:'+(w.doy/YLEN*100)+'%">'+w.kw+'</div>').join('')+'</div></div>';
   // Spur „Projekte" (Release B, Schritt 5): Team-Projekte mit Zeitraum (eigene persönliche Projekte nur für die Person selbst)
   const _tcol=_teamColor();
   const projs=_projekte().filter(p=>inYear(p.von,p.bis)&&(!curTeam||curTeam==='@me'||p.team===curTeam));
@@ -938,7 +938,7 @@ export function renderKalender(){
       <div class="kal-bar">
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
-        ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
+        ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">${window._planActive?'12 Monate':'Ganzes Jahr'}</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
         ${(V==='woche'||V==='monat')&&_scope('kal_faellig')?`<label class="kal-chk"><input type="checkbox" ${_showDue?'checked':''} onchange="kalSetDue(this.checked)"> Fälligkeiten</label>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
@@ -1022,4 +1022,6 @@ function kalTaskIssues(n){
   if(n.kanal && n.bildrechte!==true && ['freigabe','geplant'].includes(n.phase)) out.push({ lv:'warn', t:'Bildrechte offen' });
   return out;
 }
-Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts, kalOpenProjekt, kalSetTeamSilent, kalGotoDate, kalTaskIssues });
+// Sichtbare Personen nach Rechten (für die Planung „Wer ist diese Woche da?")
+function kalVisibleEmps(){ const me=(window.cu&&window.cu.id)||''; const l=_emps().filter(u=>!u.archived); return _kr('kal_ansehen') ? l : l.filter(u=>u.id===me); }
+Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts, kalOpenProjekt, kalSetTeamSilent, kalGotoDate, kalTaskIssues, kalVisibleEmps });

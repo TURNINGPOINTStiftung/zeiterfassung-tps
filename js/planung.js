@@ -129,8 +129,8 @@ function _termCard(){
 function _whoCard(){
   const now=new Date(); const mon=addD(now,-dowMon(now)); const days=[0,1,2,3,4].map(i=>addD(mon,i)); const abs=_abs();
   const kw=(()=>{ const t=new Date(Date.UTC(mon.getFullYear(),mon.getMonth(),mon.getDate())); const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3); const ft=new Date(Date.UTC(t.getUTCFullYear(),0,4)); const fd=(ft.getUTCDay()+6)%7; ft.setUTCDate(ft.getUTCDate()-fd+3); return 1+Math.round((t-ft)/6048e5); })();
-  const sc=(()=>{ try{ const v=window.tpsRechteOf&&window.cu&&window.cu.role!=='admin'?window.tpsRechteOf(window.cu).kal_ansehen:'alle'; return v===true?'alle':(v||'alle'); }catch(e){ return 'alle'; } })();
-  let emps=_emps(); if(sc==='team'){ const my=new Set(_myTeams()); emps=emps.filter(u=>[u.team].concat(u.teams||[]).some(t=>my.has(t))); } else if(sc==='eigene'){ emps=emps.filter(u=>u.id===me()); }
+  // Rechte wie im Kalender (kal_ansehen: alle/team/eigene, kal_abw: Abwesenheiten anderer) – im Zweifel nur ich
+  let emps=[]; try{ emps=window.kalVisibleEmps?window.kalVisibleEmps():_emps().filter(u=>u.id===me()); }catch(e){ emps=_emps().filter(u=>u.id===me()); }
   const today=iso(now);
   let h=`<div class="plan-who" style="grid-template-columns:minmax(64px,140px) repeat(5,minmax(0,1fr))"><div></div>${days.map(d=>`<div class="plan-whoh${iso(d)===today?' today':''}">${DOW[dowMon(d)]} ${d.getDate()}.</div>`).join('')}`;
   emps.forEach(u=>{ h+=`<div class="plan-whon">${esc(u.name)}</div>`+days.map(d=>{ const x=iso(d); const ab=abs.some(a=>a.emp===u.id&&a.von<=x&&x<=a.bis); return `<div class="plan-whoc${ab?' abw':''}">${ab?'Abwesend':''}</div>`; }).join(''); });
@@ -154,9 +154,6 @@ function _styles(){
   const st=document.createElement('style'); st.id='plan-styles';
   st.textContent=`
   /* Teamfarben (Planung, Kalender-Jahr, Teamseite) – hell/dunkel, keine festen Farben im Code */
-  :root{--team-1:#1f6fb2;--team-2:#b4531f;--team-3:#2f7d4f;--team-4:#7a4bb0;--team-5:#b0306a;--team-6:#2f8a8a;--team-7:#8a6d1f;--team-8:#4b5fb0}
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--team-1:#6aa8e8;--team-2:#e3925f;--team-3:#6cc08f;--team-4:#b493e0;--team-5:#e57aa6;--team-6:#6cc7c7;--team-7:#d4b25c;--team-8:#8f9fe8} }
-  html[data-theme="dark"]{--team-1:#6aa8e8;--team-2:#e3925f;--team-3:#6cc08f;--team-4:#b493e0;--team-5:#e57aa6;--team-6:#6cc7c7;--team-7:#d4b25c;--team-8:#8f9fe8}
   #planung-root{flex:1;min-height:0;overflow:auto;background:var(--bg,#f3f5f9)}
   .plan-bar{display:flex;flex-wrap:nowrap;gap:6px;padding:10px 12px;margin:14px 18px 0;background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .plan-bar::-webkit-scrollbar{display:none}
@@ -170,6 +167,7 @@ function _styles(){
   .plan-body{padding:16px 18px 40px;display:grid;gap:16px}
   .plan-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
   .plan-col{display:grid;gap:16px}
+  @media(max-width:480px){ .plan-bar{display:grid;grid-template-columns:1fr 1fr;overflow:visible} .plan-bar .plan-tab{text-align:center} }
   @media(max-width:860px){ .plan-grid{grid-template-columns:1fr} .plan-bar{margin:10px 10px 0} .plan-body{padding:12px 10px 30px} }
   .plan-card{background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:14px;padding:16px 18px;min-width:0}
   .plan-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;margin:0 0 10px}
@@ -179,6 +177,9 @@ function _styles(){
   .plan-grp.crit{color:var(--danger,#c0392b)}
   .plan-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
   .plan-item:hover{background:var(--info-bg,#eef3fb)}
+  .plan-item:not([role]){cursor:default}
+  .plan-item:not([role]):hover{background:var(--surface-2,#f6f8fb)}
+  .plan-item[role]:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}
   .plan-barc{flex:none;width:4px;align-self:stretch;border-radius:3px}
   .plan-main{flex:1;min-width:0}
   .plan-t{font-weight:700;color:var(--primary-d,#15263a)}
@@ -202,3 +203,5 @@ function _styles(){
 
 try{ Object.assign(window, { planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
 export { renderPlanungStart };
+// Tastatur: Einträge mit role=button per Enter/Leertaste öffnen
+document.addEventListener('keydown', e=>{ if(e.key!=='Enter' && e.key!==' ') return; const t=e.target; if(!t || !t.classList || !t.classList.contains('plan-item') || t.getAttribute('role')!=='button') return; e.preventDefault(); t.click(); });

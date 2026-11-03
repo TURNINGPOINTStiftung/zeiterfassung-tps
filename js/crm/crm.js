@@ -504,6 +504,8 @@ function crmSetupModuleBar(){
       // bleiben als Bereiche erreichbar (Adressen #/kalender, #/kanban), stehen aber nicht mehr einzeln im Menü.
       const vis=Object.assign({}, show, { planung: !!(show.kalender||show.kanban) });
       if(vis.planung){ vis.kalender=false; vis.kanban=false; }
+      // Start mit gemerktem „kalender"/„kanban": beim App-Start war „Planung" noch unsichtbar → jetzt in die Planung holen
+      const _reroute = vis.planung && !window._planActive && (window._activeModule==='kalender' || window._activeModule==='kanban');
       Object.keys(vis).forEach(mod=>{
         const b=document.querySelector('.mb-mod[data-mod="'+mod+'"]');
         if(b) b.style.display=vis[mod]?'':'none';
@@ -522,6 +524,7 @@ function crmSetupModuleBar(){
           const fb = show.zeiterfassung ? 'zeiterfassung' : (Object.keys(show).find(m=>show[m] && m!=='messe') || 'zeiterfassung');
           if(fb!==active) window.switchModule(fb);
         }
+        else if(_reroute && window.planGo) window.planGo(active==='kalender'?'kalender':(window._crmMode==='veranstaltungen'?'veranstaltung':'teams'), { keep:true });
       }catch(e){}
       // Benutzerverwaltung/Berechtigungen früh in die Verwaltungs-Ebene umhängen
       if(_canVerw()){ try{ ensureVerwMounted(); }catch(e){} }
@@ -1088,9 +1091,10 @@ function _crmSyncModuleHighlight(){
     const name = _crmModuleForMode(window._crmMode||'');
     window._crmModule = name; window._activeModule = name;
     try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
-    const label = name==='kanban' ? 'Projektmanagement' : (name==='verteiler' ? 'Verteiler' : 'CRM');
+    const _inPlan = !!window._planActive && name==='kanban';
+    const label = _inPlan ? 'Planung' : (name==='kanban' ? 'Projektmanagement' : (name==='verteiler' ? 'Verteiler' : 'CRM'));
     const cur=document.getElementById('mb-current'); if(cur) cur.textContent = label;
-    document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===name));
+    document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===(_inPlan?'planung':name)));
     _crmUpdateTopTools();
   }catch(e){}
 }
@@ -4292,7 +4296,7 @@ function paintTeamDetail(){
   const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
   const _mem=team==='Ohne Team'?[]:zeUsers().filter(u=>u.id!=='admin'&&u.role!=='admin'&&(u.team===team||(Array.isArray(u.teams)&&u.teams.includes(team))));
   const memChips=_mem.map(u=>{ const lead=u.role==='leitung'&&(u.team===team); const guest=u.team&&u.team!==team;
-    return `<span class="crm-chip" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px"><span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:var(--on-primary,#fff);display:inline-grid;place-items:center;font-size:11px;font-weight:700">${esc(String(u.name||'?').charAt(0))}</span>${esc(u.name)}${lead?' <span style="color:var(--muted)">Leitung</span>':''}${guest?' <span style="color:var(--muted)">+ '+esc(u.team)+'</span>':''}</span>`; }).join('');
+    return `<span class="crm-chip" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px"><span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:var(--on-primary,#fff);display:inline-grid;place-items:center;font-size:12px;font-weight:700">${esc(String(u.name||'?').charAt(0))}</span>${esc(u.name)}${lead?' <span style="color:var(--muted)">Leitung</span>':''}${guest?' <span style="color:var(--muted)">+ '+esc(u.team)+'</span>':''}</span>`; }).join('');
   root.innerHTML = barHtml() + `<div class="crm-body">
     ${chipRow}
     <div class="crm-detail-head" style="flex-wrap:wrap;gap:10px">
@@ -4527,7 +4531,7 @@ function oeaRedaktionHtml(){
     .red-n{display:inline-block;min-width:20px;border-radius:10px;border:1.5px solid var(--primary,#203869);font-weight:800;color:var(--primary,#203869)}
     .red-sum th,.red-sum td{background:var(--surface-2,#f4f7fb);font-weight:600}
     .num{text-align:center;font-variant-numeric:tabular-nums} .l1{background:var(--ok-bg,#e7f6e9)} .l2{background:var(--warn-bg,#fef3c7)} .l3{background:var(--danger-bg,#fde8e8)}
-    .red-yp{font-size:11px;background:var(--surface-2,#eef2f7);border-radius:4px;padding:1px 4px;margin:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px}
+    .red-yp{font-size:12px;background:var(--surface-2,#eef2f7);border-radius:4px;padding:1px 4px;margin:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px}
     .red-hint{font-size:12px;color:var(--muted,#5d7086);margin:6px 2px 0}
     .red-board{display:grid;grid-template-columns:repeat(${c.ablauf.length},minmax(170px,1fr));gap:10px;overflow-x:auto;margin-top:10px}
     .red-col{background:var(--surface-2,#f4f7fb);border-radius:10px;padding:8px;min-width:0}
