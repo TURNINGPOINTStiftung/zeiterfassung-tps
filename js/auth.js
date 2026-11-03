@@ -217,6 +217,9 @@ export async function doLogin(){
     errEl.style.display='block'; return;
   }
   try{ window.tpsPerf&&window.tpsPerf.mark('angemeldet'); }catch(e){}
+  // Kiosk-Konto (Messe-Tablet, v536): weder Zeiterfassung noch CRM laden – nur das Messe-Besucherformular (js/messe.js).
+  try{ if(window.messeKioskCheck && (await window.messeKioskCheck())===true){ errEl.style.display='none'; await window.messeKioskEnter({ pw }); return; } }
+  catch(e){ console.warn('Kiosk-Prüfung:', e); }
   // Angemeldet + freigeschaltet → volle Daten laden.
   // SCHNELLSTART auf bekannten Geräten: gibt es einen brauchbaren lokalen Stand mit genau
   // diesem Nutzer, zeigen wir die App SOFORT daraus. loadFullData (Merge, Migration,

@@ -131,6 +131,7 @@ function _loadLoginDir(ms, blocking){
 // Nach erfolgreichem Login (allowlistete Sitzung): volle Daten laden, migrieren,
 // cachen und den Realtime-Listener starten. (Früher Teil von initFirebase.)
 export async function loadFullData(){
+  if(window._tpsKiosk) return;   // Kiosk-Konto (js/messe.js): nie Zeiterfassungsdaten laden/zwischenspeichern
   const _fbRef=window._fbRef||firebase.database().ref('zeiterfassung');
   const _timeout=ms=>new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));
   let fbData=null;
@@ -219,7 +220,7 @@ export async function loadFullData(){
 }
 
 function _applyFirebaseSnap(val){
-  if(!val||!getData()) return;
+  if(!val||!getData()||window._tpsKiosk) return;
   const _pt=performance.now();
   try{ _applyFirebaseSnapInner(val); }
   finally{ try{ window.tpsPerf&&window.tpsPerf.snap('ze', performance.now()-_pt); }catch(e){} }

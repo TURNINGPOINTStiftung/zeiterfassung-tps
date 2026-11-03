@@ -28,6 +28,8 @@
 //  GET  /kalender/<schlüssel>-alle.ics – zweiter Kalender: alle übrigen CRM-Termine/Veranstaltungen (ohne die eigenen),
 //        nur wenn die Person den Kalender-Bereich nutzen darf (perms.path_kalender bzw. crm/pathAccess.kalender).
 //        Schlüssel liegen unter kalenderAbo/ (oberste Ebene, für Geräte durch die Regeln gesperrt; nur dieser Server).
+//  Kiosk-Konten (zeiterfassung/kiosk/<uid> = true, z. B. das Messe-Tablet, Regeln v14): keine Speicher-Markierung (claimSelf),
+//        kein Kalender-Abo, kein Tages-Backup, keine System-Verwaltung – sie dürfen nur das Messe-Formular abschicken.
 //
 //  „System-Verwaltung erweitert“ (seit 14.10., Recht zugriff_verwaltung_plus, vergibt NUR der Administrator, gilt nur
 //  zusammen mit „System-Verwaltung“ und nur mit zweitem Faktor): zusätzlich Einmal-Passwörter setzen ('set') und die
@@ -196,18 +198,21 @@ function logTo(upd, c, action, target, details) {
   upd['ze_admin_log/' + k] = { ts: Date.now(), by: String((c && c.callerId) || ''), byUid: String((c && c.tok && c.tok.uid) || ''),
     action: String(action), target: String(target || '').slice(0, 80), details: details || null };
 }
-// Wer ruft auf? → { tok, isAdmin, isStaff (System-Verwaltung), isPlus (… erweitert), callerId } oder null
+// Kiosk-Konto (nur Messe-Formular, Regeln v14)?
+const isKioskUid = async uid => (await db.ref('zeiterfassung/kiosk/' + uid).once('value')).val() === true;
+// Wer ruft auf? → { tok, isAdmin, isStaff (System-Verwaltung), isPlus (… erweitert), isKiosk, callerId } oder null
 async function whoCalls(req) {
   const m = (req.get('Authorization') || '').match(/^Bearer (.+)$/);
   if (!m) return null;
   const tok = await admin.auth().verifyIdToken(m[1]);
   const val = async p => (await db.ref(p).once('value')).val();
   const isAdmin = (await val('zeiterfassung/admins/' + tok.uid)) === true;
-  const isStaff = !isAdmin && (await val('zeiterfassung/allowed/' + tok.uid)) === true
+  const isKiosk = !isAdmin && await isKioskUid(tok.uid);
+  const isStaff = !isAdmin && !isKiosk && (await val('zeiterfassung/allowed/' + tok.uid)) === true
     && (await val('zeiterfassung/grants/zugriff_verwaltung/' + tok.uid)) === true;
   const isPlus = isStaff && (await val('zeiterfassung/grants/zugriff_verwaltung_plus/' + tok.uid)) === true;
   const callerId = (await val('zeiterfassung/uidUser/' + tok.uid)) || '';
-  return { tok, isAdmin, isStaff, isPlus, callerId };
+  return { tok, isAdmin, isStaff, isPlus, isKiosk, callerId };
 }
 const isPlusUser = u => !!(u && u.perms && u.perms.zugriff_verwaltung_plus === true);
 
@@ -535,6 +540,7 @@ exports.tpsPw = async (req, res) => {
       const tok = await admin.auth().verifyIdToken(m[1]);
       if ((await db.ref('zeiterfassung/allowed/' + tok.uid).once('value')).val() !== true
         && (await db.ref('zeiterfassung/admins/' + tok.uid).once('value')).val() !== true) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if (await isKioskUid(tok.uid)) return res.status(403).json({ ok: false, error: 'forbidden' });
       const day = berlinDay();
       const file = admin.storage().bucket(BUCKET).file('backups/daily/' + day + '_srv.json');
       const [exists] = await file.exists();
@@ -856,7 +862,9 @@ exports.tpsPw = async (req, res) => {
       const tok = await admin.auth().verifyIdToken(m[1]);
       const allowedMap = (await db.ref('zeiterfassung/allowed').once('value')).val() || {};
       const adminsMap  = (await db.ref('zeiterfassung/admins').once('value')).val() || {};
-      const want = u => !u.disabled && (allowedMap[u.uid] === true || adminsMap[u.uid] === true);
+      const kioskMap   = (await db.ref('zeiterfassung/kiosk').once('value')).val() || {};
+      // Kiosk-Konten bekommen keine Markierung → keine CRM-Anhänge in Storage
+      const want = u => !u.disabled && (allowedMap[u.uid] === true || adminsMap[u.uid] === true) && (adminsMap[u.uid] === true || kioskMap[u.uid] !== true);
       const sync = async u => {
         const cur = Object.assign({}, u.customClaims || {});
         const on = want(u);
@@ -889,7 +897,7 @@ exports.tpsPw = async (req, res) => {
       const c = await whoCalls(req);
       if (!c || !c.callerId) return res.status(401).json({ ok: false, error: 'auth' });
       const allowed = (await db.ref('zeiterfassung/allowed/' + c.tok.uid).once('value')).val() === true;
-      if (!allowed && !c.isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+      if ((!allowed && !c.isAdmin) || c.isKiosk) return res.status(403).json({ ok: false, error: 'forbidden' });
       const uRef = db.ref('kalenderAbo/users/' + dirKey(c.callerId));
       const cur = (await uRef.once('value')).val();
       const op = String(body.op || 'get');

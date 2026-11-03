@@ -933,7 +933,7 @@ function userForm(u={}){
         ${_ufAreaBox('kanban', u, isNewUser, '', kanbanBody)}
         ${_ufAreaBox('kalender', u, isNewUser, '', '')}
         ${_ufAreaBox('verteiler', u, isNewUser, '', '')}
-        ${_ufAreaBox('messe', u, isNewUser, '', '')}
+        ${_ufAreaBox('messe', u, isNewUser, '', (!isNewUser && window.cu && window.cu.role==='admin' && window.messeKioskBoxHtml) ? window.messeKioskBoxHtml(u) : '')}
         ${_ufAreaBox('shop', u, isNewUser, '', '')}
         ${modBlock('ki','🧠','KI')}
         ${modBlock('auswertung','📊','Auswertung')}

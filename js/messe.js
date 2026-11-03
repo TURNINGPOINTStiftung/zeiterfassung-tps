@@ -21,6 +21,8 @@
 import { saveEntity, newId, ensureCrmReady } from './crm/crm-data.js';
 import { getCategories, getTrees } from './crm/crm-config.js';
 import { toast } from './utils.js';
+import { STORAGE_KEY } from './config.js';
+import { getData } from './data.js';
 
 const LS_OLD = 'tps_messe_v1';   // alter, rein lokaler Stand (wird einmalig in die Cloud übernommen)
 const LS = 'tps_messe_v2';       // { activeId, events:{id:ev ohne Personendaten}, outbox:[…] }
@@ -32,7 +34,7 @@ function _me(){ return (window.cu&&window.cu.id)||''; }
 function _dev(){ try{ let d=localStorage.getItem('tps_messe_dev'); if(!d){ d='d'+Math.random().toString(36).slice(2,8); localStorage.setItem('tps_messe_dev',d); } return d; }catch(e){ return 'd?'; } }
 
 // ── Lokaler Zustand ──
-function _load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return { activeId:s.activeId||'', events:s.events||{}, outbox:Array.isArray(s.outbox)?s.outbox:[], kiosk:!!s.kiosk }; }catch(e){} return { activeId:'', events:{}, outbox:[] }; }
+function _load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return { activeId:s.activeId||'', events:s.events||{}, outbox:Array.isArray(s.outbox)?s.outbox:[], kiosk:!!s.kiosk, kioskAcct:!!s.kioskAcct, unlock:s.unlock||null }; }catch(e){} return { activeId:'', events:{}, outbox:[] }; }
 function _save(s){ try{ localStorage.setItem(LS, JSON.stringify(s)); }catch(e){} }
 let L=_load();
 
@@ -42,13 +44,16 @@ function _fbOk(){ try{ return !!(window.firebase && firebase.apps && firebase.ap
 function _online(){ return navigator.onLine && _conn; }
 function _subscribe(){
   if(_live || !_fbOk()) return;
+  const kio=_isKiosk();
   try{
-    _ref=firebase.database().ref('messe');
+    // Kiosk-Konto: nur die Namensliste messe/kioskEvents (Regeln v14) – keine PIN, keine Einträge anderer Geräte
+    _ref=firebase.database().ref(kio?'messe/kioskEvents':'messe');
     _connCb=snap=>{ _conn=!!snap.val(); if(_conn) _flush(); _rerender(); };
     firebase.database().ref('.info/connected').on('value', _connCb);
     _live=_ref.on('value', snap=>{
       const v=snap.val()||{};
-      _srv={ events:v.events||{}, entries:v.entries||{}, transferred:v.transferred||{} };
+      if(kio) _srv={ events:v, entries:{}, transferred:{} };
+      else { _srv={ events:v.events||{}, entries:v.entries||{}, transferred:v.transferred||{} }; _syncKioskEvents(v); }
       // Veranstaltungen (ohne Personendaten) lokal merken → Offline-Start
       L.events=Object.assign({}, _srv.events); _save(L);
       _rerender();
@@ -72,10 +77,12 @@ async function _flush(){
   try{
     const db=firebase.database();
     for(const it of L.outbox.slice()){
+      if(it.t==='ev' && _isKiosk()) continue;   // Veranstaltungen schickt erst ein persönliches Konto nach
       const path = it.t==='ev' ? 'messe/events/'+it.ev : 'messe/entries/'+it.ev+'/'+it.id;
       try{
         await Promise.race([ db.ref(path).set(it.data), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000)) ]);
         L.outbox=L.outbox.filter(x=>!(x.t===it.t && x.ev===it.ev && x.id===it.id)); _save(L);
+        if(it.t==='ev') _kioskEvSet(it.ev, it.data);
       }catch(e){
         const denied=/permission/i.test(String((e&&e.code)||'')+' '+String(e&&e.message||''));
         if(denied){ toast('Messe: keine Berechtigung zum Speichern in der gemeinsamen Ablage – bitte Administrator fragen.','err'); }
@@ -85,6 +92,24 @@ async function _flush(){
   }finally{ _flushing=false; _rerender(); }
 }
 function _queue(item){ L.outbox=L.outbox.filter(x=>!(x.t===item.t && x.ev===item.ev && x.id===item.id)); L.outbox.push(item); _save(L); _flush(); }
+
+// Namensliste für Kiosk-Geräte (messe/kioskEvents/<ev> = { name, createdAt }, Regeln v14): schreibt, wer Veranstaltungen
+// anlegen darf – nebenher und ohne Fehlermeldung (unter älteren Regeln ist der Knoten noch gesperrt). Fehlende/abweichende
+// Einträge werden beim Öffnen des Messemodus nachgetragen, damit auch ältere Veranstaltungen am Kiosk wählbar sind.
+const _keTried=new Set();
+function _kioskEvSet(id, ev){
+  if(!id || !ev || !ev.name || !_fbOk()) return;
+  try{ firebase.database().ref('messe/kioskEvents/'+id).set({ name:String(ev.name).slice(0,100), createdAt:Number(ev.createdAt)||Date.now() }).catch(()=>{}); }catch(e){}
+}
+function _syncKioskEvents(v){
+  if(_isKiosk() || !_mr('me_va')) return;
+  const evs=v.events||{}, ke=v.kioskEvents||{};
+  Object.keys(evs).forEach(id=>{ const ev=evs[id]; if(!ev||!ev.name) return;
+    if(ke[id] && ke[id].name===ev.name) return;
+    const key=id+'|'+ev.name; if(_keTried.has(key)) return; _keTried.add(key); _kioskEvSet(id, ev); });
+  if(_mr('me_va_loeschen')) Object.keys(ke).forEach(id=>{ if(evs[id] || _keTried.has('del|'+id)) return; _keTried.add('del|'+id);
+    try{ firebase.database().ref('messe/kioskEvents/'+id).remove().catch(()=>{}); }catch(e){} });
+}
 
 // Zusammengeführte Sicht (Cloud + eigener Ausgang)
 function _events(){
@@ -134,7 +159,7 @@ function _splitOrt(adr){ const s=String(adr||''); const mm=s.match(/(?:^|\n)Ort:
 function _entryData(e){
   const c=(v,n)=>String(v==null?'':v).trim().slice(0,n);
   return { vorname:c(e.vorname,100), nachname:c(e.nachname,100), org:c(e.org,200), email:c(e.email,200), tel:c(e.tel,60),
-    adresse:c(e.adresse,300), note:c(e.note,2000), ts:Number(e.ts)||Date.now(), by:c(_me(),64), dev:c(_dev(),64) };
+    adresse:c(e.adresse,300), note:c(e.note,2000), ts:Number(e.ts)||Date.now(), by:c(_isKiosk()?'kiosk':_me(),64), dev:c(_dev(),64) };
 }
 
 function _ov(){ return document.getElementById('messe-overlay'); }
@@ -241,6 +266,7 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 
 // ── Event-Auswahl / -Verwaltung (Personal) ──
 function _renderPicker(){
+  if(_isKiosk()){ _renderKioskPicker(); return; }
   _view='picker';
   const o=_ensureOverlay(); const evs=_events();
   const rows = evs.length ? evs.map(ev=>{
@@ -313,7 +339,8 @@ async function messeDeleteEvent(id){
   if(!window.confirm(`Veranstaltung „${ev.name}" auf ALLEN Geräten löschen?`+(n?`\n\nAchtung: ${n} noch nicht übertragene(r) Kontakt(e) gehen dabei verloren.`:''))) return;
   L.outbox=L.outbox.filter(x=>x.ev!==id); if(L.activeId===id) L.activeId=''; _save(L);
   if(_fbOk()){
-    try{ await firebase.database().ref('messe').update({ ['events/'+id]:null, ['entries/'+id]:null, ['transferred/'+id]:null }); }
+    try{ await firebase.database().ref('messe').update({ ['events/'+id]:null, ['entries/'+id]:null, ['transferred/'+id]:null });
+      try{ await firebase.database().ref('messe/kioskEvents/'+id).remove(); }catch(_){} }   // getrennt: unter älteren Regeln gesperrt
     catch(e){ toast('Löschen fehlgeschlagen: '+((e&&e.code)||e),'err'); }
   }
   _renderPicker();
@@ -367,7 +394,7 @@ function messeSaveEntry(btn){
 }
 
 // ── Personal-Bereich (per PIN): Liste, Übertragen, Events, Beenden ──
-function messeStaff(){ if(!_mr('me_liste')){ _noR('Erfasste Liste ansehen'); return; } const ev=_active(); if(!ev || !ev.pinHash){ _renderStaff(); return; } _renderPinCheck(); }
+function messeStaff(){ if(_isKiosk()){ _renderKioskUnlock(); return; } if(!_mr('me_liste')){ _noR('Erfasste Liste ansehen'); return; } const ev=_active(); if(!ev || !ev.pinHash){ _renderStaff(); return; } _renderPinCheck(); }
 function _renderPinCheck(){
   _view='pin';
   const o=_ensureOverlay();
@@ -480,10 +507,150 @@ function messeEnd(){
 }
 function messeClose(){ L.kiosk=false; _save(L); _close(); }
 
+// ══ KIOSK-KONTO (v536, Umbauplan 0a.1) ══
+// Ein Konto mit zeiterfassung/kiosk/<uid> = true (setzt nur der Administrator: Mitarbeiterdialog → Messemodus) liest ab
+// Regeln v14 NICHTS außer seinem eigenen Kennzeichen und messe/kioskEvents (nur Namen) und darf nur neue Besucher-Einträge
+// anlegen. Die App lädt dafür weder Zeiterfassung noch CRM, löscht deren Gerätespeicher und zeigt nur das Formular.
+// Liste + Übertrag ins CRM: am eigenen Gerät mit persönlichem Konto (☰ → Messemodus).
+// Beenden/Wechseln: Passwort des Messe-Kontos – online prüft Firebase, offline ein nur auf diesem Gerät gespeicherter
+// PBKDF2-Wert (entsteht bei der Anmeldung bzw. der letzten Online-Prüfung).
+const LS_KIOSK='tps_kiosk_uid';
+function _isKiosk(){ return !!L.kioskAcct; }
+function _authUser(){ try{ return firebase.auth().currentUser||null; }catch(e){ return null; } }
+// true = Kiosk-Konto, false = normales Konto, null = unbekannt (keine Verbindung)
+async function messeKioskCheck(){
+  const u=_authUser(); if(!u) return false;
+  try{
+    const snap=await Promise.race([ firebase.database().ref('zeiterfassung/kiosk/'+u.uid).once('value'), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000)) ]);
+    const k=snap.val()===true;
+    try{ if(k) localStorage.setItem(LS_KIOSK, u.uid); else if(localStorage.getItem(LS_KIOSK)===u.uid) localStorage.removeItem(LS_KIOSK); }catch(e){}
+    return k;
+  }catch(e){
+    try{ if(localStorage.getItem(LS_KIOSK)===u.uid) return true; }catch(_){}
+    return null;
+  }
+}
+// Zeiterfassungs-/CRM-Daten vom Gerät entfernen (wie beim Abmelden, auth.js) – der Messe-Ausgang bleibt.
+const _APP_LS=[STORAGE_KEY, STORAGE_KEY+'_prev', 'tp_zt_guard', 'tps_crm_v1', 'tps_crm_pending_v1', 'tp_zt_pending', 'tp_zt_pending_rejected', 'tp_zt_stamp', 'tp_zt_session', 'tp_zt_remember', 'tps_last_sync'];
+const _APP_LS_PREFIX=['tp_zt_premigrate_','tps_home_recent_','tps_home_favs_','tps_home_geo_','tps_shop_cart_','tps_shop_ack2_','tps_shop_soll_ack_','tps_shop_od_ack_','tps_shop_due_ack_'];
+function _wipeAppData(){
+  ['zeiterfassung','crm','crm_history'].forEach(p=>{ try{ firebase.database().ref(p).off(); }catch(e){} });
+  try{ _APP_LS.forEach(k=>localStorage.removeItem(k)); Object.keys(localStorage).filter(k=>_APP_LS_PREFIX.some(p=>k.startsWith(p))).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+}
+async function messeKioskEnter(opts){
+  opts=opts||{};
+  window._tpsKiosk=true; window.cu=null;
+  const u=_authUser();
+  if(!L.kioskAcct){ L.kioskAcct=true; L.events={}; L.unlock=null; }   // evtl. gemerkte Veranstaltungen MIT PIN-Hash verwerfen
+  _save(L);
+  try{ if(u) localStorage.setItem(LS_KIOSK, u.uid); }catch(e){}
+  _wipeAppData();
+  if(opts.pw) await _kioskRememberPw(opts.pw);
+  try{ document.getElementById('fb-loading').style.display='none'; }catch(e){}
+  try{ document.getElementById('login-screen').style.display='none'; }catch(e){}
+  try{ document.getElementById('app').classList.remove('visible'); }catch(e){}
+  _unsubscribe(); _ensureOverlay(); _subscribe();
+  if(L.kiosk && _active()) _renderForm(); else _renderKioskPicker();
+}
+// Kennzeichen wurde entfernt (oder Abmelden am Gerät): Kiosk verlassen, abmelden, neu starten
+async function _kioskLeave(){
+  L.kioskAcct=false; L.kiosk=false; L.unlock=null; L.events={}; _save(L);
+  try{ localStorage.removeItem(LS_KIOSK); }catch(e){}
+  _unsubscribe();
+  try{ await firebase.auth().signOut(); }catch(e){}
+  location.reload();
+}
+function messeKioskExit(){ return _kioskLeave(); }
+function messeKioskLogout(){
+  const pend=L.outbox.filter(x=>x.t==='en').length;
+  if(!window.confirm('Messe-Gerät abmelden?'+(pend?`\n\n${pend} Kontakt(e) warten noch auf Netz. Sie bleiben auf dem Gerät und werden nach der nächsten Anmeldung mit einem Messe-Konto gesendet.`:''))) return;
+  _kioskLeave();
+}
+async function _pbk(pw, salt){
+  const k=await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const b=await crypto.subtle.deriveBits({ name:'PBKDF2', salt:new TextEncoder().encode(salt), iterations:150000, hash:'SHA-256' }, k, 256);
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function _kioskRememberPw(pw){
+  try{ const salt=[...crypto.getRandomValues(new Uint8Array(16))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    L.unlock={ s:salt, h:await _pbk(pw, salt) }; _save(L); }catch(e){}
+}
+async function _kioskPwOk(pw){
+  const u=_authUser();
+  if(u && u.email && navigator.onLine){
+    try{ await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, pw)); await _kioskRememberPw(pw); return true; }
+    catch(e){ const c=(e&&e.code)||'';
+      if(c==='auth/too-many-requests'){ toast('Zu viele Versuche – bitte kurz warten.','err'); return false; }
+      if(c!=='auth/network-request-failed') return false; }
+  }
+  if(!(L.unlock&&L.unlock.s)){ toast('Ohne Netz erst möglich, nachdem das Passwort einmal online eingegeben wurde.','err'); return false; }
+  try{ return (await _pbk(pw, L.unlock.s))===L.unlock.h; }catch(e){ return false; }
+}
+function _renderKioskUnlock(){
+  _view='pin';
+  const o=_ensureOverlay();
+  o.innerHTML=`<div class="me-wrap"><div class="me-card">
+    <div class="me-h">🔒 Personal</div>
+    <div class="me-sub">Passwort des Messe-Kontos eingeben, um die Veranstaltung zu wechseln oder das Gerät abzumelden.</div>
+    <div class="me-field"><label for="me-kpw">Passwort</label><input id="me-kpw" type="password" autocomplete="off"></div>
+    <button class="me-btn" onclick="messeKioskUnlock()">Weiter →</button>
+    <button class="me-btn sec" onclick="messeBackToForm()">Abbrechen</button>
+  </div></div>`;
+  setTimeout(()=>{ const el=document.getElementById('me-kpw'); if(el){ el.focus(); el.addEventListener('keydown',e=>{ if(e.key==='Enter') messeKioskUnlock(); }); } },40);
+}
+let _unlocking=false;
+async function messeKioskUnlock(){
+  if(_unlocking) return;
+  const el=document.getElementById('me-kpw'); const pw=(el&&el.value)||'';
+  if(!pw) return;
+  _unlocking=true; let ok=false;
+  try{ ok=await _kioskPwOk(pw); }finally{ _unlocking=false; }
+  if(!ok){ toast('Falsches Passwort.','err'); if(el){ el.value=''; el.focus(); } return; }
+  _renderKioskPicker();
+}
+function _renderKioskPicker(){
+  _view='picker';
+  const o=_ensureOverlay(); const evs=_events();
+  const pend=ev=>L.outbox.filter(x=>x.t==='en'&&x.ev===ev).length;
+  const rows = evs.length ? evs.map(ev=>`<div class="me-ev">
+      <div><div class="nm">${_esc(ev.name||'(ohne Name)')}</div>${pend(ev.id)?`<div class="mt">${pend(ev.id)} wartet auf Netz</div>`:''}</div>
+      <div class="me-ev-btns"><button class="me-mini go" onclick="messeOpenEvent(${_jsq(ev.id)})">Öffnen</button></div></div>`).join('')
+    : '<div style="color:var(--muted,#5b6b7d);font-size:14px;padding:6px 0 14px">Noch keine Veranstaltung freigegeben. Bitte am eigenen Gerät (☰ → Messemodus) eine anlegen oder einmal öffnen.</div>';
+  const noAccess = _srv.events===null && _online();
+  o.innerHTML=`<div class="me-wrap">
+    <div class="me-top"><span class="cnt">${_statusLine()}</span></div>
+    <div class="me-card">
+    <div class="me-h">Messe-Gerät</div>
+    <div class="me-sub">Dieses Konto erfasst nur Besucherdaten. Liste und Übertrag ins CRM: am eigenen Gerät mit persönlichem Konto (☰ → Messemodus).</div>
+    ${noAccess?'<div style="background:var(--warn-bg,#fff4e0);color:var(--warn-text,#7a4a00);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px">Kein Zugriff auf die Veranstaltungsliste. Bitte den Administrator fragen („Messemodus: Nutzen").</div>':''}
+    ${rows}
+    ${_active()?'<button class="me-btn sec" onclick="messeBackToForm()">← Zurück zum Formular</button>':''}
+    <button class="me-btn warn" onclick="messeKioskLogout()">Gerät abmelden</button>
+  </div></div>`;
+}
+// Verwaltung (nur Administrator): Haken im Mitarbeiterdialog → Bereich Messemodus
+function _uidOf(appId){ try{ const m=(getData()||{}).uidUser||{}; return Object.keys(m).find(k=>m[k]===appId)||''; }catch(e){ return ''; } }
+function messeKioskBoxHtml(u){
+  if(!u || !u.id) return '';
+  const uid=_uidOf(u.id);
+  if(!uid) return '<div style="font-size:12px;color:var(--muted)">Kiosk-Konto: erst möglich, wenn die Person ein Anmeldekonto hat.</div>';
+  const on=((getData()||{}).kiosk||{})[uid]===true;
+  return `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer"><input type="checkbox" ${on?'checked':''} onchange="messeSetKiosk(${_jsq(u.id)}, this.checked, this)" style="margin-top:2px">
+    <span><b>Kiosk-Konto (Messe-Tablet)</b><br><span style="font-size:12px;color:var(--muted)">Dieses Konto zeigt nur noch das Besucherformular und kann weder Zeiterfassung noch CRM lesen. Wirkt sofort (ohne „Speichern").</span></span></label>`;
+}
+async function messeSetKiosk(appId, on, el){
+  if(!(window.cu && window.cu.role==='admin')){ toast('Das darf nur der Administrator.','err'); if(el) el.checked=!on; return; }
+  const uid=_uidOf(appId); if(!uid){ if(el) el.checked=!on; return; }
+  if(on && !window.confirm('Dieses Konto als Kiosk-Konto markieren?\n\nEs kann danach nur noch das Messe-Besucherformular nutzen (keine Zeiterfassung, kein CRM, keine Liste).')){ if(el) el.checked=false; return; }
+  try{ await firebase.database().ref('zeiterfassung/kiosk/'+uid).set(on?true:null); toast(on?'Kiosk-Konto gesetzt ✓':'Kiosk-Kennzeichen entfernt ✓','ok'); }
+  catch(e){ toast('Speichern fehlgeschlagen: '+((e&&e.code)||e),'err'); if(el) el.checked=!on; }
+}
+
 export { messeStart };
 // Ausgang auch ohne geöffneten Messemodus nachschicken (nach der Anmeldung, siehe main.js)
 function messeFlush(){ return _flush(); }
 Object.assign(window, {
   messeFlush, messeStart, messeClose, messeEditEvent, messeSaveEvent, messeDeleteEvent, messeOpenEvent,
-  messeSaveEntry, messeStaff, messeStaffCheck, messeDeleteEntry, messeBackToForm, messeManage, messeTransfer, messeEnd
+  messeSaveEntry, messeStaff, messeStaffCheck, messeDeleteEntry, messeBackToForm, messeManage, messeTransfer, messeEnd,
+  messeKioskCheck, messeKioskEnter, messeKioskExit, messeKioskLogout, messeKioskUnlock, messeKioskBoxHtml, messeSetKiosk
 });

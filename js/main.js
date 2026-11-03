@@ -378,10 +378,23 @@ initFirebase().then(async function(){
     }
   }catch(e){}
 
+  // Kiosk-Konto (Messe-Tablet, v536): direkt ins Besucherformular, ohne Zeiterfassung/CRM zu laden (auch offline).
+  // Hebt der Administrator das Kennzeichen auf, meldet sich das Gerät ab.
+  try{
+    const ku=localStorage.getItem('tps_kiosk_uid'), au=firebase.auth().currentUser;
+    if(ku && au && au.uid===ku && window.messeKioskEnter){
+      await window.messeKioskEnter();
+      window.messeKioskCheck && window.messeKioskCheck().then(k=>{ if(k===false) window.messeKioskExit(); });
+      return;
+    }
+  }catch(e){ console.warn('Kiosk-Start:', e); }
+
   // Auto-Login: bestehende (persistierte) Firebase-Sitzung + gemerkte Nutzer-ID.
   try{
     const savedId=localStorage.getItem('tp_zt_session');
     if(savedId && firebase.auth().currentUser){
+      // Konto wurde inzwischen zum Kiosk-Konto gemacht → sofort umschalten und lokale Daten löschen (nebenher, kein Warten)
+      try{ window.messeKioskCheck && window.messeKioskCheck().then(k=>{ if(k===true) window.messeKioskEnter(); }); }catch(_){}
       // Schnellstart: gibt es einen lokalen Stand mit genau diesem Nutzer, App SOFORT daraus zeigen
       // (kein Login-Aufblitzen, kein Warten); volle Daten laufen im Hintergrund nach.
       let fast=false;
