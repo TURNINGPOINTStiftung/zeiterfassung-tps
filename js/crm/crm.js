@@ -4287,11 +4287,11 @@ function paintTeamDetail(){
     return `<div class="crm-sec"><h4><span class="ttl">📋 Team-Aufgaben</span></h4>${rows||'<div class="small" style="color:var(--muted)">Keine offenen Team-Aufgaben.</div>'}</div>`;
   })();
   const isOea = !!team && team===oeaCfg().team;   // Redaktionsplan nur auf der ÖA-Teamseite (Release C)
-  const redTab = isOea && window._crmRedTab==='redaktion';
-  const ppTab = !isOea && window._crmRedTab==='projekt';   // Projektplan: für jedes Team (früher Projekte-Spur im Kalender-Jahr); beim ÖA-Team übernimmt das der Redaktionsplan
+  const _hasPlan = !!team && team!=='Ohne Team';   // Plan für jedes Team: ÖA = „Redaktionsplan", sonst „Projektplan" (gleiche Ansicht)
+  const redTab = _hasPlan && window._crmRedTab==='redaktion';
   const _tb=(k,l,on)=>`<button aria-pressed="${on}" style="border:0;font:inherit;font-weight:600;padding:7px 14px;cursor:pointer;min-height:38px;background:${on?'var(--primary,#203869)':'var(--surface,#fff)'};color:${on?'var(--on-primary,#fff)':'var(--primary-d,#15263a)'}" onclick="crmRedSet('tab','${k}')">${l}</button>`;
   const tabs = `<div class="red-seg" style="display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden;margin:0 0 12px">
-      ${_tb('uebersicht','Übersicht',!redTab&&!ppTab)}${isOea?_tb('redaktion','Redaktionsplan',redTab):_tb('projekt','Projektplan',ppTab)}</div>`;
+      ${_tb('uebersicht','Übersicht',!redTab)}${_hasPlan?_tb('redaktion',isOea?'Redaktionsplan':'Projektplan',redTab):''}</div>`;
   const _tc=(t)=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--muted)':_TC[i%_TC.length]; };
   const _visT=(_kanbanSeesAll(window.cu)?zeTeams():visibleKanbanTeams(window.cu));
   const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
@@ -4307,7 +4307,7 @@ function paintTeamDetail(){
     </div>
     ${tabs}
     ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmGoVerwOea()">⚙ ÖA-Team in der Verwaltung festlegen</button></div>`:''}
-    ${redTab ? oeaRedaktionHtml() : ppTab ? _planProjektplan(team) : (window._planActive ? _planTeamOverview(team) : `${teamTaskSec}
+    ${redTab ? oeaRedaktionHtml(team) : (window._planActive ? _planTeamOverview(team) : `${teamTaskSec}
     ${_view?vaSec:''}
     ${projektSec}`)}
   </div>`;
@@ -4332,15 +4332,21 @@ function oeaCfg(){
   return { ablauf, kanaele, team };
 }
 window.crmOeaTeam=()=>{ try{ return oeaCfg().team; }catch(e){ return ''; } };
+// Plan eines Teams: beim ÖA-Team der Redaktionsplan, bei allen anderen Teams dieselbe Ansicht als „Projektplan"
+// (Spalten = normaler Aufgaben-Status, keine Kanäle/Freigabe). _rpTeam wird nur während Zeichnen/Verschieben gesetzt.
+let _rpTeam='';
+const _RP_STATUS=[{key:'offen',label:'Offen',base:'offen'},{key:'inarbeit',label:'In Arbeit',base:'inarbeit'},{key:'erledigt',label:'Erledigt',base:'erledigt'}];
+function rpCfg(){ const o=oeaCfg(); const t=_rpTeam||o.team; return t===o.team ? Object.assign({}, o, { team:t, oea:true }) : { ablauf:_RP_STATUS, kanaele:[], team:t, oea:false }; }
+function _rpMay(){ return rpCfg().oea ? _R('pm_redaktion') : _R('pm_aufg_bearb'); }
 function oeaPhaseOf(n){
-  const ab=oeaCfg().ablauf; if(n&&n.phase&&ab.some(x=>x.key===n.phase)) return n.phase;
+  const ab=rpCfg().ablauf; if(n&&n.phase&&ab.some(x=>x.key===n.phase)) return n.phase;
   const st=(n&&n.status)||'offen';
   if(st==='erledigt') return (ab.filter(x=>x.base==='erledigt').pop()||ab[ab.length-1]).key;
   if(st==='inarbeit') return (ab.find(x=>x.base==='inarbeit')||ab[0]).key;
   return (ab.find(x=>x.base==='offen')||ab[0]).key;
 }
-function oeaPhase(key){ return oeaCfg().ablauf.find(x=>x.key===key)||null; }
-function oeaPhaseIdx(key){ return oeaCfg().ablauf.findIndex(x=>x.key===key); }
+function oeaPhase(key){ return rpCfg().ablauf.find(x=>x.key===key)||null; }
+function oeaPhaseIdx(key){ return rpCfg().ablauf.findIndex(x=>x.key===key); }
 // Standard-Freigabe: Leitung des ÖA-Teams (erste gefundene), sonst niemand
 function oeaLeadId(){ const t=oeaCfg().team; if(!t) return ''; try{ const u=(getData().users||[]).find(x=>x&&x.role==='leitung'&&(x.team===t||(Array.isArray(x.teams)&&x.teams.includes(t)))); return u?u.id:''; }catch(e){ return ''; } }
 // Darf jemand einen Beitrag aus „Freigabe" weiterschieben? (Recht „Beiträge freigeben" oder eingetragene Freigabe-Person)
@@ -4352,8 +4358,8 @@ function oeaCheckMove(n, from, to){
   return '';
 }
 // Beiträge = Aufgaben (Blätter) des ÖA-Teams aus allen Behältern
-function oeaTasks(){ const t=oeaCfg().team; if(!t) return []; return listAllTasks().filter(a=>(a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
-function _oeaMembers(){ const t=oeaCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&(u.team===t||(Array.isArray(u.teams)&&u.teams.includes(t)))); }catch(e){ return []; } }
+function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>(a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
+function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&(u.team===t||(Array.isArray(u.teams)&&u.teams.includes(t)))); }catch(e){ return []; } }
 // Abwesenheiten wie im Kalender: nur genehmigter Urlaub/Ausgleich, nie der Grund
 function _oeaAbs(){ const out=[]; try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(r.type!=='Urlaub'&&r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }
 const _oIso=d=>localISODate(d);
@@ -4372,7 +4378,6 @@ function _oeaRange(){
 function _oeaLabel(r){ if(r.v==='woche') return 'KW '+_oKw(r.days[0])+' · '+r.days[0].getDate()+'.'+(r.days[0].getMonth()+1)+'. – '+r.days[6].getDate()+'.'+(r.days[6].getMonth()+1)+'.'; if(r.v==='monat') return ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][r.days[0].getMonth()]+' '+r.days[0].getFullYear(); return String(r.y); }
 function crmRedSet(k, v){
   if(k==='tab') window._crmRedTab=v; else if(k==='view') window._crmRedView=v; else if(k==='kanal') window._crmRedKanal=v;
-  else if(k==='pp'){ const t=localISODate(); const r=String(window._crmPpRef||t).slice(0,7)+'-01'; window._crmPpRef = v===0 ? t : _oIso(new Date(+r.slice(0,4), +r.slice(5,7)-1+12*v, 1, 12)); }
   else if(k==='nav'){ const r=_oeaRange(); const ref=_oParse(window._crmRedRef||localISODate());
     if(v===0) window._crmRedRef=localISODate();
     else if(r.v==='woche') window._crmRedRef=_oIso(_oAdd(ref,7*v));
@@ -4388,20 +4393,20 @@ function _oeaWhoHtml(r, posts, members, abs){
     const ms=[...Array(12)].map((_,i)=>({ m:i, a:r.y+'-'+String(i+1).padStart(2,'0')+'-01', b:_oIso(new Date(r.y,i+1,0,12)) }));
     const wdays=m=>{ const out=[]; const n=new Date(r.y,m+1,0,12).getDate(); for(let d=1;d<=n;d++){ const dt=new Date(r.y,m,d,12); if(_oDow(dt)<5) out.push(_oIso(dt)); } return out; };
     const absDays=(id,m)=>wdays(m).filter(x=>absOn(id,x)).length;
-    const t=oeaCfg().team;
+    const t=rpCfg().team;
     const projs=listTeamProjekte(t).filter(p=>p.start&&!p.owner&&!p.closed);
     const vas=teamVeranstaltungen(t).filter(v=>v.start&&!v.closed);
     let h='<div class="red-scroll" tabindex="0" role="region" aria-label="Wer ist da (seitlich scrollbar)"><table class="red-y"><thead><tr><th></th>'+ms.map(o=>'<th>'+_O_MON[o.m]+'</th>').join('')+'</tr></thead><tbody>';
     h+='<tr><th>📂 Projekte</th>'+ms.map(o=>{ const l=projs.filter(p=>String(p.start).slice(0,10)<=o.b&&String(p.ende||p.start).slice(0,10)>=o.a); return '<td>'+l.map(p=>'<div class="red-yp" title="'+esc(p.name||'')+'">'+esc(p.name||'Projekt')+'</div>').join('')+'</td>'; }).join('')+'</tr>';
     h+='<tr><th>📅 Veranstaltungen</th>'+ms.map(o=>{ const n=vas.filter(v=>String(v.start).slice(0,10)<=o.b&&String(v.ende||v.start).slice(0,10)>=o.a).length; return '<td class="num">'+(n||'')+'</td>'; }).join('')+'</tr>';
-    const kan=oeaCfg().kanaele.concat(['']);
-    kan.forEach(k=>{ const cnt=ms.map(o=>posts.filter(a=>(a.node.kanal||'')===k&&a.node.due&&a.node.due>=o.a&&a.node.due<=o.b).length); if(!k&&!cnt.some(Boolean)) return;
-      h+='<tr><th>'+(k?esc(k):'ohne Kanal')+'</th>'+cnt.map(n=>'<td class="num">'+(n||'')+'</td>').join('')+'</tr>'; });
+    const _rc=rpCfg(); const kan=_rc.kanaele.concat(['']);
+    kan.forEach(k=>{ const cnt=ms.map(o=>posts.filter(a=>(_rc.oea?(a.node.kanal||''):'')===k&&a.node.due&&a.node.due>=o.a&&a.node.due<=o.b).length); if(!k&&!cnt.some(Boolean)) return;
+      h+='<tr><th>'+(k?esc(k):(_rc.oea?'ohne Kanal':'Aufgaben'))+'</th>'+cnt.map(n=>'<td class="num">'+(n||'')+'</td>').join('')+'</tr>'; });
     h+='<tr class="red-sum"><th>Gesamtlast</th>'+ms.map(o=>{ const n=posts.filter(a=>a.node.due&&a.node.due>=o.a&&a.node.due<=o.b).length; const wd=wdays(o.m).length;
       const pres=members.length?Math.max(0.5,(members.length*wd-members.reduce((s,u)=>s+absDays(u.id,o.m),0))/Math.max(1,wd)):0; const per=pres?n/pres:n;
-      const lv=!n?'':(per<4?'l1':(per<8?'l2':'l3')); return '<td class="num '+lv+'" title="'+n+' Beiträge · '+(pres?pres.toFixed(1):0)+' Personen anwesend (Schnitt)">'+(n||'–')+'</td>'; }).join('')+'</tr>';
+      const lv=!n?'':(per<4?'l1':(per<8?'l2':'l3')); return '<td class="num '+lv+'" title="'+n+(_rc.oea?' Beiträge':' Aufgaben')+' · '+(pres?pres.toFixed(1):0)+' Personen anwesend (Schnitt)">'+(n||'–')+'</td>'; }).join('')+'</tr>';
     members.forEach(u=>{ h+='<tr><th class="red-p">'+esc(u.name)+'</th>'+ms.map(o=>{ const n=absDays(u.id,o.m); return '<td class="num'+(n?' abw':'')+'">'+(n?n+' T.':'')+'</td>'; }).join('')+'</tr>'; });
-    return h+'</tbody></table></div><div class="red-hint">Zahlen = Beiträge mit Datum im Monat · Gesamtlast eingefärbt nach Beiträgen je anwesender Person · unten die Abwesenheitstage (Mo–Fr) je Person.</div>';
+    return h+'</tbody></table></div><div class="red-hint">Zahlen = '+(_rc.oea?'Beiträge':'Aufgaben')+' mit Datum im Monat · Gesamtlast eingefärbt nach '+(_rc.oea?'Beiträgen':'Aufgaben')+' je anwesender Person · unten die Abwesenheitstage (Mo–Fr) je Person.</div>';
   }
   const days=r.days; const isW=r.v==='woche';
   let h='<div class="red-scroll" tabindex="0" role="region" aria-label="Wer ist da (seitlich scrollbar)"><table class="red-g'+(isW?' wk':' mo')+'"><thead><tr><th></th>'+days.map(d=>{ const iso=_oIso(d); return '<th class="'+(_oDow(d)>=5?'we ':'')+(iso===today?'today':'')+'">'+_O_DOW[_oDow(d)]+'<br><b>'+d.getDate()+'</b></th>'; }).join('')+'</tr></thead><tbody>';
@@ -4409,36 +4414,36 @@ function _oeaWhoHtml(r, posts, members, abs){
       const cf=ps.some(a=>(window.kalTaskIssues?window.kalTaskIssues(a.node):[]).some(x=>x.lv==='crit'));
       s+='<td class="'+(ab?'abw ':(id&&!we?'da ':''))+(we?'we':'')+'">'+(ab&&isW?'<div class="red-abw">Abwesend</div>':'')+(isW?ps.map(a=>_oeaPostChip(a,false)).join(''):(ps.length?'<span class="red-n'+(cf?' cf':'')+'" title="'+esc(ps.map(a=>(a.node.kanal?a.node.kanal+': ':'')+a.node.text).join(' · '))+'">'+ps.length+'</span>':''))+'</td>'; });
     return s+'</tr>'; };
-  members.forEach(u=>{ h+=row(esc(u.name)+(u.team&&u.team!==oeaCfg().team?' <span class="red-guest">+ '+esc(u.team)+'</span>':''), u.id); });
+  members.forEach(u=>{ h+=row(esc(u.name), u.id); });   // alle Teams einer Person sind gleichwertig → kein Zusatz
   h+=row('<span style="color:var(--warn-text,#7a4a00)">Team</span> <span class="red-guest">niemand zuständig</span>', '');
   { // Last je KW: Beiträge im Verhältnis zu anwesenden Personentagen (Mo–Fr)
     const kws=[]; days.forEach(d=>{ const k=_oKw(d); let g=kws.find(x=>x.k===k); if(!g){ g={k,ds:[]}; kws.push(g); } g.ds.push(d); });
     const stat=kws.map(g=>{ const wd=g.ds.filter(d=>_oDow(d)<5).map(_oIso); const n=posts.filter(a=>g.ds.map(_oIso).includes(a.node.due)).length;
       const pt=members.reduce((sum,u)=>sum+wd.filter(x=>!absOn(u.id,x)).length,0); return { g, n, pt }; });
     h+='<tr class="red-sum"><th>Woche</th>'; stat.forEach(x=>{ const ratio=x.pt?x.n/x.pt:(x.n?1:0); const lv=ratio<0.25?'l1':(ratio<0.5?'l2':'l3');
-      if(x.g.ds.length<3){ h+='<td colspan="'+x.g.ds.length+'" class="red-kw" title="KW '+x.g.k+' · '+x.n+' Beiträge · '+x.pt+' Personentage">'+(x.n||'')+'</td>'; return; }
-      h+='<td colspan="'+x.g.ds.length+'" class="red-kw"><div>KW '+x.g.k+' · '+x.n+' B. · '+x.pt+' PT</div><div class="red-kwbar"><span class="'+lv+'" style="width:'+Math.min(100,Math.round(ratio*200))+'%"></span></div></td>'; }); h+='</tr>';
+      if(x.g.ds.length<3){ h+='<td colspan="'+x.g.ds.length+'" class="red-kw" title="KW '+x.g.k+' · '+x.n+(rpCfg().oea?' Beiträge':' Aufgaben')+' · '+x.pt+' Personentage">'+(x.n||'')+'</td>'; return; }
+      h+='<td colspan="'+x.g.ds.length+'" class="red-kw"><div>KW '+x.g.k+' · '+x.n+(rpCfg().oea?' B.':' A.')+' · '+x.pt+' PT</div><div class="red-kwbar"><span class="'+lv+'" style="width:'+Math.min(100,Math.round(ratio*200))+'%"></span></div></td>'; }); h+='</tr>';
   }
   return h+'</tbody></table></div>';
 }
 function _oeaBoardHtml(r, posts){
-  const ab=oeaCfg().ablauf; const may=_R('pm_redaktion'); const today=localISODate();
+  const _rc=rpCfg(); const ab=_rc.ablauf; const may=_rpMay(); const today=localISODate();
   const inR=a=>a.node.due&&a.node.due>=r.a&&a.node.due<=r.b;
   const list=posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key));
   const card=a=>{ const n=a.node; const ph=oeaPhaseOf(n);
     const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     const over=iss.some(x=>x.lv==='crit');
-    const short=oeaCfg().team.split(/\s+/)[0];
-    const chips=[n.kanal?`<span class="red-tag k">${esc(String(n.kanal).toUpperCase())}</span>`:'', n.due?`<span class="red-tag">live ${esc(fmtDate(Date.parse(n.due)))}</span>`:'<span class="red-tag">ohne Datum</span>',
+    const short=_rc.team.split(/\s+/)[0];
+    const chips=[n.kanal?`<span class="red-tag k">${esc(String(n.kanal).toUpperCase())}</span>`:'', n.due?`<span class="red-tag">${_rc.oea?'live':'fällig'} ${esc(fmtDate(Date.parse(n.due)))}</span>`:'<span class="red-tag">ohne Datum</span>',
       n.assigneeId?`<span class="red-tag">${esc(userName(n.assigneeId)||'')}</span>`:`<span class="red-tag w">Team ${esc(short)} · niemand</span>`,
       `<span class="red-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span>`].join('');
     const fr=`<div class="red-fr">Freigabe: ${esc(n.freigabeId?(userName(n.freigabeId)||n.freigabeId):'–')} · Bildrechte: ${n.bildrechte===true?'✓':'<b class="red-off">offen</b>'}</div>`;
     const issH=iss.map(x=>`<span class="red-tag ${x.lv==='crit'?'c':'w'}">${esc(x.t)}</span>`).join('');
     const sel=may?`<select class="red-ph" aria-label="Spalte ändern" onchange="crmRedPhaseSet(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)},this.value)">${ab.map(p=>`<option value="${esc(p.key)}" ${p.key===ph?'selected':''}>${esc(p.label)}</option>`).join('')}</select>`:'';
-    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${esc(n.text||'Beitrag')}</div>
-      <div class="red-meta">${chips}</div>${fr}${issH?`<div class="red-meta">${issH}</div>`:''}${sel}</div>`; };
+    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${esc(n.text||(_rc.oea?'Beitrag':'Aufgabe'))}</div>
+      <div class="red-meta">${chips}</div>${_rc.oea?fr:''}${issH?`<div class="red-meta">${issH}</div>`:''}${sel}</div>`; };
   return '<div class="red-board">'+ab.map(p=>{ const cs=list.filter(a=>oeaPhaseOf(a.node)===p.key).sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
-    return '<div class="red-col"><div class="red-colh">'+esc(p.label)+' <small>→ '+esc(({offen:'Offen',inarbeit:'In Arbeit',erledigt:'Erledigt'})[p.base]||'')+'</small><span>'+cs.length+'</span></div>'+(cs.map(card).join('')||'<div class="red-empty">–</div>')+'</div>'; }).join('')+'</div>';
+    return '<div class="red-col"><div class="red-colh">'+esc(p.label)+(_rc.oea?' <small>→ '+esc(({offen:'Offen',inarbeit:'In Arbeit',erledigt:'Erledigt'})[p.base]||'')+'</small>':'')+'<span>'+cs.length+'</span></div>'+(cs.map(card).join('')||'<div class="red-empty">–</div>')+'</div>'; }).join('')+'</div>';
 }
 function _oeaNoTasksHtml(){
   const t=oeaCfg().team; const today=localISODate(); const until=_oIso(_oAdd(_oParse(today),400));
@@ -4466,18 +4471,26 @@ function crmRedPaketApply(vaId, vid){
   toast(n?'ÖA-Paket übernommen ('+n+' Hauptaufgabe'+(n===1?'':'n')+') ✓':'Nichts übernommen.', n?'ok':'err');
 }
 function crmRedPhaseSet(kind, tree, cid, tid, key){
-  const ab=oeaCfg().ablauf; _teamTaskSetCtx(kind, tree, cid, tid);
+  _rpTeam=window._crmTeamSel||''; try{ _crmRedPhaseSet(kind, tree, cid, tid, key); } finally { _rpTeam=''; }
+}
+function _crmRedPhaseSet(kind, tree, cid, tid, key){
+  const ab=rpCfg().ablauf; _teamTaskSetCtx(kind, tree, cid, tid);
   const e=curContainer(); const f=e&&findNode(e,tid); if(!f) return;
   const i=oeaPhaseIdx(oeaPhaseOf(f.node)), j=oeaPhaseIdx(key); if(j<0||i===j) return;
   window._crmTaskCtx=null; crmRedMove(kind, tree, cid, tid, j-i);
 }
 function crmRedMove(kind, tree, cid, tid, dir){
-  if(!_R('pm_redaktion')){ toast('Dafür fehlt das Recht „Redaktionsplan bearbeiten“.','err'); return; }
+  const _own=!_rpTeam; if(_own) _rpTeam=window._crmTeamSel||'';
+  try{ _crmRedMove(kind, tree, cid, tid, dir); } finally { if(_own) _rpTeam=''; }
+}
+function _crmRedMove(kind, tree, cid, tid, dir){
+  if(!_rpMay()){ toast(rpCfg().oea?'Dafür fehlt das Recht „Redaktionsplan bearbeiten“.':'Dafür fehlt das Recht „Aufgaben bearbeiten und verschieben“.','err'); return; }
   _teamTaskSetCtx(kind, tree, cid, tid);
   const e=curContainer(); const f=e&&findNode(e,tid); if(!f) return;
-  const ab=oeaCfg().ablauf; const from=oeaPhaseOf(f.node); const i=oeaPhaseIdx(from); const to=ab[i+dir]; if(!to) return;
+  const ab=rpCfg().ablauf; const from=oeaPhaseOf(f.node); const i=oeaPhaseIdx(from); const to=ab[i+dir]; if(!to) return;
   const why=oeaCheckMove(f.node, from, to.key); if(why){ toast(why,'err'); return; }
-  mutateContainer(en=>{ const g=findNode(en,tid); if(!g) return; g.node.phase=to.key; g.node.status=to.base;
+  const _isO=rpCfg().oea;
+  mutateContainer(en=>{ const g=findNode(en,tid); if(!g) return; if(_isO) g.node.phase=to.key; g.node.status=to.base;
     if(to.base==='erledigt'){ g.node.doneAt=g.node.doneAt||new Date().toISOString(); g.node.doneBy=g.node.doneBy||curKuerzel(); } else { g.node.doneAt=''; g.node.doneBy=''; } });
   window._crmTaskCtx=null; paintTeamDetail();
 }
@@ -4508,8 +4521,11 @@ function crmRedSettingsSave(){
   if(document.getElementById('verw-crmcfg') && window._activeModule==='verwaltung') paintVerwConfig(); else paintTeamDetail();
   toast('Gespeichert ✓','ok');
 }
-function oeaRedaktionHtml(){
-  const c=oeaCfg(); const r=_oeaRange(); const kanal=window._crmRedKanal||'';
+function oeaRedaktionHtml(team){
+  _rpTeam=team||''; try{ return _oeaRedaktionHtml(); } finally { _rpTeam=''; }
+}
+function _oeaRedaktionHtml(){
+  const c=rpCfg(); const r=_oeaRange(); const kanal=c.oea?(window._crmRedKanal||''):'';
   const members=_oeaMembers(); const abs=_oeaAbs();
   const posts=oeaTasks().filter(a=>!kanal||(a.node.kanal||'')===kanal);
   const seg=(k,v,l)=>`<button class="${(k==='view'?(window._crmRedView||'monat'):'')===v?'on':''}" onclick="crmRedSet('${k}','${v}')">${l}</button>`;
@@ -4558,93 +4574,17 @@ function oeaRedaktionHtml(){
   <div class="red-bar">
     <span class="red-seg">${seg('view','woche','Woche')}${seg('view','monat','Monat')}${seg('view','jahr','Jahr')}</span>
     <span><button class="btn-sm-crm" onclick="crmRedSet('nav',-1)">‹</button> <b>${esc(_oeaLabel(r))}</b> <button class="btn-sm-crm" onclick="crmRedSet('nav',1)">›</button> <button class="btn-sm-crm" onclick="crmRedSet('nav',0)">Heute</button></span>
-    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)">Kanal <select onchange="crmRedSet('kanal',this.value)" aria-label="Kanal" style="font:inherit;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${kanOpts}</select></label>
-    ${_R('crm_einst')?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
+    ${c.oea?`<label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)">Kanal <select onchange="crmRedSet('kanal',this.value)" aria-label="Kanal" style="font:inherit;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${kanOpts}</select></label>`:''}
+    ${(c.oea&&_R('crm_einst'))?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
   </div>
   <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, posts, members, abs)}</div>
-  <div class="crm-sec"><h4><span class="ttl">🗂 Beiträge nach Ablauf</span></h4>
-    ${r.v==='jahr'?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (Ideen ohne Datum sind dabei)</summary>${board}</details>`:board}
+  <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span></h4>
+    ${r.v==='jahr'?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
   </div>
-  ${_oeaNoTasksHtml()}`;
+  ${c.oea?_oeaNoTasksHtml():''}`;
 }
 
 // ── Planung: Team-Übersicht nach Prototyp (offene Aufgaben 6 Wochen + ohne Frist | Veranstaltungen, Projekte) ──
-// ══════════════════════════════════════════════════════════════════
-//  PROJEKTPLAN eines Teams (Planung → Teams → Team → Projektplan)
-//  12 Monate ab dem gewählten Monat: je Projekt ein Balken (Start–Ende) und Punkte für offene Aufgaben
-//  mit Frist. Gehört zum Team (früher im Kalender-Jahr für alle sichtbar). Handy: Liste statt Zeitleiste.
-// ══════════════════════════════════════════════════════════════════
-function _planProjektplan(team){
-  const ohne=team==='Ohne Team'; const today=localISODate();
-  const ref=String(window._crmPpRef||today).slice(0,7)+'-01'; const y0=+ref.slice(0,4), m0=+ref.slice(5,7);
-  const months=[]; for(let i=0;i<12;i++){ const d=new Date(y0,m0-1+i,1,12); months.push({ y:d.getFullYear(), m:d.getMonth()+1, dim:new Date(d.getFullYear(),d.getMonth()+1,0).getDate() }); }
-  const pad=n=>String(n).padStart(2,'0'); const Y0=ref, last=months[11], Y1=last.y+'-'+pad(last.m)+'-'+pad(last.dim);
-  const CUM=[]; let tot=0; months.forEach(o=>{ CUM.push(tot); tot+=o.dim; });
-  const doy=iso=>{ const y=+iso.slice(0,4), m=+iso.slice(5,7), d=+iso.slice(8,10); const i=months.findIndex(o=>o.y===y&&o.m===m); return i<0?(iso<Y0?0:tot-1):CUM[i]+d-1; };
-  const pct=iso=>doy(iso<Y0?Y0:(iso>Y1?Y1:iso))/tot*100;
-  const MON=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  const fd=s=>s?fmtDate(Date.parse(s)).replace(/\.\d{4}$/,'.'):'';
-  const col=(()=>{ const ts=zeTeams(); const i=ts.indexOf(team); return i<0?'var(--primary,#203869)':'var(--team-'+((i%8)+1)+')'; })();
-  const projs=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed).map(p=>{
-    const leaves=flatTasks(p).map(x=>x.ref||x).filter(t=>!(Array.isArray(t.children)&&t.children.length));
-    const open=leaves.filter(t=>t.status!=='erledigt'); const done=leaves.length-open.length;
-    return { p, von:p.start?String(p.start).slice(0,10):'', bis:String(p.ende||p.start||'').slice(0,10), leaves, open, done, over:open.filter(t=>t.due&&String(t.due).slice(0,10)<today).length };
-  }).sort((a,b)=>String(a.von||'9').localeCompare(String(b.von||'9')));
-  const dated=projs.filter(x=>x.von && x.bis>=Y0 && x.von<=Y1), undated=projs.filter(x=>!x.von), outside=projs.filter(x=>x.von && !(x.bis>=Y0 && x.von<=Y1));
-  const nav=`<div class="pp-nav"><span class="pp-seg"><button aria-label="12 Monate zurück" onclick="crmRedSet('pp',-1)">‹</button><button onclick="crmRedSet('pp',0)">Heute</button><button aria-label="12 Monate weiter" onclick="crmRedSet('pp',1)">›</button></span>
-    <b>${MON[m0-1]} ${String(y0).slice(2)} – ${MON[last.m-1]} ${String(last.y).slice(2)}</b>
-    ${_kbManage()?`<button class="btn-sm-crm primary" style="margin-left:auto" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</div>`;
-  const grid='grid-template-columns:200px '+months.map(o=>o.dim+'fr').join(' ');
-  const tline=(today>=Y0&&today<=Y1)?`<div class="pp-today" style="left:${pct(today)}%"></div>`:'';
-  const wl=months.slice(1).map((o,i)=>`<div class="pp-mline" style="left:${CUM[i+1]/tot*100}%"></div>`).join('');
-  const row=x=>{ const p=x.p; const l=pct(x.von), w=Math.max(0.6,pct(x.bis)-l+(1/tot*100));
-    // offene Aufgaben mit Frist je Woche (Montag) zusammengefasst: Zahl, rot wenn davon welche überfällig
-    const wk={}; x.open.forEach(t=>{ const d=String(t.due||'').slice(0,10); if(!d||d<Y0||d>Y1) return; const dt=new Date(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10),12); dt.setDate(dt.getDate()-((dt.getDay()+6)%7));
-      let k=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate()); if(k<Y0) k=Y0; (wk[k]=wk[k]||{n:0,o:0,t:[]}); wk[k].n++; if(d<today) wk[k].o++; if(wk[k].t.length<6) wk[k].t.push((t.text||'Aufgabe')+' · '+fd(d)); });
-    const dots=Object.keys(wk).map(k=>{ const g=wk[k]; const tip=g.n+' offen in der Woche ab '+fd(k)+(g.o?' ('+g.o+' überfällig)':'')+': '+g.t.join(', ')+(g.n>g.t.length?' …':'');
-      return `<span class="pp-dot${g.o?' over':''}" style="left:${pct(k)}%" title="${esc(tip)}">${g.n}</span>`; }).join('');
-    return `<div class="pp-row" style="${grid}"><div class="pp-name"><b>${esc(p.name||'Projekt')}</b><span>${x.open.length} offen${x.over?` · <em>${x.over} überfällig</em>`:''}</span></div>
-      <div class="pp-track">${wl}${tline}<button class="pp-bar" style="left:${l}%;width:${w}%;background:${col}" onclick="crmOpenTeamProjekt(${jsq(p.id)})" title="${esc((p.name||'Projekt')+' · '+fd(x.von)+'–'+fd(x.bis))}"><span>${esc(p.name||'Projekt')}</span></button>${dots}</div></div>`; };
-  const head=`<div class="pp-row pp-head" style="${grid}"><div class="pp-name">Projekt</div>${months.map(o=>`<div class="pp-mh">${MON[o.m-1]}${o.y!==y0?" '"+String(o.y).slice(2):''}</div>`).join('')}</div>`;
-  const time=`<div class="pp-time red-scroll" role="region" aria-label="Projektplan als Zeitleiste" tabindex="0"><div class="pp-grid">${head}${dated.map(row).join('')||`<div class="plan-empty" style="padding:14px">Keine Projekte mit Zeitraum in diesen 12 Monaten.</div>`}</div></div>`;
-  const item=x=>{ const p=x.p; const n=x.leaves.length; const prc=n?Math.round(x.done/n*100):0;
-    return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div>
-      <div class="plan-row"><span class="plan-tag">${x.von?fd(x.von)+'–'+fd(x.bis):'ohne Zeitraum'}</span><span class="plan-tag">${x.open.length} offen</span>${x.over?`<span class="plan-tag crit">${x.over} überfällig</span>`:''}</div>
-      ${n?`<div class="pp-prog" role="img" aria-label="${prc} % erledigt"><span style="width:${prc}%;background:${col}"></span></div>`:''}</div></div>`; };
-  const list=`<div class="pp-list">${dated.concat(outside).map(item).join('')||'<div class="plan-empty">Keine Projekte mit Zeitraum.</div>'}</div>`;
-  const rest=undated.length||outside.length?`<section class="plan-card pp-rest" style="margin-top:14px"><div class="plan-h"><h2>Ohne Zeitraum${outside.length?' oder außerhalb':''}</h2><span class="plan-sub">Start und Ende im Projekt eintragen, dann erscheint es in der Zeitleiste</span></div>${undated.concat(outside).map(item).join('')}</section>`:'';
-  return `<style>
-    .pp-nav{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 12px}
-    .pp-seg{display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden}
-    .pp-seg button{border:0;background:var(--surface,#fff);color:var(--primary-d,#15263a);font:inherit;font-size:14px;font-weight:600;padding:7px 12px;min-height:38px;min-width:38px;cursor:pointer}
-    .pp-seg button+button{border-left:1px solid var(--border,#c3cedb)}
-    @media(max-width:640px){ .pp-seg button{min-height:42px;min-width:42px} }
-    .pp-grid{min-width:960px}
-    .pp-row{display:grid;align-items:stretch;border-bottom:1px solid var(--border,#dce3ec)}
-    .pp-head{background:var(--primary,#203869);color:var(--on-primary,#fff);font-weight:700;border-radius:9px 9px 0 0}
-    .pp-head .pp-name,.pp-mh{padding:8px 10px;font-size:13px}
-    .pp-mh{text-align:center;border-left:1px solid rgba(255,255,255,.18)}
-    .pp-name{padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0;font-size:14px}
-    .pp-name b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pp-name span{font-size:12px;color:var(--muted,#5d7086)} .pp-name em{font-style:normal;color:var(--danger,#c0392b);font-weight:600}
-    .pp-track{grid-column:2 / -1;position:relative;min-height:50px}
-    .pp-mline{position:absolute;top:0;bottom:0;width:1px;background:var(--border,#dce3ec)}
-    .pp-today{position:absolute;top:0;bottom:0;width:2px;background:var(--warn,#b45309);z-index:1}
-    .pp-bar{position:absolute;top:9px;height:22px;border:0;border-radius:6px;color:#fff;font:inherit;font-size:12px;font-weight:700;text-align:left;padding:0 8px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;z-index:2}
-    .pp-bar span{text-shadow:0 1px 1px rgba(0,0,0,.35)}
-    .pp-bar:focus-visible{outline:2px solid var(--text,#15263a);outline-offset:2px}
-    .pp-dot{position:absolute;top:34px;min-width:18px;height:16px;padding:0 3px;margin-left:-2px;border-radius:8px;background:var(--surface,#fff);border:1.5px solid var(--primary,#203869);color:var(--primary-d,#15263a);font-size:12px;font-weight:700;line-height:13px;text-align:center;z-index:3;box-sizing:border-box}
-    .pp-dot.over{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:#fff}
-    .pp-track{min-height:56px}
-    .pp-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted,#5d7086);margin:8px 2px 0;align-items:center}
-    .pp-legend i{display:inline-block;vertical-align:middle;margin-right:5px}
-    .pp-prog{height:6px;border-radius:3px;background:var(--surface-3,#e4e9f1);margin-top:8px;overflow:hidden} .pp-prog span{display:block;height:100%}
-    .plan-tag.crit{color:var(--danger,#c0392b);border-color:var(--danger,#c0392b)}
-    .pp-list{display:none}
-    @media(max-width:640px){ .pp-time,.pp-legend{display:none} .pp-list{display:block} .pp-rest{display:none} }
-  </style>${nav}${time}
-  <div class="pp-legend"><span><i style="width:18px;height:10px;border-radius:3px;background:${col}"></i>Projekt (Start–Ende, antippen öffnet)</span><span><i class="pp-dot" style="position:static;margin:0 5px 0 0;display:inline-block;font-style:normal">3</i>offene Aufgaben mit Frist in dieser Woche</span><span><i class="pp-dot over" style="position:static;margin:0 5px 0 0;display:inline-block;font-style:normal">1</i>davon überfällig</span><span><i style="width:2px;height:12px;background:var(--warn,#b45309)"></i>heute</span></div>
-  ${list}${rest}`;
-}
 function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };

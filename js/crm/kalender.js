@@ -345,10 +345,9 @@ function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '�
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }
 // Alle Teams einer Person (Haupt- + Zweit-/Dritt-Teams aus der Verwaltung)
 function _teamsOfU(u){ return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
-// Zeilen im Kalender: bei gewähltem Team alle Mitglieder (auch Zweit-/Dritt-Team), bei „Alle Teams" jede Person einmal unter ihrem Hauptteam
-function _rowTeams(emps){ const base=_teamsOrdered(emps); if(curTeam && curTeam!=='@me' && !base.includes(curTeam) && emps.some(u=>_teamsOfU(u).includes(curTeam))) base.push(curTeam); return base; }
-function _rowMembers(emps,t){ return emps.filter(u=> (curTeam && curTeam!=='@me') ? _teamsOfU(u).includes(t) : _teamOf(u)===t); }
-function _guest(u,t){ const m=_teamOf(u); return m!==t?'<span class="kal-guest">Hauptteam '+esc(m)+'</span>':''; }
+// Großer Kalender: jede Person steht nur in ihrem Hauptteam (Zweit-/Dritt-Teams wirken auf Teamseite, Plan, „Wer ist da“)
+function _rowTeams(emps){ return _teamsOrdered(emps); }
+function _rowMembers(emps,t){ return emps.filter(u=>_teamOf(u)===t); }
 // Handy (schmal): schmale Namensspalte mit Kurznamen („Mia M."), Standardansicht „Liste" (User 14.10.2026)
 const _mobile=()=>{ try{ return window.matchMedia('(max-width: 640px)').matches; }catch(e){ return false; } };
 const _NW=()=>_mobile()?96:180;
@@ -420,7 +419,6 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-load{grid-row:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;border-right:1px solid var(--border,#c3cedb);font-size:13px;color:var(--muted,#5d7086);line-height:1.15}
   .kal-load b{font-size:15px;color:var(--primary-d,#15263a);font-variant-numeric:tabular-nums}
   .kal-load span{font-size:12px}
-  .kal-guest{display:block;font-size:12px;font-weight:400;color:var(--muted,#5d7086);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .kal-load.l1{background:var(--ok-bg,#e7f6e9)} .kal-load.l2{background:var(--warn-bg,#fef3c7)} .kal-load.l3{background:var(--danger-bg,#fde8e8)}
   .kal-cfsec{margin:0 0 6px}
   .kal-cfhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 6px}
@@ -581,7 +579,7 @@ function _dayGrid(days){
       const laneH=(rowTot/aRows).toFixed(2);
       const rowsCss='grid-template-rows:repeat('+aRows+','+laneH+'px);';
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+_guest(u,t)+'</div>';
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+rowsCss+'"><div class="kal-name'+(isMe?' kal-me':'')+'" style="grid-row:1 / -1" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>';
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
       myAsg.forEach(it=>{ h+=asgBar(it, myAbs, asgLanes); });   // heller Balken zuerst – Abwesenheit liegt darüber
       myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+((absLanes<=1||a._alone)?'1 / -1':((a._lane+1)+' / span 1'))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
@@ -673,7 +671,7 @@ function _yearGrid(months, title){
       const rowH=42;                 // alle Zeilen gleich hoch
       const segH=(rowH-6)/aL;        // Spuren (Abwesenheit + Termine) teilen sich die Höhe
       const isMe=u.id===myId;
-      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+_guest(u,t)+'</div>'+mcells();
+      h+='<div class="kal-row'+(isMe?' kal-me':'')+'" style="'+cs+'"><div class="kal-name'+(isMe?' kal-me':'')+'" title="'+esc(u.name)+'">'+esc(_nm(u))+'</div>'+mcells();
       h+='<div class="kal-track" style="min-height:'+rowH+'px">'+wlines+todayLine;
       myAsg.forEach(it=>{ h+=asgMark(it, rowH, myAbs, yAsgL); });   // heller Balken (z1), bei Überschneidung in Spuren
       myAbs.forEach(a=>{ h+=absMark(a, u.name, segH); });    // Abwesenheit darüber (z2)
@@ -925,8 +923,7 @@ export function renderKalender(){
     else if(_sc==='team' && (curTeam==='' || (curTeam!=='@me' && !_myTeams().includes(curTeam)))) curTeam=_myTeams()[0]||'@me';
     const emps=_emps(); const personal=curTeam==='@me';
     const kalCanManage=_kalAccess().anlegen;   // Recht „Termine anlegen" bzw. „Veranstaltungen anlegen"
-    const _allT=[...new Set(_teamsOrdered(emps).concat(...emps.map(_teamsOfU)))];
-    const _tl=_sc==='team' ? _allT.filter(t=>_myTeams().includes(t)) : _allT;
+    const _tl=_sc==='team' ? _teamsOrdered(emps).filter(t=>_myTeams().includes(t)) : _teamsOrdered(emps);
     const teamOpts=['<option value="@me"'+(personal?' selected':'')+'>👤 Nur ich</option>'].concat(_sc==='alle'?['<option value=""'+(curTeam===''?' selected':'')+'>Alle Teams</option>']:[])
       .concat(_sc==='eigene'?[]:_tl.map(t=>'<option value="'+esc(t)+'"'+(curTeam===t?' selected':'')+'>'+esc(t)+'</option>')).join('');
     root.innerHTML=((window._planActive&&window.planBarHtml)?window.planBarHtml('kalender'):'')+`<div class="kal-wrap">
