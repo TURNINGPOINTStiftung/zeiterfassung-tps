@@ -3218,11 +3218,41 @@ function _knExtraHtml(n, e, part){
   return out.join('');
 }
 // Für „📌 Mir zugewiesen" / Team-Seite: Aufgaben aus den Projekten aller Einträge (Vereine, Sozialakteure …)
-function _entityAssignedTasks(pred){
+// ── EINE Sammelstelle für alle Aufgaben (Umbauplan Release A, Schritt 1) ─────────────────────────
+// Liest alle drei Behälter: 📅 Veranstaltungen (crm/veranstaltungen) · 📂 Team-/eigene Projekte (crm/teamprojekte) ·
+// 📇 Projekte an CRM-Einträgen (e.projekte[].todos). Abgeschlossene Behälter (closed) fehlen, außer opts.includeClosed.
+// opts.kinds = ['veranstaltung','teamprojekt','entity'] (Reihenfolge = Reihenfolge der Ausgabe).
+// Je Aufgabenknoten (alle Ebenen, Unterpunkte inklusive):
+//   { node, kind, containerId, containerName (roh, evtl. ''), tree, eid, pid, projName, owner, depth, top, closed, teamsEff }
+// teamsEff = Team-Erbregel: eigene teams[] → sonst die der Hauptaufgabe → sonst das Team des Behälters
+// (Veranstaltung v.team, Projekt p.team; Einträge haben kein Behälter-Team). Nur lesen – ändert nichts außer der
+// üblichen Normalisierung (normTasks/migEntityProjekte), die alle Ansichten ohnehin vornehmen.
+function listAllTasks(opts){
+  opts=opts||{}; const kinds=Array.isArray(opts.kinds)?opts.kinds:['veranstaltung','teamprojekt','entity']; const incl=!!opts.includeClosed;
   const out=[];
-  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
-    (e.projekte||[]).forEach(p=>{ if(p.closed) return; flatNodes(p.todos||[]).forEach(x=>{ if(pred(x.ref)) out.push({ kind:'entity', tree:tr.key, id:e.id, name:((e.stamm&&e.stamm.name)||'(Eintrag)')+' · '+(p.name||'Projekt'), node:x.ref }); }); }); })); }catch(err){}
+  const _arr=v=>Array.isArray(v)?v.filter(Boolean):[];
+  const walk=(todos, base, cTeams)=>{ (todos||[]).forEach(top=>{ const topT=_arr(top&&top.teams);
+    const rec=(n,d)=>{ if(!n) return; const own=_arr(n.teams);
+      out.push(Object.assign({ node:n, depth:d, top, teamsEff: own.length?own:(topT.length?topT:cTeams) }, base));
+      (n.children||[]).forEach(ch=>rec(ch,d+1)); };
+    rec(top,0); }); };
+  kinds.forEach(k=>{
+    try{
+      if(k==='veranstaltung') listVeranstaltungen().forEach(v=>{ if(!v || (v.closed&&!incl)) return; normTasks(v);
+        walk(v.todos, { kind:k, containerId:v.id, containerName:v.titel||'', tree:'', eid:'', pid:'', projName:'', owner:'', closed:!!v.closed }, v.team?[v.team]:[]); });
+      else if(k==='teamprojekt') listTeamProjekte().forEach(p=>{ if(!p || (p.closed&&!incl)) return; normTasks(p);
+        walk(p.todos, { kind:k, containerId:p.id, containerName:p.name||'', tree:'', eid:'', pid:'', projName:'', owner:p.owner||'', closed:!!p.closed }, p.team?[p.team]:[]); });
+      else if(k==='entity') getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
+        (e.projekte||[]).forEach(p=>{ if(!p || (p.closed&&!incl)) return;
+          walk(p.todos, { kind:k, containerId:e.id, containerName:(e.stamm&&e.stamm.name)||'', tree:tr.key, eid:e.id, pid:p.id, projName:p.name||'', owner:'', closed:!!p.closed }, []); }); }));
+    }catch(err){ console.warn('listAllTasks '+k+':', err); }
+  });
   return out;
+}
+window.crmListAllTasks=listAllTasks;   // für Kalender/Startseite (kein benannter Import – Gerätecache)
+function _entityAssignedTasks(pred){
+  return listAllTasks({ kinds:['entity'] }).filter(a=>pred(a.node))
+    .map(a=>({ kind:'entity', tree:a.tree, id:a.eid, name:(a.containerName||'(Eintrag)')+' · '+(a.projName||'Projekt'), node:a.node }));
 }
 // Für die Startseite (js/home.js, „Neuigkeiten"): mir aus einer Kontaktnotiz zugewiesene, offene Aufgaben anderer
 function crmNoteAssignments(){
@@ -4037,21 +4067,22 @@ function teamMainTasks(team){
 //   📂 Team-Projekte (p.team). Reine Lese-Funktion für die Team-Aufgaben-Ansicht. Unzugewiesen zuerst.
 function teamTasks(team){
   const out=[]; const ohne=(team==='Ohne Team');
-  try{ listVeranstaltungen().forEach(v=>{ if(v.closed) return;
-    const match = ohne ? !v.team : (v.team===team); if(!match) return; normTasks(v);
-    (v.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
-      out.push({kind:'veranstaltung', id:v.id, origin:(v.titel||'Veranstaltung'), oicon:'📅', node:m}); }); }); }catch(e){}
-  try{ getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
-    (e.projekte||[]).forEach(p=>{ if(p.closed) return; (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
+  const all=listAllTasks({ kinds:['veranstaltung','entity','teamprojekt'] });
+  all.forEach(a=>{ if(a.kind!=='veranstaltung' || a.depth!==0) return;
+    const v=getVeranstaltung(a.containerId)||{}; const match = ohne ? !v.team : (v.team===team); if(!match || a.node.status==='erledigt') return;
+    out.push({kind:'veranstaltung', id:a.containerId, origin:(a.containerName||'Veranstaltung'), oicon:'📅', node:a.node}); });
+  // Einträge: je Projekt zuerst die Hauptaufgaben mit Team-Tag, dann Aufgaben aus Kontaktnotizen (Unterpunkte „Aus Kontaktnotizen“)
+  const byProj=new Map(); all.forEach(a=>{ if(a.kind!=='entity') return; const k=a.tree+'|'+a.eid+'|'+a.pid; if(!byProj.has(k)) byProj.set(k,[]); byProj.get(k).push(a); });
+  byProj.forEach(list=>{
+    list.forEach(a=>{ const m=a.node; if(a.depth!==0 || m.status==='erledigt') return;
       const tg=m.teams||[]; const match = ohne ? !tg.length : tg.includes(team); if(!match) return;
-      out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag'), oicon:'📇', node:m}); });
-      // Aufgaben aus Kontaktnotizen liegen als Unterpunkte („Aus Kontaktnotizen“) – eigenes Team-Feld zählt
-      flatNodes(p.todos||[]).forEach(x=>{ const m=x.ref; if(!m || !m.fromNote || m.status==='erledigt') return;
-        const tg=m.teams||[]; if(ohne || !tg.includes(team)) return;
-        out.push({kind:'entity', tree:tr.key, id:e.id, origin:((e.stamm&&e.stamm.name)||'Eintrag')+' · Kontaktnotiz', oicon:'📇', node:m}); }); }); })); }catch(e){}
-  try{ listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed).forEach(p=>{ normTasks(p);
-    (p.todos||[]).forEach(m=>{ if(m.status==='erledigt') return;
-      out.push({kind:'teamprojekt', id:p.id, origin:(p.name||'Projekt'), oicon:'📂', node:m}); }); }); }catch(e){}
+      out.push({kind:'entity', tree:a.tree, id:a.eid, origin:(a.containerName||'Eintrag'), oicon:'📇', node:m}); });
+    list.forEach(a=>{ const m=a.node; if(!m.fromNote || m.status==='erledigt') return;
+      const tg=m.teams||[]; if(ohne || !tg.includes(team)) return;
+      out.push({kind:'entity', tree:a.tree, id:a.eid, origin:(a.containerName||'Eintrag')+' · Kontaktnotiz', oicon:'📇', node:m}); }); });
+  all.forEach(a=>{ if(a.kind!=='teamprojekt' || a.depth!==0 || a.owner) return;
+    const p=getTeamProjekt(a.containerId)||{}; if((p.team||'')!==(ohne?'':team) || a.node.status==='erledigt') return;
+    out.push({kind:'teamprojekt', id:a.containerId, origin:(a.containerName||'Projekt'), oicon:'📂', node:a.node}); });
   out.sort((a,b)=>{ const au=a.node.assigneeId?1:0, bu=b.node.assigneeId?1:0; if(au!==bu) return au-bu;
     return String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')); });
   return out;
@@ -4361,11 +4392,10 @@ function paintMeine(){ window._crmMode='teams'; window._crmTeamSel=null; paintTe
 function meineSectionsHtml(){
   const me=(window.cu&&window.cu.id)||'';
   // 1) Mir zugewiesene Aufgaben (aus Veranstaltungen und Projekten)
-  const assigned=[];
-  listVeranstaltungen().forEach(v=>{ if(v.closed) return; normTasks(v); flatNodes(v.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'veranstaltung',id:v.id,name:v.titel||'(Veranstaltung)',node:x.ref}); }); });
-  listTeamProjekte().forEach(p=>{ if(p.closed) return; normTasks(p); flatNodes(p.todos).forEach(x=>{ if(x.ref.assigneeId===me) assigned.push({kind:'teamprojekt',id:p.id,name:p.name||'(Projekt)',node:x.ref}); }); });
-  // auch Aufgaben in den Projekten der CRM-Einträge (z. B. aus Kontaktnotizen) – gleiche Aufgabe, nur gespiegelt
-  _entityAssignedTasks(n=>n && n.assigneeId===me).forEach(a=>assigned.push(a));
+  // (Veranstaltungen, Projekte und – gespiegelt – die Projekte der CRM-Einträge, z. B. aus Kontaktnotizen; listAllTasks)
+  const assigned=listAllTasks().filter(a=>a.node.assigneeId===me).map(a=> a.kind==='entity'
+    ? { kind:'entity', tree:a.tree, id:a.eid, name:(a.containerName||'(Eintrag)')+' · '+(a.projName||'Projekt'), node:a.node }
+    : { kind:a.kind, id:a.containerId, name:a.containerName||(a.kind==='veranstaltung'?'(Veranstaltung)':'(Projekt)'), node:a.node });
   assigned.sort((a,b)=> String(a.node.due||'9999').localeCompare(String(b.node.due||'9999')) );
   const arows = assigned.map(a=>{
     const t=a.node; const st=taskStatusByKey(t.status); const done=t.status==='erledigt';

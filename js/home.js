@@ -442,10 +442,35 @@ async function _fillTodo(){
   try{
     await _crmSoon();
     const me=(window.cu&&window.cu.id)||'';
+    // Hinweise (Release A, Schritt 4): Konflikte, die MICH betreffen (4 Wochen), + offene Punkte in meinen Veranstaltungen.
+    // Stehen oben; dieselbe Aufgabe erscheint dann nicht noch einmal weiter unten.
+    const cfIds=new Set();
+    try{ const cf=window.kalMyConflicts?window.kalMyConflicts(28):null;
+      if(cf){
+        cf.tasks.forEach(t=>{ cfIds.add(t.id);
+          rows.push({ sort:'!'+t.due, html:`<div class="home-row mine"${canOpen?` onclick="crmMeineOpen(${jsq(t.kind)},${jsq(t.tree||'')},${jsq(t.cid)},${jsq(t.id)})"`:''}><span>⚠️</span><span class="tx">${esc(t.text)} <span class="home-sub">· ${esc(t.issue)} · ${esc(t.src)}</span></span><span class="home-pill red">${t.due<today?'überfällig':fmtD(t.due)}</span></div>` }); });
+        cf.events.forEach(e=>{
+          const on=!canOpen?'':(e.typ==='va'?` onclick="homeOpenVa(${jsq(e.id)})"`:(e.tree&&e.eid?` onclick="crmOpenTerminFromHome(${jsq(e.tree)},${jsq(e.eid)},${jsq(e.id)})"`:''));
+          rows.push({ sort:'!'+e.von, html:`<div class="home-row mine"${on}><span>⚠️</span><span class="tx">${esc(e.titel)} <span class="home-sub">· du bist eingeplant, aber abwesend</span></span><span class="home-pill red">${fmtD(e.von)}</span></div>` }); });
+      } }catch(e){}
+    try{ if(window.crmListAllTasks){ const in28=isoDay(new Date(Date.now()+28*864e5)); const byVa={};
+      window.crmListAllTasks({ kinds:['veranstaltung'] }).forEach(a=>{ const n=a.node; if(n.status==='erledigt' || (Array.isArray(n.children)&&n.children.length)) return;
+        if(n.assigneeId && n.due) return; (byVa[a.containerId]=byVa[a.containerId]||[]).push(n); });
+      (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>{ const list=byVa[v.id]; if(!list||!list.length||v.closed||!v.start) return;
+        if(!(Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me))) return;
+        const s=String(v.start).slice(0,10), e=String(v.ende||v.start).slice(0,10); if(e<today||s>in28) return;
+        const noA=list.filter(n=>!n.assigneeId).length, noD=list.filter(n=>!n.due).length;
+        const txt=[noA?noA+' ohne Zuständige':'', noD?noD+' ohne Frist':''].filter(Boolean).join(' · ');
+        rows.push({ sort:'!'+s+'~', html:`<div class="home-row"${canOpen?` onclick="homeOpenVa(${jsq(v.id)})"`:''}><span>📋</span><span class="tx">${esc(v.titel||'Veranstaltung')} <span class="home-sub">· offene Punkte: ${esc(txt)}</span></span><span class="home-pill amber">${s<=today?'heute':fmtD(s)}</span></div>` }); }); } }catch(e){}
     const tasks=[];
-    const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(t.assigneeId===me && t.status!=='erledigt') tasks.push({kind,id:o.id,name,t}); }); };
-    (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
-    (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
+    const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(t.assigneeId===me && t.status!=='erledigt' && !cfIds.has(t.id)) tasks.push({kind,id:o.id,name,t}); }); };
+    if(window.crmListAllTasks){   // gemeinsame Sammelstelle (crm.js, Release A)
+      window.crmListAllTasks({ kinds:['veranstaltung','teamprojekt'] }).forEach(a=>{ if(a.node.assigneeId===me && a.node.status!=='erledigt')
+        if(!cfIds.has(a.node.id)) tasks.push({ kind:a.kind, id:a.containerId, name:a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':'Projekt'), t:a.node }); });
+    } else {
+      (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
+      (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
+    }
     tasks.forEach(a=>{ const due=a.t.due||''; const over=due&&due<today;
       rows.push({ sort:due||'9999', html:`<div class="home-row mine" onclick="crmMeineOpen(${jsq(a.kind)},'',${jsq(a.id)},${jsq(a.t.id)})"><span>☑️</span><span class="tx">${esc(a.t.text||'Aufgabe')} <span class="home-sub">· ${esc(a.name)}</span></span>${due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(due)}</span>`:''}</div>` }); });
     (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>{
@@ -458,7 +483,7 @@ async function _fillTodo(){
     // Vereine/Kontakte: Aufgaben + Fristen (auch aus Kontaktnotizen) und Termine, denen ich zugewiesen bin
     const ci=window.crmHomeItems?window.crmHomeItems(today,in7,ov):null;
     if(ci){
-      ci.tasks.forEach(a=>{ const over=a.due&&a.due<today;
+      ci.tasks.forEach(a=>{ if(cfIds.has(a.tid)) return; const over=a.due&&a.due<today;
         rows.push({ sort:a.due||'9999', html:`<div class="home-row mine" onclick="crmOpenAssignedFromHome(${jsq(a.tree)},${jsq(a.eid)},${jsq(a.tid)})"><span>${/^⏰/.test(a.text)?'⏰':'☑️'}</span><span class="tx">${esc(String(a.text).replace(/^⏰\s*/,''))} <span class="home-sub">· ${esc(a.name)}${a.team?' · 👥 Team':''}</span></span>${a.due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(a.due)}</span>`:''}</div>` }); });
       ci.termine.forEach(t=>{
         rows.push({ sort:t.datum, html:`<div class="home-row${t.mine?' mine':''}"${canOpen?` onclick="crmOpenTerminFromHome(${jsq(t.tree)},${jsq(t.eid)},${jsq(t.tid)})"`:''}><span>🗓️</span><span class="tx">${esc(t.titel)}${t.mine?' '+_MINE:''} <span class="home-sub">· ${esc(t.name)}${t.uhr?' · '+esc(t.uhr):''}</span></span><span class="home-pill green">${t.datum<=today?'heute':fmtD(t.datum)}</span></div>` }); });

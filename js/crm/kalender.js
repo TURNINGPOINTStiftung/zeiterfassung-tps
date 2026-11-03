@@ -66,6 +66,8 @@ let weekStart=_mondayOf(_now);                          // Woche
 // Admin/ohne rechte.js: alles wie bisher.
 function _kr(k){ try{ const u=window.cu; if(!u||u.role==='admin'||!window.tpsRechteOf) return k==='kal_ansehen'?'alle':true; return window.tpsRechteOf(u)[k]; }catch(e){ return k==='kal_ansehen'?'alle':true; } }
 function _myTeams(){ const u=window.cu||{}; return [u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); }
+// Umfang eines Sichtrechts mit Optionen (alle|team|eigene); '' = gar nicht. Admin/ohne rechte.js → alle.
+function _scope(k){ const v=_kr(k); if(v===true) return 'alle'; return (v==='alle'||v==='team'||v==='eigene') ? v : ''; }
 const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray(it.mitarbeiter)&&it.mitarbeiter.includes(me); };
 function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{};
   Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved') return; const m=AB[r.type]; if(!m||!r.startDate) return;
@@ -94,6 +96,111 @@ function _absMerge(list){
 function _events(){ let vs=[]; try{ vs=listVeranstaltungen()||[]; }catch(e){}
   const _own=_kr('kal_ansehen')==='eigene';
   return vs.filter(v=>v&&v.start).filter(v=>!_own||(Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes((window.cu&&window.cu.id)||''))).map(v=>({id:v.id||'', titel:v.titel||'(Veranstaltung)', typ:'va', von:v.start, bis:v.ende||v.start, uhr:v.uhrzeit||'', farbe:v.farbe||'', mitarbeiter:Array.isArray(v.mitarbeiter)?v.mitarbeiter:[]})); }
+// ── Fälligkeiten (Umbauplan Release A, Schritt 2) ──
+// Aufgaben aus ALLEN Behältern (window.crmListAllTasks, crm.js) mit Frist + zuständiger Person, nicht erledigt.
+// Sichtbar je Recht kal_faellig: alle · team (zuständige Person oder Aufgaben-Team in meinen Teams) · eigene.
+let _showDue=true; try{ _showDue=localStorage.getItem('tps_kal_due')!=='0'; }catch(e){}
+function _dueTasks(){
+  const sc=_scope('kal_faellig'); if(!sc) return [];
+  let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){ all=[]; }
+  const me=(window.cu&&window.cu.id)||''; const my=new Set(_myTeams());
+  const d=getData()||{}; const tOf={}; (d.users||[]).forEach(u=>{ if(u&&u.id) tOf[u.id]=[u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); });
+  return all.filter(a=>{ const n=a.node; if(!n||!n.due||!n.assigneeId||n.status==='erledigt') return false;
+      if(sc==='alle') return true; if(n.assigneeId===me) return true;
+      return sc==='team' && ((tOf[n.assigneeId]||[]).some(t=>my.has(t)) || (a.teamsEff||[]).some(t=>my.has(t))); })
+    .map(a=>({ id:a.node.id, text:a.node.text||'Aufgabe', due:String(a.node.due).slice(0,10), emp:a.node.assigneeId, status:a.node.status||'offen',
+      kind:a.kind, cid:a.containerId, tree:a.tree, src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:''), teams:a.teamsEff||[] }));
+}
+// Konflikt einer Aufgabe: überfällig ODER zuständige Person am Fälligkeitstag oder an den 2 Arbeitstagen davor abwesend.
+// (Abwesenheit = nur genehmigter Urlaub/Ausgleich wie im übrigen Kalender – Krankheit wird nie herangezogen.)
+function _workdaysBefore(iso,n){ const out=[iso]; let dt=_parse(iso); while(out.length<=n){ dt=_addDays(dt,-1); if(_dowMon(dt)<5) out.push(_iso(dt)); } return out; }
+function _taskIssue(t, abs){
+  if(t.due<_todayISO()) return 'überfällig seit '+_deDate(t.due);
+  const ds=_workdaysBefore(t.due,2);
+  if((abs||[]).some(a=>a.emp===t.emp && ds.some(x=>overlap(a.von,a.bis,x,x)))) return _short(empName(t.emp))+' vor Fälligkeit abwesend';
+  return '';
+}
+function _dueMark(tasks, emp, iso, abs, col){
+  const ts=tasks.filter(t=>t.emp===emp && t.due===iso); if(!ts.length) return '';
+  const cf=ts.some(t=>_taskIssue(t,abs));
+  const tip=(ts.length===1?'1 Aufgabe fällig':ts.length+' Aufgaben fällig')+': '+ts.map(t=>t.text).join(', ').slice(0,200)+(cf?' · ⚠ Konflikt':'');
+  return '<button type="button" class="kal-due'+(cf?' cf':'')+'"'+(col?' style="grid-column:'+col+';grid-row:1 / -1"':'')+' data-tip="'+esc(tip)+'" aria-label="'+esc(tip)+'" onclick="kalDueOpen('+jsq(emp)+','+jsq(iso)+')">'+ts.length+'</button>';
+}
+function kalDueOpen(emp, iso){
+  const abs=_abs(); const ts=_dueTasks().filter(t=>t.emp===emp && t.due===iso);
+  const canOpen=_kalAccess().hasCrm && typeof window.crmMeineOpen==='function';
+  const rows=ts.map(t=>{ const is=_taskIssue(t,abs);
+    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border,#e3e9f0)">'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:700">'+esc(t.text)+'</div>'
+      +'<div style="font-size:13px;color:var(--muted,#5d7086)">'+esc(t.src)+(t.status==='inarbeit'?' · in Arbeit':'')+'</div>'
+      +(is?'<div style="font-size:13px;color:var(--danger,#c0392b);font-weight:600">⚠ '+esc(is)+'</div>':'')+'</div>'
+      +(canOpen?'<button class="btn btn-secondary" style="flex:none" onclick="closeModal();crmMeineOpen('+jsq(t.kind)+','+jsq(t.tree||'')+','+jsq(t.cid)+','+jsq(t.id)+')">Öffnen</button>':'')+'</div>'; }).join('')
+    || '<div style="color:var(--muted,#5d7086)">Keine offenen Aufgaben mehr.</div>';
+  openModal('<h3 style="margin:0 0 4px">☑ Fällig am '+esc(_deDate(iso))+'</h3><div style="color:var(--muted,#5d7086);margin-bottom:8px">'+esc(empName(emp))+'</div>'+rows
+    +'<div style="text-align:right;margin-top:12px"><button class="btn btn-secondary" onclick="closeModal()">Schließen</button></div>');
+}
+// ── Konflikte um Aufgaben (Umbauplan Release A, Schritt 3) ──
+// Umfang je Recht kal_konflikte: eigene („betrifft mich": mir zugewiesen) · team (+ Aufgaben meiner Teams, auch
+// ohne Zuständige) · alle. Auswahl in der Liste höchstens bis zum eigenen Recht. Zeitraum 4 Wochen / 3 Monate ab heute;
+// überfällige Aufgaben stehen immer oben (ohne Zeitgrenze). Abwesenheit wie überall nur „abwesend", nie der Grund.
+let _cfScope='', _cfDays=28;
+const _CF_SCOPES=[['eigene','Betrifft mich'],['team','Meine Teams'],['alle','Alle']];
+function _cfScopesAllowed(){ const r=_scope('kal_konflikte'); if(!r) return []; const i=_CF_SCOPES.findIndex(x=>x[0]===r); return _CF_SCOPES.slice(0, i+1); }
+function _cfScopeNow(){ const al=_cfScopesAllowed(); if(!al.length) return ''; if(!al.some(x=>x[0]===_cfScope)) _cfScope=al[al.length-1][0]; return _cfScope; }
+function _taskConflicts(scope, days, noFilter){
+  if(!scope) return [];
+  let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){ all=[]; }
+  const me=(window.cu&&window.cu.id)||''; const my=new Set(_myTeams()); const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
+  const d=getData()||{}; const tOf={}; (d.users||[]).forEach(u=>{ if(u&&u.id) tOf[u.id]=[u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); });
+  const abs=_abs(); const out=[];
+  all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt') return;
+    const due=String(n.due).slice(0,10); if(due>until) return;
+    const emp=n.assigneeId||''; const teams=a.teamsEff||[];
+    const inScope = scope==='alle' || emp===me || (scope==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || teams.some(t=>my.has(t))));
+    if(!inScope) return;
+    if(!noFilter && curTeam && curTeam!=='@me' && !((tOf[emp]||[]).includes(curTeam) || teams.includes(curTeam))) return;
+    if(!noFilter && curTeam==='@me' && emp!==me) return;
+    const t={ id:n.id, text:n.text||'Aufgabe', due, emp, kind:a.kind, cid:a.containerId, tree:a.tree, teams,
+      src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:'') };
+    const is=emp ? _taskIssue(t, abs) : (due<today ? 'überfällig seit '+_deDate(due) : '');
+    if(is) out.push(Object.assign(t, { issue:is, over:due<today }));
+  });
+  return out.sort((x,y)=>x.due<y.due?-1:x.due>y.due?1:String(x.text).localeCompare(String(y.text),'de'));
+}
+function _taskConflictSection(personal){
+  const al=personal?[['eigene','Betrifft mich']]:_cfScopesAllowed(); if(!al.length) return '';
+  const sc=personal?'eigene':_cfScopeNow();
+  const list=_taskConflicts(sc, _cfDays);
+  const canOpen=_kalAccess().hasCrm && typeof window.crmMeineOpen==='function';
+  const who=t=>t.emp?esc(empName(t.emp)):('<span style="color:var(--warn-text,#7a4a00)">'+esc(t.teams[0]?('Team '+t.teams[0]):'ohne Team')+' · niemand zuständig</span>');
+  const row=t=>'<div class="kal-cfitem"><div class="kal-cfdate">'+esc(_deDateY(t.due))+'</div><div class="kal-cfmain"><div class="kal-cftitle">☑ '+esc(t.text)+' <span style="font-weight:400;color:var(--muted)">· '+esc(t.src)+'</span></div>'
+    +'<div class="kal-cfsub">'+who(t)+'</div><div class="kal-chips"><span class="kal-chip" style="background:var(--danger,#c0392b)">'+esc(t.issue)+'</span></div></div>'
+    +(canOpen?'<button class="kal-today" style="align-self:center" onclick="crmMeineOpen('+jsq(t.kind)+','+jsq(t.tree||'')+','+jsq(t.cid)+','+jsq(t.id)+')">Öffnen</button>':'<div class="kal-badge" style="background:#fbe4df;color:#c8442f">⚠</div>')+'</div>';
+  const over=list.filter(t=>t.over), up=list.filter(t=>!t.over);
+  let h='<div class="kal-cfsec"><div class="kal-cfhead"><span class="kal-cfh">☑ Aufgaben mit Konflikt</span>';
+  if(al.length>1) h+='<span class="kal-seg">'+al.map(x=>'<button class="'+(sc===x[0]?'on':'')+'" onclick="kalSetCfScope('+jsq(x[0])+')">'+x[1]+'</button>').join('')+'</span>';
+  h+='<span class="kal-seg"><button class="'+(_cfDays===28?'on':'')+'" onclick="kalSetCfDays(28)">4 Wochen</button><button class="'+(_cfDays===91?'on':'')+'" onclick="kalSetCfDays(91)">3 Monate</button></span></div>';
+  h+='<div class="kal-cf">';
+  if(!list.length) h+='<div class="kal-empty">Keine Aufgaben mit Konflikt'+(sc==='eigene'?' bei dir':'')+' in den nächsten '+(_cfDays===28?'4 Wochen':'3 Monaten')+'.</div>';
+  if(over.length) h+='<div class="kal-cfmon">Überfällig ('+over.length+')</div>'+over.map(row).join('');
+  if(up.length) h+='<div class="kal-cfmon">Nächste '+(_cfDays===28?'4 Wochen':'3 Monate')+' ('+up.length+')</div>'+up.map(row).join('');
+  h+='</div></div><div class="kal-cfh" style="margin:18px 0 6px">📅 Veranstaltungen &amp; Termine</div>';
+  return h;
+}
+// Für die Startseite (home.js, Release A Schritt 4): was MICH betrifft – unabhängig von der Kalender-Auswahl.
+// → { tasks:[Aufgaben mit Konflikt], events:[mir zugewiesene Veranstaltungen/Termine, während ich abwesend bin] }
+function kalMyConflicts(days){
+  const me=(window.cu&&window.cu.id)||''; if(!me || !_scope('kal_konflikte')) return { tasks:[], events:[] };
+  days=days||28; const today=_todayISO(); const until=_iso(_addDays(_parse(today), days));
+  const tasks=_taskConflicts('eigene', days, true).map(t=>Object.assign(t, { issue:/vor Fälligkeit abwesend$/.test(t.issue)?'du bist vor der Frist abwesend':t.issue }));
+  const myAbs=_abs().filter(a=>a.emp===me);
+  const events=_events().concat(_termine()).filter(e=>(e.mitarbeiter||[]).includes(me) && (e.bis||e.von)>=today && e.von<=until && myAbs.some(a=>overlap(a.von,a.bis,e.von,e.bis||e.von)))
+    .map(e=>({ typ:e.typ, id:e.id, tree:e.tree||'', eid:e.eid||'', titel:e.titel, von:e.von, bis:e.bis||e.von }));
+  return { tasks, events };
+}
+function kalSetCfScope(v){ _cfScope=v; renderKalender(); }
+function kalSetCfDays(n){ _cfDays=n===91?91:28; renderKalender(); }
+function kalSetDue(on){ _showDue=!!on; try{ localStorage.setItem('tps_kal_due', on?'1':'0'); }catch(e){} renderKalender(); }
 // CRM-Termine (auf Kontakten: e.termine) einsammeln – über alle Bäume/Einträge.
 function _termine(){ const out=[]; try{
     const crm=getCrm()||{};
@@ -264,6 +371,15 @@ function _styles(){ if(document.getElementById('kal-styles')) return;
   .kal-termin{border:1.5px dashed rgba(255,255,255,.65)}
   .kal-asg{margin:2px;border-radius:4px;min-width:4px;z-index:1}
   .kal-asg.cf{outline:2px solid var(--warn,#f0a92e);outline-offset:-2px}
+  .kal-due{align-self:start;justify-self:end;z-index:3;margin:3px 3px 0 0;min-width:20px;height:20px;padding:0 5px;border-radius:10px;border:1.5px solid var(--primary,#203869);background:var(--surface,#fff);color:var(--primary,#203869);font:inherit;font-size:12px;font-weight:800;line-height:17px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.18)}
+  .kal-due.cf{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:var(--on-primary,#fff)}
+  .kal-due:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:1px}
+  .kal-pdue{background:var(--surface,#fff);color:var(--primary,#203869);border:1.5px solid var(--primary,#203869)}
+  .kal-pdue.cf{background:var(--danger,#c0392b);border-color:var(--danger,#c0392b);color:var(--on-primary,#fff)}
+  .kal-cfsec{margin:0 0 6px}
+  .kal-cfhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 6px}
+  .kal-cfh{font-size:16px;font-weight:800;color:var(--primary-d,#15263a)}
+  .kal-chk{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--primary-d,#15263a);cursor:pointer}
   .kal-yasg{position:absolute;border-radius:4px;min-width:3px;z-index:1}
   .kal-yasg.cf{outline:2px solid var(--warn,#f0a92e);outline-offset:-2px}
   .kal-row.kal-me{position:relative;z-index:1}
@@ -364,6 +480,7 @@ function _dayGrid(days){
   // die Zeilen dauerhaft höher (v523, User 30.10.2026).
   const inView=x=>overlap(x.von,x.bis||x.von,isoList[0],isoList[N-1]);
   const abs=_abs().filter(inView); const items=_events().concat(_termine()).filter(inView);
+  const dues=_showDue?_dueTasks().filter(t=>t.due>=isoList[0]&&t.due<=isoList[N-1]):[]; const absAll=dues.length?_abs():[];
   const NW=_NW(), DW=_mobile()?30:34;
   const cs='grid-template-columns:'+NW+'px repeat('+N+',minmax('+DW+'px,1fr));';
   const cfSet=new Set();
@@ -422,6 +539,7 @@ function _dayGrid(days){
       days.forEach((dd,i)=>{ h+='<div class="kal-cell'+(dd.we?' we':'')+(dd.today?' today':'')+(dd.dow===0?' mon':'')+(cfSet.has(dd.iso)?' cf':'')+'" style="grid-column:'+(i+2)+';grid-row:1 / -1"></div>'; });
       myAsg.forEach(it=>{ h+=asgBar(it, myAbs, asgLanes); });   // heller Balken zuerst – Abwesenheit liegt darüber
       myAbs.forEach(a=>{ const cc=clampCols(a.von,a.bis); if(!cc) return; const m=KMETA[a.type]; const wide=(cc[1]-cc[0])>=1; const tip=m.lbl+' · '+u.name+' · '+_deDate(a.von)+'–'+_deDate(a.bis)+(a.half?' (½ Tag)':''); h+='<div class="kal-bar-seg" style="grid-column:'+cc[0]+' / '+(cc[1]+1)+';grid-row:'+((absLanes<=1||a._alone)?'1 / -1':((a._lane+1)+' / span 1'))+';background:'+m.c+'" data-tip="'+esc(tip)+'">'+(wide?m.lbl:'')+'</div>'; });
+      if(dues.length) days.forEach((dd,i)=>{ h+=_dueMark(dues, u.id, dd.iso, absAll, i+2); });   // Fälligkeiten (oben rechts in der Zelle)
       h+='</div>';
     });
   });
@@ -525,7 +643,8 @@ function _conflictList(){
   const zeIds=new Set(_emps().map(u=>u.id));   // nur Mitarbeiter mit Zeiterfassung
   const abs=_abs().filter(a=>zeIds.has(a.emp));
   const items=_events().concat(_termine());
-  if(!items.length) return '<div class="kal-empty">Keine Veranstaltungen oder Termine.</div>';
+  const tsec=_taskConflictSection(false);
+  if(!items.length) return tsec+'<div class="kal-empty">Keine Veranstaltungen oder Termine.</div>';
   const inTeam=id=>!curTeam||empTeamById(id)===curTeam;
   const row=e=>{
     let h='';
@@ -547,7 +666,7 @@ function _conflictList(){
     h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?('⚠ '+cnt):'✓ frei')+'</div></div>';
     return h;
   };
-  return _cfTimeline(items, row, 'Ab heute stehen keine Veranstaltungen oder Termine an.');
+  return tsec+_cfTimeline(items, row, 'Ab heute stehen keine Veranstaltungen oder Termine an.');
 }
 
 // ═══ Persönliche Ansicht („Nur ich"): klassische Kalender-Layouts ═══
@@ -565,9 +684,14 @@ function _persAbsChip(a){ const m=KMETA[a.type]; return '<div class="kal-pabs" s
 function _persDayEntries(iso){
   const abs=_persMyAbs().filter(a=>overlap(a.von,a.bis,iso,iso)).map(_persAbsChip);
   const its=_persItems().filter(it=>overlap(it.von,it.bis,iso,iso)).sort((x,y)=>(_persMine(y)?1:0)-(_persMine(x)?1:0));
-  return abs.concat(its.map(_persChip)).join('');
+  return abs.concat(its.map(_persChip)).join('')+_persDue(iso);
 }
 const _DOWLONG=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+function _persDue(iso){
+  if(!_showDue) return ''; const me=(window.cu&&window.cu.id)||''; const ts=_dueTasks().filter(t=>t.emp===me && t.due===iso); if(!ts.length) return '';
+  const cf=ts.some(t=>_taskIssue(t,_abs()));
+  return '<div class="kal-pchip kal-clickable kal-pdue'+(cf?' cf':'')+'" data-tip="'+esc(ts.map(t=>t.text).join(', ').slice(0,200))+'" onclick="kalDueOpen('+jsq(me)+','+jsq(iso)+')">☑ '+ts.length+' fällig</div>';
+}
 function _persMonth(y,m){
   const first=new Date(y,m-1,1,12); const startDow=_dowMon(first); const dim=_daysInMonth(y,m);
   const cells=[];
@@ -602,7 +726,7 @@ function _persWeek(ws){
   h+='<div class="kal-pw-corner"></div>';
   days.forEach(d=>{ h+='<div class="kal-pw-dh'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+DOW[d.dow]+' '+d.dt.getDate()+'.'+(d.dt.getMonth()+1)+'.</div>'; });
   h+='<div class="kal-pw-tl">ganztägig</div>';
-  days.forEach((d,i)=>{ h+='<div class="kal-pw-ad'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+dd[i].abs.map(_persAbsChip).join('')+dd[i].allday.map(_persChip).join('')+'</div>'; });
+  days.forEach((d,i)=>{ h+='<div class="kal-pw-ad'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+dd[i].abs.map(_persAbsChip).join('')+dd[i].allday.map(_persChip).join('')+_persDue(d.iso)+'</div>'; });
   for(let hh=H0; hh<=H1; hh++){
     h+='<div class="kal-pw-tl">'+String(hh).padStart(2,'0')+':00</div>';
     days.forEach((d,i)=>{ h+='<div class="kal-pw-hc'+(d.dow>=5?' we':'')+(d.today?' today':'')+'">'+dd[i].timed.filter(x=>x.hh===hh).map(x=>_persChip(x.it)).join('')+'</div>'; });
@@ -645,14 +769,15 @@ function _persYear(months){
 function _persConflict(){
   const myId=(window.cu&&window.cu.id)||''; const myAbs=_abs().filter(a=>a.emp===myId);
   const mine=_persItems().filter(it=>_persMine(it));
-  if(!mine.length) return '<div class="kal-empty">Dir sind keine Veranstaltungen oder Termine zugewiesen.</div>';
+  const tsec=_taskConflictSection(true);
+  if(!mine.length) return tsec+'<div class="kal-empty">Dir sind keine Veranstaltungen oder Termine zugewiesen.</div>';
   const row=e=>{ const ic=e.typ==='va'?'📅':'•'; const clash=myAbs.filter(a=>overlap(a.von,a.bis,e.von,e.bis)); const cnt=clash.length;
     const dl=e.von===e.bis?_deDateY(e.von):(_deDateY(e.von)+' – '+_deDateY(e.bis));
     let h='<div class="kal-cfitem"><div class="kal-cfdate">'+dl+'</div><div class="kal-cfmain"><div class="kal-cftitle">'+ic+' '+esc(e.titel)+(e.entity?(' <span style="font-weight:400;color:var(--muted)">· '+esc(e.entity)+'</span>'):'')+'</div>';
     h+='<div class="kal-cfsub">'+(cnt?('überschneidet sich mit deiner Abwesenheit: '+clash.map(a=>KMETA[a.type].lbl).join(', ')):'frei – keine Überschneidung')+'</div>';
     h+='</div><div class="kal-badge" style="background:'+(cnt?'#fbe4df;color:#c8442f':'#dff1e7;color:var(--ok,#16a34a)')+'">'+(cnt?'⚠ Konflikt':'✓ frei')+'</div></div>';
     return h; };
-  return _cfTimeline(mine, row, 'Ab heute sind dir keine Veranstaltungen oder Termine zugewiesen.');
+  return tsec+_cfTimeline(mine, row, 'Ab heute sind dir keine Veranstaltungen oder Termine zugewiesen.');
 }
 
 // ── Liste (Agenda): Tag für Tag, was ansteht – gut am Handy (User 14.10.2026) ──
@@ -749,6 +874,7 @@ export function renderKalender(){
         <div class="kal-seg" id="kal-tabs">${tabs.map(t=>`<button data-v="${t[0]}" class="${V===t[0]?'on':''}" onclick="kalSetView(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
         ${V==='konflikt'?'':`<span class="kal-nav"><button onclick="kalNav(-1)">‹</button> <span>${_periodLabel()}</span> <button onclick="kalNav(1)">›</button></span><button class="kal-today" onclick="kalToday()">Heute</button>`}
         ${V==='jahr'?`<span class="kal-seg"><button class="${curSaison===''?'on':''}" onclick="kalSetSaison('')">Ganzes Jahr</button><button class="${curSaison==='sommer'?'on':''}" onclick="kalSetSaison('sommer')">☀️ Sommer</button><button class="${curSaison==='winter'?'on':''}" onclick="kalSetSaison('winter')">❄️ Winter</button></span>`:''}
+        ${(V==='woche'||V==='monat')&&_scope('kal_faellig')?`<label class="kal-chk"><input type="checkbox" ${_showDue?'checked':''} onchange="kalSetDue(this.checked)"> Fälligkeiten</label>`:''}
         <span class="kal-spacer"></span>
         ${kalCanManage?`<button class="kal-new" onclick="kalNewItem()">＋ Neu</button>`:''}
         <select class="kal-sel" aria-label="Team" onchange="kalSetTeam(this.value)">${teamOpts}</select>
@@ -759,6 +885,7 @@ export function renderKalender(){
         <span class="kal-lg"><span class="kal-sw" style="background:var(--info,#2563eb)"></span>Abwesend</span>
         ${personal ? '' : `<span class="kal-lg"><span class="kal-sw" style="background:#f2b8b8"></span>eingeplant (heller Balken auf der Zeile)</span>
         <span class="kal-lg"><span class="kal-sw" style="background:transparent;outline:2px solid var(--warn,#f0a92e)"></span>Konflikt (eingeplant &amp; abwesend)</span>`}
+        ${(V==='woche'||V==='monat')&&_showDue&&_scope('kal_faellig')?`<span class="kal-lg"><span class="kal-sw" style="background:var(--surface,#fff);border:1.5px solid var(--primary,#203869);border-radius:8px"></span>fällige Aufgaben (Zahl)</span><span class="kal-lg"><span class="kal-sw" style="background:var(--danger,#c0392b);border-radius:8px"></span>Aufgabe mit Konflikt</span>`:''}
       </div>
       ${V==='konflikt'||V==='liste'?`<div class="kal-board">${_boardHtml()}</div>`:`<div class="kal-board"><div class="kal-scroll" tabindex="0" aria-label="Kalender (scrollbar)">${_boardHtml()}</div></div>`}
     </div>`;
@@ -821,3 +948,4 @@ function kalAboCopy(id){ const i=document.getElementById(id||'kal-abo-url'); if(
 
 Object.assign(window, { kalAboOpen, kalAboNew, kalAboDelete, kalAboCopy });
 Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav, kalSetSaison, kalOpenVeranstaltung, kalOpenTermin, kalGotoVeranstaltung, kalGotoTermin, kalNewItem });
+Object.assign(window, { kalDueOpen, kalSetDue, kalSetCfScope, kalSetCfDays, kalMyConflicts });
