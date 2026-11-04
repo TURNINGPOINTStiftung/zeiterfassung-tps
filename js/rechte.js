@@ -15,7 +15,7 @@ import { hasPermission } from './roles.js';
 
 export const RECHTE = [
   { area:'crm', icon:'📇', label:'CRM-Kontakte', items:[
-    { k:'crm_ansehen',       nr:'1.1',  label:'Kontakte ansehen', opts:[['alle','alle'],['kat','nur bestimmte Kategorien'],['verein','nur eigener Verein']] },
+    { k:'crm_ansehen',       nr:'1.1',  label:'Kontakte ansehen', opts:[['alle','alle'],['kat','nur bestimmte Kategorien']] },
     { k:'crm_anlegen',       nr:'1.2',  label:'Kontakte neu anlegen' },
     { k:'crm_stamm',         nr:'1.3',  label:'Stammdaten bearbeiten (Name, Adresse, Kategorien, Status, Zusatzfelder)' },
     { k:'crm_personen',      nr:'1.4',  label:'Personen beim Kontakt anlegen/bearbeiten' },
@@ -116,7 +116,6 @@ export const VORLAGEN = [
   { key:'leitung',    label:'Leitung',       hint:'wie Team, zusätzlich löschen, Team-Projekte, Messe-Veranstaltungen', vals:_pick(LEITUNG) },
   { key:'verwaltung', label:'Verwaltung',    hint:'alles', vals:_all(true) },
   { key:'lesen',      label:'Nur lesen',     hint:'überall nur ansehen', vals:_pick({ crm_ansehen:'alle', kal_ansehen:'alle', kal_abw:true, kal_abo:true, kal_faellig:'team', kal_konflikte:'eigene', pm_ansehen:'teams', vt_nutzen:true, la_ansehen:true }) },
-  { key:'verein',     label:'Verein (extern)', hint:'nur den eigenen Verein: Personen, Notizen, Statistik', vals:_pick({ crm_ansehen:'verein', crm_personen:true, crm_notizen:true, crm_statistik:true }) },
   { key:'keine',      label:'Keine',         hint:'keine dieser Bereiche', vals:_all(false) },
 ];
 const _TPL = Object.fromEntries(VORLAGEN.map(v=>[v.key,v]));
@@ -126,7 +125,8 @@ function _legacy(u){
   let acc={}; try{ acc=(window.crmModuleAccess&&window.crmModuleAccess(u))||{}; }catch(e){}
   const on=a=>acc[a]&&acc[a]!=='kein', adm=a=>acc[a]==='verwaltend';
   let lvl='none'; try{ const a=window.crmUserAccess&&window.crmUserAccess(u.id); lvl=(a&&a.level)||'none'; }catch(e){}
-  const crm=on('crm'), full=crm&&(lvl==='full'||lvl==='admin'), ro=crm&&lvl==='readonly', ver=crm&&lvl==='verein', crmAdm=adm('crm');
+  // „Nur eigener Verein" gibt es nicht mehr (04.11.2026): solche Zugänge haben kein CRM
+  const crm=on('crm')&&lvl!=='verein', full=crm&&(lvl==='full'||lvl==='admin'), ro=crm&&lvl==='readonly', ver=false, crmAdm=adm('crm')&&crm;
   const edit=full||ver;
   // Termine/Veranstaltungen anlegen hing bisher an CRM „Verwaltend" (_canManageEvents), Veranstaltungs-Knöpfe
   // in Listen an „Voll" – beides bleibt so.
@@ -135,7 +135,7 @@ function _legacy(u){
   const vt=on('verteiler'), me=on('messe'), sh=on('shop'), shAdm=adm('shop');
   let seesAll=false; try{ seesAll=!!(window._crmKanbanSeesAll&&window._crmKanbanSeesAll(u)); }catch(e){}
   return {
-    crm_ansehen: crm ? (ver?'verein':'alle') : false,
+    crm_ansehen: crm ? 'alle' : false,
     crm_anlegen: full, crm_stamm: edit, crm_personen: edit||ro, crm_notizen: edit, crm_notizen_fremd: full,
     crm_aufgaben: edit||ro, crm_termine: kalEdit, crm_statistik: edit, crm_foerder: edit, crm_koop: edit, crm_dateien: edit,
     crm_loeschen: full, crm_notiz_purge: crmAdm, crm_export: crmAdm, crm_import: crmAdm, crm_einst: crmAdm,
@@ -159,14 +159,15 @@ function _legacy(u){
 export function rechteOf(u){
   if(!u) return _all(false);
   if(u.role==='admin' || u.id==='admin') return _all(true);
-  const r=u.rechte;
+  let r=u.rechte;
+  if(r && typeof r==='object' && r.tpl==='verein') r=Object.assign({}, r, { tpl:'keine' });   // Vorlage „Verein (extern)" abgeschafft → keine Rechte
   if(!r || typeof r!=='object' || !_TPL[r.tpl]) {
     const base = (r && r.tpl==='eigen' && r.x) ? _all(false) : _legacy(u);
     return (r && r.tpl==='eigen' && r.x) ? Object.assign(base, _clean(r.x)) : base;
   }
   return Object.assign({}, _TPL[r.tpl].vals, _clean(r.x));
 }
-function _clean(x){ const o={}; if(x&&typeof x==='object') Object.keys(x).forEach(k=>{ if(_ITEM[k]) o[k]=x[k]; }); return o; }
+function _clean(x){ const o={}; if(x&&typeof x==='object') Object.keys(x).forEach(k=>{ if(_ITEM[k]) o[k]=(k==='crm_ansehen'&&x[k]==='verein')?false:x[k]; }); return o; }   // „verein" abgeschafft → kein CRM
 
 // Ein Recht prüfen. Optionen-Rechte: Wert (z. B. 'alle'/'teams') oder false. opt=gewünschter Mindestwert.
 export function recht(key, u, opt){
@@ -187,7 +188,6 @@ export function diffZuVorlage(tpl, vals){
 // Passende CRM-Stufe (crm/access) zu den Rechten – damit Server-Prüfungen (Löschen, Messe-Standard) stimmig bleiben
 export function crmStufeAus(vals){
   if(!vals || !vals.crm_ansehen) return 'none';
-  if(vals.crm_ansehen==='verein') return 'verein';
   if(vals.crm_anlegen || vals.crm_loeschen || vals.crm_stamm) return 'full';
   return 'readonly';
 }

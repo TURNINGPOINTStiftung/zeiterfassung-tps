@@ -124,7 +124,7 @@ function _myProjCard(){
   const open=ps.filter(p=>!p.closed).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de')), closed=ps.filter(p=>p.closed);
   const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
   return `<section class="plan-card"><div class="plan-h"><h2>📂 Meine Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
-    <div class="plan-sub" style="margin:-4px 0 8px">nur für dich sichtbar · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
+    <div class="plan-sub" style="margin:-4px 0 8px">nur für dich angezeigt · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
     ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
     ${closed.length?`<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted,#5d7086);font-weight:600;font-size:13px">Abgeschlossen (${closed.length})</summary>${closed.map(row).join('')}</details>`:''}</section>`;
 }

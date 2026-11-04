@@ -328,7 +328,8 @@ function accessLevel(){
   if(cu.role==='admin') return 'admin';
   if(_hasNeu(cu)){ try{ return window.tpsCrmStufeAus(window.tpsRechteOf(cu)); }catch(e){} }   // feine Rechte → passende Stufe
   const a=getAccess(cu.id);
-  return (a && a.level) || 'none';
+  const l=(a && a.level) || 'none';
+  return l==='verein' ? 'none' : l;   // „Nur zugeordnete Vereine" abgeschafft → kein CRM
 }
 // Zugeordnete Vereine (mehrere möglich; Abwärtskompat. zu einzelnem vereinId)
 function accessVereine(){
@@ -394,7 +395,7 @@ function _canVerwZe(){ const cu=window.cu; if(!cu) return false; if(cu.role==='a
 const _PATH_DEFS=[
   {key:'zeiterfassung', label:'Zeiterfassung', icon:'🕒'},
   {key:'crm',           label:'CRM (Kontakte)', icon:'📇'},
-  {key:'kanban',        label:'Projektmanagement', icon:'🗂️'},
+  {key:'kanban',        label:'Planner · Projektmanagement', icon:'🗂️'},
   {key:'verteiler',     label:'Verteiler', icon:'✉️'},
   {key:'ki',            label:'KI', icon:'🧠'},
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
@@ -4374,7 +4375,7 @@ function oeaCheckMove(n, from, to){
 function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>!a.owner && (a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
 function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&userTeamsAll(u).includes(t)); }catch(e){ return []; } }
 // Abwesenheiten wie im Kalender: nur genehmigter Urlaub/Ausgleich, nie der Grund
-function _oeaAbs(){ const out=[]; try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(r.type!=='Urlaub'&&r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }
+function _oeaAbs(){ const out=[]; const me=(window.cu&&window.cu.id)||''; const others=_R('kal_abw'); try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(!others && r.userId!==me) return; if(r.type!=='Urlaub'&&r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }
 const _oIso=d=>localISODate(d);
 const _oParse=s=>{ const p=String(s).slice(0,10).split('-').map(Number); return new Date(p[0],(p[1]||1)-1,p[2]||1,12); };
 const _oAdd=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
@@ -4669,6 +4670,10 @@ function paintTeamProjektDetail(){
   const root=document.getElementById('crm-root'); if(!root) return;
   const p=getTeamProjekt(window._crmTeamProjSel);
   if(!p){ window._crmTeamProjSel=null; paintTeamDetail(); return; }
+  { const u=window.cu; const me=(u&&u.id)||''; const admin=!!(u&&u.role==='admin');
+    const okOwner = !p.owner || p.owner===me || admin;
+    const okTeam = p.owner || !p.team || admin || _kanbanSeesAll(u) || visibleKanbanTeams(u).includes(p.team);
+    if(!okOwner || !okTeam){ window._crmTeamProjSel=null; toast('Dieses Projekt ist für dich nicht freigegeben.','err'); if(window._planActive&&window.planGo) window.planGo('start'); else paintTeamDetail(); return; } }
   normTasks(p);
   window._crmTaskCtx={ kind:'teamprojekt', id:p.id };  // Aufgaben-Engine zielt aufs Projekt
   window._crmAfterTask='projektdetail';
@@ -6262,7 +6267,7 @@ function crmSetPathAccess(pathKey, role, value){
 }
 function paintVerwUsers(){
   const host=document.getElementById('verw-users'); if(!host) return;
-  const LVL={none:'Kein Zugriff',verein:'Nur zugeordnete Vereine',readonly:'Erweitert (nur Ansicht)',full:'Voll'};
+  const LVL={none:'Kein Zugriff',verein:'Kein Zugriff (früher: Verein)',readonly:'Erweitert (nur Ansicht)',full:'Voll'};
   const users=zeUsers().filter(u=>u.id!=='admin')
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
   const rows=users.map(u=>{

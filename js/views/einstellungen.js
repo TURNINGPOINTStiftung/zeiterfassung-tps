@@ -26,7 +26,7 @@ const _plusMay = (cu,t) => !!(_isPlus(cu) && t && t.role!=='admin' && t.id!=='ad
 const _UF_PATHS=[
   {key:'zeiterfassung', label:'Zeiterfassung', icon:'🕒'},
   {key:'crm',           label:'CRM (Kontakte)', icon:'📇'},
-  {key:'kanban',        label:'Projektmanagement', icon:'🗂️'},
+  {key:'kanban',        label:'Planner · Projektmanagement', icon:'🗂️'},
   {key:'verteiler',     label:'Verteiler', icon:'✉️'},
   {key:'ki',            label:'KI', icon:'🧠'},
   {key:'auswertung',    label:'Auswertung', icon:'📊'},
@@ -54,7 +54,7 @@ window.ufSetMod=function(key){
 // Kopf: Kein / Nutzen / Verwaltend als Schnellwahl („Angepasst", wenn die Häkchen davon abweichen).
 // Nutzen = Standard-Häkchen der ROLLE (Verwaltung → Standard-Rechte je Rolle), Verwaltend = alle Häkchen des Bereichs.
 // Neue Person: alle Module „Kein" (Häkchen trotzdem nach Rolle vorbelegt, bis das Modul eingeschaltet wird).
-const _UF_RTITLE={ crm:'📇 CRM (Kontakte)', kanban:'🗂️ Projektmanagement', kalender:'📅 Kalender', verteiler:'✉️ Verteiler', messe:'🎪 Messemodus', shop:'📦 Lager (Bestand, Bestellungen & Ausleihe)' };
+const _UF_RTITLE={ crm:'📇 CRM (Kontakte)', kanban:'🗂️ Projektmanagement (Teams, Projekte, Projekt-/Redaktionsplan)', kalender:'📅 Kalender (ansehen, Termine, Veranstaltungen)', verteiler:'✉️ Verteiler', messe:'🎪 Messemodus', shop:'📦 Lager (Bestand, Bestellungen & Ausleihe)' };
 const _UF_RFEIN={ crm:'innerhalb des CRM', kanban:'im Projektmanagement', kalender:'im Kalender', verteiler:'im Verteiler', messe:'im Messemodus', shop:'im Lager' };
 function _ufArea(a){ return (window.TPS_RECHTE||[]).find(x=>x.area===a); }
 function _ufRoleNow(){ return document.getElementById('uf-role')?.value||'mitarbeiter'; }
@@ -73,12 +73,11 @@ function _ufRechteKopf(u, isNew){
     <span>Standard der Rolle: <b id="uf-r-rolle">${esc(lbl)}</b> – gilt beim Einschalten eines Moduls („Nutzen").</span>
     <span style="margin-left:auto">Füllen:</span>
     <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('rolle')">wie Rolle</button>
-    <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('verein')">Verein (extern)</button>
     <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('alles')">alles</button>
     <button type="button" class="btn btn-outline btn-sm uf-r-fill" style="width:auto" onclick="ufRfill('keine')">nichts</button>
   </div>`;
 }
-function _ufAreaBox(area, u, isNew, vereinDiv, extraBody){
+function _ufAreaBox(area, u, isNew, vereinDiv, extraBody, sub){
   const A=_ufArea(area); if(!A) return '';
   const cur = isNew ? {} : ((window.tpsRechteOf&&window.tpsRechteOf(u))||{});
   const pre = isNew ? ((window.tpsRoleTplVals&&window.tpsRoleTplVals(u.role||'mitarbeiter'))||{}) : cur;   // neue Person: nach Rolle vorbelegt
@@ -90,6 +89,11 @@ function _ufAreaBox(area, u, isNew, vereinDiv, extraBody){
     return `<label class="uf-r-row"><span class="uf-r-nr">${esc(it.nr)}</span><input type="checkbox" class="uf-r" data-k="${esc(it.k)}" data-area="${area}"${v?' checked':''} onchange="ufRchg(${jsq(area)})"><span class="uf-r-lbl">${esc(it.label)}</span></label>`; };
   const katBox=area!=='crm'?'':`<div id="uf-rkat-wrap" style="display:${pre.crm_ansehen==='kat'?'':'none'};margin:4px 0 8px 34px"><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Welche Kategorien?</div>${cats.length?cats.map(c=>`<label style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="uf-rkat" value="${esc(c.key)}"${kats.includes(c.key)?' checked':''}> ${esc(c.label)}</label>`).join(''):'<span style="font-size:12px;color:var(--muted)">Keine Kategorien angelegt.</span>'}</div><div style="margin-left:34px">${vereinDiv||''}</div>`;
   const seg=['kein','nutzen','verwaltend','angepasst'].map(v=>`<label class="uf-seg-opt" data-v="${v}"${v==='angepasst'?' style="display:none;cursor:default" title="Einzelne Häkchen weichen von Nutzen/Verwaltend ab"':''}><input type="radio" name="ufr-${area}" value="${v}" onchange="ufRseg(${jsq(area)},this.value)" style="display:none"${v==='angepasst'?' disabled':''}>${{kein:'Kein',nutzen:'Nutzen',verwaltend:'Verwaltend',angepasst:'Angepasst'}[v]}</label>`).join('');
+  if(sub) return `<div class="uf-mod uf-sub" data-rarea="${area}" data-on="${on?'1':'0'}" data-sub="1"><div class="uf-sub-h">${esc(_UF_RTITLE[area])} <span class="uf-sub-st"></span></div>
+    <div class="uf-mod-body" id="ufrsub-${area}">
+      ${A.items.map(it=>item(it)).join('')}
+      ${extraBody?`<div style="margin:8px 0 0 34px;border-top:1px dashed var(--border);padding-top:8px">${extraBody}</div>`:''}
+    </div></div>`;
   return `<div class="uf-mod" data-rarea="${area}" data-on="${on?'1':'0'}"><div class="uf-mod-head"><span class="uf-mod-name">${esc(_UF_RTITLE[area])}</span><div class="uf-seg">${seg}</div></div>
     <div class="uf-mod-body" id="ufrsub-${area}" style="display:${on?'':'none'}">
       <div style="font-size:12px;color:var(--muted);margin:0 0 6px">Feinrechte ${_UF_RFEIN[area]}:</div>
@@ -108,29 +112,52 @@ window.ufRchg=function(area){
     const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+ar+'"]'); if(!box) return;
     const A=_ufArea(ar); const vals=_ufAreaVals(ar); const on=box.dataset.on==='1' && !!vals[A.items[0].k];
     if(box.dataset.on==='1' && !vals[A.items[0].k]) box.dataset.on='0';   // „ansehen" aus → Modul aus
+    if(box.dataset.sub==='1' && box.dataset.on!=='1' && vals[A.items[0].k]) box.dataset.on='1';   // Planner-Unterbereich: „ansehen" an → an
     const st=!on?'kein':(_ufSame(vals,_ufAllVals(ar))?'verwaltend':(_ufSame(vals,_ufNutzenVals(ar))?'nutzen':'angepasst'));
     box.querySelectorAll('.uf-seg-opt').forEach(l=>{ const r=l.querySelector('input'); const is=l.dataset.v===st; r.checked=is; l.classList.toggle('on',is); if(l.dataset.v==='angepasst') l.style.display=is?'':'none'; });
-    const sub=document.getElementById('ufrsub-'+ar); if(sub) sub.style.display=on?'':'none';
+    const sub=document.getElementById('ufrsub-'+ar); if(sub) sub.style.display=(on||box.dataset.sub==='1')?'':'none';
+    const sst=box.querySelector('.uf-sub-st'); if(sst) sst.textContent=on?'':'· aus';
     // übrige Häkchen ausgrauen, solange „ansehen" aus ist
     box.querySelectorAll('.uf-r').forEach((el,i)=>{ if(i>0){ el.disabled=!on; const r=el.closest('.uf-r-row'); if(r) r.style.opacity=on?'':'.5'; } });
     if(ar==='crm'){ const sc=vals.crm_ansehen||''; const kw=document.getElementById('uf-rkat-wrap'); if(kw) kw.style.display=(on&&sc==='kat')?'':'none';
       const vw=document.getElementById('uf-crmverein'); if(vw) vw.style.display=(on&&sc==='verein')?'':'none'; }
   });
+  try{ _ufPlannerSync(); }catch(e){}
 };
+// Planner-Schnellwahl: beide Bereiche (Kalender + Projektmanagement) auf einmal; „nur Kalender ansehen“ = Kalender
+// sehen inkl. „Abwesend“ anderer, nichts anlegen/bearbeiten, kein Projektmanagement
+window.ufPlannerPreset=function(mode){
+  if(mode==='kein'){ window.ufRseg('kalender','kein'); window.ufRseg('kanban','kein'); return; }
+  if(mode==='kalender'){
+    window.ufRseg('kanban','kein'); window.ufRseg('kalender','nutzen');
+    const A=_ufArea('kalender'); const o={}; A.items.forEach(it=>{ o[it.k]=false; }); o.kal_ansehen='alle'; o.kal_abw=true;
+    _ufSetAreaVals('kalender', o); window.ufRchg('kalender'); return; }
+  window.ufRseg('kalender', mode); window.ufRseg('kanban', mode);
+};
+// Planner-Kopf: Zustand aus Kalender + Projektmanagement ableiten (kein / nur Kalender / nutzen / verwaltend / angepasst)
+function _ufPlannerSync(){
+  const pb=document.querySelector('#modal-body .uf-planner'); if(!pb) return;
+  const on=a=>{ const b=document.querySelector('#modal-body .uf-mod[data-rarea="'+a+'"]'); return !!(b && b.dataset.on==='1'); };
+  const kv=_ufAreaVals('kalender'), pv=_ufAreaVals('kanban');
+  const kalOnly=(()=>{ const A=_ufArea('kalender'); return A.items.every(it=>(it.k==='kal_ansehen'?kv[it.k]==='alle':(it.k==='kal_abw'?!!kv[it.k]:!kv[it.k]))); })();
+  const st=!on('kalender')&&!on('kanban')?'kein':(on('kalender')&&!on('kanban')&&kalOnly?'kalender':(on('kalender')&&on('kanban')&&_ufSame(kv,_ufAllVals('kalender'))&&_ufSame(pv,_ufAllVals('kanban'))?'verwaltend':(on('kalender')&&on('kanban')&&_ufSame(kv,_ufNutzenVals('kalender'))&&_ufSame(pv,_ufNutzenVals('kanban'))?'nutzen':'angepasst')));
+  pb.querySelectorAll('.uf-seg-opt').forEach(l=>{ const r=l.querySelector('input'); const is=l.dataset.v===st; r.checked=is; l.classList.toggle('on',is); if(l.dataset.v==='angepasst') l.style.display=is?'':'none'; });
+  const body=pb.querySelector('.uf-planner-b'); if(body) body.style.display=st==='kein'?'none':'';
+}
 window.ufRseg=function(area, v){
   const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+area+'"]'); if(!box) return;
   if(v==='kein'){ box.dataset.on='0'; const A=_ufArea(area); _ufSetAreaVals(area, Object.assign(_ufNutzenVals(area), { [A.items[0].k]: false })); }
   else { box.dataset.on='1'; _ufSetAreaVals(area, v==='verwaltend'?_ufAllVals(area):_ufNutzenVals(area)); }
   window.ufRchg(area);
 };
-// Alle Bereiche füllen: wie Rolle (eingeschaltete Module), Verein (extern), alles, nichts
+// Alle Bereiche füllen: wie Rolle (eingeschaltete Module), alles, nichts
 window.ufRfill=function(what){
   const V=window.TPS_VORLAGEN||[];
   Object.keys(_UF_RTITLE).forEach(ar=>{
     const box=document.querySelector('#modal-body .uf-mod[data-rarea="'+ar+'"]'); if(!box) return;
     const A=_ufArea(ar);
     if(what==='rolle'){ if(box.dataset.on==='1') _ufSetAreaVals(ar, _ufNutzenVals(ar)); return; }
-    const t=what==='alles'?null:(V.find(x=>x.key===(what==='verein'?'verein':'keine'))||{}).vals||{};
+    const t=what==='alles'?null:(V.find(x=>x.key==='keine')||{}).vals||{};
     const vals=what==='alles'?_ufAllVals(ar):t;
     box.dataset.on=vals[A.items[0].k]?'1':'0'; _ufSetAreaVals(ar, vals);
   });
@@ -922,16 +949,18 @@ function userForm(u={}){
       const _kbExtra=new Set(Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]);
       const kanbanBody=!_kbTeams.length
         ? '<div style="font-size:12px;color:var(--muted)">Noch keine Teams angelegt (Teams &amp; Rollen).</div>'
-        : `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Team-Boards, die diese Person im Projektmanagement sieht. Die <b>Zeiterfassungs-Teams</b> sind automatisch dabei; hier zusätzliche <b>zuweisen</b>. (Verwalten / CRM-Vollzugriff sieht alle.)</div>`
+        : `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Team-Boards, die diese Person im Projektmanagement sieht. Die <b>Zeiterfassungs-Teams</b> sind automatisch dabei; hier zusätzliche <b>zuweisen</b>. (Alle Boards nur, wenn oben „Boards sehen: alle“ gewählt ist.)</div>`
           +_kbTeams.map(t=>{ const inZe=_kbZe.has(t); const on=inZe||_kbExtra.has(t);
             return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;${inZe?'opacity:.65':'cursor:pointer'}"><input type="checkbox" class="uf-kbteam" value="${esc(t)}" data-ze="${inZe?'1':'0'}" ${on?'checked':''} ${inZe?'disabled':''} style="width:auto;cursor:${inZe?'default':'pointer'}"> ${esc(t)}${inZe?' <span style="font-size:12px;color:var(--muted)">(aus Zeiterfassung – automatisch)</span>':''}</label>`; }).join('');
-      return `<style>.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:14px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
+      return `<style>.uf-planner>.uf-mod-head{flex-wrap:wrap}.uf-planner>.uf-mod-head .uf-seg{flex-wrap:wrap}.uf-sub{border:0;border-top:1px solid var(--border);border-radius:0;margin:0}.uf-sub:first-of-type{border-top:0}.uf-sub .uf-mod-body{padding:4px 0 8px}.uf-sub-h{font-weight:700;font-size:13px;padding:8px 0 2px;color:var(--text)}.uf-sub-st{font-weight:400;color:var(--muted)}.uf-mod{border:1.5px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden}.uf-mod-head{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(127,127,127,.06)}.uf-mod-name{font-weight:600;font-size:14px;flex:1}.uf-mod-body{padding:8px 10px;border-top:1px dashed var(--border)}.uf-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;flex:none}.uf-seg-opt{font-size:12px;font-weight:600;padding:4px 10px;cursor:pointer;color:var(--muted);border-left:1.5px solid var(--border);user-select:none}.uf-seg-opt:first-child{border-left:none}.uf-seg-opt.on{background:var(--accent,#2f6f9f);color:#fff}</style>
         <div class="uf-section-head">🎚️ Zugriffe <span style="font-size:12px;color:var(--muted)">(pro Person)</span></div>
         ${zeBlock}
         ${_ufRechteKopf(u, isNewUser)}
         ${_ufAreaBox('crm', u, isNewUser, vereinDiv, '')}
-        ${_ufAreaBox('kanban', u, isNewUser, '', kanbanBody)}
-        ${_ufAreaBox('kalender', u, isNewUser, '', '')}
+        <div class="uf-mod uf-planner"><div class="uf-mod-head"><span class="uf-mod-name">📅 Planner <span style="font-weight:400;font-size:12px;color:var(--muted)">Kalender + Projektmanagement</span></span><div class="uf-seg">${[['kein','Kein'],['kalender','Nur Kalender ansehen'],['nutzen','Nutzen'],['verwaltend','Verwaltend'],['angepasst','Angepasst']].map(([v,l])=>`<label class="uf-seg-opt" data-v="${v}"${v==='angepasst'?' style="display:none;cursor:default"':''}><input type="radio" name="ufr-planner" value="${v}" onchange="ufPlannerPreset('${v}')"${v==='angepasst'?' disabled':''} style="display:none">${l}</label>`).join('')}</div></div>
+          <div class="uf-planner-b uf-mod-body"><div style="font-size:12px;color:var(--muted);margin:0 0 6px">Feinrechte im Planner (je Teil: erstes Recht „ansehen“ schaltet ihn ein oder aus):</div>
+          ${_ufAreaBox('kalender', u, isNewUser, '', '', true)}
+          ${_ufAreaBox('kanban', u, isNewUser, '', kanbanBody, true)}</div></div>
         ${_ufAreaBox('verteiler', u, isNewUser, '', '')}
         ${_ufAreaBox('messe', u, isNewUser, '', (!isNewUser && window.cu && window.cu.role==='admin' && window.messeKioskBoxHtml) ? window.messeKioskBoxHtml(u) : '')}
         ${_ufAreaBox('shop', u, isNewUser, '', '')}

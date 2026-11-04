@@ -73,7 +73,7 @@ function _scope(k){ const v=_kr(k); if(v===true) return 'alle'; return (v==='all
 const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray(it.mitarbeiter)&&it.mitarbeiter.includes(me); };
 function _abs(){ const d=getData()||{}; const out=[]; const vr=d.vacRequests||{};
   Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved') return; const m=AB[r.type]; if(!m||!r.startDate) return;
-    out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay, note:r.note||''}); });
+    out.push({emp:r.userId, type:m.k, von:r.startDate, bis:r.endDate||r.startDate, half:!!r.halfDay}); });   // Notiz/Grund wird im Kalender nie gebraucht → nicht einsammeln
   return _absMerge(out); }
 // Aneinanderhängende Abwesenheiten einer Person (Urlaub + Ausgleich usw.) als EINEN Balken zeigen (v522, User 30.10.2026):
 // zusammengefasst, wenn sie sich überlappen, direkt aneinander anschließen oder nur ein Wochenende dazwischen liegt.
@@ -90,7 +90,7 @@ function _absMerge(list){
     arr.forEach(a=>{
       if(cur && (a.von<=cur.bis || nahtlos(cur.bis, a.von))){
         if(a.bis>cur.bis) cur.bis=a.bis;
-        cur.half=false; if(a.note && a.note!==cur.note) cur.note=[cur.note,a.note].filter(Boolean).join(' · ');
+        cur.half=false;
       } else { cur=Object.assign({}, a); out.push(cur); }
     });
   });

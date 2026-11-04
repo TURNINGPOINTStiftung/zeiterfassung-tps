@@ -322,7 +322,7 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
   4 Wochen betrifft – nur sichtbar, wenn es welche gibt: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
   eingeplant bist), **Meine Termine** (die nächsten 5, weitere aufklappbar) und **Wer ist diese Woche da?** (die Personen deiner Teams,
   nur „Abwesend", nie der Grund).
-  Darunter **📂 Meine Projekte**: nur für dich sichtbar; öffnen zum Bearbeiten, Abschließen oder Löschen, „＋ Projekt" legt
+  Darunter **📂 Meine Projekte**: nur dir angezeigt (andere sehen sie in der App nirgends); öffnen zum Bearbeiten, Abschließen oder Löschen, „＋ Projekt" legt
   ein neues an. Eigene Projekte erscheinen nie bei den Teams oder „übergreifend".
 - **Kalender:** Woche/Monat mit **Fälligkeiten** (Zahl am Tag auf der Zeile der zuständigen Person, **rot** bei
   Konflikt: überfällig, Person am Tag oder an den 2 Arbeitstagen davor abwesend, oder Freigabe-Person am Tag/Vortag
@@ -447,7 +447,9 @@ Menü ☰ → **Verwaltung**:
   alle. Weichen einzelne Häkchen ab, steht dort **„Angepasst“**. Neue Personen starten mit allen Modulen auf „Kein“;
   die Häkchen sind nach der Rolle schon vorbelegt und gelten, sobald das Modul eingeschaltet wird. Wird die Rolle
   einer Person geändert, fragt die App, ob die Häkchen angepasst werden sollen. Knöpfe „Füllen: wie Rolle /
-  Verein (extern) / alles / nichts“ setzen alle Module auf einmal.
+  alles / nichts“ setzen alle Module auf einmal. Kalender und Projektmanagement stehen zusammen im Bereich
+  **„📅 Planner“** mit einem Schalter (Kein · Nur Kalender ansehen · Nutzen · Verwaltend) und den Feinrechten darunter.
+  Einen Zugang „nur eigener Verein“ gibt es nicht mehr.
   Nach dem Ändern einmal die App als Administrator neu öffnen – dann werden die Freigaben für den Server neu berechnet.
 - **🔑 Einmal-Passwort:** bei vergessenem Passwort; offene Anfragen erscheinen unter „Mitarbeiter".
 - **Archivieren (✕):** Person verlässt die Stiftung → Zugang wird sofort gesperrt, die Zeitdaten bleiben
