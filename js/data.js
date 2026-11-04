@@ -38,7 +38,7 @@ export function _usersPoisoned(users){
 //                      loginDir/allowed vor versehentlichem Clobber aus einem Cache und
 //                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
 const _CONFIG_NODES     = new Set(['users','archivedUsers','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
-const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','freelancers','uidUser','grants','kiosk','seeOf','abwesend']);
+const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','freelancers','uidUser','grants','kiosk','seeOf','abwesend','zePrivOnly']);
 // Config-Knoten (Nutzer, Teams, Kategorien, Rollen, Rechte) darf NUR noch der Account
 // „Administrator" schreiben – nicht mehr Personen mit delegiertem Verwaltungs-Zugriff.
 // Schützt vor dem Überspielen der Nutzerliste durch ein Gerät mit veraltetem/verstümmeltem
@@ -491,7 +491,8 @@ function _auditRec(upd, ek, ds, f, from, to){
   if(a===b) return;
   const cu=window.cu||{};
   const id=Date.now().toString(36)+'_'+(++_auditSeq).toString(36)+Math.random().toString(36).slice(2,6);
-  const rec={ts:Date.now(), by:cu.id||'', byName:cu.name||'', ds, f, from:a.slice(0,200), to:b.slice(0,200)};
+  // zp:4 = Gerät schreibt schon mit Phase-4-fähiger App (v552+); das Abschluss-Werkzeug (zeprivat.js) erkennt daran alte Geräte.
+  const rec={ts:Date.now(), by:cu.id||'', byName:cu.name||'', ds, f, from:a.slice(0,200), to:b.slice(0,200), zp:4};
   upd['audit/'+ek+'/'+id]=rec;
   (_auditLocal[ek]=_auditLocal[ek]||{})[id]=rec;
 }
@@ -685,9 +686,13 @@ export function privMirror(upd, d){
   return out;
 }
 // update-Objekt (relativ zu zeiterfassung/) → EIN Wurzel-Update: zeiterfassung/… + ze_audit/… (+ Spiegel ze_private/abwesend)
+// Phase 4 (v552): Hat das Abschluss-Werkzeug die alten Sammlungen gelöscht (zeiterfassung/zePrivOnly), werden
+// entries/vacRequests/stamps NUR noch unter ze_private geschrieben – die Regeln (v17) verbieten den alten Ort dann.
+const _PRIV_COLLS=/^(entries|vacRequests|stamps)(\/|$)/;
+export function zePrivOnly(d){ d=d||_dataCache; return !!(d && d.zePrivOnly===true); }
 function _rootUpdate(upd, withMirror, mirrorSrc){
-  const r={};
-  for(const [k,v] of Object.entries(upd||{})) r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v;
+  const r={}; const only=zePrivOnly();
+  for(const [k,v] of Object.entries(upd||{})){ if(only && _PRIV_COLLS.test(k)) continue; r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v; }
   let n=0;
   if(withMirror){ let m={}; try{ m=JSON.parse(JSON.stringify(privMirror(mirrorSrc||upd))); }catch(e){ m={}; } for(const [k,v] of Object.entries(m)){ r[k]=v; n++; } }
   return { r, n };
@@ -698,7 +703,7 @@ const _isPerm=e=>!!(e && /permission/i.test(String(e.code||e.message)));
 function _writeRoot(ref, upd, mirrorSrc){
   const a=_rootUpdate(upd, true, mirrorSrc);
   const p=ref.root.update(a.r);
-  if(!a.n) return p;
+  if(!a.n || zePrivOnly()) return p;   // nach Phase 4 gibt es keinen alten Ort mehr zum Ausweichen
   return p.catch(e=>{
     if(!_isPerm(e)) throw e;
     console.warn('[Personaldaten privat] Spiegel abgelehnt – ohne Spiegel gespeichert:', e&&e.message);

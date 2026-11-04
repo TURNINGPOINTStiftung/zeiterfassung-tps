@@ -84,7 +84,7 @@ async function _serverEntries(){
   await Promise.all(ids.map(async u => { let v = null;
     try{ v = (await db.ref('ze_private/'+u+'/entries').once('value')).val(); }catch(_){ v = null; }
     if(v && Object.keys(v).length) Object.assign(out, v); else missing.add(u); }));
-  if(missing.size){
+  if(missing.size && getData().zePrivOnly!==true){
     const old = (await db.ref('zeiterfassung/entries').once('value')).val() || {};
     Object.keys(old).forEach(k => { const m = /^(.+)_[0-9]{4}_[0-9]{2}$/.exec(k); if(m && missing.has(m[1]) && !out[k]) out[k] = old[k]; });
   }

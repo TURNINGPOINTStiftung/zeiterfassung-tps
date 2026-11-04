@@ -179,6 +179,45 @@ async function grantUpdates(authUid, u, opts) {
 // ── Hilfen für Backups ──
 const SHOP_COLLS = ['shopItems', 'shopPlaces', 'shopOrders', 'shopLog', 'shopLoans', 'shopConfig'];
 const berlinDay = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });   // JJJJ-MM-TT
+// ── Personaldaten privat (Regeln v16/v17): Zeiteinträge, Anträge, Stempel liegen in ze_private/<Person>/… ──
+// Backups behalten ihr bisheriges Format: der private Stand wird in zeiterfassung.entries/vacRequests/stamps eingerechnet
+// (je Schlüssel, ze_private gewinnt) – so lassen sich alte und neue Backups gleich einspielen.
+const ZP_COLLS = ['entries', 'vacRequests', 'stamps'];
+function zeWithPrivate(ze, zp) {
+  const out = Object.assign({}, ze || {});
+  const isO = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const E = Object.assign({}, isO(out.entries) ? out.entries : {}), V = Object.assign({}, isO(out.vacRequests) ? out.vacRequests : {}), S = Object.assign({}, isO(out.stamps) ? out.stamps : {});
+  Object.keys(isO(zp) ? zp : {}).forEach(u => { const p = zp[u]; if (!isO(p)) return;
+    if (isO(p.entries)) Object.assign(E, p.entries);
+    if (isO(p.vacRequests)) Object.assign(V, p.vacRequests);
+    if (p.stamps != null) S[u] = p.stamps; });
+  out.entries = E; out.vacRequests = V; out.stamps = S;
+  return out;
+}
+async function readZeFull() {
+  const [ze, zp] = await Promise.all([db.ref('zeiterfassung').once('value'), db.ref('ze_private').once('value')]);
+  return zeWithPrivate(ze.val() || {}, zp.val() || {});
+}
+const ABW_TYPES = ['Urlaub', 'Arbeitszeitausgleich', 'AU/Krank'];
+function abwOf(r) { return (r && r.status === 'approved' && ABW_TYPES.includes(r.type) && r.userId && r.startDate)
+  ? { uid: r.userId, von: String(r.startDate).slice(0, 10), bis: String(r.endDate || r.startDate).slice(0, 10), halb: !!r.halfDay } : null; }
+// Einspielen: bereinigte Sammlungen { entries, vacRequests, stamps } → Schreib-Aufträge für ze_private + abwesend.
+// privOnly (zeiterfassung/zePrivOnly, nach Phase 4): alter Ort bleibt leer; sonst dort derselbe Stand (ohne Krank-Freitext).
+function privRestoreUpd(clean, privOnly) {
+  const isO = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const upd = {}, zpNew = {}, abw = {}; const P = u => (zpNew[u] = zpNew[u] || {});
+  Object.entries(clean.entries || {}).forEach(([k, e]) => { const mm = /^(.+)_[0-9]{4}_[0-9]{2}$/.exec(k); if (mm && ID_RE.test(mm[1])) (P(mm[1]).entries = P(mm[1]).entries || {})[k] = e; });
+  const vOld = {};
+  Object.entries(clean.vacRequests || {}).forEach(([k, r]) => { if (!isO(r) || typeof r.userId !== 'string' || !ID_RE.test(r.userId)) return;
+    const rr = Object.assign({}, r); if (rr.type === 'AU/Krank') delete rr.note; rr.id = k; vOld[k] = rr;
+    (P(r.userId).vacRequests = P(r.userId).vacRequests || {})[k] = rr; const a = abwOf(rr); if (a) abw[k] = a; });
+  Object.entries(clean.stamps || {}).forEach(([u, st]) => { if (ID_RE.test(u) && st != null) P(u).stamps = st; });
+  upd['ze_private'] = Object.keys(zpNew).length ? zpNew : null;
+  upd['zeiterfassung/abwesend'] = Object.keys(abw).length ? abw : null;
+  if (privOnly) ZP_COLLS.forEach(n => { upd['zeiterfassung/' + n] = null; });
+  else upd['zeiterfassung/vacRequests'] = Object.keys(vOld).length ? vOld : null;
+  return upd;
+}
 function fullBlob(ze, crm, source, by) {
   const crmPart = {}, shopPart = { _v: 1 };
   Object.keys(crm || {}).forEach(k => { if (SHOP_COLLS.includes(k)) shopPart[k] = crm[k]; else crmPart[k] = crm[k]; });
@@ -550,7 +589,7 @@ exports.tpsPw = async (req, res) => {
       const file = admin.storage().bucket(BUCKET).file('backups/daily/' + day + '_srv.json');
       const [exists] = await file.exists();
       if (!exists) {
-        const ze = (await db.ref('zeiterfassung').once('value')).val() || {};
+        const ze = await readZeFull();   // inkl. ze_private (Personaldaten privat)
         const crm = (await db.ref('crm').once('value')).val() || {};
         if (!Array.isArray(ze.users) || !ze.users.length) return res.status(409).json({ ok: false, error: 'empty' });
         try { await file.save(JSON.stringify(fullBlob(ze, crm, 'server', '')), { contentType: 'application/json', resumable: false, preconditionOpts: { ifGenerationMatch: 0 } }); }
@@ -631,7 +670,7 @@ exports.tpsPw = async (req, res) => {
       const doShop = parts.shop === true && isObj(shopIn);
       if (!doZe && !doCrm && !doShop) return res.status(400).json({ ok: false, error: 'nothing' });
       // 1) Sicherung des aktuellen Stands (Pflicht)
-      const curZe = (await db.ref('zeiterfassung').once('value')).val() || {};
+      const curZe = await readZeFull();   // inkl. ze_private (Personaldaten privat)
       const curCrm = (await db.ref('crm').once('value')).val() || {};
       const now = new Date();
       const safeName = berlinDay() + '_vorEinspielen-' + c.tok.uid.replace(/[^A-Za-z0-9]/g, '').slice(0, 40) + '-' + now.getTime() + '.json';
@@ -670,11 +709,15 @@ exports.tpsPw = async (req, res) => {
         upd['zeiterfassung/archivedUsers'] = na;
         const KEYED = { entries: /^[a-z0-9._-]{1,64}_[0-9]{4}_[0-9]{2}$/, stamps: /^[A-Za-z0-9._-]{1,80}$/, vacRequests: /^[A-Za-z0-9._-]{1,120}$/,
           teamReports: /^[A-Za-z0-9._-]{1,160}$/, yearReports: /^[A-Za-z0-9._-]{1,160}$/, teamCats: /^[^.#$/\[\]]{1,120}$/ };
+        const clean = {};
         Object.keys(KEYED).forEach(n => {
-          const v = ze[n]; if (!isObj(v)) { upd['zeiterfassung/' + n] = null; return; }
+          const v = ze[n]; if (!isObj(v)) { upd['zeiterfassung/' + n] = null; clean[n] = {}; return; }
           const o = {}; Object.keys(v).forEach(k => { if (KEYED[n].test(k) && (n === 'entries' ? isObj(v[k]) : v[k] != null)) o[k] = cleanDeep(v[k]); });
-          upd['zeiterfassung/' + n] = Object.keys(o).length ? o : null;
+          upd['zeiterfassung/' + n] = Object.keys(o).length ? o : null; clean[n] = o;
         });
+        // Personaldaten privat: Zeiteinträge/Anträge/Stempel je Person nach ze_private, öffentliche Liste abwesend neu.
+        // Freitext bei Krankheit wird nicht übernommen. Sind die alten Sammlungen abgeschaltet (zeiterfassung/zePrivOnly), bleiben sie leer.
+        Object.assign(upd, privRestoreUpd(clean, curZe.zePrivOnly === true));
         if (Array.isArray(ze.customRoles)) upd['zeiterfassung/customRoles'] = cleanDeep(ze.customRoles.slice(0, 200));   // nur Anzeige-Bezeichnungen
         ['teams', 'cats'].forEach(n => { if (Array.isArray(ze[n])) upd['zeiterfassung/' + n] = ze[n].filter(x => typeof x === 'string').map(x => cleanStr(x).slice(0, 120)).slice(0, 500); });
       }

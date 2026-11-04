@@ -1,12 +1,10 @@
 // ═════════════════════════════════════════════════════════════════
-//  PERSONALDATEN PRIVAT – Phase 2: einmaliger Umzug (nur Administrator)
-//  Kopiert Zeiteinträge, Anträge und Stempelzeiten aus dem gemeinsamen Baum `zeiterfassung` nach
-//  `ze_private/<Person>/…` (Regeln v16) und baut `zeiterfassung/abwesend` (nur von–bis, ohne Art) neu auf.
-//  Freitext-Gründe bei Krankheit werden dabei entfernt (neu und alt). Wiederholbar (überschreibt mit dem
-//  aktuellen Stand), liest direkt aus der Datenbank, vergleicht danach Eintrag für Eintrag.
-//  Andere Module nur über window.* (kein benannter Import – Gerätecache).
+//  PERSONALDATEN PRIVAT – Abschluss (Phase 4, nur Administrator, Verwaltung → Daten & Backup)
+//  Der einmalige Umzug (Phase 2, v547–v550) ist erledigt und wurde in v552 entfernt; zpPlan bleibt als
+//  Zuordnung alt → je Person für den Abschluss-Vergleich. Andere Module nur über Namespace-Import/window.*.
 // ═════════════════════════════════════════════════════════════════
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+import * as D from './data.js';
 const ABW=new Set(['Urlaub','Arbeitszeitausgleich','AU/Krank']);
 const isAdmin=()=>!!(window.cu && window.cu.role==='admin');
 
@@ -21,9 +19,6 @@ function _cleanVac(r, key){
   if(r.dayTimes && typeof r.dayTimes==='object'){ let ch=false; const dt={}; Object.entries(r.dayTimes).forEach(([d,t])=>{ const f=x=>(typeof x==='string'&&!/^[0-9:. ]{0,8}$/.test(x))?((/^([0-9]{1,2}:[0-9]{2})/.exec(x)||[])[1]||''):x; const nt=Object.assign({},t||{}); if(t){ const a=f(t.von), b=f(t.bis); if(a!==t.von||b!==t.bis){ ch=true; nt.von=a; nt.bis=b; } } dt[d]=nt; }); if(ch) set('dayTimes', dt); }
   return o;
 }
-// Für die Fehlermeldung: welche Felder hat ein abgelehnter Antrag (ohne Art/Grund/Notiz)
-function _vacInfo(r){ if(!r||typeof r!=='object') return ''; const show=k=>{ const v=r[k]; return v===undefined?'–':JSON.stringify(v).slice(0,40); };
-  return ' [id='+show('id')+' status='+show('status')+' start='+show('startDate')+' ende='+show('endDate')+' tage='+show('workDays')+' felder='+Object.keys(r).filter(k=>!/^(type|note|reason|reviewNote)$/.test(k)).join(',')+']'; }
 // Reine Logik (testbar): aus dem Rohstand die Schreib-Aufträge bilden
 export function zpPlan(raw){
   raw=raw||{}; const perUser={}, skipped=[], abwesend={}, stripOld={}, fixIdOld={};
@@ -46,56 +41,106 @@ async function _readRaw(db){
   const [entries,vacRequests,stamps]=await Promise.all([g('entries'),g('vacRequests'),g('stamps')]);
   return { entries, vacRequests, stamps };
 }
-function _counts(plan){ let e=0,v=0,s=0; Object.values(plan.perUser).forEach(u=>{ e+=Object.keys(u.entries||{}).length; v+=Object.keys(u.vacRequests||{}).length; if(u.stamps) s++; }); return {e,v,s,p:Object.keys(plan.perUser).length,a:Object.keys(plan.abwesend).length,k:Object.keys(plan.stripOld).length}; }
 
-let _busy=false, _last='';
+// ═════════════════════════════════════════════════════════════════
+//  Phase 4 (v552): Abschluss – alte Sammlungen zeiterfassung/entries|vacRequests|stamps löschen.
+//  Erst dann sind die Personaldaten wirklich geschützt (in RTDB erbt ein Kind die Leserechte des Elternknotens).
+//  Ablauf im Werkzeug: 1. Prüfen (alt ↔ ze_private je Person, welche Geräte noch mit alter App schreiben)
+//  2. Sicherung herunterladen  3. Löschen (Reste nur am alten Ort werden vorher nach ze_private übernommen,
+//  danach Merker zeiterfassung/zePrivOnly → die App schreibt nur noch neu). Danach Regeln v17 veröffentlichen.
+// ═════════════════════════════════════════════════════════════════
+// Reine Logik (testbar): Vergleich alter Stand ↔ ze_private. Liefert, was nur alt liegt (wird übernommen),
+// was abweicht (ze_private gewinnt – so zeigt es die App seit v551) und die Schreib-Aufträge fürs Übernehmen.
+export function zpCompare(raw, priv){
+  raw=raw||{}; priv=priv||{};
+  const onlyOld=[], differ=[], copy={}; let same=0;
+  const plan=zpPlan(raw);
+  Object.entries(plan.perUser).forEach(([u,colls])=>{
+    const p=priv[u]||{};
+    Object.entries(colls).forEach(([coll,val])=>{
+      if(coll==='stamps'){ if(p.stamps==null){ onlyOld.push(u+'/stamps'); copy['ze_private/'+u+'/stamps']=val; } else if(_stable(p.stamps)!==_stable(val)) differ.push(u+'/stamps'); else same++; return; }
+      Object.entries(val).forEach(([k,v])=>{ const pv=(p[coll]||{})[k];
+        if(pv===undefined){ onlyOld.push(u+'/'+coll+'/'+k); copy['ze_private/'+u+'/'+coll+'/'+k]=v;
+          if(coll==='vacRequests' && plan.abwesend[k]) copy['zeiterfassung/abwesend/'+k]=plan.abwesend[k]; }
+        else if(_stable(pv)!==_stable(v)) differ.push(u+'/'+coll+'/'+k); else same++; });
+    });
+  });
+  return { onlyOld, differ, same, copy, skipped:plan.skipped };
+}
+// Reine Logik (testbar): Wer hat in den letzten Tagen noch mit einer App OHNE Phase-4-Kennung (zp:4) geschrieben?
+export function zpOldWriters(audit, sinceTs){
+  const last={};
+  Object.values(audit||{}).forEach(m=>Object.values(m||{}).forEach(r=>{ if(!r||!r.by||!(r.ts>=sinceTs)) return;
+    const cur=last[r.by]; if(!cur||r.ts>cur.ts) last[r.by]={ ts:r.ts, zp:r.zp===4, name:r.byName||r.by }; }));
+  const old=Object.entries(last).filter(([,x])=>!x.zp).map(([id,x])=>({ id, name:x.name, ts:x.ts })).sort((a,b)=>b.ts-a.ts);
+  return { old, fresh:Object.values(last).filter(x=>x.zp).length };
+}
+const _ids=(d,raw)=>{ const s=new Set(); ((d&&d.users)||[]).concat(Array.isArray(d&&d.archivedUsers)?d.archivedUsers:[]).forEach(u=>{ if(u&&u.id) s.add(u.id); });
+  Object.keys(zpPlan(raw).perUser).forEach(u=>s.add(u)); return [...s]; };
+async function _readPriv(db, ids){ const out={}; for(const u of ids){ try{ out[u]=(await db.ref('ze_private/'+u).once('value')).val()||{}; }catch(e){ out[u]=null; } } return out; }
+const _when=ts=>{ try{ return new Date(ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+new Date(ts).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } };
+
+let _busy=false, _last='', _cmp=null, _saved=false, _done=false;
 export async function zpCheck(){
   if(!isAdmin()||_busy) return; _busy=true; _render('Lese den aktuellen Stand …');
-  try{ const db=firebase.database(); const plan=zpPlan(await _readRaw(db)); const c=_counts(plan);
-    // Regeln v16: Lesen nur je Person (ze_private/<Person>), nicht den ganzen Knoten
-    let have=0; for(const u of Object.keys(plan.perUser)){ try{ if((await db.ref('ze_private/'+u).once('value')).exists()) have++; }catch(e){} }
-    _last=`<b>Zu übertragen:</b> ${c.p} Personen · ${c.e} Monatsblätter · ${c.v} Anträge · ${c.s} Stempel-Bereiche · ${c.a} Abwesenheiten (von–bis)`+
-      (c.k?` · bei ${c.k} Krankmeldungen wird der Grund entfernt`:'')+(plan.skipped.length?`<br><span style="color:var(--warn-text,#8a4b06)">Nicht zuordenbar (bleiben, wie sie sind): ${plan.skipped.length}</span>`:'')+
-      `<br>Schon im privaten Bereich: ${have} Personen.`;
-  }catch(e){ _last='<span style="color:var(--danger)">Lesen fehlgeschlagen: '+esc(e&&e.message)+'</span>'; }
+  try{ const db=firebase.database(); const raw=await _readRaw(db);
+    const d=((D.getData&&D.getData())||{});
+    const ids=_ids(d,raw); const priv=await _readPriv(db, ids); const unread=ids.filter(u=>priv[u]===null);
+    _cmp=zpCompare(raw, priv);
+    let aud={}; try{ aud=(await db.ref('ze_audit').once('value')).val()||{}; }catch(e){}
+    const ow=zpOldWriters(aud, Date.now()-14*864e5);
+    const nOld=Object.keys(raw.entries||{}).length+Object.keys(raw.vacRequests||{}).length+Object.keys(raw.stamps||{}).length;
+    _done=!nOld && d.zePrivOnly===true;
+    _last=_done ? '<b style="color:var(--ok,#1a7f3c)">✓ Abgeschlossen:</b> am alten Ort liegt nichts mehr, die App schreibt nur noch in den geschützten Bereich.'
+      : `<b>Alter Ort:</b> ${Object.keys(raw.entries||{}).length} Monatsblätter · ${Object.keys(raw.vacRequests||{}).length} Anträge · ${Object.keys(raw.stamps||{}).length} Stempel-Bereiche`+
+      `<br><b>Vergleich mit dem geschützten Bereich:</b> ${_cmp.same} gleich · ${_cmp.onlyOld.length} nur am alten Ort (werden beim Abschluss übernommen) · ${_cmp.differ.length} abweichend (es gilt der geschützte Bereich – so zeigt es die App schon seit v551)`+
+      (unread.length?`<br><span style="color:var(--danger)">Nicht lesbar: ${esc(unread.join(', '))}</span>`:'')+
+      ((_cmp.onlyOld.length||_cmp.differ.length)?`<details style="margin-top:4px"><summary>Einzelheiten</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(_cmp.onlyOld.slice(0,40).map(x=>'nur alt: '+x).concat(_cmp.differ.slice(0,40).map(x=>'abweichend: '+x)).join('\n'))}</pre></details>`:'')+
+      `<br><b>Geräte (letzte 14 Tage, Änderungsprotokoll):</b> ${ow.fresh} Person${ow.fresh===1?'':'en'} schreib${ow.fresh===1?'t':'en'} mit neuer App`+
+      (ow.old.length?` · <span style="color:var(--warn-text,#8a4b06)">noch mit alter App: ${ow.old.map(x=>esc(x.name)+' ('+esc(_when(x.ts))+')').join(', ')}</span> – erst abschließen, wenn hier niemand mehr steht (App neu laden lassen).`:' · niemand mehr mit alter App ✓');
+  }catch(e){ _last='<span style="color:var(--danger)">Lesen fehlgeschlagen: '+esc(e&&e.message)+'</span>'; _cmp=null; }
   _busy=false; _render();
 }
-export async function zpMigrate(){
-  if(!isAdmin()||_busy) return;
-  _busy=true; _render('Übertrage … bitte die Seite offen lassen.');
-  const log=[]; let fail=0;
-  try{
-    const db=firebase.database(); const raw=await _readRaw(db); const plan=zpPlan(raw);
-    for(const [u,colls] of Object.entries(plan.perUser)){
-      const upd={}; Object.entries(colls).forEach(([coll,val])=>{ if(coll==='stamps') upd['ze_private/'+u+'/stamps']=val; else Object.entries(val).forEach(([k,v])=>{ upd['ze_private/'+u+'/'+coll+'/'+k]=v; }); });
-      try{ await db.ref().update(upd); }
-      catch(e){ // einzeln nachschreiben, damit ein abgelehnter Datensatz nicht alle anderen blockiert
-        for(const [p,v] of Object.entries(upd)){ try{ await db.ref().update({[p]:v}); }catch(e2){ fail++; log.push(p+': '+(e2&&e2.code||e2&&e2.message||'abgelehnt')+(/\/vacRequests\//.test(p)?_vacInfo(v):'')); } } }
-    }
-    await db.ref('zeiterfassung/abwesend').set(plan.abwesend);
-    const strip={}; Object.keys(plan.stripOld).forEach(id=>{ strip['zeiterfassung/vacRequests/'+id+'/note']=null; });
-    Object.keys(plan.fixIdOld||{}).forEach(id=>{ strip['zeiterfassung/vacRequests/'+id+'/id']=id; });   // alte Kennung im Feld id angleichen
-    if(Object.keys(strip).length) await db.ref().update(strip);
-    // Kontrolle: alles zurücklesen und Eintrag für Eintrag vergleichen
-    const back={}; let diff=0;
-    for(const u of Object.keys(plan.perUser)){ try{ back[u]=(await db.ref('ze_private/'+u).once('value')).val()||{}; }catch(e){ back[u]={}; log.push('Zurücklesen nicht möglich: '+u+' ('+(e&&e.code||e&&e.message)+')'); } }
-    Object.entries(plan.perUser).forEach(([u,colls])=>Object.entries(colls).forEach(([coll,val])=>{
-      if(coll==='stamps'){ if(_stable(((back[u]||{}).stamps)||null)!==_stable(val)){ diff++; log.push('Abweichung: '+u+'/stamps'); } return; }
-      Object.entries(val).forEach(([k,v])=>{ if(_stable(((back[u]||{})[coll]||{})[k])!==_stable(v)){ diff++; if(log.length<30) log.push('Abweichung: '+u+'/'+coll+'/'+k); } }); }));
-    const c=_counts(plan);
-    _last=(fail||diff?'<b style="color:var(--danger)">Mit Problemen fertig.</b> ':'<b style="color:var(--ok,#1a7f3c)">✓ Übertragen und geprüft.</b> ')+
-      `${c.p} Personen · ${c.e} Monatsblätter · ${c.v} Anträge · ${c.s} Stempel-Bereiche · ${c.a} Abwesenheiten`+(c.k?` · ${c.k} Krankheits-Gründe entfernt`:'')+
-      `<br>Abgelehnt: ${fail} · Abweichungen beim Zurücklesen: ${diff}`+(log.length?`<details style="margin-top:6px"><summary>Einzelheiten (${log.length})</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(log.join('\n'))}</pre></details>`:'');
-  }catch(e){ _last='<span style="color:var(--danger)">Abgebrochen: '+esc(e&&e.message)+'</span>'; }
+export async function zpBackup(){
+  if(!isAdmin()||_busy) return; _busy=true; _render('Erstelle Sicherung …');
+  try{ const db=firebase.database(); const raw=await _readRaw(db); const d=((D.getData&&D.getData())||{});
+    const priv=await _readPriv(db, _ids(d,raw)); let abw={}; try{ abw=(await db.ref('zeiterfassung/abwesend').once('value')).val()||{}; }catch(e){}
+    const blob={ _type:'tps-zeprivat-sicherung', _v:1, exportedAt:new Date().toISOString(), alt:raw, ze_private:priv, abwesend:abw };
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(blob)],{type:'application/json'}));
+    a.download='Personaldaten-Sicherung_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    _saved=true; _last=(_last?_last+'<br>':'')+'<b style="color:var(--ok,#1a7f3c)">✓ Sicherung heruntergeladen.</b> Bitte gut aufbewahren (enthält Gesundheitsdaten).';
+  }catch(e){ _last='<span style="color:var(--danger)">Sicherung fehlgeschlagen: '+esc(e&&e.message)+'</span>'; }
+  _busy=false; _render();
+}
+export async function zpFinish(){
+  if(!isAdmin()||_busy||!_cmp||!_saved) return;
+  const t=window.prompt('Die alten Sammlungen werden endgültig gelöscht (Monatsblätter, Anträge, Stempel am alten Ort). Vorher werden '+_cmp.onlyOld.length+' Reste in den geschützten Bereich übernommen.\n\nZum Bestätigen LÖSCHEN eingeben:');
+  if(t!=='LÖSCHEN') return;
+  _busy=true; _render('Schließe ab … bitte die Seite offen lassen.');
+  try{ const db=firebase.database();
+    // frisch vergleichen (zwischen Prüfen und Löschen kann jemand etwas gespeichert haben)
+    const raw=await _readRaw(db); const d=((D.getData&&D.getData())||{}); const priv=await _readPriv(db, _ids(d,raw));
+    const unread=Object.keys(priv).filter(u=>priv[u]===null); if(unread.length) throw new Error('nicht lesbar: '+unread.join(', '));
+    const cmp=zpCompare(raw, priv);
+    const upd=Object.assign({}, cmp.copy, { 'zeiterfassung/entries':null, 'zeiterfassung/vacRequests':null, 'zeiterfassung/stamps':null, 'zeiterfassung/zePrivOnly':true });
+    await db.ref().update(upd);   // atomar: Reste übernehmen + alten Ort löschen + Merker
+    const chk=await _readRaw(db); const left=Object.keys(chk.entries).length+Object.keys(chk.vacRequests).length+Object.keys(chk.stamps).length;
+    _done=!left; _cmp=null; _saved=false;
+    _last=left?'<b style="color:var(--danger)">Am alten Ort liegen noch '+left+' Datensätze.</b>'
+      :`<b style="color:var(--ok,#1a7f3c)">✓ Abgeschlossen.</b> ${cmp.onlyOld.length} Reste übernommen, alter Ort gelöscht. Jetzt Regeln v17 veröffentlichen (Anleitung in firebase-rules/README.md).`;
+  }catch(e){ _last='<span style="color:var(--danger)">Abgebrochen, nichts gelöscht: '+esc(e&&e.message)+'</span>'; }
   _busy=false; _render();
 }
 function _render(msg){
   const host=document.getElementById('verw-zepriv'); if(!host) return;
   if(!isAdmin()){ host.innerHTML=''; return; }
-  host.innerHTML=`<div class="crm-sec"><h4><span class="ttl">🔒 Personaldaten privat · Umzug (Phase 2)</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:8px">Kopiert Monatsblätter, Abwesenheitsanträge und Stempelzeiten in den geschützten Bereich je Person und baut die öffentliche Liste „abwesend von–bis“ (ohne Art) neu auf. Gründe bei Krankmeldungen werden entfernt. Die bisherigen Daten bleiben vorerst unverändert lesbar (Sperre erst in Phase 4). Kann gefahrlos wiederholt werden.</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"><button class="btn-sm-crm" ${_busy?'disabled':''} onclick="zpCheck()">Prüfen (ändert nichts)</button><button class="btn-sm-crm primary" ${_busy?'disabled':''} onclick="zpMigrate()">Jetzt übertragen</button></div>
+  const can=!_busy&&!!_cmp&&_saved&&!_done;
+  host.innerHTML=`<div class="crm-sec"><h4><span class="ttl">🔒 Personaldaten privat · Abschluss (Phase 4)</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Löscht Monatsblätter, Anträge und Stempelzeiten am alten, für alle lesbaren Ort. Die App liest seit v551 nur noch den geschützten Bereich je Person. Reihenfolge: 1. Prüfen · 2. Sicherung herunterladen · 3. Abschließen · danach Regeln v17 veröffentlichen.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"><button class="btn-sm-crm" ${_busy?'disabled':''} onclick="zpCheck()">1. Prüfen (ändert nichts)</button>
+      <button class="btn-sm-crm" ${(_busy||!_cmp||_done)?'disabled':''} onclick="zpBackup()">2. Sicherung herunterladen</button>
+      <button class="btn-sm-crm primary" ${can?'':'disabled'} onclick="zpFinish()">3. Alten Ort löschen</button></div>
     <div class="small" role="status" aria-live="polite">${msg?esc(msg):(_last||'Noch nicht geprüft.')}</div></div>`;
 }
 export function renderZePrivBox(){ _render(); }
-try{ Object.assign(window, { zpCheck, zpMigrate, zpPlan, renderZePrivBox }); }catch(e){}
+try{ Object.assign(window, { zpCheck, zpBackup, zpFinish, zpPlan, zpCompare, zpOldWriters, renderZePrivBox }); }catch(e){}

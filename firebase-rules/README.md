@@ -270,6 +270,16 @@ sha256 (raw @ff63ed6): de81c647985e654bf0354a322c7d2a566ae4fd641ce8673d62addecbc
 **Reihenfolge:** App v546 live (Spiegel ist best effort, schaltet sich ohne v16 still ab) → v16 veröffentlichen → Administrator öffnet die App
 (schreibt `seeOf`). Rückweg: CANDIDATE-v15.json.
 
+## ENTWURF CANDIDATE-v17.json – „Personaldaten privat“ Phase 4 (noch NICHT live, noch nicht im Testprojekt getestet)
+= v16 + alte Sammlungen gesperrt:
+- `zeiterfassung/entries`, `vacRequests`, `stamps`: `.validate: false` (auf dem Knoten und je Kind) → dort entsteht nichts mehr, auch nicht
+  durch den Admin (`.validate` gilt für alle, nur Löschen geht). Personen schreiben seit App v552 nach dem Abschluss nur noch `ze_private`.
+- `zeiterfassung/zePrivOnly`: nur `true` (setzt das Abschluss-Werkzeug, Verwaltung → Daten & Backup; schreibt nur der Admin).
+- `ze_audit/$k/$id` (Person selbst): Status-Prüfung „Monat nicht genehmigt“ liest jetzt `ze_private/<eigene Person>/entries/$k/status`.
+**Reihenfolge (zwingend):** App v552 live → tpsPw deployen (Backup/Einspielen mit ze_private) → warten, bis das Werkzeug unter „Geräte“
+niemanden mit alter App mehr zeigt → Werkzeug: Prüfen · Sicherung herunterladen · Alten Ort löschen → **sofort danach** v17 veröffentlichen.
+Grund: Geräte mit v551 schreiben weiter auch an den alten Ort; unter v17 würde das abgelehnt. Rückweg: CANDIDATE-v16.json (+ Sicherungsdatei).
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json

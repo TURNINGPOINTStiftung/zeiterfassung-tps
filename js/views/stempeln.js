@@ -226,7 +226,7 @@ export async function startZeitstempel(){
       // Personaldaten privat (v551): zuerst ze_private, bis Phase 4 sonst der alte Stand
       const _rd=ref=>Promise.race([ref.once('value').then(s=>s.val()), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),2500))]);
       let val=null; try{ val=await _rd(firebase.database().ref('ze_private/'+cu.id+'/entries/'+k)); }catch(_){ val=null; }
-      if(!val) val=await _rd(window._fbRef.child('entries').child(k));
+      if(!val && getDataCache().zePrivOnly!==true) val=await _rd(window._fbRef.child('entries').child(k));
       if(val) getDataCache().entries[k]=val;
     }catch(e){}
   }

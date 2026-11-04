@@ -271,7 +271,9 @@ function _zpWorkDays(von, bis, u, halb){
 export function zpBuild(val, scope, priv){
   if(!val||!scope) return val;
   priv=priv||{}; const P=priv.person||{}, V=priv.vac||{};
-  const oldE=val.entries||{}, oldV=val.vacRequests||{}, oldS=val.stamps||{};
+  // Nach Phase 4 (zeiterfassung/zePrivOnly) gilt nur noch ze_private – liegengebliebene Reste am alten Ort werden ignoriert.
+  const only=val.zePrivOnly===true;
+  const oldE=only?{}:(val.entries||{}), oldV=only?{}:(val.vacRequests||{}), oldS=only?{}:(val.stamps||{});
   const E={}, VR={}, S={}; const readable=new Set(scope.ids);
   const oldVacOf=u=>{ const o={}; Object.entries(oldV).forEach(([k,r])=>{ if(r&&r.userId===u) o[k]=r; }); return o; };
   // Übergang bis Phase 4: je Schlüssel alter Stand ∪ ze_private, ze_private gewinnt. So bleibt auch ein Monatsblatt
