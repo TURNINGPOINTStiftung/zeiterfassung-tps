@@ -244,6 +244,18 @@ sha256 (raw @d89f7a1): e2436851706d3f0a8ada92ddda4b07809ad063d7b36d2988e4c8a9616
 Messemodus (füllt `kioskEvents`) → Admin setzt im Mitarbeiterdialog den Haken „Kiosk-Konto“ → Passwort des Messe-Kontos ändern.
 Rückweg: CANDIDATE-v13.json.
 
+## Stand 2026-11-04: CANDIDATE-v15.json – Kandidat (noch NICHT live) – Team-Projekte nur mit Recht „Aufgaben bearbeiten“ ändern (App v544)
+= v14 + in `crm/teamprojekte/$id` verlangt das Ändern eines bestehenden Team-Projekts (ohne `owner`, Team unverändert) zusätzlich
+`grants/r_pm_aufg_bearb` (bisher: jede freigeschaltete Person). Anlegen/Team wechseln/Löschen weiter nur mit `verw_kanban` bzw. Admin;
+eigene Projekte (`owner`) unverändert nur die Person selbst.
+Nicht serverseitig prüfbar (bleibt App-Prüfung): ÖA-Freigabe/Phase innerhalb verschachtelter Aufgaben, Team-Grenze beim Ändern.
+Test im Testprojekt 04.11.2026 (Abschnitt `crm/teamprojekte` auf `ruletest/` umbenannt): 17 Simulator-Fälle alle wie erwartet
+(ohne/mit Recht ändern, Team/Besitzer ändern, Löschen, Leitung mit verw_kanban, Admin, eigene/fremde eigene Projekte, Anlegen, unbekannte UID)
++ PUT ohne Anmeldung → 401; vollständige v15-Datei vom Compiler akzeptiert. Testdaten gelöscht, Original-Regeln zurück (PUT → 401).
+sha256 (raw @6f9c3c3): a8894af53b201a70359b1ebb44fe115efaf63a97b26c0e45f729adebd142d536 · Prüfwort `r_pm_aufg_bearb` = 2 Treffer (v14: 1).
+**Reihenfolge:** App v544 live → Administrator öffnet die App einmal (Freigaben `grants/r_pm_aufg_bearb` neu berechnen) → v15 veröffentlichen.
+Rückweg: CANDIDATE-v14.json.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
