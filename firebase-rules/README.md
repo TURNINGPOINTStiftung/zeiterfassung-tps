@@ -244,7 +244,7 @@ sha256 (raw @d89f7a1): e2436851706d3f0a8ada92ddda4b07809ad063d7b36d2988e4c8a9616
 Messemodus (füllt `kioskEvents`) → Admin setzt im Mitarbeiterdialog den Haken „Kiosk-Konto“ → Passwort des Messe-Kontos ändern.
 Rückweg: CANDIDATE-v13.json.
 
-## Stand 2026-11-04: CANDIDATE-v15.json – Kandidat (noch NICHT live) – Team-Projekte nur mit Recht „Aufgaben bearbeiten“ ändern (App v544)
+## Stand 2026-11-04: CANDIDATE-v15.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle r_pm_aufg_bearb = 2) – Team-Projekte nur mit Recht „Aufgaben bearbeiten“ ändern (App v544)
 = v14 + in `crm/teamprojekte/$id` verlangt das Ändern eines bestehenden Team-Projekts (ohne `owner`, Team unverändert) zusätzlich
 `grants/r_pm_aufg_bearb` (bisher: jede freigeschaltete Person). Anlegen/Team wechseln/Löschen weiter nur mit `verw_kanban` bzw. Admin;
 eigene Projekte (`owner`) unverändert nur die Person selbst.
