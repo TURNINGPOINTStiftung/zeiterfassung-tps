@@ -256,6 +256,20 @@ sha256 (raw @6f9c3c3): a8894af53b201a70359b1ebb44fe115efaf63a97b26c0e45f729adebd
 **Reihenfolge:** App v544 live → Administrator öffnet die App einmal (Freigaben `grants/r_pm_aufg_bearb` neu berechnen) → v15 veröffentlichen.
 Rückweg: CANDIDATE-v14.json.
 
+## Stand 2026-11-04: CANDIDATE-v16.json – Kandidat (noch NICHT live) – „Personaldaten privat“ Phase 1 (App v546)
+= v15 + neuer Top-Level-Knoten `ze_private/<userId>/{entries,vacRequests,stamps}` und `zeiterfassung/abwesend/<id> = {uid,von,bis,halb}`:
+- Lesen `ze_private/<u>`: die Person selbst, Admin, oder `zeiterfassung/seeOf/<auth.uid>/<u>` (schreibt die Admin-App aus `canSeeEmployee`).
+  `vacRequests` zusätzlich `managers` und `grants/genehmigung_abwesenheit`. Kiosk nie.
+- Schreiben: Regeln von `entries`/`vacRequests`/`stamps` 1:1 übernommen, zusätzlich Schlüssel bzw. `userId` muss zur Person `<u>` passen;
+  unbekannte Unterknoten verboten. `abwesend`: Admin/Leitung/GF/Genehmiger:in oder die Person für eigene; nur uid/von/bis/halb (keine Art).
+- Alte Knoten unverändert lesbar (Phase 1 schreibt nur zusätzlich, Phase 4 sperrt alt).
+Test im Testprojekt 04.11.2026 (Abschnitte auf `ruletest`/`ruletest_priv`): 29 Simulator-Fälle wie erwartet (Fall „eigene Stempelzeit“ im
+Sammellauf einmal Fehlläufer, einzeln wiederholt 2× erlaubt), dazu Lesen/Schreiben ohne Anmeldung → 401; vollständige v16-Datei vom Compiler
+akzeptiert. Testdaten gelöscht, Original-Regeln zurück (PUT → 401).
+sha256 (raw @ff63ed6): de81c647985e654bf0354a322c7d2a566ae4fd641ce8673d62addecbc4a26252 · Prüfwort `ze_private` ≥ 1 Treffer (v15: 0).
+**Reihenfolge:** App v546 live (Spiegel ist best effort, schaltet sich ohne v16 still ab) → v16 veröffentlichen → Administrator öffnet die App
+(schreibt `seeOf`). Rückweg: CANDIDATE-v15.json.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
