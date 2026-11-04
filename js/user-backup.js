@@ -74,11 +74,27 @@ function _mergeForBackup(server, local){
   }
   return out;
 }
+// Personaldaten privat (v551): Monatsblätter je lesbarer Person aus ze_private (ze_private ist nur je Person lesbar).
+// Bis Phase 4: Person ohne Stand in ze_private → alter Stand aus zeiterfassung/entries.
+async function _serverEntries(){
+  const db = firebase.database(); const uid = (firebase.auth().currentUser||{}).uid || '';
+  let ids = [window.cu.id];
+  try{ const sc = window.zpScope && window.zpScope(getData(), uid); if(sc && sc.ids.length) ids = sc.ids; }catch(_){}
+  const out = {}, missing = new Set();
+  await Promise.all(ids.map(async u => { let v = null;
+    try{ v = (await db.ref('ze_private/'+u+'/entries').once('value')).val(); }catch(_){ v = null; }
+    if(v && Object.keys(v).length) Object.assign(out, v); else missing.add(u); }));
+  if(missing.size){
+    const old = (await db.ref('zeiterfassung/entries').once('value')).val() || {};
+    Object.keys(old).forEach(k => { const m = /^(.+)_[0-9]{4}_[0-9]{2}$/.exec(k); if(m && missing.has(m[1]) && !out[k]) out[k] = old[k]; });
+  }
+  return out;
+}
 async function _backupEntries(){
   const local = getData().entries || {};
   try{
     if(window.firebase && firebase.database && firebase.auth && firebase.auth().currentUser && !window._offlineMode){
-      const server = (await firebase.database().ref('zeiterfassung/entries').once('value')).val() || {};
+      const server = await _serverEntries();
       return { data: _mergeForBackup(server, local), source: 'server+local' };
     }
   }catch(e){ console.warn('[Backup] Server-Lesen fehlgeschlagen, nutze nur lokalen Stand:', e && (e.code||e.message)); }

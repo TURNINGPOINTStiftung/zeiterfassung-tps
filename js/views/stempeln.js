@@ -223,8 +223,11 @@ export async function startZeitstempel(){
   if(!window._offlineMode&&getDataCache()){
     try{
       // Höchstens 2,5 s auf den frischen Monatsstand warten – ohne Verbindung mit dem lokalen Stand weiter.
-      const snap=await Promise.race([window._fbRef.child('entries').child(k).once('value'), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),2500))]);
-      const val=snap.val(); if(val) getDataCache().entries[k]=val;
+      // Personaldaten privat (v551): zuerst ze_private, bis Phase 4 sonst der alte Stand
+      const _rd=ref=>Promise.race([ref.once('value').then(s=>s.val()), new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),2500))]);
+      let val=null; try{ val=await _rd(firebase.database().ref('ze_private/'+cu.id+'/entries/'+k)); }catch(_){ val=null; }
+      if(!val) val=await _rd(window._fbRef.child('entries').child(k));
+      if(val) getDataCache().entries[k]=val;
     }catch(e){}
   }
   const dayNow=(getEntry(cu.id,sy,sm).days||{})[startDate]||{};

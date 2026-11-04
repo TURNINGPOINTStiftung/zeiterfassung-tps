@@ -35,10 +35,12 @@ const overlap=(a1,b1,a2,b2)=>a1<=b2&&a2<=b1;   // ISO-Strings vergleichbar (YYYY
 function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von).localeCompare(String(b.von))||((a.emp?0:1)-(b.emp?0:1))).forEach(e=>{ let L=0; while(lanes[L]&&lanes[L].some(x=>overlap(x.von,x.bis,e.von,e.bis))) L++; if(!lanes[L]) lanes[L]=[]; lanes[L].push(e); e._lane=L; }); return lanes.length; }
 
 // ── Abwesenheits-Typen ──
-// Krankheit (AU) wird im Kalender BEWUSST NICHT gezeigt (sensibel, für alle sichtbar).
 // Urlaub + AZA sind im Kalender EINE Kategorie „Abwesend" (egal warum man nicht arbeitet) → beide Blau.
 // Seit v472 (User 26.10.2026) auch in Beschriftung/Tooltip nur noch „Abwesend“ – der Grund geht niemanden an.
-const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
+// Seit v551 (Personaldaten privat): Krankheit erscheint ebenfalls nur als „Abwesend“ (Entscheidung Moritz), ebenso die
+// Pseudo-Anträge aus zeiterfassung/abwesend (type 'Abwesend') für Personen, deren Anträge man nicht lesen darf.
+const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'},
+  'AU/Krank':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Abwesend':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
 const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
 // Wählbare Farben je Termin/Veranstaltung (v495): [kräftig, hell]. Blau bleibt für „Abwesend“ reserviert.
 const KAL_FARBEN={ rot:['#dc2626','#f2b8b8'], orange:['#d97706','#f0c58a'], gruen:['#16a34a','#bfe5cb'], tuerkis:['#0d9488','#b5e3de'],

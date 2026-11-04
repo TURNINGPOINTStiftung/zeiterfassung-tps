@@ -138,7 +138,7 @@ export async function loadFullData(){
   try{ window.tpsPerf&&window.tpsPerf.mark('zeStart'); }catch(e){}
   try{
     const snap=await Promise.race([_fbRef.once('value'),_timeout(8000)]);
-    fbData=snap.val();
+    fbData=snap.val(); _zp.snap=snap;
     try{ if(window.tpsPerf&&!window._perfZeDone){ window._perfZeDone=true; const k=window.tpsPerf.kb(fbData); window.tpsPerf.mark('zeFertig',{zeKB:k.kb,zeJsonMs:k.ms}); } }catch(e){}
     window._offlineMode=false;
     _noteSync();
@@ -148,6 +148,10 @@ export async function loadFullData(){
     try{ window.tpsPerf&&window.tpsPerf.info({zeTimeout:true}); }catch(_){}
   }
   _netChip();
+
+  // Personaldaten privat: lesbare Personen aus ze_private laden (höchstens 6 s warten, sonst alter Stand als Übergang)
+  let _sc=null;
+  if(fbData){ try{ _sc=zpScope(fbData, _zpUid()); if(_sc){ await Promise.race([_zpSubscribe(_sc), new Promise(r=>setTimeout(r,6000))]); zpBuild(fbData, _sc, _zp); } }catch(e){ console.warn('[Personaldaten privat] Laden:', e&&e.message); } }
 
   let lsData=null;
   try{ const ls=localStorage.getItem(STORAGE_KEY); if(ls) lsData=JSON.parse(ls); }catch(e){}
@@ -161,7 +165,9 @@ export async function loadFullData(){
     data=fbData;
     if(lsCnt>fbCnt){
       if(!data.entries) data.entries={};
+      const _rd=_sc?new Set(_sc.ids):null;   // nur Personen, die gelesen werden dürfen (älterer Gerätestand enthielt alle)
       for(const [k,v] of Object.entries(lsData.entries||{})){
+        if(_rd && !_rd.has(_zpOwner(k))) continue;
         if(!data.entries[k]&&v&&v.days&&Object.keys(v.days).length>0)
           data.entries[k]=v;
       }
@@ -216,8 +222,117 @@ export async function loadFullData(){
     window._cloudUnverified=true;
   }
 
+  _zp.ready=true;
   _setupRealtimeSync();
 }
+
+// ══ „Personaldaten privat“, Phase 3 (v551, Regeln v16) ══════════════════════════════════════════════════
+// Zeiteinträge, Anträge und Stempelzeiten kommen aus ze_private/<Person> – gelesen wird NUR je Person (die Regel
+// erlaubt ze_private nicht als Ganzes): Admin alle, sonst die eigene Person + zeiterfassung/seeOf/<auth.uid>.
+// Leitung/GF/Genehmiger:in (managers bzw. grants/genehmigung_abwesenheit) lesen zusätzlich ze_private/<u>/vacRequests
+// aller. Wer eine Person nicht lesen darf, bekommt deren Abwesenheiten nur aus zeiterfassung/abwesend als Pseudo-Antrag
+// {type:'Abwesend', status:'approved', _public:true} – Kalender, Planner, Abwesenheiten, Konflikte laufen damit
+// unverändert, und Krankheit erscheint dort nur als „abwesend“. Datenmodell im Speicher (d.entries usw.) bleibt gleich.
+// Übergang bis Phase 4: für lesbare Personen alter Stand ∪ ze_private je Schlüssel (ze_private gewinnt), siehe zpBuild.
+// Pro Person ein Live-Listener; jede Änderung baut den Stand neu zusammen.
+const _zp={ subs:{}, person:{}, vac:{}, snap:null, timer:0, ready:false };
+function _zpOwner(k){ const m=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(String(k||'')); return m?m[1]:''; }
+function _zpUid(){ try{ const u=firebase.auth().currentUser; return (u&&u.uid)||''; }catch(e){ return ''; } }
+// Wer darf was lesen? null = unbekannt (dann bleibt alles wie geladen).
+export function zpScope(val, authUid){
+  if(!val||!authUid) return null;
+  const isAdm=!!(val.admins&&val.admins[authUid]===true);
+  const me=(val.uidUser&&val.uidUser[authUid])||'';
+  if(!isAdm && !me) return null;
+  const ids=new Set();
+  if(isAdm){
+    (val.users||[]).concat(Array.isArray(val.archivedUsers)?val.archivedUsers:[]).forEach(u=>{ if(u&&u.id) ids.add(u.id); });
+    Object.keys(val.entries||{}).forEach(k=>{ const o=_zpOwner(k); if(o) ids.add(o); });
+    Object.values(val.vacRequests||{}).forEach(r=>{ if(r&&r.userId) ids.add(r.userId); });
+    Object.keys(val.stamps||{}).forEach(u=>ids.add(u));
+  } else {
+    ids.add(me); Object.keys((val.seeOf&&val.seeOf[authUid])||{}).forEach(u=>{ if(val.seeOf[authUid][u]===true) ids.add(u); });
+  }
+  const vacAll=!isAdm && !!((val.managers&&val.managers[authUid]===true) || (val.grants&&val.grants.genehmigung_abwesenheit&&val.grants.genehmigung_abwesenheit[authUid]===true));
+  const vacIds=vacAll ? (val.users||[]).map(u=>u&&u.id).filter(id=>id && !ids.has(id)) : [];
+  return { ids:[...ids], vacIds, me, isAdm };
+}
+// Werktage (Mo–Fr ohne Feiertage des Wohnorts) für die Anzeige der Pseudo-Anträge
+function _zpWorkDays(von, bis, u, halb){
+  if(halb) return 0.5;
+  let n=0; const cur=new Date(von+'T12:00:00'), end=new Date(bis+'T12:00:00'); let guard=0;
+  while(cur<=end && guard++<800){ const wd=cur.getDay(); const ds=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
+    if(wd!==0&&wd!==6){ let hol=false; try{ hol=getHolidays(cur.getFullYear(),(u&&u.bundesland)||'').has(ds); }catch(e){} if(!hol) n++; }
+    cur.setDate(cur.getDate()+1); }
+  return n;
+}
+// Reine Logik (testbar): baut entries/vacRequests/stamps von val aus den privaten Ständen neu.
+// priv = { person:{<u>:{entries,vacRequests,stamps}|undefined}, vac:{<u>:{…}|undefined} } (undefined = nicht geladen)
+export function zpBuild(val, scope, priv){
+  if(!val||!scope) return val;
+  priv=priv||{}; const P=priv.person||{}, V=priv.vac||{};
+  const oldE=val.entries||{}, oldV=val.vacRequests||{}, oldS=val.stamps||{};
+  const E={}, VR={}, S={}; const readable=new Set(scope.ids);
+  const oldVacOf=u=>{ const o={}; Object.entries(oldV).forEach(([k,r])=>{ if(r&&r.userId===u) o[k]=r; }); return o; };
+  // Übergang bis Phase 4: je Schlüssel alter Stand ∪ ze_private, ze_private gewinnt. So bleibt auch ein Monatsblatt
+  // sichtbar, das (z. B. von einem Gerät mit alter App-Version) nur im alten Bestand liegt; beim nächsten Bearbeiten
+  // schreibt data.js privMirror es ganz nach ze_private. Gelöscht wird immer in beiden (atomar) → nichts lebt wieder auf.
+  scope.ids.forEach(u=>{
+    const p=P[u];
+    Object.keys(oldE).forEach(k=>{ if(_zpOwner(k)===u) E[k]=oldE[k]; });
+    Object.assign(E, (p&&p.entries)||{});
+    Object.assign(VR, oldVacOf(u), (p&&p.vacRequests)||{});
+    if(p&&p.stamps) S[u]=p.stamps; else if(oldS[u]) S[u]=oldS[u];
+  });
+  const realVac=new Set();
+  (scope.vacIds||[]).forEach(u=>{ Object.assign(VR, oldVacOf(u), V[u]||{}); realVac.add(u); });
+  const users={}; (val.users||[]).forEach(u=>{ if(u&&u.id) users[u.id]=u; });
+  Object.entries(val.abwesend||{}).forEach(([id,a])=>{
+    if(!a||!a.uid||!a.von||readable.has(a.uid)||realVac.has(a.uid)||VR[id]) return;
+    const von=String(a.von).slice(0,10), bis=String(a.bis||a.von).slice(0,10), u=users[a.uid];
+    VR[id]={ id, userId:a.uid, userName:(u&&u.name)||'', startDate:von, endDate:bis, halfDay:!!a.halb,
+      workDays:_zpWorkDays(von,bis,u,!!a.halb), status:'approved', type:'Abwesend', _public:true };
+  });
+  val.entries=E; val.vacRequests=VR; val.stamps=S;
+  return val;
+}
+// Für data.js (privMirror): Gibt es den Datensatz in ze_private schon? true/false, undefined = unbekannt.
+window._zpHas=function(u,coll,key){
+  const p=_zp.person[u];
+  if(coll==='vacRequests' && p===undefined && _zp.vac[u]!==undefined) return !!(_zp.vac[u]&&_zp.vac[u][key]);
+  if(!p) return undefined;
+  return !!(p[coll]&&p[coll][key]);
+};
+// Live-Listener je Person anmelden/abmelden; liefert ein Promise, das nach dem ersten Stand aller neuen Listener erfüllt ist.
+function _zpSubscribe(scope){
+  if(!scope) return Promise.resolve();
+  const want={}; scope.ids.forEach(u=>{ want['p:'+u]=u; }); scope.vacIds.forEach(u=>{ want['v:'+u]=u; });
+  Object.keys(_zp.subs).forEach(k=>{ if(!want[k]){ const s=_zp.subs[k]; try{ s.ref.off('value', s.cb); }catch(e){} delete _zp.subs[k]; if(k[0]==='p') delete _zp.person[s.u]; else delete _zp.vac[s.u]; } });
+  const firsts=[];
+  Object.entries(want).forEach(([k,u])=>{
+    if(_zp.subs[k]) return;
+    const isP=k[0]==='p';
+    let ref; try{ ref=firebase.database().ref('ze_private/'+u+(isP?'':'/vacRequests')); }catch(e){ return; }
+    let done; firsts.push(new Promise(r=>{ done=r; }));
+    const cb=s=>{ const v=s.val(); if(isP) _zp.person[u]=v||{}; else _zp.vac[u]=v||{}; done(); _zpChanged(); };
+    const err=e=>{ console.warn('[Personaldaten privat] '+k+' nicht lesbar:', e&&(e.code||e.message)); done(); };   // bleibt „nicht geladen“ → alter Stand
+    _zp.subs[k]={ ref, cb, u };
+    try{ ref.on('value', cb, err); }catch(e){ done(); }
+  });
+  return Promise.all(firsts);
+}
+// Eine private Änderung → letzten zeiterfassung-Stand neu zusammenbauen (kurz gebündelt).
+function _zpChanged(){
+  if(!_zp.ready || !_zp.snap || _zp.timer) return;   // erst nach loadFullData (das wartet selbst auf den ersten Stand)
+  _zp.timer=setTimeout(()=>{ _zp.timer=0; try{ const v=_zp.snap.val(); if(v) _applyFirebaseSnap(v); }catch(e){ console.warn('[Personaldaten privat] Neuaufbau:', e&&e.message); } }, 120);
+}
+function _zpApply(val){
+  const sc=zpScope(val, _zpUid());
+  if(!sc) return val;
+  _zpSubscribe(sc);
+  return zpBuild(val, sc, _zp);
+}
+window.zpBuild=zpBuild; window.zpScope=zpScope;
 
 function _applyFirebaseSnap(val){
   if(!val||!getData()||window._tpsKiosk) return;
@@ -230,6 +345,7 @@ function _applyFirebaseSnapInner(val){
   if(Array.isArray(val.users)&&val.users.length>0){ window._cloudUnverified=false; _noteSync(); }
   // Cloud bestätigt → evtl. noch offene (offline eingereihte) Änderungen gezielt nachholen.
   try{ flushPendingWrites(); }catch(e){}
+  _zpApply(val);   // Personaldaten privat: entries/vacRequests/stamps aus ze_private (+ Pseudo-Anträge aus abwesend)
   const hadPauseMig=!!(val._fixes&&val._fixes.pauseMigrationV2);
   const hadB2Mig=!!(val._fixes&&val._fixes.b2PauseMigrationV1);
   const migrated=_migrate(val);
@@ -274,7 +390,7 @@ function _setupRealtimeSync(){
   // Live-Listener IMMER anmelden (auch nach Timeout/Offline-Start) – Firebase verbindet selbst neu und
   // liefert den Stand, sobald er da ist. Ein echter Snapshot beendet den Offline-Modus.
   if(!_rtOn && window._fbRef){ _rtOn=true;
-    window._fbRef.on('value', snap=>{ const v=snap.val(); if(v&&Array.isArray(v.users)&&v.users.length) window._offlineMode=false; _applyFirebaseSnap(v); }); }
+    window._fbRef.on('value', snap=>{ _zp.snap=snap; const v=snap.val(); if(v&&Array.isArray(v.users)&&v.users.length) window._offlineMode=false; _applyFirebaseSnap(v); }); }
   _watchConnection();
 }
 // Echte Verbindung zum Server beobachten (.info/connected) statt nur auf das „online“-Ereignis des Geräts zu warten.
@@ -325,6 +441,7 @@ export async function _pollFirebase(){
   if(window._offlineMode||!getData()) return;
   try{
     const snap=await window._fbRef.once('value');
+    _zp.snap=snap;
     _applyFirebaseSnap(snap.val());
   }catch(e){}
 }
@@ -375,7 +492,7 @@ function _runAbsMigrations(d){
       const userMap={}; (d.users||[]).forEach(u=>{ userMap[u.id]=u; });
       if(d._fixes.allAbsBemerkung){
         Object.values(d.vacRequests||{}).forEach(req=>{
-          if(req.status!=='approved') return;
+          if(req.status!=='approved'||req._public) return;
           const u=userMap[req.userId]; if(!u||u.role==='freiberuflich') return;
           if(u.holidaysLikeSunday===false) return;
           let cur=new Date(req.startDate+'T12:00:00');
@@ -398,7 +515,7 @@ function _runAbsMigrations(d){
         });
       }
       Object.values(d.vacRequests||{}).forEach(req=>{
-        if(req.status!=='approved') return;
+        if(req.status!=='approved'||req._public) return;
         const u=userMap[req.userId]; if(!u) return;
         const isFree=u.role==='freiberuflich';
         const holFree=u.holidaysLikeSunday!==false;
@@ -442,7 +559,7 @@ function _runAbsMigrations(d){
       const _wk=dt=>{const t=new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate()));const dy=(t.getUTCDay()+6)%7;t.setUTCDate(t.getUTCDate()-dy+3);const f=new Date(Date.UTC(t.getUTCFullYear(),0,4));return t.getUTCFullYear()+'-'+(1+Math.round(((t-f)/864e5-3+((f.getUTCDay()+6)%7))/7));};
       const _isArtifact=day=>day&&day.b1von==='08:00'&&!day.b2von&&(day.b1zuord===''||day.b1zuord==='Sonstiges'||day.b1zuord==='Urlaub'||day.b1zuord==='AU/Krank');
       Object.values(d.vacRequests||{}).forEach(req=>{
-        if(req.status!=='approved') return;
+        if(req.status!=='approved'||req._public) return;
         const u=userMap[req.userId]; if(!u) return;
         const isFree=u.role==='freiberuflich';
         const holFree=u.holidaysLikeSunday!==false;

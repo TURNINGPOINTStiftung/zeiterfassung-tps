@@ -576,12 +576,17 @@ function _typeBg(t){ const c=_abType(t)[2]; return c?`var(--${c}-bg)`:'var(--bg)
 function _typeFg(t){ const c=_abType(t)[2]; return c?`var(--${c}-text)`:'var(--muted)'; }
 function _typeBar(t){ return _abType(t)[3]; }
 // Krankmeldungen anderer sehen nur Leitung, GF und Admin – für alle anderen „Abwesend" (v518, User 30.10.2026).
-// Hinweis: reine Anzeige; die Daten liegen weiter auf dem Gerät (Lesezugriff je Person = Prio 3).
+// Seit v551 (Personaldaten privat) liegen Anträge anderer nur noch auf dem Gerät, wenn man sie lesen darf (Leitung ihrer
+// Teams, GF, Admin, Genehmiger:in); für alle übrigen kommen Pseudo-Anträge mit Art „Abwesend“ (ohne Grund) aus firebase.js.
 function _abSeesSick(cu){ cu=cu||window.cu; return !!(cu && (cu.role==='admin'||cu.role==='leitung'||cu.role==='geschaeftsfuehrer')); }
-function _shownType(r){ const cu=window.cu; return (r && r.type==='AU/Krank' && r.userId!==(cu&&cu.id) && !_abSeesSick(cu)) ? 'Abwesend' : (r&&r.type); }
+// v551: „Krank“ nur für Personen, die man auch sonst sehen darf (Leitung ihrer Teams, GF wie canSeeEmployee, Admin) –
+// Leitung/Genehmiger:in laden zum Genehmigen zwar die Anträge aller, fremde Teams sehen sie trotzdem nur als „Abwesend“.
+function _sickVisible(cu, r){ if(!cu||!_abSeesSick(cu)) return false; if(cu.role==='admin') return true; const u=getUser(r.userId); try{ return !!(u && canSeeEmployee(cu,u)); }catch(e){ return false; } }
+function _shownType(r){ const cu=window.cu; return (r && r.type==='AU/Krank' && r.userId!==(cu&&cu.id) && !_sickVisible(cu, r)) ? 'Abwesend' : (r&&r.type); }
 function _typeLegend(){
   const sick=_abSeesSick();
-  return '<div class="ab-type-legend">'+_AB_TYPES.filter(x=>sick?x[0]!=='Abwesend':true).map(([k,l,c,b])=>`<span><span class="ab-dot" style="background:${b}"></span>${esc(k==='AU/Krank'&&!sick?'Krank (eigene)':l)}</span>`).join('')+'</div>';
+  const pub=Object.values(getData().vacRequests||{}).some(r=>r&&_shownType(r)==='Abwesend');   // „Abwesend“ kommt vor → auch für Leitung/GF erklären
+  return '<div class="ab-type-legend">'+_AB_TYPES.filter(x=>(sick&&!pub)?x[0]!=='Abwesend':true).map(([k,l,c,b])=>`<span><span class="ab-dot" style="background:${b}"></span>${esc(k==='AU/Krank'&&!sick?'Krank (eigene)':l)}</span>`).join('')+'</div>';
 }
 // Titel der Kalender-Navigation (Woche / Monat / Jahr)
 function _abCalTitle(){

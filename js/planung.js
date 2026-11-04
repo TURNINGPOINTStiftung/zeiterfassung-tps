@@ -93,7 +93,7 @@ function planVaSet(id){ window._planVa=id; planGo('veranstaltung'); }
 
 // ── Daten für „Start" ──
 function _abs(){ const out=[]; try{ const vr=(getData()||{}).vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return;
-  if(r.type!=='Urlaub' && r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10) }); }); }catch(e){} return out; }
+  if(!/^(Urlaub|Arbeitszeitausgleich|AU\/Krank|Abwesend)$/.test(r.type||'')) return; out.push({ emp:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10) }); }); }catch(e){} return out; }
 function _emps(){ try{ return ((getData()||{}).users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.archived); }catch(e){ return []; } }
 function _teamCol(t){ const ts=_teamsVisible(); const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':'var(--team-'+((i%8)+1)+')'; }
 const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };

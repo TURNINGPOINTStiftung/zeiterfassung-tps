@@ -402,11 +402,19 @@ export function fbWriteMerge(d){
     } else if(k==='users' && _usersPoisoned(d[k])){
       // Schutz: verstümmelten users-Array NICHT hochschreiben (Server-Stand bleibt intakt).
       console.warn('[Schutz] users nicht geschrieben (Mojibake erkannt) – Server-Stand bleibt.');
+    } else if(k==='vacRequests'){
+      // Pseudo-Anträge (_public, aus zeiterfassung/abwesend) gehören nie in den Datenbestand.
+      const vr={}; Object.entries(d.vacRequests||{}).forEach(([id,r])=>{ if(r && !r._public) vr[id]=r; }); upd[k]=vr;
     } else {
       upd[k]=d[k];
     }
   }
-  return ref.update(upd);
+  // Personaldaten privat: Spiegel je Antrag/Stempel (ganze Sammlungen gibt es unter ze_private nicht) – im selben Update.
+  const ms={}; Object.keys(upd).forEach(p=>{ if(p.startsWith('entries/')) ms[p]=upd[p]; });
+  Object.entries(upd.vacRequests||{}).forEach(([id,r])=>{ ms['vacRequests/'+id]=r; });
+  Object.entries(upd.stamps||{}).forEach(([u,st])=>{ if(st) ms['stamps/'+u]=st; });
+  if(!ref.root) return ref.update(upd);
+  return _writeRoot(ref, upd, ms);
 }
 export function saveRaw(d){
   // Sanity-Guard gegen Massen-Datenverlust. Greift nur bei DRASTISCHER Reduktion
@@ -473,7 +481,7 @@ export function saveRaw(d){
 // abbricht. Interne Felder (_ts, _paused, stampSessions …) werden nicht protokolliert.
 // Eigener Wurzelknoten ze_audit (NICHT unter zeiterfassung), damit der Live-Sync das stetig
 // wachsende Protokoll nicht bei jedem Snapshot mitlädt – gelesen wird es nur bei Bedarf.
-// Im update-Objekt steht es als 'audit/…'; _toRoot() bildet es auf ze_audit/… ab.
+// Im update-Objekt steht es als 'audit/…'; _rootUpdate() bildet es auf ze_audit/… ab.
 const _AUDIT_FIELDS=new Set(['b1von','b1bis','b1zuord','b1bem','b2von','b2bis','b2zuord','b2bem','ktmin']);
 let _auditSeq=0;
 const _auditLocal={};   // zuletzt geschriebene Einträge (sofortige Anzeige vor dem Server-Read)
@@ -487,14 +495,6 @@ function _auditRec(upd, ek, ds, f, from, to){
   upd['audit/'+ek+'/'+id]=rec;
   (_auditLocal[ek]=_auditLocal[ek]||{})[id]=rec;
 }
-// update-Objekt (relativ zu zeiterfassung/) → Wurzel-Pfade; enthält es Protokoll-Einträge,
-// wird über die Wurzel geschrieben (ein atomares update über beide Knoten).
-function _toRoot(upd){
-  if(!Object.keys(upd).some(k=>k.startsWith('audit/'))) return null;
-  const r={};
-  for(const [k,v] of Object.entries(upd)) r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v;
-  return r;
-}
 // Protokoll eines Monats (Server + noch nicht zurückgespiegelte lokale Einträge), neueste zuerst.
 export async function loadAudit(ek){
   let srv={};
@@ -506,6 +506,7 @@ function _diffToUpdate(before, after, blocked){
   const upd={}; const B=before||{}, A=after||{};
   const _childDiff=(name)=>{ const bo=B[name]||{}, ao=A[name]||{};
     for(const ck of new Set([...Object.keys(bo),...Object.keys(ao)])){
+      if((bo[ck]&&bo[ck]._public) || (ao[ck]&&ao[ck]._public)) continue;   // Pseudo-Antrag aus abwesend: nie schreiben
       if(!_eqJSON(bo[ck],ao[ck])) upd[name+'/'+ck]= (ao[ck]===undefined? null : ao[ck]);
     } };
   for(const key of new Set([...Object.keys(B),...Object.keys(A)])){
@@ -646,43 +647,62 @@ function _localPersist(d){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){}
   noteGoodData(d);
 }
-// ── „Personaldaten privat“, Phase 1 (Regeln v16) ───────────────────────────────────────────
-// Zeiteinträge, Anträge und Stempelzeiten werden ZUSÄTZLICH unter ze_private/<Person>/… gespeichert (gleiche
-// Schlüssel), Abwesenheiten öffentlich nur als zeiterfassung/abwesend/<id> = {uid,von,bis,halb} (ohne Art/Grund).
-// Gelesen wird in Phase 1 weiter der alte Stand; der Spiegel ist „best effort“: lehnt der Server ab (Regeln v16
-// noch nicht live), wird er für diese Sitzung abgeschaltet – der eigentliche Speichervorgang ist davon unberührt.
+// ── „Personaldaten privat“ (Regeln v16) ───────────────────────────────────────────────────
+// Zeiteinträge, Anträge und Stempelzeiten liegen unter ze_private/<Person>/… (gleiche Schlüssel), Abwesenheiten
+// öffentlich nur als zeiterfassung/abwesend/<id> = {uid,von,bis,halb} (ohne Art/Grund). Phase 3 (v551): gelesen wird
+// aus ze_private (firebase.js), geschrieben wird in EINEM atomaren Wurzel-Update alter Pfad + ze_private + abwesend –
+// beide Stände bleiben gleich, bis Phase 4 die alten Knoten löscht. Pseudo-Anträge (_public, aus abwesend) nie schreiben.
 const _ABW_TYPES=new Set(['Urlaub','Arbeitszeitausgleich','AU/Krank']);
-function _abwOf(r){ return (r && r.status==='approved' && _ABW_TYPES.has(r.type) && r.userId && r.startDate)
+function _abwOf(r){ return (r && !r._public && r.status==='approved' && _ABW_TYPES.has(r.type) && r.userId && r.startDate)
   ? { uid:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10), halb:!!r.halfDay } : null; }
-function _ownerOf(key, ids){ for(const id of ids){ if(key.startsWith(id+'_')) return id; } return ''; }
+// Besitzer eines Monatsblatts: Schlüssel = <userId>_JJJJ_MM
+function _entryOwner(key){ const m=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(String(key||'')); return m?m[1]:''; }
 export function privMirror(upd, d){
-  d=d||_dataCache||{}; const out={};
-  const ids=(d.users||[]).map(u=>u&&u.id).filter(Boolean).sort((a,b)=>b.length-a.length);   // längste zuerst (a_b vor a)
+  d=d||_dataCache||{}; const out={}; const whole=new Set();
+  // Fehlt ein Monatsblatt/Antrag in ze_private noch (firebase.js weiß das), wird er dort EINMAL ganz geschrieben statt
+  // feldweise – sonst entstünde ein halber Datensatz (bzw. ein Antrag ohne userId, den die Regel ablehnt).
+  const has=(u,c,k)=>{ try{ return window._zpHas ? window._zpHas(u,c,k) : undefined; }catch(e){ return undefined; } };
+  const put=(p,v)=>{ for(const w of whole){ if(p===w || p.startsWith(w+'/')) return; } out[p]=v; };
+  const putWhole=(p,v)=>{ Object.keys(out).forEach(k=>{ if(k.startsWith(p+'/')) delete out[k]; }); out[p]=v; whole.add(p); };
   for(const [path,val] of Object.entries(upd||{})){
     const seg=path.split('/'); const coll=seg[0], key=seg[1]; if(!key) continue;
     const rest=seg.length>2?'/'+seg.slice(2).join('/'):'';
     if(coll==='entries'){
-      const uid=_ownerOf(key, ids); if(!uid || !/^[0-9]{4}_[0-9]{2}$/.test(key.slice(uid.length+1))) continue;
-      out['ze_private/'+uid+'/entries/'+key+rest]=val;
+      const uid=_entryOwner(key); if(!uid) continue;
+      const base='ze_private/'+uid+'/entries/'+key, cur=(d.entries||{})[key];
+      if(rest && cur && has(uid,'entries',key)===false) putWhole(base, cur); else put(base+rest, val);
     } else if(coll==='vacRequests'){
       const cur=(d.vacRequests||{})[key];
-      const uid=(!rest && val && val.userId) ? val.userId : ((cur&&cur.userId) || _ownerOf(key, ids)); if(!uid) continue;
-      out['ze_private/'+uid+'/vacRequests/'+key+rest]=val;
+      if((cur&&cur._public) || (val&&val._public)) continue;
+      const uid=(!rest && val && val.userId) ? val.userId : ((cur&&cur.userId) || ''); if(!uid) continue;
+      const base='ze_private/'+uid+'/vacRequests/'+key;
+      if(rest && cur && has(uid,'vacRequests',key)===false) putWhole(base, cur); else put(base+rest, val);
       out['zeiterfassung/abwesend/'+key]=_abwOf(rest ? cur : val);
     } else if(coll==='stamps'){
-      out['ze_private/'+key+'/stamps'+rest]=val;
+      put('ze_private/'+key+'/stamps'+rest, val);
     }
   }
   return out;
 }
-function _privPush(upd){
-  if(window._zePrivOff || !window._fbRef) return;
-  let m; try{ m=privMirror(upd); }catch(e){ return; }
-  if(!Object.keys(m).length) return;
-  try{ m=JSON.parse(JSON.stringify(m)); }catch(e){ return; }
-  window._fbRef.root.update(m).catch(e=>{
-    if(e && /permission/i.test(String(e.code||e.message))){ window._zePrivOff=true; console.info('[Personaldaten privat] Spiegel inaktiv (Regeln v16 noch nicht live).'); }
-    else console.warn('[Personaldaten privat] Spiegel:', e&&e.message);
+// update-Objekt (relativ zu zeiterfassung/) → EIN Wurzel-Update: zeiterfassung/… + ze_audit/… (+ Spiegel ze_private/abwesend)
+function _rootUpdate(upd, withMirror, mirrorSrc){
+  const r={};
+  for(const [k,v] of Object.entries(upd||{})) r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v;
+  let n=0;
+  if(withMirror){ let m={}; try{ m=JSON.parse(JSON.stringify(privMirror(mirrorSrc||upd))); }catch(e){ m={}; } for(const [k,v] of Object.entries(m)){ r[k]=v; n++; } }
+  return { r, n };
+}
+const _isPerm=e=>!!(e && /permission/i.test(String(e.code||e.message)));
+// Schreibt atomar mit Spiegel. Lehnt der Server nur wegen des Spiegels ab (z. B. abweichender Altstand), wird der
+// Vorgang einmal ohne Spiegel wiederholt (Stand wie bis v550) – die Änderung der Person geht so nie verloren.
+function _writeRoot(ref, upd, mirrorSrc){
+  const a=_rootUpdate(upd, true, mirrorSrc);
+  const p=ref.root.update(a.r);
+  if(!a.n) return p;
+  return p.catch(e=>{
+    if(!_isPerm(e)) throw e;
+    console.warn('[Personaldaten privat] Spiegel abgelehnt – ohne Spiegel gespeichert:', e&&e.message);
+    return ref.root.update(_rootUpdate(upd, false).r);
   });
 }
 function _cloudUpdate(upd){
@@ -694,8 +714,8 @@ function _cloudUpdate(upd){
   // Änderungen nur im Arbeitsspeicher und gingen beim Schließen der App verloren. Nachgeholt wird beim Verbinden.
   if(window._offlineMode || window._fbConnected===false){ _queuePending(upd); return Promise.resolve(); }
   const ref=window._fbRef; if(!ref) return Promise.resolve();
-  let p; try{ const r=_toRoot(upd); p=r?ref.root.update(r):ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
-  return (p||Promise.resolve()).then(()=>{ _privPush(upd); }).catch(e=>{
+  let p; try{ p=_writeRoot(ref, upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
+  return (p||Promise.resolve()).catch(e=>{
     console.warn('Firebase scoped-sync error:',e);
     // Regel-Ablehnung wird durch Wiederholen nicht besser → nicht einreihen, aber sichtbar melden.
     if(e && /permission/i.test(String(e.code||e.message))){ try{ window.toast?.('⛔ Änderung vom Server abgelehnt (keine Berechtigung).','err'); }catch(_){} return; }
@@ -737,9 +757,8 @@ export function flushPendingWrites(){
   if(!n||_flushing||window._offlineMode||window._cloudUnverified) return Promise.resolve();
   const ref=window._fbRef; if(!ref) return Promise.resolve();
   _flushing=true;
-  let p; try{ const r=_toRoot(q); p=r?ref.root.update(r):ref.update(q); }catch(e){ _flushing=false; return Promise.resolve(); }
+  let p; try{ p=_writeRoot(ref, q); }catch(e){ _flushing=false; return Promise.resolve(); }   // atomar inkl. Spiegel (Personaldaten privat)
   return p.then(()=>{
-    _privPush(q);   // Personaldaten privat: auch nachgeholte Änderungen spiegeln
     // Nur die übertragenen Pfade entfernen (währenddessen neu Eingereihtes bleibt erhalten).
     const cur=_readPending(); Object.keys(q).forEach(k=>{ if(_eqJSON(cur[k],q[k])) delete cur[k]; }); _writePending(cur);
     try{ window.toast?.('📶 '+n+' Offline-Änderung'+(n===1?'':'en')+' synchronisiert ✓','ok'); }catch(_){}
