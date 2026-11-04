@@ -270,7 +270,7 @@ sha256 (raw @ff63ed6): de81c647985e654bf0354a322c7d2a566ae4fd641ce8673d62addecbc
 **Reihenfolge:** App v546 live (Spiegel ist best effort, schaltet sich ohne v16 still ab) → v16 veröffentlichen → Administrator öffnet die App
 (schreibt `seeOf`). Rückweg: CANDIDATE-v15.json.
 
-## ENTWURF CANDIDATE-v17.json – „Personaldaten privat“ Phase 4 (noch NICHT live, noch nicht im Testprojekt getestet)
+## GETESTET CANDIDATE-v17.json – „Personaldaten privat“ Phase 4 (noch NICHT live)
 = v16 + alte Sammlungen gesperrt:
 - `zeiterfassung/entries`, `vacRequests`, `stamps`: `.validate: false` (auf dem Knoten und je Kind) → dort entsteht nichts mehr, auch nicht
   durch den Admin (`.validate` gilt für alle, nur Löschen geht). Personen schreiben seit App v552 nach dem Abschluss nur noch `ze_private`.
@@ -279,6 +279,12 @@ sha256 (raw @ff63ed6): de81c647985e654bf0354a322c7d2a566ae4fd641ce8673d62addecbc
 **Reihenfolge (zwingend):** App v552 live → tpsPw deployen (Backup/Einspielen mit ze_private) → warten, bis das Werkzeug unter „Geräte“
 niemanden mit alter App mehr zeigt → Werkzeug: Prüfen · Sicherung herunterladen · Alten Ort löschen → **sofort danach** v17 veröffentlichen.
 Grund: Geräte mit v551 schreiben weiter auch an den alten Ort; unter v17 würde das abgelehnt. Rückweg: CANDIDATE-v16.json (+ Sicherungsdatei).
+Test im Testprojekt 04.11.2026 (Abschnitte auf `ruletest`/`ruletest_priv`/`ruletest_audit`): 20 Simulator-Fälle wie erwartet –
+alter Ort: Anna/Leitung/Admin schreiben Monatsblatt, Antrag, Stempel → verweigert; Admin löscht alte Sammlungen → erlaubt, Anna → verweigert;
+Merker: Admin true → erlaubt, false → verweigert, Anna → verweigert; ze_private: eigener Entwurfsmonat/Stempel → erlaubt, genehmigter Monat →
+verweigert, Leitung ohne seeOf liest nicht; Protokoll: Entwurfsmonat (auch mit zp:4) → erlaubt, genehmigter Monat (Status aus ze_private) →
+verweigert. Vollständige v17-Datei vom Compiler akzeptiert. Testdaten gelöscht, Original-Regeln zurück (PUT/GET ohne Anmeldung → 401).
+sha256 (raw @ab44d6d): 5589373f3b0b0ed9f651fe4f32447a886bd4fda4d4ae8f608963e73f1aa206f0 · Prüfwort `zePrivOnly` = 1 Treffer (v16: 0).
 
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
