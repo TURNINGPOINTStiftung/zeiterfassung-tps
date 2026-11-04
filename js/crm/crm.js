@@ -180,7 +180,7 @@ function userName(id){ const u=zeUsers().find(x=>x.id===id); return u?u.name:'';
 function teamMembers(team){
   const teams = Array.isArray(team) ? team.filter(Boolean) : (team?[team]:[]);
   const us=zeUsers().filter(u=>u.id!=='admin');
-  const list = !teams.length ? us : us.filter(u=> teams.some(t=> u.team===t || (Array.isArray(u.teams)&&u.teams.includes(t)) ));
+  const list = !teams.length ? us : us.filter(u=> teams.some(t=> userTeamsAll(u).includes(t)));
   return list.map(u=>({id:u.id, name:u.name}))
     .sort((a,b)=>String(a.name).localeCompare(String(b.name),'de',{sensitivity:'base'}));
 }
@@ -362,6 +362,9 @@ function _kbMayManage(p){ const u=window.cu; return _kbManage() || !!(u && p && 
 // Projekt löschen: eigenes persönliches Projekt immer, sonst Recht „Projekte löschen" (v510)
 function _kbMayDelete(p){ const u=window.cu; if(u && p && p.owner && p.owner===u.id) return true; return _hasNeu(u) ? _R('pm_proj_loeschen') : _kbManage(); }
 function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(_hasNeu(u)){ try{ return window.tpsRechteOf(u).pm_ansehen==='alle'; }catch(e){ return false; } } if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+// Alle Teams einer Person: Hauptteam + weitere ZE-Teams + zusätzliche Projektmanagement-Teams (Verwaltung → Zugriffe)
+function userTeamsAll(u){ if(!u) return []; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).filter(Boolean))]; }
+window.tpsUserTeams=userTeamsAll;
 function kanbanTeamsFor(u){
   u=u||window.cu; if(!u) return [];
   const set=new Set();
@@ -4296,7 +4299,7 @@ function paintTeamDetail(){
   const _tc=(t)=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--muted)':_TC[i%_TC.length]; };
   const _visT=(_kanbanSeesAll(window.cu)?zeTeams():visibleKanbanTeams(window.cu));
   const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
-  const _mem=team==='Ohne Team'?[]:zeUsers().filter(u=>u.id!=='admin'&&u.role!=='admin'&&(u.team===team||(Array.isArray(u.teams)&&u.teams.includes(team))));
+  const _mem=team==='Ohne Team'?[]:zeUsers().filter(u=>u.id!=='admin'&&u.role!=='admin'&&userTeamsAll(u).includes(team));
   const memChips=_mem.map(u=>{ const lead=u.role==='leitung'&&(u.team===team); const guest=u.team&&u.team!==team;
     return `<span class="crm-chip" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px"><span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:var(--on-primary,#fff);display:inline-grid;place-items:center;font-size:12px;font-weight:700">${esc(String(u.name||'?').charAt(0))}</span>${esc(u.name)}${lead?' <span style="color:var(--muted)">Leitung</span>':''}${guest?' <span style="color:var(--muted)">+ '+esc(u.team)+'</span>':''}</span>`; }).join('');
   root.innerHTML = barHtml() + `<div class="crm-body">
@@ -4304,7 +4307,7 @@ function paintTeamDetail(){
     <div class="crm-detail-head" style="flex-wrap:wrap;gap:10px">
       ${window._planActive?'':`<button class="btn-sm-crm" onclick="crmBackToTeams()">← Teams</button>`}
       <h2 style="display:flex;align-items:center;gap:10px"><span style="width:14px;height:14px;border-radius:50%;background:${team==='Ohne Team'?'var(--primary)':_tc(team)}"></span>${esc(team==='Ohne Team'?'übergreifend':team)}</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:auto">${memChips}</div>
+      ${window._planActive?'':`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:auto">${memChips}</div>`}
     </div>
     ${tabs}
     ${(!oeaCfg().team && _R('crm_einst'))?`<div class="small" style="color:var(--muted);margin:0 0 12px">Redaktionsplan: noch kein ÖA-Team gewählt. <button class="btn-sm-crm" onclick="crmGoVerwOea()">⚙ ÖA-Team in der Verwaltung festlegen</button></div>`:''}
@@ -4360,7 +4363,7 @@ function oeaCheckMove(n, from, to){
 }
 // Beiträge = Aufgaben (Blätter) des ÖA-Teams aus allen Behältern
 function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>!a.owner && (a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
-function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&(u.team===t||(Array.isArray(u.teams)&&u.teams.includes(t)))); }catch(e){ return []; } }
+function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&userTeamsAll(u).includes(t)); }catch(e){ return []; } }
 // Abwesenheiten wie im Kalender: nur genehmigter Urlaub/Ausgleich, nie der Grund
 function _oeaAbs(){ const out=[]; try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(r.type!=='Urlaub'&&r.type!=='Arbeitszeitausgleich') return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }
 const _oIso=d=>localISODate(d);

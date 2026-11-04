@@ -67,7 +67,7 @@ let weekStart=_mondayOf(_now);                          // Woche
 // Feine Rechte (v510, js/rechte.js): Wert eines Kalender-Rechts der angemeldeten Person.
 // Admin/ohne rechte.js: alles wie bisher.
 function _kr(k){ try{ const u=window.cu; if(!u||u.role==='admin'||!window.tpsRechteOf) return k==='kal_ansehen'?'alle':true; return window.tpsRechteOf(u)[k]; }catch(e){ return k==='kal_ansehen'?'alle':true; } }
-function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
+function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).filter(Boolean))]; }
 // Umfang eines Sichtrechts mit Optionen (alle|team|eigene); '' = gar nicht. Admin/ohne rechte.js → alle.
 function _scope(k){ const v=_kr(k); if(v===true) return 'alle'; return (v==='alle'||v==='team'||v==='eigene') ? v : ''; }
 const _mineIt=it=>{ const me=(window.cu&&window.cu.id)||''; return Array.isArray(it.mitarbeiter)&&it.mitarbeiter.includes(me); };
@@ -339,7 +339,7 @@ function _emps(){ const d=getData()||{}; let l=(d.users||[]).filter(u=>u&&u.id&&
   // Rechte: „Abwesenheiten anderer sehen" aus bzw. „nur eigene" → nur ich; „eigenes Team" → nur Teamkolleg:innen
   const me=(window.cu&&window.cu.id)||'', sc=_kr('kal_ansehen');
   if(!_kr('kal_abw') || sc==='eigene') return l.filter(u=>u.id===me);
-  if(sc==='team'){ const mt=_myTeams(); l=l.filter(u=>u.id===me || [u.team].concat(Array.isArray(u.teams)?u.teams:[]).some(t=>t&&mt.includes(t))); }
+  if(sc==='team'){ const mt=_myTeams(); l=l.filter(u=>u.id===me || [u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).some(t=>t&&mt.includes(t))); }
   return l; }
 function _teamOf(u){ return u.team || (Array.isArray(u.teams)&&u.teams[0]) || '—'; }
 function _teamsOrdered(emps){ const seen=[]; emps.forEach(u=>{ const t=_teamOf(u); if(!seen.includes(t)) seen.push(t); }); return seen; }

@@ -49,7 +49,8 @@ function planGo(tab, opts){
   window._planInternal=true;
   try{
     if(tab==='kalender'){
-      if(window._planTeam!==undefined && window.kalSetTeamSilent) window.kalSetTeamSilent(window._planTeam||'');
+      // Standard: immer „Alle Teams" (nur ausdrücklich übergebenes Team setzt einen Filter)
+      if(window.kalSetTeamSilent) window.kalSetTeamSilent(opts.team!==undefined ? (opts.team||'') : '');
       window.switchModule('kalender');
       if(opts.view && window.kalSetView) window.kalSetView(opts.view);
       if(opts.date && window.kalGotoDate) window.kalGotoDate(opts.date);
@@ -69,7 +70,7 @@ function _label(){
     document.querySelectorAll('.mb-mod').forEach(b=>b.classList.toggle('active', b.dataset.mod==='planung')); }catch(e){}
 }
 function _teamsVisible(){ try{ const d=getData()||{}; return Array.isArray(d.teams)?d.teams.slice():[]; }catch(e){ return []; } }
-function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))]; }
+function _myTeams(){ const u=window.cu||{}; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).filter(Boolean))]; }
 function _openPm(tab){
   if(tab==='teams'){
     let t=window._planTeam;
@@ -87,7 +88,7 @@ function _openPm(tab){
 }
 function _vasSorted(){ let vs=[]; try{ vs=(CD.listVeranstaltungen?CD.listVeranstaltungen():[]).filter(v=>v&&!v.closed); }catch(e){}
   return vs.sort((a,b)=>String(a.start||'').localeCompare(String(b.start||''))); }
-function planTeamSet(t){ window._planTeam=t; planGo(window._planTab==='kalender'?'kalender':'teams'); }
+function planTeamSet(t){ window._planTeam=t; planGo(window._planTab==='kalender'?'kalender':'teams', window._planTab==='kalender'?{team:t}:{}); }
 function planVaSet(id){ window._planVa=id; planGo('veranstaltung'); }
 
 // ── Daten für „Start" ──
@@ -102,14 +103,16 @@ function _open(a){ return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
   const today=iso(new Date()); const wkEnd=iso(addD(new Date(), 6-dowMon(new Date())));
-  const mine=all.filter(a=>(a.node.assigneeId===me() || (a.kind==='teamprojekt' && a.owner===me())) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length))
+  const mine=all.filter(a=>(a.node.assigneeId===me() || (a.kind==='teamprojekt' && a.owner===me() && a.node.due)) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const groups=[['Überfällig',mine.filter(a=>a.node.due&&a.node.due<today),'crit'],['Diese Woche',mine.filter(a=>a.node.due&&a.node.due>=today&&a.node.due<=wkEnd),''],['Später',mine.filter(a=>!a.node.due||a.node.due>wkEnd),'']];
   const row=a=>{ const n=a.node; const col=_teamCol((a.teamsEff||[])[0]);
     return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(n.assigneeId&&n.assigneeId!==me())?`<span class="plan-tag">→ ${esc(_uName(n.assigneeId))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
-  const body=groups.filter(g=>g[1].length).map(g=>`<div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].map(row).join('')}`).join('')
-    || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und alle offenen Aufgaben aus deinen eigenen Projekten.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt oder aus meinen eigenen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>${_myProjCard()}`;
+  const MAXN=5;
+  const col=g=>`<div class="plan-gcol"><div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].slice(0,MAXN).map(row).join('')||'<div class="plan-empty sm">nichts</div>'}${g[1].length>MAXN?`<details class="plan-more"><summary>${g[1].length-MAXN} weitere anzeigen</summary>${g[1].slice(MAXN).map(row).join('')}</details>`:''}</div>`;
+  const body=mine.length?`<div class="plan-gcols">${groups.map(col).join('')}</div>`:''
+    || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt oder mit Frist aus meinen eigenen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
 }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Meine Projekte (persönlich, owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
@@ -120,7 +123,7 @@ function _myProjCard(){
   const cnt=p=>{ let n=0; const w=a=>(a||[]).forEach(t=>{ if(!t) return; if(!(Array.isArray(t.children)&&t.children.length) && t.status!=='erledigt') n++; w(t.children); }); w(p.todos); return n; };
   const open=ps.filter(p=>!p.closed).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de')), closed=ps.filter(p=>p.closed);
   const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
-  return `<section class="plan-card" style="margin-top:14px"><div class="plan-h"><h2>📂 Meine Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
+  return `<section class="plan-card"><div class="plan-h"><h2>📂 Meine Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
     <div class="plan-sub" style="margin:-4px 0 8px">nur für dich sichtbar · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
     ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
     ${closed.length?`<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted,#5d7086);font-weight:600;font-size:13px">Abgeschlossen (${closed.length})</summary>${closed.map(row).join('')}</details>`:''}</section>`;
@@ -135,13 +138,14 @@ function _hintCard(){
   return `<section class="plan-card"><div class="plan-h"><h2>⚠ Hinweise</h2><span class="plan-sub">betrifft mich · 4 Wochen</span></div>${rows||'<div class="plan-empty">Keine Konflikte in den nächsten 4 Wochen.</div>'}</section>`;
 }
 function _termCard(){
-  const today=iso(new Date()), until=iso(addD(new Date(),14)); const out=[];
+  const today=iso(new Date()), until='9999-12-31'; const out=[];
   try{ _vasSorted().forEach(v=>{ const s=String(v.start||'').slice(0,10), e=String(v.ende||v.start||'').slice(0,10); if(!s||e<today||s>until) return; if(!(v.mitarbeiter||[]).includes(me())) return; out.push({ t:v.titel||'Veranstaltung', d:s, k:'va', id:v.id }); }); }catch(e){}
   try{ const crm=(CD.getCrm&&CD.getCrm())||{}; const R=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
     Object.keys(crm).forEach(tk=>{ if(R.has(tk)) return; const es=crm[tk]; if(!es||typeof es!=='object') return; Object.values(es).forEach(e=>{ (e&&e.termine||[]).forEach(t=>{ if(!t||!t.datum) return; const s=t.datum, en=t.bis||t.datum; if(en<today||s>until) return; if(!(t.mitarbeiter||[]).includes(me())) return; out.push({ t:t.titel||'Termin', d:s, k:'te', tree:tk, eid:e.id, tid:t.id }); }); }); }); }catch(e){}
   out.sort((a,b)=>a.d.localeCompare(b.d));
   const row=x=>`<div class="plan-item" role="button" tabindex="0" onclick="${x.k==='va'?`planVaSet(${jsq(x.id)})`:`crmOpenTerminFromHome(${jsq(x.tree)},${jsq(x.eid)},${jsq(x.tid)})`}"><span class="plan-barc" style="background:${x.k==='va'?'var(--danger,#dc2626)':'var(--warn,#d97706)'}"></span><div class="plan-main"><div class="plan-t">${esc(x.t)}</div><div class="plan-sub">${x.k==='va'?'Veranstaltung':'Termin'}</div></div><span class="plan-when">${esc(fmt(x.d))}</span></div>`;
-  return `<section class="plan-card"><div class="plan-h"><h2>📅 Meine Termine</h2><span class="plan-sub">nächste 14 Tage</span></div>${out.map(row).join('')||'<div class="plan-empty">Keine Termine, in denen du eingeplant bist.</div>'}</section>`;
+  const N=5;
+  return `<section class="plan-card"><div class="plan-h"><h2>📅 Meine Termine</h2><span class="plan-sub">die nächsten ${Math.min(N,out.length)||''}</span></div>${out.slice(0,N).map(row).join('')||'<div class="plan-empty">Keine Termine, in denen du eingeplant bist.</div>'}${out.length>N?`<details class="plan-more"><summary>${out.length-N} weitere Termine</summary>${out.slice(N).map(row).join('')}</details>`:''}</section>`;
 }
 function _whoCard(){
   const now=new Date(); const mon=addD(now,-dowMon(now)); const days=[0,1,2,3,4].map(i=>addD(mon,i)); const abs=_abs();
@@ -151,7 +155,7 @@ function _whoCard(){
   const today=iso(now);
   let h=`<div class="plan-who" style="grid-template-columns:minmax(64px,140px) repeat(5,minmax(0,1fr))"><div></div>${days.map(d=>`<div class="plan-whoh${iso(d)===today?' today':''}">${DOW[dowMon(d)]} ${d.getDate()}.</div>`).join('')}`;
   // Nur die eigenen Teams (Haupt- + Zweit-/Dritt-Teams aus der Verwaltung); wer keinem Team angehört, sieht alle (Rechte oben)
-  const tOf=u=>[...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean))];
+  const tOf=u=>[...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).filter(Boolean))];
   const myT=_myTeams();
   const groups=[]; const shown=new Set();
   if(myT.length){ myT.forEach(t=>{ const g=emps.filter(u=>!shown.has(u.id) && tOf(u).includes(t)); g.forEach(u=>shown.add(u.id)); if(g.length) groups.push([t,g]); }); }
@@ -167,7 +171,7 @@ function renderPlanungStart(){
   const root=document.getElementById('planung-root'); if(!root) return;
   window._planActive=true; window._planTab='start';
   const go=()=>{ try{
-    root.innerHTML=planBarHtml('start')+`<div class="plan-body"><div class="plan-grid"><div>${_todoCard()}</div><div class="plan-col">${_hintCard()}${_termCard()}</div></div>${_whoCard()}</div>`;
+    root.innerHTML=planBarHtml('start')+`<div class="plan-body">${_todoCard()}<div class="plan-row3">${_hintCard()}${_termCard()}${_myProjCard()}</div>${_whoCard()}</div>`;
   }catch(e){ console.error('Planung Start:', e); root.innerHTML=planBarHtml('start')+'<div class="plan-body"><div class="plan-empty">Die Übersicht konnte nicht geladen werden.</div></div>'; } };
   go();
   try{ if(CD.ensureCrmReady) CD.ensureCrmReady().then(()=>{ if(window._planTab==='start' && document.getElementById('planung-root')===root) go(); }).catch(()=>{}); }catch(e){}
@@ -199,6 +203,15 @@ function _styles(){
   .plan-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;margin:0 0 10px}
   .plan-h h2{margin:0;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--primary-d,#15263a)}
   .plan-sub{font-size:13px;color:var(--muted,#5d7086);font-weight:400}
+  .plan-gcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+  .plan-gcol{min-width:0} .plan-gcol .plan-grp{margin-top:4px}
+  .plan-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;margin:16px 0}
+  @media(max-width:1100px){ .plan-row3{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media(max-width:760px){ .plan-gcols{grid-template-columns:1fr} }
+  @media(max-width:700px){ .plan-row3{grid-template-columns:1fr} }
+  .plan-more summary{cursor:pointer;color:var(--primary,#203869);font-weight:600;font-size:14px;padding:6px 2px;min-height:32px}
+  .plan-more summary:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}
+  .plan-empty.sm{font-size:13px;padding:4px 2px}
   .plan-grp{font-size:13px;font-weight:700;color:var(--muted,#5d7086);margin:10px 0 6px}
   .plan-grp.crit{color:var(--danger,#c0392b)}
   .plan-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
