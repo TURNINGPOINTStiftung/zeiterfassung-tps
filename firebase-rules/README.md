@@ -284,6 +284,7 @@ alter Ort: Anna/Leitung/Admin schreiben Monatsblatt, Antrag, Stempel → verweig
 Merker: Admin true → erlaubt, false → verweigert, Anna → verweigert; ze_private: eigener Entwurfsmonat/Stempel → erlaubt, genehmigter Monat →
 verweigert, Leitung ohne seeOf liest nicht; Protokoll: Entwurfsmonat (auch mit zp:4) → erlaubt, genehmigter Monat (Status aus ze_private) →
 verweigert. Vollständige v17-Datei vom Compiler akzeptiert. Testdaten gelöscht, Original-Regeln zurück (PUT/GET ohne Anmeldung → 401).
+tpsPw @ab44d6d deployt 04.11.2026 (Moritz, rev tpspw-00021-luk, ACTIVE) – Backup/Einspielen mit ze_private.
 sha256 (raw @ab44d6d): 5589373f3b0b0ed9f651fe4f32447a886bd4fda4d4ae8f608963e73f1aa206f0 · Prüfwort `zePrivOnly` = 1 Treffer (v16: 0).
 
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
