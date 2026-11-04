@@ -10,6 +10,18 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'
 const ABW=new Set(['Urlaub','Arbeitszeitausgleich','AU/Krank']);
 const isAdmin=()=>!!(window.cu && window.cu.role==='admin');
 
+// Eindeutige Formfehler alter Anträge an die heutigen Prüfregeln anpassen (nur in der Kopie):
+// Datum mit Uhrzeit → JJJJ-MM-TT, Tagesanzahl als Text („1,5 Tage“) → Zahl, Uhrzeiten mit Sekunden → HH:MM.
+function _cleanVac(r){
+  let o=r; const set=(k,v)=>{ if(o===r) o=Object.assign({},r); if(v===undefined) delete o[k]; else o[k]=v; };
+  ['startDate','endDate'].forEach(k=>{ const v=r[k]; if(typeof v==='string' && v && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)){ const m=/^([0-9]{4}-[0-9]{2}-[0-9]{2})/.exec(v); set(k, m?m[1]:undefined); } });
+  const w=r.workDays; if(w!=null && typeof w!=='number' && !(typeof w==='string' && /^[0-9.,]{0,8}$/.test(w))){ const n=parseFloat(String(w).replace(',','.')); set('workDays', isFinite(n)?n:undefined); }
+  if(r.dayTimes && typeof r.dayTimes==='object'){ let ch=false; const dt={}; Object.entries(r.dayTimes).forEach(([d,t])=>{ const f=x=>(typeof x==='string'&&!/^[0-9:. ]{0,8}$/.test(x))?((/^([0-9]{1,2}:[0-9]{2})/.exec(x)||[])[1]||''):x; const nt=Object.assign({},t||{}); if(t){ const a=f(t.von), b=f(t.bis); if(a!==t.von||b!==t.bis){ ch=true; nt.von=a; nt.bis=b; } } dt[d]=nt; }); if(ch) set('dayTimes', dt); }
+  return o;
+}
+// Für die Fehlermeldung: welche Felder hat ein abgelehnter Antrag (ohne Art/Grund/Notiz)
+function _vacInfo(r){ if(!r||typeof r!=='object') return ''; const show=k=>{ const v=r[k]; return v===undefined?'–':JSON.stringify(v).slice(0,40); };
+  return ' [status='+show('status')+' start='+show('startDate')+' ende='+show('endDate')+' tage='+show('workDays')+' felder='+Object.keys(r).filter(k=>!/^(type|note|reason|reviewNote)$/.test(k)).join(',')+']'; }
 // Reine Logik (testbar): aus dem Rohstand die Schreib-Aufträge bilden
 export function zpPlan(raw){
   raw=raw||{}; const perUser={}, skipped=[], abwesend={}, stripOld={};
@@ -17,7 +29,7 @@ export function zpPlan(raw){
   Object.entries(raw.entries||{}).forEach(([ek,e])=>{ const m=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(ek); if(!m||!e){ skipped.push('entries/'+ek); return; } put(m[1],'entries',ek,e); });
   Object.entries(raw.vacRequests||{}).forEach(([id,r])=>{
     if(!r||!r.userId){ skipped.push('vacRequests/'+id); return; }
-    let rr=r; if(r.type==='AU/Krank' && r.note){ rr=Object.assign({},r); delete rr.note; stripOld[id]=true; }
+    let rr=_cleanVac(r); if(r.type==='AU/Krank' && r.note){ if(rr===r) rr=Object.assign({},r); delete rr.note; stripOld[id]=true; }
     put(r.userId,'vacRequests',id,rr);
     if(r.status==='approved' && ABW.has(r.type) && r.startDate) abwesend[id]={ uid:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10), halb:!!r.halfDay };
   });
@@ -55,7 +67,7 @@ export async function zpMigrate(){
       const upd={}; Object.entries(colls).forEach(([coll,val])=>{ if(coll==='stamps') upd['ze_private/'+u+'/stamps']=val; else Object.entries(val).forEach(([k,v])=>{ upd['ze_private/'+u+'/'+coll+'/'+k]=v; }); });
       try{ await db.ref().update(upd); }
       catch(e){ // einzeln nachschreiben, damit ein abgelehnter Datensatz nicht alle anderen blockiert
-        for(const [p,v] of Object.entries(upd)){ try{ await db.ref().update({[p]:v}); }catch(e2){ fail++; log.push(p+': '+(e2&&e2.code||e2&&e2.message||'abgelehnt')); } } }
+        for(const [p,v] of Object.entries(upd)){ try{ await db.ref().update({[p]:v}); }catch(e2){ fail++; log.push(p+': '+(e2&&e2.code||e2&&e2.message||'abgelehnt')+(/\/vacRequests\//.test(p)?_vacInfo(v):'')); } } }
     }
     await db.ref('zeiterfassung/abwesend').set(plan.abwesend);
     const strip={}; Object.keys(plan.stripOld).forEach(id=>{ strip['zeiterfassung/vacRequests/'+id+'/note']=null; });
