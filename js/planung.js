@@ -103,16 +103,21 @@ function _open(a){ return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
   const today=iso(new Date()); const wkEnd=iso(addD(new Date(), 6-dowMon(new Date())));
-  const mine=all.filter(a=>(a.node.assigneeId===me() || (a.kind==='teamprojekt' && a.owner===me() && a.node.due)) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length))
+  // Was ansteht: (1) mir zugeteilt – auch Aufgaben mit Unterpunkten, aus jedem Behälter; (2) mit Frist aus meinen persönlichen
+  // Projekten; (3) einem meiner Teams zugeordnet und noch niemandem zugeteilt (gilt für alle Mitglieder, bis jemand übernimmt).
+  const myT=new Set(_myTeams()); const leaf=a=>!(Array.isArray(a.node.children)&&a.node.children.length);
+  const isCol=a=>a.depth===0 && (a.kind==='veranstaltung'||a.kind==='teamprojekt');   // oberste Ebene = Spalte des Boards, keine Aufgabe
+  const isTeamTask=a=>!a.node.assigneeId && !a.owner && leaf(a) && !isCol(a) && (a.teamsEff||[]).some(t=>myT.has(t));
+  const mine=all.filter(a=>a.node.status!=='erledigt' && (a.node.assigneeId===me() || (a.kind==='teamprojekt' && a.owner===me() && a.node.due && leaf(a)) || isTeamTask(a)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const groups=[['Überfällig',mine.filter(a=>a.node.due&&a.node.due<today),'crit'],['Diese Woche',mine.filter(a=>a.node.due&&a.node.due>=today&&a.node.due<=wkEnd),''],['Später',mine.filter(a=>!a.node.due||a.node.due>wkEnd),'']];
   const row=a=>{ const n=a.node; const col=_teamCol((a.teamsEff||[])[0]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(n.assigneeId&&n.assigneeId!==me())?`<span class="plan-tag">→ ${esc(_uName(n.assigneeId))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
+    return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))} · noch frei</span>`:''}${(n.assigneeId&&n.assigneeId!==me())?`<span class="plan-tag">→ ${esc(_uName(n.assigneeId))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
   const MAXN=5;
   const col=g=>`<div class="plan-gcol"><div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].slice(0,MAXN).map(row).join('')||'<div class="plan-empty sm">nichts</div>'}${g[1].length>MAXN?`<details class="plan-more"><summary>${g[1].length-MAXN} weitere anzeigen</summary>${g[1].slice(MAXN).map(row).join('')}</details>`:''}</div>`;
   const body=mine.length?`<div class="plan-gcols">${groups.map(col).join('')}</div>`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt oder mit Frist aus meinen eigenen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt, meinem Team zugeordnet oder mit Frist aus meinen persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
 }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen

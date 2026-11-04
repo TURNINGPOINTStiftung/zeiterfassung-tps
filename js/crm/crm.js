@@ -108,7 +108,10 @@ function isEntityCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind=
 function _isVorlageCtx(){ return !!(window._crmTaskCtx && window._crmTaskCtx.kind==='vorlage'); }
 // Kontexte, in denen eine TOP-Aufgabe ein eigenes Mehrfach-Team-Feld (node.teams) bekommt:
 // CRM-Eintrag, Veranstaltung und Vorlage. (Team-Projekte NICHT – die hängen an EINEM festen Team.)
-function _ctxAllowsTeams(){ const k=window._crmTaskCtx&&window._crmTaskCtx.kind; return k==='entity'||k==='veranstaltung'||k==='vorlage'; }
+// Teams an Aufgaben/Unterpunkten: in Einträgen, Veranstaltungen, Vorlagen und Team-Projekten (nicht in persönlichen Projekten)
+function _ctxAllowsTeams(){ const c=window._crmTaskCtx; const k=c&&c.kind; if(k==='teamprojekt'){ try{ const p=getTeamProjekt(c.id); return !!(p && !p.owner); }catch(e){ return false; } } return k==='entity'||k==='veranstaltung'||k==='vorlage'; }
+// Vorbelegung neuer Aufgaben: immer das eigene Team (Hauptteam), sonst das Team des Behälters
+function _ownTeamDefault(fallback){ const u=window.cu||{}; const own=u.team||(Array.isArray(u.teams)&&u.teams[0])||''; return (own && zeTeams().includes(own)) ? [own] : (fallback||[]); }
 function curContainer(){
   const ctx=window._crmTaskCtx; if(!ctx) return null;
   if(ctx.kind==='teamprojekt'){ const c=getTeamProjekt(ctx.id); if(c) normTasks(c); return c; }
@@ -3884,9 +3887,10 @@ function nodeModal(o){
   const allowTeams = o.isTop && _ctxAllowsTeams();
   let teamRow;
   if(allowTeams){
-    // Neue Aufgabe in einer Veranstaltung: deren Team vorbelegen (die Veranstaltung gehört einem Team).
-    const ctxTeam = (window._crmTaskCtx&&window._crmTaskCtx.kind==='veranstaltung'&&e.team)?[e.team]:[];
-    const preTeams = (Array.isArray(n.teams)&&n.teams.length)?n.teams:ctxTeam;
+    // Neue Aufgabe: das eigene Team vorbelegen (sonst Team des Behälters); bestehende behalten ihre Teams.
+    const _k=window._crmTaskCtx&&window._crmTaskCtx.kind;
+    const ctxTeam = (_k==='veranstaltung'&&e.team)?[e.team]:((_k==='teamprojekt'&&e.team)?[e.team]:[]);
+    const preTeams = (Array.isArray(n.teams)&&n.teams.length) ? n.teams : (n.id ? ctxTeam : _ownTeamDefault(ctxTeam));
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${preTeams.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Teams <span style="font-size:12px;color:var(--muted)">(mehrere möglich)</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(preTeams, n.assigneeId||'')}</select></div>`;
@@ -3896,7 +3900,7 @@ function nodeModal(o){
     teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst erbt der Punkt das Team der Hauptaufgabe)</span></label><div style="padding:4px 0">${teamBoxes}</div></div>`;
   }
   else if(_ctxAllowsTeams()){   // Unterpunkt in Eintrag/Veranstaltung (z. B. aus Kontaktnotizen): eigenes Team möglich, sonst geerbt
-    const it=o.inheritTeam||[]; const own=Array.isArray(n.teams)?n.teams:[];
+    const it=(o.inheritTeam&&o.inheritTeam.length)?o.inheritTeam:(tp&&e.team?[e.team]:[]); const own=Array.isArray(n.teams)?n.teams:[];
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${own.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst ${it.length?'wie die Hauptaufgabe: '+esc(it.join(', ')):'TPS – Gesamt'})</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(own.length?own:it, n.assigneeId||'')}</select></div>`;
@@ -4049,7 +4053,12 @@ function crmQuickAddColumn(text, focusId){
 }
 function crmQuickAddChildInline(parentId, text, focusId, prepend){
   if(!_ctxMay(null, true)){ toast('Dafür fehlt die Berechtigung (Aufgaben anlegen).','err'); return; }
-  mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; const node={ id:newId(), text, status:'offen', children:[] }; if(prepend) f.node.children.unshift(node); else f.node.children.push(node); });
+  const _teamsOk=_ctxAllowsTeams() && !_isVorlageCtx();
+  mutateContainer(en=>{ const f=findNode(en, parentId); if(!f) return; if(!Array.isArray(f.node.children)) f.node.children=[]; const node={ id:newId(), text, status:'offen', children:[] };
+    // Standard: eigenes Team – nur setzen, wenn es nicht ohnehin geerbt wird (Aufgabe, Behälter)
+    if(_teamsOk){ const own=_ownTeamDefault([]); const inh=(Array.isArray(f.node.teams)&&f.node.teams.length)?f.node.teams:(effectiveTeams(en,parentId).length?effectiveTeams(en,parentId):(en.team?[en.team]:(Array.isArray(en.teams)?en.teams.slice(0,1):[])));
+      if(own.length && !inh.includes(own[0])) node.teams=own.slice(); }
+    if(prepend) f.node.children.unshift(node); else f.node.children.push(node); });
   window._crmFocusAfter=focusId;
   repaintContainer();
 }

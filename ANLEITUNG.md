@@ -316,7 +316,7 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 **☰ → Planner.** Oben die Leiste mit vier Reitern; das gewählte **Team** bleibt beim Wechseln erhalten.
 Die Startseite der App (🏠 Start) bleibt davon unberührt.
 
-- **Was ansteht:** alles, was dir zugeteilt ist, und offene Aufgaben **mit Frist** aus deinen **eigenen Projekten**
+- **Was ansteht:** alles, was dir zugeteilt ist (auch Aufgaben mit Unterpunkten), Aufgaben deiner Teams, die noch niemand übernommen hat („Team … · noch frei“), und offene Aufgaben **mit Frist** aus deinen **persönlichen Projekten**
   (aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇) –
   getrennt nach **Überfällig**, **Diese Woche**, **Später**. Daneben **⚠ Hinweise** (was dich in den nächsten
   4 Wochen betrifft – nur sichtbar, wenn es welche gibt: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
@@ -338,6 +338,7 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
   sonst zum **federführenden** Team ihrer Veranstaltung bzw. ihres Projekts; beteiligte Teams sehen nur, was ihnen
   ausdrücklich zugeteilt ist.
 - **＋ Neu** (oben links im Projekt- und Redaktionsplan): neue Veranstaltung oder neues Projekt für das Team.
+- **Teams an Aufgaben:** Aufgaben und Unterpunkte können einem oder mehreren Teams zugeordnet werden (in Veranstaltungen, CRM-Einträgen und Team-Projekten); neu angelegte bekommen dein eigenes Team.
 - **Projektplan** (jedes Team): „Wer ist da" als Woche/Monat/Jahr mit den Aufgaben des Teams, Last je Woche und
   das Board **Offen → In Arbeit → Erledigt** (Spalte per Auswahl ändern; Recht „Aufgaben bearbeiten und verschieben").
 - **Redaktionsplan** (beim ÖA-Team statt Projektplan): „Wer ist da" als Woche/Monat/Jahr, Kanal-Filter, Last je Woche
