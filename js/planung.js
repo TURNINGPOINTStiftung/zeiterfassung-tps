@@ -197,6 +197,10 @@ function _styles(){
   .plan-body{padding:16px 18px 40px;display:grid;gap:16px}
   .plan-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
   .plan-col{display:grid;gap:16px}
+  /* Im Kalender liegt die Leiste in #kalender-root (eigener Innenabstand 18px bzw. 12/10px) → gleiche Lage wie in den anderen Reitern */
+  #kalender-root>.plan-bar{margin:-4px 0 14px}
+  @media(max-width:860px){ #kalender-root>.plan-bar{margin:-8px -8px 12px} }
+  @media(max-width:640px){ #kalender-root>.plan-bar{margin:-2px 0 10px} }
   @media(max-width:480px){ .plan-bar{display:grid;grid-template-columns:1fr 1fr;overflow:visible} .plan-bar .plan-tab{text-align:center} }
   @media(max-width:860px){ .plan-grid{grid-template-columns:1fr} .plan-bar{margin:10px 10px 0} .plan-body{padding:12px 10px 30px} }
   .plan-card{background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:14px;padding:16px 18px;min-width:0}

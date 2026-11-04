@@ -307,6 +307,21 @@ export async function refreshPermissionAllowlists(opts){
   }
   if(!_crmOk) Object.keys(_oldGrants).forEach(k=>{ if(/^r_/.test(k)) grants[k]=_oldGrants[k]; });
   await db.ref('zeiterfassung/grants').set(grants);
+  // „Personaldaten privat“ (Regeln v16): wer darf wessen Zeiteinträge/Anträge lesen? Genau wer die Person in der App
+  // sehen darf (roles.js canSeeEmployee – Leitung ihre Teams inkl. früherer Team-Stände und Vertretungen, GF ohne
+  // Leitungen außer „Gegenzeichnen“) → zeiterfassung/seeOf/<uid>/<userId> = true. Der Administrator liest über admins.
+  try{
+    const RO=await import('./roles.js');
+    const seeOf={}; const all=Object.values(byId);
+    for(const [uid,id] of Object.entries(uidMap)){
+      const m=byId[id]; if(!m || _isAdminUser(m)) continue;
+      all.forEach(e=>{ if(!e||!e.id||e.id===m.id||_isAdminUser(e)) return;
+        const ds=[undefined].concat((Array.isArray(e.teamHistory)?e.teamHistory:[]).map(h=>h&&h.fromDate).filter(Boolean));
+        if(ds.some(dt=>{ try{ return RO.canSeeEmployee(m,e,dt); }catch(_){ return false; } })) (seeOf[uid]=seeOf[uid]||{})[e.id]=true; });
+    }
+    await db.ref('zeiterfassung/seeOf').set(seeOf);
+    log('Lesefreigaben Personaldaten (seeOf): '+Object.keys(seeOf).length+' Konten');
+  }catch(e){ console.warn('seeOf nicht geschrieben:', e&&e.message); }
   // Freigabe-Markierung (Custom Claim) aller Konten an allowed/admins angleichen – für die Storage-Regeln.
   // Best-effort im Hintergrund (Cloud Function tpsPw claimSync), blockiert nichts.
   try{ window.syncAccessClaims&&window.syncAccessClaims().then(r=>{ if(r) log('Freigabe-Markierung: '+r.on+' Konten frei, '+r.changed+' geändert'); }); }catch(_){}

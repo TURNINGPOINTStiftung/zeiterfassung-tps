@@ -38,7 +38,7 @@ export function _usersPoisoned(users){
 //                      loginDir/allowed vor versehentlichem Clobber aus einem Cache und
 //                      verhindert, dass ein Restore alter Backups die Allowlist löscht.
 const _CONFIG_NODES     = new Set(['users','archivedUsers','cats','teams','teamCats','customRoles','rolePermissions','vertretungen']);
-const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','freelancers','uidUser','grants','kiosk']);
+const _NEVER_BLOB_NODES = new Set(['loginDir','allowed','admins','gfAdmins','managers','freelancers','uidUser','grants','kiosk','seeOf','abwesend']);
 // Config-Knoten (Nutzer, Teams, Kategorien, Rollen, Rechte) darf NUR noch der Account
 // „Administrator" schreiben – nicht mehr Personen mit delegiertem Verwaltungs-Zugriff.
 // Schützt vor dem Überspielen der Nutzerliste durch ein Gerät mit veraltetem/verstümmeltem
@@ -646,6 +646,45 @@ function _localPersist(d){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }catch(e){}
   noteGoodData(d);
 }
+// ── „Personaldaten privat“, Phase 1 (Regeln v16) ───────────────────────────────────────────
+// Zeiteinträge, Anträge und Stempelzeiten werden ZUSÄTZLICH unter ze_private/<Person>/… gespeichert (gleiche
+// Schlüssel), Abwesenheiten öffentlich nur als zeiterfassung/abwesend/<id> = {uid,von,bis,halb} (ohne Art/Grund).
+// Gelesen wird in Phase 1 weiter der alte Stand; der Spiegel ist „best effort“: lehnt der Server ab (Regeln v16
+// noch nicht live), wird er für diese Sitzung abgeschaltet – der eigentliche Speichervorgang ist davon unberührt.
+const _ABW_TYPES=new Set(['Urlaub','Arbeitszeitausgleich','AU/Krank']);
+function _abwOf(r){ return (r && r.status==='approved' && _ABW_TYPES.has(r.type) && r.userId && r.startDate)
+  ? { uid:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10), halb:!!r.halfDay } : null; }
+function _ownerOf(key, ids){ for(const id of ids){ if(key.startsWith(id+'_')) return id; } return ''; }
+export function privMirror(upd, d){
+  d=d||_dataCache||{}; const out={};
+  const ids=(d.users||[]).map(u=>u&&u.id).filter(Boolean).sort((a,b)=>b.length-a.length);   // längste zuerst (a_b vor a)
+  for(const [path,val] of Object.entries(upd||{})){
+    const seg=path.split('/'); const coll=seg[0], key=seg[1]; if(!key) continue;
+    const rest=seg.length>2?'/'+seg.slice(2).join('/'):'';
+    if(coll==='entries'){
+      const uid=_ownerOf(key, ids); if(!uid || !/^[0-9]{4}_[0-9]{2}$/.test(key.slice(uid.length+1))) continue;
+      out['ze_private/'+uid+'/entries/'+key+rest]=val;
+    } else if(coll==='vacRequests'){
+      const cur=(d.vacRequests||{})[key];
+      const uid=(!rest && val && val.userId) ? val.userId : ((cur&&cur.userId) || _ownerOf(key, ids)); if(!uid) continue;
+      out['ze_private/'+uid+'/vacRequests/'+key+rest]=val;
+      out['zeiterfassung/abwesend/'+key]=_abwOf(rest ? cur : val);
+    } else if(coll==='stamps'){
+      out['ze_private/'+key+'/stamps'+rest]=val;
+    }
+  }
+  return out;
+}
+function _privPush(upd){
+  if(window._zePrivOff || !window._fbRef) return;
+  let m; try{ m=privMirror(upd); }catch(e){ return; }
+  if(!Object.keys(m).length) return;
+  try{ m=JSON.parse(JSON.stringify(m)); }catch(e){ return; }
+  window._fbRef.root.update(m).catch(e=>{
+    if(e && /permission/i.test(String(e.code||e.message))){ window._zePrivOff=true; console.info('[Personaldaten privat] Spiegel inaktiv (Regeln v16 noch nicht live).'); }
+    else console.warn('[Personaldaten privat] Spiegel:', e&&e.message);
+  });
+}
 function _cloudUpdate(upd){
   // Cloud-Schutz wie in saveRaw: unbestätigt → nur lokal (Stand könnte aus Defaults stammen).
   if(window._cloudUnverified && !window._allowDataShrink) return Promise.resolve();
@@ -656,7 +695,7 @@ function _cloudUpdate(upd){
   if(window._offlineMode || window._fbConnected===false){ _queuePending(upd); return Promise.resolve(); }
   const ref=window._fbRef; if(!ref) return Promise.resolve();
   let p; try{ const r=_toRoot(upd); p=r?ref.root.update(r):ref.update(upd); }catch(e){ _queuePending(upd); return Promise.resolve(); }
-  return (p||Promise.resolve()).catch(e=>{
+  return (p||Promise.resolve()).then(()=>{ _privPush(upd); }).catch(e=>{
     console.warn('Firebase scoped-sync error:',e);
     // Regel-Ablehnung wird durch Wiederholen nicht besser → nicht einreihen, aber sichtbar melden.
     if(e && /permission/i.test(String(e.code||e.message))){ try{ window.toast?.('⛔ Änderung vom Server abgelehnt (keine Berechtigung).','err'); }catch(_){} return; }
@@ -700,6 +739,7 @@ export function flushPendingWrites(){
   _flushing=true;
   let p; try{ const r=_toRoot(q); p=r?ref.root.update(r):ref.update(q); }catch(e){ _flushing=false; return Promise.resolve(); }
   return p.then(()=>{
+    _privPush(q);   // Personaldaten privat: auch nachgeholte Änderungen spiegeln
     // Nur die übertragenen Pfade entfernen (währenddessen neu Eingereihtes bleibt erhalten).
     const cur=_readPending(); Object.keys(q).forEach(k=>{ if(_eqJSON(cur[k],q[k])) delete cur[k]; }); _writePending(cur);
     try{ window.toast?.('📶 '+n+' Offline-Änderung'+(n===1?'':'en')+' synchronisiert ✓','ok'); }catch(_){}
