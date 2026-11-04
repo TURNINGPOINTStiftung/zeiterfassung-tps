@@ -37,7 +37,8 @@ let _busy=false, _last='';
 export async function zpCheck(){
   if(!isAdmin()||_busy) return; _busy=true; _render('Lese den aktuellen Stand …');
   try{ const db=firebase.database(); const plan=zpPlan(await _readRaw(db)); const c=_counts(plan);
-    let have=0; try{ have=Object.keys((await db.ref('ze_private').once('value')).val()||{}).length; }catch(e){}
+    // Regeln v16: Lesen nur je Person (ze_private/<Person>), nicht den ganzen Knoten
+    let have=0; for(const u of Object.keys(plan.perUser)){ try{ if((await db.ref('ze_private/'+u).once('value')).exists()) have++; }catch(e){} }
     _last=`<b>Zu übertragen:</b> ${c.p} Personen · ${c.e} Monatsblätter · ${c.v} Anträge · ${c.s} Stempel-Bereiche · ${c.a} Abwesenheiten (von–bis)`+
       (c.k?` · bei ${c.k} Krankmeldungen wird der Grund entfernt`:'')+(plan.skipped.length?`<br><span style="color:var(--warn-text,#8a4b06)">Nicht zuordenbar (bleiben, wie sie sind): ${plan.skipped.length}</span>`:'')+
       `<br>Schon im privaten Bereich: ${have} Personen.`;
@@ -60,7 +61,8 @@ export async function zpMigrate(){
     const strip={}; Object.keys(plan.stripOld).forEach(id=>{ strip['zeiterfassung/vacRequests/'+id+'/note']=null; });
     if(Object.keys(strip).length) await db.ref().update(strip);
     // Kontrolle: alles zurücklesen und Eintrag für Eintrag vergleichen
-    const back=(await db.ref('ze_private').once('value')).val()||{}; let diff=0;
+    const back={}; let diff=0;
+    for(const u of Object.keys(plan.perUser)){ try{ back[u]=(await db.ref('ze_private/'+u).once('value')).val()||{}; }catch(e){ back[u]={}; log.push('Zurücklesen nicht möglich: '+u+' ('+(e&&e.code||e&&e.message)+')'); } }
     Object.entries(plan.perUser).forEach(([u,colls])=>Object.entries(colls).forEach(([coll,val])=>{
       if(coll==='stamps'){ if(_stable(((back[u]||{}).stamps)||null)!==_stable(val)){ diff++; log.push('Abweichung: '+u+'/stamps'); } return; }
       Object.entries(val).forEach(([k,v])=>{ if(_stable(((back[u]||{})[coll]||{})[k])!==_stable(v)){ diff++; if(log.length<30) log.push('Abweichung: '+u+'/'+coll+'/'+k); } }); }));
