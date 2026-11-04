@@ -6121,6 +6121,7 @@ function verwShowTab(name){
   document.querySelectorAll('#verw-root .verw-panel').forEach(p=>{ p.style.display=(p.id==='verw-tab-'+name)?'':'none'; });
   document.querySelectorAll('#verw-root .verw-tab').forEach(t=>{ t.classList.toggle('active', t.getAttribute('data-vtab')===name); });
   try{ localStorage.setItem('tp_verw_tab', name); }catch(e){}
+  if(name==='data'){ try{ window.renderZePrivBox&&window.renderZePrivBox(); }catch(e){} }
 }
 function ensureVerwMounted(){
   const root=document.getElementById('verw-root'); if(!root) return;
@@ -6187,7 +6188,7 @@ function ensureVerwMounted(){
      <div class="verw-panel" id="verw-tab-users"><div id="verw-users"></div></div>
      <div class="verw-panel" id="verw-tab-org" style="display:none"></div>
      <div class="verw-panel" id="verw-tab-crm" style="display:none"><div id="verw-crmcfg"></div></div>
-     <div class="verw-panel" id="verw-tab-data" style="display:none"><div id="verw-impexp"></div><div id="verw-history"></div></div>
+     <div class="verw-panel" id="verw-tab-data" style="display:none"><div id="verw-zepriv"></div><div id="verw-impexp"></div><div id="verw-history"></div></div>
    </div>`;
   // ZE-Bausteine an ihren neuen Ort im jeweiligen Reiter hängen (gleiche IDs → renderSettings füllt sie dort).
   const org=document.getElementById('verw-tab-org');

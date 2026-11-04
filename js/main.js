@@ -55,6 +55,7 @@ import { printFull, printBuchhaltung, printTeamBuchhaltung,
 
 import { hasPermission } from './roles.js';
 import './rechte.js';  // 🎚️ Feine Rechte je Bereich (window.tpsRecht …) – vor allen Modulen, die sie prüfen
+import './zeprivat.js';   // 🔒 Personaldaten privat – Umzug (nur Administrator, Verwaltung → Daten & Backup)
 import './messe.js';   // Messemodus (registriert window.messeStart etc.)
 import { exportData, exportAllData, exportCrmOnly, importData, resetData,
          showCarryoverCleanup, runCarryoverCleanup,
