@@ -256,7 +256,7 @@ sha256 (raw @6f9c3c3): a8894af53b201a70359b1ebb44fe115efaf63a97b26c0e45f729adebd
 **Reihenfolge:** App v544 live → Administrator öffnet die App einmal (Freigaben `grants/r_pm_aufg_bearb` neu berechnen) → v15 veröffentlichen.
 Rückweg: CANDIDATE-v14.json.
 
-## Stand 2026-11-04: CANDIDATE-v16.json – Kandidat (noch NICHT live) – „Personaldaten privat“ Phase 1 (App v546)
+## Stand 2026-11-04: CANDIDATE-v16.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle ze_private = 1) – „Personaldaten privat“ Phase 1 (App v546)
 = v15 + neuer Top-Level-Knoten `ze_private/<userId>/{entries,vacRequests,stamps}` und `zeiterfassung/abwesend/<id> = {uid,von,bis,halb}`:
 - Lesen `ze_private/<u>`: die Person selbst, Admin, oder `zeiterfassung/seeOf/<auth.uid>/<u>` (schreibt die Admin-App aus `canSeeEmployee`).
   `vacRequests` zusätzlich `managers` und `grants/genehmigung_abwesenheit`. Kiosk nie.
