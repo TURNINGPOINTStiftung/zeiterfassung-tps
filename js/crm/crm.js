@@ -361,7 +361,7 @@ function _kbManage(){ const u=window.cu; if(!u) return false; if(u.role==='admin
 function _kbMayManage(p){ const u=window.cu; return _kbManage() || !!(u && p && p.owner && p.owner===u.id); }
 // Projekt löschen: eigenes persönliches Projekt immer, sonst Recht „Projekte löschen" (v510)
 function _kbMayDelete(p){ const u=window.cu; if(u && p && p.owner && p.owner===u.id) return true; return _hasNeu(u) ? _R('pm_proj_loeschen') : _kbManage(); }
-function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(_hasNeu(u)){ try{ return window.tpsRechteOf(u).pm_ansehen==='alle'; }catch(e){ return false; } } if(crmFull()) return true; try{ return !!_canAdminFor('kanban', u); }catch(e){ return false; } }
+function _kanbanSeesAll(u){ u=u||window.cu; if(!u) return false; if(u.role==='admin') return true; if(_hasNeu(u)){ try{ return window.tpsRechteOf(u).pm_ansehen==='alle'; }catch(e){ return false; } } return false; }   // alte Rechte-Stufen: nur eigene Teams (+ übergreifend), auch Leitung/GF
 // Alle Teams einer Person: Hauptteam + weitere ZE-Teams + zusätzliche Projektmanagement-Teams (Verwaltung → Zugriffe)
 function userTeamsAll(u){ if(!u) return []; return [...new Set([u.team].concat(Array.isArray(u.teams)?u.teams:[], Array.isArray(u.kanbanTeams)?u.kanbanTeams:[]).filter(Boolean))]; }
 window.tpsUserTeams=userTeamsAll;
@@ -1095,7 +1095,7 @@ function _crmSyncModuleHighlight(){
     window._crmModule = name; window._activeModule = name;
     try{ localStorage.setItem('tp_zt_module', name); }catch(e){}
     const _inPlan = !!window._planActive && name==='kanban';
-    const label = _inPlan ? 'Planung' : (name==='kanban' ? 'Projektmanagement' : (name==='verteiler' ? 'Verteiler' : 'CRM'));
+    const label = _inPlan ? 'Planner' : (name==='kanban' ? 'Projektmanagement' : (name==='verteiler' ? 'Verteiler' : 'CRM'));
     const cur=document.getElementById('mb-current'); if(cur) cur.textContent = label;
     document.querySelectorAll('.mb-mod').forEach(t=>t.classList.toggle('active', t.dataset.mod===(_inPlan?'planung':name)));
     _crmUpdateTopTools();
@@ -1360,7 +1360,7 @@ window.crmFavNews=crmFavNews;
 function barHtml(){
   _crmSyncModuleHighlight();   // Modul-Highlight + obere Leisten-Tools (Suche/Glocke) angleichen
   if(window._planActive && window._crmModule==='kanban' && window.planBarHtml){   // Planung: gemeinsame Leiste
-    const m=window._crmMode; try{ const cur=document.getElementById('mb-current'); if(cur) cur.textContent='Planung'; }catch(e){}
+    const m=window._crmMode; try{ const cur=document.getElementById('mb-current'); if(cur) cur.textContent='Planner'; }catch(e){}
     return window.planBarHtml((m==='veranstaltungen')?'veranstaltung':'teams');
   }
   const view = crmCanView();
@@ -3894,6 +3894,12 @@ function nodeModal(o){
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${pre.includes(tm)?'checked':''}> ${esc(tm)}</label>`).join('');
     teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst erbt der Punkt das Team der Hauptaufgabe)</span></label><div style="padding:4px 0">${teamBoxes}</div></div>`;
   }
+  else if(_ctxAllowsTeams()){   // Unterpunkt in Eintrag/Veranstaltung (z. B. aus Kontaktnotizen): eigenes Team möglich, sonst geerbt
+    const it=o.inheritTeam||[]; const own=Array.isArray(n.teams)?n.teams:[];
+    const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${own.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
+    teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst ${it.length?'wie die Hauptaufgabe: '+esc(it.join(', ')):'übergreifend'})</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
+     <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(own.length?own:it, n.assigneeId||'')}</select></div>`;
+  }
   else {
     const it = tp ? (e.team?[e.team]:[]) : (o.inheritTeam||[]);
     const itLabel = it.join(', ');
@@ -3956,6 +3962,7 @@ function _readNodeForm(e, isTop){
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), assigneeId, assigneeName: assigneeId?userName(assigneeId):'', due:val('crm-task-due'), status, deps };
   if(isTop && _ctxAllowsTeams()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe (Eintrag/Veranstaltung/Vorlage)
+  else if(!isTop && _ctxAllowsTeams() && !_isVorlageCtx() && document.getElementById('crm-task-teams')) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // Unterpunkt: eigenes Team (leer = erbt)
   if(_isVorlageCtx()){   // Vorlage: Versatz statt Datum, Team auch für Unterpunkte, nie eine Person
     const ov=String(val('crm-task-offset')||'').trim(); const o=ov===''?null:Math.round(Number(ov));
     rec.offsetTage=(o===null||!isFinite(o))?null:Math.max(-365,Math.min(365,o));
@@ -4247,7 +4254,9 @@ function paintTeamDetail(){
   // Zugriffs-Guard: wer nicht alle Teams sieht, darf nur seine zugewiesenen Teams öffnen.
   if(!_kanbanSeesAll(window.cu)){
     const vis=visibleKanbanTeams(window.cu);
-    if(!vis.includes(team)){ crmBackToTeams(); return; }
+    if(!vis.includes(team) && team!=='Ohne Team'){   // „übergreifend“ dürfen alle öffnen
+      if(window._planActive){ const t=vis[0]||'Ohne Team'; window._crmTeamSel=t; window._planTeam=t; return paintTeamDetail(); }   // Planner: eigenes Team statt alter Liste
+      crmBackToTeams(); return; }
   }
   // Veranstaltungen des Teams
   const vs=teamVeranstaltungen(team);
@@ -4525,6 +4534,13 @@ function crmRedSettingsSave(){
   if(document.getElementById('verw-crmcfg') && window._activeModule==='verwaltung') paintVerwConfig(); else paintTeamDetail();
   toast('Gespeichert ✓','ok');
 }
+// „＋ Neu" oben links im Projekt-/Redaktionsplan: Veranstaltung oder Projekt für dieses Team anlegen
+function _rpNewMenu(team){
+  const va=_R('kal_va'), pr=_kbManage(); if(!va && !pr) return '';
+  return `<details class="rp-new"><summary class="btn-sm-crm primary">＋ Neu</summary><div class="rp-new-m">
+    ${va?`<button type="button" onclick="this.closest('details').open=false;crmNewVeranstaltungForTeam(${jsq(team)})">📅 Veranstaltung</button>`:''}
+    ${pr?`<button type="button" onclick="this.closest('details').open=false;window._crmTeamSel=${jsq(team)};crmNewTeamProjekt()">📂 Projekt</button>`:''}</div></details>`;
+}
 function oeaRedaktionHtml(team){
   _rpTeam=team||''; try{ return _oeaRedaktionHtml(); } finally { _rpTeam=''; }
 }
@@ -4537,6 +4553,10 @@ function _oeaRedaktionHtml(){
   const board=_oeaBoardHtml(r, posts);
   return `<style>
     .red-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:0 0 12px}
+    .rp-new{position:relative} .rp-new summary{list-style:none;cursor:pointer;min-height:38px;display:inline-flex;align-items:center} .rp-new summary::-webkit-details-marker{display:none}
+    .rp-new-m{position:absolute;z-index:30;top:calc(100% + 4px);left:0;min-width:200px;background:var(--surface,#fff);border:1px solid var(--border,#dce3ec);border-radius:10px;box-shadow:var(--shadow-2,0 10px 30px rgba(0,0,0,.15));padding:6px;display:grid;gap:4px}
+    .rp-new-m button{border:0;background:transparent;text-align:left;font:inherit;font-size:14px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--text,#15263a);min-height:42px}
+    .rp-new-m button:hover,.rp-new-m button:focus-visible{background:var(--surface-2,#f4f7fb);outline:none}
     .red-seg{display:inline-flex;border:1.5px solid var(--border,#c3cedb);border-radius:9px;overflow:hidden}
     .red-seg button{border:0;background:var(--surface,#fff);color:var(--primary-d,#15263a);font:inherit;font-size:14px;font-weight:600;padding:7px 12px;cursor:pointer}
     .red-seg button.on{background:var(--primary,#203869);color:var(--on-primary,#fff)}
@@ -4576,6 +4596,7 @@ function _oeaRedaktionHtml(){
     .red-card.done{opacity:.7} .red-colh small{font-weight:400;color:var(--muted,#5d7086)} .red-colh span{float:right}
   </style>
   <div class="red-bar">
+    ${_rpNewMenu(c.team)}
     <span class="red-seg">${seg('view','woche','Woche')}${seg('view','monat','Monat')}${seg('view','jahr','Jahr')}</span>
     <span><button class="btn-sm-crm" onclick="crmRedSet('nav',-1)">‹</button> <b>${esc(_oeaLabel(r))}</b> <button class="btn-sm-crm" onclick="crmRedSet('nav',1)">›</button> <button class="btn-sm-crm" onclick="crmRedSet('nav',0)">Heute</button></span>
     ${c.oea?`<label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)">Kanal <select onchange="crmRedSet('kanal',this.value)" aria-label="Kanal" style="font:inherit;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${kanOpts}</select></label>`:''}
@@ -4901,8 +4922,9 @@ function paintVeranstaltungDetail(){
     ? `💻 Online${v.ortOderLink?' · '+linkify(v.ortOderLink):''}`
     : (v.ortOderLink?('📍 '+esc(v.ortOderLink)):'');
   root.innerHTML = barHtml() + `<div class="crm-body">
+    ${window._planActive?`<div class="crm-sec" style="margin-bottom:12px">${_planVaPicker(v)}</div>`:''}
     <div class="crm-detail-head">
-      ${window._planActive?_planVaPicker(v):`<button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Zurück</button>`}
+      ${window._planActive?'':`<button class="btn-sm-crm" onclick="crmBackToVeranstaltungen()">← Zurück</button>`}
       ${window._planActive?`<span class="small" style="color:var(--muted);flex:1;min-width:200px">Termin mit Aufgaben-Board – im Kalender weiter „Veranstaltung“. Spalten sind Themen wie heute.${v.closed?' · <b>abgeschlossen</b>':''}</span>`:`<h2>${v.online?'💻':'📅'} ${esc(v.titel||'(ohne Titel)')}${v.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h2>`}
       ${_R('kal_va')?`<button class="btn-sm-crm" onclick="${v.closed?'crmReopenVeranstaltung':'crmCloseVeranstaltung'}()">${v.closed?'↺ Wieder öffnen':'🏁 Abschließen'}</button>
       <button class="btn-sm-crm" onclick="crmEditVeranstaltung()">✎ Bearbeiten</button>
@@ -4933,12 +4955,29 @@ function paintVeranstaltungDetail(){
   </div>`;
 }
 // ── Planung: Seite „Veranstaltung" nach Prototyp (Auswahl, Kopf, Kurzbilanz, Vorlage mit Vorschau) ──
+// Veranstaltungs-Leiste: anstehende als Karten nebeneinander (nächste zuerst), vergangene/abgeschlossene aufklappbar
 function _planVaPicker(v){
   const today=localISODate();
-  const vs=listVeranstaltungen().filter(x=>x&&(!x.closed||x.id===v.id)).sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
-  const opt=x=>`<option value="${esc(x.id)}" ${x.id===v.id?'selected':''}>${esc(x.titel||'(ohne Titel)')} · ${esc(x.start?fmtDate(Date.parse(x.start)):'ohne Datum')}${String(x.ende||x.start||'')<today?' (vergangen)':''}</option>`;
-  return `<select class="crm-ss" aria-label="Veranstaltung" style="max-width:420px" onchange="planVaSet(this.value)">${vs.map(opt).join('')}</select>
-    <button class="btn-sm-crm" title="Im Kalender zeigen" onclick="planGo('kalender',{date:${jsq(String(v.start||'').slice(0,10))}})">📅 im Kalender</button>`;
+  const all=listVeranstaltungen().filter(Boolean);
+  const isPast=x=>x.closed || String(x.ende||x.start||'9999')<today;
+  const up=all.filter(x=>!isPast(x)).sort((a,b)=>String(a.start||'9').localeCompare(String(b.start||'9')));
+  const past=all.filter(isPast).sort((a,b)=>String(b.start||'').localeCompare(String(a.start||'')));
+  const _d=x=>x.start?fmtDate(Date.parse(x.start)).replace(/\.\d{4}$/, String(x.start).slice(0,4)===today.slice(0,4)?'.':'.'+String(x.start).slice(2,4)):'ohne Datum';
+  const chip=x=>`<button type="button" class="pva-chip${x.id===v.id?' on':''}" aria-pressed="${x.id===v.id}" onclick="planVaSet(${jsq(x.id)})"><b>${esc(x.titel||'(ohne Titel)')}</b><span>${esc(_d(x))}${x.online?' · online':''}</span></button>`;
+  return `<style>
+    .pva{display:grid;gap:8px;width:100%}
+    .pva-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:13px;font-weight:700;color:var(--muted,#5d7086)}
+    .pva-row{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;-webkit-overflow-scrolling:touch}
+    .pva-chip{flex:none;display:grid;gap:2px;text-align:left;min-width:150px;max-width:240px;padding:8px 12px;border-radius:10px;border:1.5px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--text,#15263a);font:inherit;cursor:pointer;min-height:48px}
+    .pva-chip b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pva-chip span{font-size:12px;color:var(--muted,#5d7086)}
+    .pva-chip.on{border-color:var(--primary,#203869);background:var(--primary-soft,#e9eef8)}
+    .pva-chip:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}
+    .pva details summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--primary,#203869);min-height:32px;display:inline-flex;align-items:center}
+  </style><div class="pva">
+    <div class="pva-h"><span>Anstehend · ${up.length}</span>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam('')">＋ Veranstaltung</button>`:''}<button class="btn-sm-crm" title="Im Kalender zeigen" onclick="planGo('kalender',{date:${jsq(String(v.start||'').slice(0,10))}})">📅 im Kalender</button></div>
+    <div class="pva-row" role="group" aria-label="Anstehende Veranstaltungen">${up.map(chip).join('')||'<span class="small" style="color:var(--muted)">Keine anstehenden Veranstaltungen.</span>'}</div>
+    ${past.length?`<details${isPast(v)?' open':''}><summary>Vergangene und abgeschlossene (${past.length})</summary><div class="pva-row">${past.map(chip).join('')}</div></details>`:''}
+  </div>`;
 }
 function _planVaHead(v){
   const vt=vaTeams(v);
@@ -6508,8 +6547,8 @@ function paintVerwConfig(){
   const _oc=oeaCfg();
   host.innerHTML = `
   <div class="crm-sec" id="verw-oea">
-    <h4><span class="ttl">📣 Planung · Redaktionsplan der ÖA</span><button class="btn-sm-crm primary" onclick="crmRedSettings()">✎ Einstellen</button></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:6px">Gilt für Planung → Teams → ÖA-Team → Redaktionsplan.</div>
+    <h4><span class="ttl">📣 Planner · Redaktionsplan der ÖA</span><button class="btn-sm-crm primary" onclick="crmRedSettings()">✎ Einstellen</button></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:6px">Gilt für Planner → Teams → ÖA-Team → Redaktionsplan.</div>
     <table class="vw-table"><tbody>
       <tr><td>ÖA-Team</td><td>${_oc.team?esc(_oc.team):'<span style="color:var(--muted)">nicht erkannt – bitte wählen</span>'}${(getCrmConfig()||{}).oeaTeam?'':' <span class="small" style="color:var(--muted)">(automatisch)</span>'}</td></tr>
       <tr><td>Kanäle</td><td>${_oc.kanaele.map(esc).join(', ')}</td></tr>

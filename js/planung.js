@@ -34,7 +34,7 @@ function planTabs(){
 // ── Leiste (liegt über allen Ansichten) ──
 function planBarHtml(tab){
   _styles();
-  return `<div class="plan-bar no-print" role="navigation" aria-label="Planung">
+  return `<div class="plan-bar no-print" role="navigation" aria-label="Planner">
     ${planTabs().map(([k,l,sh])=>`<button type="button" class="plan-tab${k===tab?' on':''}"${k===tab?' aria-current="page"':''} onclick="planGo(${jsq(k)})"><span class="pl-long">${esc(l)}</span><span class="pl-short">${esc(sh)}</span></button>`).join('')}
   </div>`;
 }
@@ -66,7 +66,7 @@ function planGo(tab, opts){
   _label();
 }
 function _label(){
-  try{ const cur=document.getElementById('mb-current'); if(cur) cur.textContent='Planung';
+  try{ const cur=document.getElementById('mb-current'); if(cur) cur.textContent='Planner';
     document.querySelectorAll('.mb-mod').forEach(b=>b.classList.toggle('active', b.dataset.mod==='planung')); }catch(e){}
 }
 function _teamsVisible(){ try{ const d=getData()||{}; return Array.isArray(d.teams)?d.teams.slice():[]; }catch(e){ return []; } }
@@ -135,6 +135,7 @@ function _hintCard(){
   let cf={ tasks:[], events:[] }; try{ cf=window.kalMyConflicts?window.kalMyConflicts(28):cf; }catch(e){}
   const rows=cf.tasks.filter(t=>!t.over).map(t=>`<div class="plan-item" role="button" tabindex="0" onclick="crmMeineOpen(${jsq(t.kind)},${jsq(t.tree||'')},${jsq(t.cid)},${jsq(t.id)})"><span class="plan-barc" style="background:var(--danger,#c0392b)"></span><div class="plan-main"><div class="plan-t">${esc(t.text)} <span class="plan-sub">· ${t.kanal?'Beitrag '+esc(t.kanal):'Aufgabe'}</span></div><div class="plan-row"><span class="plan-tag crit">${esc(t.issue)}</span><span class="plan-tag">${esc(t.src)}</span></div></div><span class="plan-when">${esc(fmt(t.due))}</span></div>`)
     .concat(cf.events.map(e=>`<div class="plan-item"><span class="plan-barc" style="background:var(--danger,#c0392b)"></span><div class="plan-main"><div class="plan-t">${esc(e.titel)} <span class="plan-sub">· ${e.typ==='va'?'Veranstaltung':'Termin'}</span></div><div class="plan-row"><span class="plan-tag crit">du bist eingeplant, aber abwesend</span></div></div><span class="plan-when">${esc(fmt(e.von))}</span></div>`)).join('');
+  if(!rows) return '';   // keine Hinweise → Karte gar nicht zeigen
   return `<section class="plan-card"><div class="plan-h"><h2>⚠ Hinweise</h2><span class="plan-sub">betrifft mich · 4 Wochen</span></div>${rows||'<div class="plan-empty">Keine Konflikte in den nächsten 4 Wochen.</div>'}</section>`;
 }
 function _termCard(){
@@ -164,8 +165,7 @@ function _whoCard(){
   groups.forEach(([t,g])=>{ if(t && myT.length>1) h+=`<div class="plan-whot">${esc(t)}</div>`; g.forEach(u=>{ h+=cell(u); }); });
   h+='</div>';
   const n=groups.reduce((a,g)=>a+g[1].length,0);
-  const sub=myT.length?(myT.length>1?'deine Teams':'dein Team')+': '+myT.map(esc).join(', ')+' · ':'';
-  return `<section class="plan-card plan-wide"><div class="plan-h"><h2>Wer ist diese Woche da?</h2><span class="plan-sub">${sub}KW ${kw} · nur „Abwesend", ohne Grund</span></div>${n?h:'<div class="plan-empty">Keine Personen sichtbar.</div>'}</section>`;
+  return `<section class="plan-card plan-wide"><div class="plan-h"><h2>Wer ist diese Woche da?</h2></div>${n?h:'<div class="plan-empty">Keine Personen sichtbar.</div>'}</section>`;
 }
 function renderPlanungStart(){
   const root=document.getElementById('planung-root'); if(!root) return;
@@ -205,10 +205,10 @@ function _styles(){
   .plan-sub{font-size:13px;color:var(--muted,#5d7086);font-weight:400}
   .plan-gcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
   .plan-gcol{min-width:0} .plan-gcol .plan-grp{margin-top:4px}
-  .plan-row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;margin:16px 0}
-  @media(max-width:1100px){ .plan-row3{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .plan-row3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start;margin:16px 0}
   @media(max-width:760px){ .plan-gcols{grid-template-columns:1fr} }
   @media(max-width:700px){ .plan-row3{grid-template-columns:1fr} }
+  @media(max-width:360px){ .plan-row3{grid-template-columns:minmax(0,1fr)} }
   .plan-more summary{cursor:pointer;color:var(--primary,#203869);font-weight:600;font-size:14px;padding:6px 2px;min-height:32px}
   .plan-more summary:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}
   .plan-empty.sm{font-size:13px;padding:4px 2px}

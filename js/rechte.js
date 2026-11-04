@@ -90,7 +90,7 @@ const _ITEM = Object.fromEntries(RECHTE_ITEMS.map(i=>[i.k,i]));
 // „Ansehen"-Recht je Bereich = Bereich erscheint im Menü
 export const AREA_VIEW = { crm:'crm_ansehen', kalender:'kal_ansehen', kanban:'pm_ansehen', verteiler:'vt_nutzen', messe:'me_formular', shop:'la_ansehen' };
 
-const _all = (on)=>Object.fromEntries(RECHTE_ITEMS.map(i=>[i.k, on ? (i.opts ? i.opts[i.k==='kal_loeschen'||i.k==='pm_ansehen'?1:0][0] : true) : false]));
+const _all = (on)=>Object.fromEntries(RECHTE_ITEMS.map(i=>[i.k, on ? (i.opts ? i.opts[i.k==='kal_loeschen'?1:0][0] : true) : false]));
 const _pick = (vals)=>Object.assign(_all(false), vals);
 const TEAM = {
   crm_ansehen:'alle', crm_anlegen:true, crm_stamm:true, crm_personen:true, crm_notizen:true, crm_notizen_fremd:true,
@@ -106,7 +106,7 @@ const TEAM = {
 const LEITUNG = Object.assign({}, TEAM, {
   crm_loeschen:true, crm_notiz_purge:true, crm_export:true,
   kal_loeschen:'alle', kal_va_loeschen:true, kal_konflikte:'team',
-  pm_ansehen:'alle', pm_proj_team:true, pm_proj_loeschen:true, pm_freigabe:true,
+  pm_ansehen:'teams', pm_proj_team:true, pm_proj_loeschen:true, pm_freigabe:true,
   vt_import:true, vt_loeschen:true, vt_export:true,
   me_eintrag_loeschen:true, me_va:true, me_va_loeschen:true,
   la_best_bearb:true,

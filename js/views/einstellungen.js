@@ -63,7 +63,7 @@ function _ufNutzenVals(area){
   const A=_ufArea(area); const t=(window.tpsRoleTplVals?window.tpsRoleTplVals(_ufRoleNow()):{})||{}; const o={};
   A.items.forEach((it,i)=>{ o[it.k]=t[it.k]; if(i===0 && !o[it.k]) o[it.k]=it.opts?it.opts[0][0]:true; });
   return o; }
-function _ufAllVals(area){ const A=_ufArea(area); const o={}; A.items.forEach(it=>{ o[it.k]=it.opts?it.opts[(it.k==='kal_loeschen'||it.k==='pm_ansehen')?1:0][0]:true; }); return o; }
+function _ufAllVals(area){ const A=_ufArea(area); const o={}; A.items.forEach(it=>{ o[it.k]=it.opts?it.opts[(it.k==='kal_loeschen')?1:0][0]:true; }); return o; }
 function _ufRechteKopf(u, isNew){
   if(!(window.TPS_RECHTE||[]).length) return '';
   const rk=window.tpsRoleTplKey?window.tpsRoleTplKey(u.role||'mitarbeiter'):'team';

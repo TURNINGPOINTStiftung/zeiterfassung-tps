@@ -304,6 +304,17 @@ export function ensureCrmReady(){
               const mb=document.getElementById('modal-bg');
               if(!(mb && mb.classList.contains('show'))) window.renderShop();
             }
+            // Planner-Start und Kalender: ebenfalls sofort nachziehen (neue/zugeteilte Aufgaben, Projekte, Termine),
+            // nicht während ein Dialog offen ist; seitliche Scroll-Positionen bleiben erhalten
+            if((window._activeModule === 'planung' || window._activeModule === 'kalender') && !window._crmModalOpen){
+              const mb=document.getElementById('modal-bg');
+              if(!(mb && mb.classList.contains('show'))){ try{
+                const rootId = window._activeModule==='planung' ? 'planung-root' : 'kalender-root'; const r=document.getElementById(rootId);
+                const keep = r ? [...r.querySelectorAll('*')].filter(el=>el.scrollLeft>0).map(el=>[el.className, el.scrollLeft]) : [];
+                if(window._activeModule==='planung') window.renderPlanungStart && window.renderPlanungStart(); else window.renderKalender && window.renderKalender();
+                if(r && keep.length) keep.forEach(([c,x])=>{ const el=c && r.getElementsByClassName(String(c).split(' ')[0])[0]; if(el) el.scrollLeft=x; });
+              }catch(e){ console.warn('Live-Aktualisierung Planner/Kalender:', e); } }
+            }
             // Mitteilungsleiste (Shop-Bestellungen) auffrischen
             try{ window.renderZeNotices && window.renderZeNotices(); }catch(e){}
           }catch(e){ console.warn('CRM Snapshot Fehler (ignoriert):', e); }
