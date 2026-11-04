@@ -115,7 +115,7 @@ function _todoCard(){
   return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt oder mit Frist aus meinen eigenen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
 }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
-// Meine Projekte (persönlich, owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
+// Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
 function _myProjCard(){
   let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.owner===me()); }catch(e){}
   const can=(()=>{ try{ const u=window.cu; return !u||u.role==='admin'||!window.tpsRechteOf||!!window.tpsRechteOf(u).pm_proj_eigen; }catch(e){ return true; } })();
@@ -123,7 +123,7 @@ function _myProjCard(){
   const cnt=p=>{ let n=0; const w=a=>(a||[]).forEach(t=>{ if(!t) return; if(!(Array.isArray(t.children)&&t.children.length) && t.status!=='erledigt') n++; w(t.children); }); w(p.todos); return n; };
   const open=ps.filter(p=>!p.closed).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de')), closed=ps.filter(p=>p.closed);
   const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
-  return `<section class="plan-card"><div class="plan-h"><h2>📂 Meine Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
+  return `<section class="plan-card"><div class="plan-h"><h2>📂 Persönliche Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
     <div class="plan-sub" style="margin:-4px 0 8px">nur für dich angezeigt · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
     ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
     ${closed.length?`<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--muted,#5d7086);font-weight:600;font-size:13px">Abgeschlossen (${closed.length})</summary>${closed.map(row).join('')}</details>`:''}</section>`;

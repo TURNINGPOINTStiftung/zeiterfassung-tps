@@ -140,7 +140,7 @@ export function showVacRequestForm(editId){
     <div id="vr-week-hint" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--warn-bg,#fffbf5);border:1.5px solid var(--warn);border-radius:6px;font-size:12px;color:var(--warn-text,#856404)">
       ⚠ Für Abwesenheiten über einer Woche ist ein formloser Antrag erforderlich. Bitte füge eine kurze Begründung hinzu.
     </div>
-    <div class="form-group"><label>Bemerkung / Begründung <span style="font-size:12px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
+    <div class="form-group" id="vr-note-wrap"><label>Bemerkung / Begründung <span style="font-size:12px;color:var(--muted)">(bei &gt;1 Woche empfohlen)</span></label>
       <textarea id="vr-note" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;resize:vertical" placeholder="z.B. Sommerurlaub, familiäre Gründe…">${esc(note)}</textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -154,6 +154,9 @@ export function onVrTypeChange(){
   const isVA=t==='Veranstaltung';
   const hint=document.getElementById('vr-krank-hint');
   if(hint) hint.style.display=t==='AU/Krank'?'block':'none';
+  // Datenschutz: bei Krankheit keine Gründe/Bemerkungen erfassen (Gesundheitsdaten)
+  const nw=document.getElementById('vr-note-wrap'); if(nw) nw.style.display=t==='AU/Krank'?'none':'';
+  if(t==='AU/Krank'){ const ne=document.getElementById('vr-note'); if(ne) ne.value=''; }
   const modeWrap=document.getElementById('vr-count-mode-wrap');
   if(modeWrap) modeWrap.style.display=t==='Urlaub'?'block':'none';
   const hdWrap=document.getElementById('vr-halfday-wrap');
@@ -280,7 +283,7 @@ export async function saveVacRequest(){
   const type=document.getElementById('vr-type').value;
   const from=document.getElementById('vr-from').value;
   const to=document.getElementById('vr-to').value;
-  const note=document.getElementById('vr-note')?.value.trim()||'';
+  const note=type==='AU/Krank' ? '' : (document.getElementById('vr-note')?.value.trim()||'');   // Krankheit: nie einen Grund speichern
   const halfDay=!!(type==='Urlaub'&&from===to&&document.getElementById('vr-halfday')?.checked);
   if(!from||!to){ toast('Bitte Zeitraum auswählen.','err'); return; }
   if(from>to){ toast('Startdatum muss vor dem Enddatum liegen.','err'); return; }

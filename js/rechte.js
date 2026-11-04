@@ -47,7 +47,7 @@ export const RECHTE = [
     { k:'kal_konflikte',   nr:'2.11', label:'Konflikte sehen', opts:[['alle','alle'],['team','eigene Teams'],['eigene','nur was mich betrifft']] },
   ]},
   { area:'kanban', icon:'🗂️', label:'Projektmanagement', items:[
-    { k:'pm_ansehen',       nr:'3.1', label:'Boards sehen', opts:[['teams','eigene Teams'],['alle','alle']] },
+    { k:'pm_ansehen',       nr:'3.1', label:'Boards sehen', opts:[['teams','eigene Teams + TPS – Gesamt']] },   // „alle“ abgeschafft (04.11.2026)
     { k:'pm_aufg_bearb',    nr:'3.2', label:'Aufgaben bearbeiten und verschieben' },
     { k:'pm_aufg_neu',      nr:'3.3', label:'Aufgaben anlegen' },
     { k:'pm_proj_eigen',    nr:'3.4', label:'Eigene Projekte anlegen' },
@@ -133,7 +133,6 @@ function _legacy(u){
   const kalEdit=crmAdm;
   const kb=on('kanban'), kbAdm=adm('kanban');
   const vt=on('verteiler'), me=on('messe'), sh=on('shop'), shAdm=adm('shop');
-  let seesAll=false; try{ seesAll=!!(window._crmKanbanSeesAll&&window._crmKanbanSeesAll(u)); }catch(e){}
   return {
     crm_ansehen: crm ? 'alle' : false,
     crm_anlegen: full, crm_stamm: edit, crm_personen: edit||ro, crm_notizen: edit, crm_notizen_fremd: full,
@@ -145,7 +144,7 @@ function _legacy(u){
     // Fälligkeiten/Konflikte (Release A): GF alles, Leitung ihre Teams, sonst Team bzw. „betrifft mich"
     kal_faellig: on('kalender') ? (u.role==='geschaeftsfuehrer'?'alle':'team') : false,
     kal_konflikte: on('kalender') ? (u.role==='geschaeftsfuehrer'?'alle':(u.role==='leitung'?'team':'eigene')) : false,
-    pm_ansehen: kb ? (seesAll?'alle':'teams') : false, pm_aufg_bearb: kb, pm_aufg_neu: kb, pm_proj_eigen: true,
+    pm_ansehen: kb ? 'teams' : false, pm_aufg_bearb: kb, pm_aufg_neu: kb, pm_proj_eigen: true,
     pm_proj_team: kbAdm, pm_proj_loeschen: kbAdm, pm_vorlagen: kb||crm,
     pm_vorlage_anwenden: kb||crm, pm_va_teams: kalEdit||full, pm_redaktion: kb,
     pm_freigabe: kbAdm || u.role==='leitung' || u.role==='geschaeftsfuehrer',
@@ -167,7 +166,7 @@ export function rechteOf(u){
   }
   return Object.assign({}, _TPL[r.tpl].vals, _clean(r.x));
 }
-function _clean(x){ const o={}; if(x&&typeof x==='object') Object.keys(x).forEach(k=>{ if(_ITEM[k]) o[k]=(k==='crm_ansehen'&&x[k]==='verein')?false:x[k]; }); return o; }   // „verein" abgeschafft → kein CRM
+function _clean(x){ const o={}; if(x&&typeof x==='object') Object.keys(x).forEach(k=>{ if(_ITEM[k]) o[k]=(k==='crm_ansehen'&&x[k]==='verein')?false:((k==='pm_ansehen'&&x[k]==='alle')?'teams':x[k]); }); return o; }   // „verein" abgeschafft → kein CRM
 
 // Ein Recht prüfen. Optionen-Rechte: Wert (z. B. 'alle'/'teams') oder false. opt=gewünschter Mindestwert.
 export function recht(key, u, opt){

@@ -3898,7 +3898,7 @@ function nodeModal(o){
   else if(_ctxAllowsTeams()){   // Unterpunkt in Eintrag/Veranstaltung (z. B. aus Kontaktnotizen): eigenes Team möglich, sonst geerbt
     const it=o.inheritTeam||[]; const own=Array.isArray(n.teams)?n.teams:[];
     const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;margin:0 14px 5px 0"><input type="checkbox" class="crm-task-team-cb" value="${esc(tm)}" ${own.includes(tm)?'checked':''} onchange="crmTaskTeamChange()"> ${esc(tm)}</label>`).join('');
-    teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst ${it.length?'wie die Hauptaufgabe: '+esc(it.join(', ')):'übergreifend'})</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
+    teamRow=`<div class="crm-modal-field"><label>Team <span style="font-size:12px;color:var(--muted)">(optional – sonst ${it.length?'wie die Hauptaufgabe: '+esc(it.join(', ')):'TPS – Gesamt'})</span></label><div id="crm-task-teams" style="padding:4px 0">${teamBoxes||'<span class="small" style="color:var(--muted)">Keine Teams angelegt.</span>'}</div></div>
      <div class="crm-modal-field"><label>Zuständig</label><select id="crm-task-assignee" class="crm-ss">${assigneeOptsHtml(own.length?own:it, n.assigneeId||'')}</select></div>`;
   }
   else {
@@ -4225,7 +4225,7 @@ function paintTeamsList(){
   const _safe=(label,fn)=>{ try{ return fn(); }catch(e){ console.error('Projektmanagement „'+label+'“:', e);
     return `<div class="crm-sec"><h4><span class="ttl">⚠ ${esc(label)}</span></h4><div class="small" style="color:var(--danger)">Konnte nicht angezeigt werden: ${esc((e&&e.message)||String(e))}${e&&e.stack?' · '+esc(String(e.stack).split(String.fromCharCode(10)).slice(1,3).join(' ').trim().slice(0,200)):''}</div></div>`; } };
   // „Meine Aufgaben" oben – für alle
-  const meine = _safe('Mir zugewiesen / Meine Projekte', meineSectionsHtml);
+  const meine = _safe('Mir zugewiesen / Persönliche Projekte', meineSectionsHtml);
   // Veranstaltungen direkt GANZ OBEN in der Teams-Ansicht (kein eigener Reiter mehr)
   const vaBlock = _safe('Veranstaltungen', ()=>crmCanView() ? veranstaltungenListHtml() : '');
   // Team-Kacheln: für CRM-Betrachter ODER reine Kanban-Nutzer. Sichtbare Teams = visibleKanbanTeams
@@ -4255,7 +4255,7 @@ function paintTeamDetail(){
   // Zugriffs-Guard: wer nicht alle Teams sieht, darf nur seine zugewiesenen Teams öffnen.
   if(!_kanbanSeesAll(window.cu)){
     const vis=visibleKanbanTeams(window.cu);
-    if(!vis.includes(team) && team!=='Ohne Team'){   // „übergreifend“ dürfen alle öffnen
+    if(!vis.includes(team) && team!=='Ohne Team'){   // „TPS – Gesamt“ dürfen alle öffnen
       if(window._planActive){ const t=vis[0]||'Ohne Team'; window._crmTeamSel=t; window._planTeam=t; return paintTeamDetail(); }   // Planner: eigenes Team statt alter Liste
       crmBackToTeams(); return; }
   }
@@ -4308,7 +4308,7 @@ function paintTeamDetail(){
       ${_tb('uebersicht','Übersicht',!redTab)}${_hasPlan?_tb('redaktion',isOea?'Redaktionsplan':'Projektplan',redTab):''}</div>`;
   const _tc=(t)=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--muted)':_TC[i%_TC.length]; };
   const _visT=(_kanbanSeesAll(window.cu)?zeTeams():visibleKanbanTeams(window.cu));
-  const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'übergreifend':t)}</button>`).join('')}</div>`;
+  const chipRow=`<div class="crm-team-chips" style="display:flex;flex-wrap:nowrap;gap:8px;margin:0 0 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">${_visT.concat(['Ohne Team']).map(t=>`<button type="button" class="btn-sm-crm${t===team?' primary':''}" style="border-radius:999px;display:inline-flex;align-items:center;gap:7px;flex:none;white-space:nowrap" onclick="crmOpenTeam(${jsq(encodeURIComponent(t))})"><span style="width:9px;height:9px;border-radius:50%;background:${t==='Ohne Team'?'var(--primary)':_tc(t)}"></span>${esc(t==='Ohne Team'?'TPS – Gesamt':t)}</button>`).join('')}</div>`;
   const _mem=team==='Ohne Team'?[]:zeUsers().filter(u=>u.id!=='admin'&&u.role!=='admin'&&userTeamsAll(u).includes(team));
   const memChips=_mem.map(u=>{ const lead=u.role==='leitung'&&(u.team===team); const guest=u.team&&u.team!==team;
     return `<span class="crm-chip" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px"><span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:var(--on-primary,#fff);display:inline-grid;place-items:center;font-size:12px;font-weight:700">${esc(String(u.name||'?').charAt(0))}</span>${esc(u.name)}${lead?' <span style="color:var(--muted)">Leitung</span>':''}${guest?' <span style="color:var(--muted)">+ '+esc(u.team)+'</span>':''}</span>`; }).join('');
@@ -4316,7 +4316,7 @@ function paintTeamDetail(){
     ${chipRow}
     <div class="crm-detail-head" style="flex-wrap:wrap;gap:10px">
       ${window._planActive?'':`<button class="btn-sm-crm" onclick="crmBackToTeams()">← Teams</button>`}
-      <h2 style="display:flex;align-items:center;gap:10px"><span style="width:14px;height:14px;border-radius:50%;background:${team==='Ohne Team'?'var(--primary)':_tc(team)}"></span>${esc(team==='Ohne Team'?'übergreifend':team)}</h2>
+      <h2 style="display:flex;align-items:center;gap:10px"><span style="width:14px;height:14px;border-radius:50%;background:${team==='Ohne Team'?'var(--primary)':_tc(team)}"></span>${esc(team==='Ohne Team'?'TPS – Gesamt':team)}</h2>
       ${window._planActive?'':`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-left:auto">${memChips}</div>`}
     </div>
     ${tabs}
@@ -4411,7 +4411,7 @@ function _oeaWhoHtml(r, posts, members, abs){
     const projs=listTeamProjekte(t).filter(p=>p.start&&!p.owner&&!p.closed);
     const vas=teamVeranstaltungen(t).filter(v=>v.start&&!v.closed);
     let h='<div class="red-scroll" tabindex="0" role="region" aria-label="Wer ist da (seitlich scrollbar)"><table class="red-y"><thead><tr><th></th>'+ms.map(o=>'<th>'+_O_MON[o.m]+'</th>').join('')+'</tr></thead><tbody>';
-    h+='<tr><th>📂 Projekte</th>'+ms.map(o=>{ const l=projs.filter(p=>String(p.start).slice(0,10)<=o.b&&String(p.ende||p.start).slice(0,10)>=o.a); return '<td>'+l.map(p=>'<div class="red-yp" title="'+esc(p.name||'')+'">'+esc(p.name||'Projekt')+'</div>').join('')+'</td>'; }).join('')+'</tr>';
+    h+='<tr><th>📂 Team-Projekte</th>'+ms.map(o=>{ const l=projs.filter(p=>String(p.start).slice(0,10)<=o.b&&String(p.ende||p.start).slice(0,10)>=o.a); return '<td>'+l.map(p=>'<div class="red-yp" title="'+esc(p.name||'')+'">'+esc(p.name||'Projekt')+'</div>').join('')+'</td>'; }).join('')+'</tr>';
     h+='<tr><th>📅 Veranstaltungen</th>'+ms.map(o=>{ const n=vas.filter(v=>String(v.start).slice(0,10)<=o.b&&String(v.ende||v.start).slice(0,10)>=o.a).length; return '<td class="num">'+(n||'')+'</td>'; }).join('')+'</tr>';
     const _rc=rpCfg(); const kan=_rc.kanaele.concat(['']);
     kan.forEach(k=>{ const cnt=ms.map(o=>posts.filter(a=>(_rc.oea?(a.node.kanal||''):'')===k&&a.node.due&&a.node.due>=o.a&&a.node.due<=o.b).length); if(!k&&!cnt.some(Boolean)) return;
@@ -4631,7 +4631,7 @@ function _planTeamOverview(team){
   const projs=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed);
   const prRow=p=>{ const openN=flatTasks(p).filter(t=>t.status!=='erledigt').length; const z=p.start?(fmtDate(Date.parse(p.start)).replace(/\.\d{4}$/,'.')+'–'+(p.ende?fmtDate(Date.parse(p.ende)).replace(/\.\d{4}$/,'.'):'')):'';
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${openN} offen</span>${p.start?'':'<span class="plan-tag">ohne Zeitraum</span>'}</div></div><span class="plan-when">${esc(z)}</span></div>`; };
-  const prCard=`<section class="plan-card"><div class="plan-h"><h2>📂 Projekte</h2>${_kbManage()?`<button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</div>${projs.length?projs.map(prRow).join(''):'<div class="plan-empty">Noch keine Projekte für dieses Team.</div>'}</section>`;
+  const prCard=`<section class="plan-card"><div class="plan-h"><h2>📂 Team-Projekte</h2>${_kbManage()?`<button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</div>${projs.length?projs.map(prRow).join(''):'<div class="plan-empty">Noch keine Projekte für dieses Team.</div>'}</section>`;
   const isOea=team===oeaCfg().team;
   return `<div class="plan-grid" style="margin-top:4px"><div>${tasksCard}</div><div class="plan-col">${vaCard}${prCard}</div></div>${isOea?_oeaNoTasksHtml():''}`;
 }
@@ -4829,7 +4829,7 @@ function meineSectionsHtml(){
       ${arows}
     </div>
     <div class="crm-sec">
-      <h4><span class="ttl">📂 Meine Projekte</span>${_R('pm_proj_eigen')?`<button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button>`:''}</h4>
+      <h4><span class="ttl">📂 Persönliche Projekte</span>${_R('pm_proj_eigen')?`<button class="btn-sm-crm primary" onclick="crmNewMeinProjekt()">＋ Projekt</button>`:''}</h4>
       ${openMine.length?`<div class="crm-list">${openMine.map(pcard).join('')}</div>`:`<div class="empty-state"><span class="es-icon">🗂️</span><span>Du hast noch keine eigenen Projekte. Lege eins an und weise Aufgaben zu.</span></div>`}
       ${closedMine.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Abgeschlossen (${closedMine.length})</summary><div class="crm-list" style="margin-top:8px">${closedMine.map(pcard).join('')}</div></details>`:''}
     </div>`;
@@ -5127,7 +5127,7 @@ function _vaFieldsHtml(v){
   v=v||{};
   const uv=_splitUhr(v.uhrzeit);
   const vt=vaTeams(v), lead=vt[0]||''; const _tOk=!v.id || _R('pm_va_teams');
-  const teamOpts=['<option value="">– übergreifend (kein Team) –</option>'].concat(zeTeams().map(tm=>`<option ${lead===tm?'selected':''}>${esc(tm)}</option>`)).join('');
+  const teamOpts=['<option value="">– TPS – Gesamt (kein Team) –</option>'].concat(zeTeams().map(tm=>`<option ${lead===tm?'selected':''}>${esc(tm)}</option>`)).join('');
   const teamBoxes=zeTeams().map(tm=>`<label style="display:inline-flex;align-items:center;gap:6px;margin:0 12px 4px 0;font-size:14px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--text)"><input type="checkbox" class="crm-va-team2" value="${esc(tm)}" ${vt.slice(1).includes(tm)?'checked':''}${_tOk?'':' disabled'} style="width:auto"> ${esc(tm)}</label>`).join('');
   return `<div class="crm-modal-field"><label>Titel *</label><input id="crm-va-titel" value="${esc(v.titel||'')}" placeholder="z. B. Netzwerktreffen, Online-Schulung …"></div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">

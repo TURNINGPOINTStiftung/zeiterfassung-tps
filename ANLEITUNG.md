@@ -322,8 +322,8 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
   4 Wochen betrifft – nur sichtbar, wenn es welche gibt: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du
   eingeplant bist), **Meine Termine** (die nächsten 5, weitere aufklappbar) und **Wer ist diese Woche da?** (die Personen deiner Teams,
   nur „Abwesend", nie der Grund).
-  Darunter **📂 Meine Projekte**: nur dir angezeigt (andere sehen sie in der App nirgends); öffnen zum Bearbeiten, Abschließen oder Löschen, „＋ Projekt" legt
-  ein neues an. Eigene Projekte erscheinen nie bei den Teams oder „übergreifend".
+  Darunter **📂 Persönliche Projekte**: nur dir angezeigt (andere sehen sie in der App nirgends); öffnen zum Bearbeiten, Abschließen oder Löschen, „＋ Projekt" legt
+  ein neues an. Persönliche Projekte erscheinen nie bei den Teams oder bei „TPS – Gesamt".
 - **Kalender:** Woche/Monat mit **Fälligkeiten** (Zahl am Tag auf der Zeile der zuständigen Person, **rot** bei
   Konflikt: überfällig, Person am Tag oder an den 2 Arbeitstagen davor abwesend, oder Freigabe-Person am Tag/Vortag
   abwesend). **Jahr** = die nächsten 12 Monate mit Veranstaltungen und Abwesenheiten (am Handy gibt es kein Jahr).
@@ -332,7 +332,7 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
   Klick auf eine Veranstaltung öffnet ihre Seite im Reiter **Veranstaltung**.
 - **Teams:** Team-Leiste oben, darunter die Personen des Teams (Leitung, „+ anderes Team" für Gäste). Wer in der
   Verwaltung mehreren Teams zugeordnet ist, erscheint in jedem dieser Teams. Unter Teams sieht jede Person nur ihre eigenen Teams und
-  „übergreifend“ – auch Leitung und Geschäftsführung (Ausnahme: „Boards sehen: alle“ in der Verwaltung).
+  „TPS – Gesamt“ (Aufgaben ohne Team) – auch Leitung und Geschäftsführung; nur der Administrator-Account sieht alle Teams.
   **Übersicht** = offene Aufgaben des Teams (6 Wochen + ohne Frist, mit Hinweisen wie „vor Fälligkeit abwesend",
   „Team · niemand", „Bildrechte offen"), Veranstaltungen und Projekte. Eine Aufgabe gehört zu ihrem eigenen Team,
   sonst zum **federführenden** Team ihrer Veranstaltung bzw. ihres Projekts; beteiligte Teams sehen nur, was ihnen
