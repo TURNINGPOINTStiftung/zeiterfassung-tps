@@ -462,10 +462,10 @@ async function _fillTodo(){
         const noA=list.filter(n=>!n.assigneeId).length, noD=list.filter(n=>!n.due).length;
         const txt=[noA?noA+' ohne Zuständige':'', noD?noD+' ohne Frist':''].filter(Boolean).join(' · ');
         rows.push({ sort:'!'+s+'~', html:`<div class="home-row"${canOpen?` onclick="homeOpenVa(${jsq(v.id)})"`:''}><span>📋</span><span class="tx">${esc(v.titel||'Veranstaltung')} <span class="home-sub">· offene Punkte: ${esc(txt)}</span></span><span class="home-pill amber">${s<=today?'heute':fmtD(s)}</span></div>` }); }); } }catch(e){}
-    const tasks=[];
-    const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(t.assigneeId===me && t.status!=='erledigt' && !cfIds.has(t.id)) tasks.push({kind,id:o.id,name,t}); }); };
+    const tasks=[]; const _ass=n=>(Array.isArray(n.assigneeIds)&&n.assigneeIds.length)?n.assigneeIds:(n.assigneeId?[n.assigneeId]:[]);
+    const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(_ass(t).includes(me) && t.status!=='erledigt' && !cfIds.has(t.id)) tasks.push({kind,id:o.id,name,t}); }); };
     if(window.crmListAllTasks){   // gemeinsame Sammelstelle (crm.js, Release A)
-      window.crmListAllTasks({ kinds:['veranstaltung','teamprojekt'] }).forEach(a=>{ if(a.node.assigneeId===me && a.node.status!=='erledigt')
+      window.crmListAllTasks({ kinds:['veranstaltung','teamprojekt'] }).forEach(a=>{ if(_ass(a.node).includes(me) && a.node.status!=='erledigt')
         if(!cfIds.has(a.node.id)) tasks.push({ kind:a.kind, id:a.containerId, name:a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':'Projekt'), t:a.node }); });
     } else {
       (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));

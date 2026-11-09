@@ -339,6 +339,7 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
   ausdrücklich zugeteilt ist.
 - **＋ Neu** (oben links im Projekt- und Redaktionsplan): neue Veranstaltung oder neues Projekt für das Team.
 - **Teams an Aufgaben:** Aufgaben und Unterpunkte können einem oder mehreren Teams zugeordnet werden (in Veranstaltungen, CRM-Einträgen und Team-Projekten); neu angelegte bekommen dein eigenes Team.
+- **Mehrere Zuständige:** Bei „Zuständig“ kannst du mehrere Personen anhaken oder mit **👥 Alle im Team** das ganze Team. Die Aufgabe erscheint dann bei jeder dieser Personen. **Niemand** = Team-Aufgabe, die eine Person übernimmt. Erledigt ist sie für alle, sobald jemand sie abhakt.
 - **Projektplan** (jedes Team): „Wer ist da" als Woche/Monat/Jahr mit den Aufgaben des Teams, Last je Woche und
   das Board **Offen → In Arbeit → Erledigt** (Spalte per Auswahl ändern; Recht „Aufgaben bearbeiten und verschieben").
 - **Redaktionsplan** (beim ÖA-Team statt Projektplan): „Wer ist da" als Woche/Monat/Jahr, Kanal-Filter, Last je Woche

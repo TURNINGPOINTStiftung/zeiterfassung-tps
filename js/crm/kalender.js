@@ -109,15 +109,16 @@ function _dueTasks(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){ all=[]; }
   const me=(window.cu&&window.cu.id)||''; const my=new Set(_myTeams());
   const d=getData()||{}; const tOf={}; (d.users||[]).forEach(u=>{ if(u&&u.id) tOf[u.id]=[u.team].concat(Array.isArray(u.teams)?u.teams:[]).filter(Boolean); });
-  return all.filter(a=>{ const n=a.node; if(!n||!n.due||!n.assigneeId||n.status==='erledigt') return false;
-      if(sc==='alle') return true; if(n.assigneeId===me) return true;
-      return sc==='team' && ((tOf[n.assigneeId]||[]).some(t=>my.has(t)) || (a.teamsEff||[]).some(t=>my.has(t))); })
-    .map(a=>({ id:a.node.id, text:a.node.text||'Aufgabe', due:String(a.node.due).slice(0,10), emp:a.node.assigneeId, status:a.node.status||'offen',
+  const inSc=(a,emp)=> sc==='alle' || emp===me || (sc==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || (a.teamsEff||[]).some(t=>my.has(t))));
+  return all.filter(a=>{ const n=a.node; return n && n.due && n.assigneeId && n.status!=='erledigt'; })
+    .flatMap(a=>_ass(a.node).filter(emp=>inSc(a,emp)).map(emp=>({a,emp})))   // je zuständiger Person ein Eintrag
+    .map(({a,emp})=>({ id:a.node.id, text:a.node.text||'Aufgabe', due:String(a.node.due).slice(0,10), emp, status:a.node.status||'offen',
       kind:a.kind, cid:a.containerId, tree:a.tree, src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:''), teams:a.teamsEff||[] }));
 }
 // Konflikt einer Aufgabe: überfällig ODER zuständige Person am Fälligkeitstag oder an den 2 Arbeitstagen davor abwesend.
 // (Abwesenheit = nur genehmigter Urlaub/Ausgleich wie im übrigen Kalender – Krankheit wird nie herangezogen.)
 function _workdaysBefore(iso,n){ const out=[iso]; let dt=_parse(iso); while(out.length<=n){ dt=_addDays(dt,-1); if(_dowMon(dt)<5) out.push(_iso(dt)); } return out; }
+const _ass=n=>(n&&Array.isArray(n.assigneeIds)&&n.assigneeIds.length)?n.assigneeIds:((n&&n.assigneeId)?[n.assigneeId]:[]);   // mehrere Zuständige
 function _taskIssue(t, abs){
   if(t.due<_todayISO()) return 'überfällig seit '+_deDate(t.due);
   const ds=_workdaysBefore(t.due,2);
@@ -162,16 +163,16 @@ function _taskConflicts(scope, days, noFilter){
   const vaMine=new Set(); try{ (listVeranstaltungen()||[]).forEach(v=>{ if(v&&Array.isArray(v.mitarbeiter)&&v.mitarbeiter.includes(me)) vaMine.add(v.id); }); }catch(e){}
   all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt'||(Array.isArray(n.children)&&n.children.length)) return;
     const due=String(n.due).slice(0,10); if(due>until) return;
-    const emp=n.assigneeId||''; const teams=a.teamsEff||[];
+    const emps=_ass(n); const emp=emps.includes(me)?me:(emps[0]||''); const teams=a.teamsEff||[];
     // „betrifft mich": mir zugewiesen, ich gebe frei, oder Aufgabe einer Veranstaltung, in der ich eingeplant bin
-    const mine = emp===me || n.freigabeId===me || (a.kind==='veranstaltung' && vaMine.has(a.containerId));
-    const inScope = scope==='alle' || mine || (scope==='team' && ((tOf[emp]||[]).some(t=>my.has(t)) || teams.some(t=>my.has(t))));
+    const mine = emps.includes(me) || n.freigabeId===me || (a.kind==='veranstaltung' && vaMine.has(a.containerId));
+    const inScope = scope==='alle' || mine || (scope==='team' && (emps.some(x=>(tOf[x]||[]).some(t=>my.has(t))) || teams.some(t=>my.has(t))));
     if(!inScope) return;
-    if(!noFilter && curTeam && curTeam!=='@me' && !((tOf[emp]||[]).includes(curTeam) || teams.includes(curTeam))) return;
+    if(!noFilter && curTeam && curTeam!=='@me' && !(emps.some(x=>(tOf[x]||[]).includes(curTeam)) || teams.includes(curTeam))) return;
     if(!noFilter && curTeam==='@me' && !mine) return;
     const t={ id:n.id, text:n.text||'Aufgabe', due, emp, frei:n.freigabeId||'', kanal:n.kanal||'', kind:a.kind, cid:a.containerId, tree:a.tree, teams,
       src:(a.kind==='veranstaltung'?'📅 ':(a.kind==='entity'?'📇 ':'📂 '))+(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))+(a.projName?' · '+a.projName:'') };
-    const is=_taskIssue(t, abs);
+    const is=(emps.length?emps:['']).map(x=>_taskIssue(Object.assign({}, t, { emp:x }), abs)).find(Boolean);
     if(is) out.push(Object.assign(t, { issue:is, over:due<today }));
   });
   return out.sort((x,y)=>x.due<y.due?-1:x.due>y.due?1:String(x.text).localeCompare(String(y.text),'de'));
@@ -226,7 +227,7 @@ function _teamLoad(months, emps, abs){
       emps.filter(u=>_teamOf(u)===t).forEach(u=>{ const mine=abs.filter(a=>a.emp===u.id); c.absDays+=days.filter(x=>mine.some(a=>overlap(a.von,a.bis,x,x))).length; }); }); });
   all.forEach(a=>{ const n=a.node; if(!n||!n.due||n.status==='erledigt') return; const due=String(n.due).slice(0,10); const y=+due.slice(0,4), m=+due.slice(5,7);
     const i=months.findIndex(o=>o.y===y&&o.m===m); if(i<0) return;
-    const ts=new Set(a.teamsEff||[]); if(n.assigneeId&&tOf[n.assigneeId]) ts.add(tOf[n.assigneeId]);
+    const ts=new Set(a.teamsEff||[]); _ass(n).forEach(x=>{ if(tOf[x]) ts.add(tOf[x]); });
     ts.forEach(t=>{ if(out[t]) out[t][i].n++; }); });
   teams.forEach(t=>out[t].forEach(c=>{ const present=c.wd?Math.max(0.5,(c.people*c.wd-c.absDays)/c.wd):c.people; c.perHead=present?c.n/present:c.n; }));
   return out;
@@ -1014,7 +1015,7 @@ Object.assign(window, { renderKalender, kalSetView, kalSetTeam, kalToday, kalNav
 // Hinweise zu EINER Aufgabe (für Teamseite/Redaktionsplan): [{lv:'crit'|'warn', t:Text}] – gleiche Regeln wie oben
 function kalTaskIssues(n){
   const out=[]; if(!n||n.status==='erledigt') return out;
-  if(n.due){ const is=_taskIssue({ due:String(n.due).slice(0,10), emp:n.assigneeId||'', frei:n.freigabeId||'' }, _abs()); if(is) out.push({ lv:'crit', t:is }); }
+  if(n.due){ const ab=_abs(); const is=(_ass(n).length?_ass(n):['']).map(emp=>_taskIssue({ due:String(n.due).slice(0,10), emp, frei:n.freigabeId||'' }, ab)).find(Boolean); if(is) out.push({ lv:'crit', t:is }); }
   if(n.kanal && n.bildrechte!==true && ['freigabe','geplant'].includes(n.phase)) out.push({ lv:'warn', t:'Bildrechte offen' });
   return out;
 }
