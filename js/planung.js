@@ -120,7 +120,7 @@ function _todoCard(){
     if(d<=2) return { k:'r', t:fmt(n.due)+' · in 2 Tagen' }; if(d<=14) return { k:'y', t:fmt(n.due)+' · in '+d+' Tagen' }; return { k:'g', t:fmt(n.due) }; };
   const row=a=>{ const n=a.node; const u=urg(n);
     const free=!n.assigneeId && !a.owner; const isA=a.art==='aufgaben';
-    const jd=(isA&&n.jeder&&window.crmAufgWho)?(()=>{ const w=window.crmAufgWho(a.containerId,n)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
+    const jd=(n.jeder&&window.crmTaskWhoA)?(()=>{ const w=window.crmTaskWhoA(a)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
     const acts=((isA||leaf(a))?`<button type="button" class="plan-act ok" onclick="${isA?`crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})`:`crmTaskDone(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
       +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
     return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
@@ -133,14 +133,14 @@ function _todoCard(){
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
 function _myProjCard(){
-  let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.owner===me()&&p.art!=='aufgaben'); }catch(e){}
+  let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.art!=='aufgaben'&&(p.owner===me()||(window.crmProjIsMember&&window.crmProjIsMember(p,me())))); }catch(e){}
   const can=(()=>{ try{ const u=window.cu; return !u||u.role==='admin'||!window.tpsRechteOf||!!window.tpsRechteOf(u).pm_proj_eigen; }catch(e){ return true; } })();
   if(!ps.length && !can) return '';
   const cnt=p=>{ let n=0; const w=a=>(a||[]).forEach(t=>{ if(!t) return; if(!(Array.isArray(t.children)&&t.children.length) && t.status!=='erledigt') n++; w(t.children); }); w(p.todos); return n; };
   const open=ps.filter(p=>!p.closed).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'de')), closed=ps.filter(p=>p.closed);
-  const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
+  const row=p=>`<div class="plan-item" role="button" tabindex="0" onclick="planOpenMyProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${cnt(p)} offen</span>${(()=>{ const sh=window.crmProjShared?window.crmProjShared(p):[]; if(!sh.length) return ''; return p.owner===me()?`<span class="plan-tag">👥 geteilt mit ${esc(sh.map(_uName).join(', '))}</span>`:`<span class="plan-tag">👥 geteilt von ${esc(_uName(p.owner))}</span>`; })()}${p.closed?'<span class="plan-tag">abgeschlossen</span>':''}</div></div></div>`;
   return `<section class="plan-card"><div class="plan-h"><h2>📂 Persönliche Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
-    <div class="plan-sub" style="margin:-4px 0 8px">nur für dich angezeigt · öffnen zum Bearbeiten, Abschließen oder Löschen</div>
+    <div class="plan-sub" style="margin:-4px 0 8px">nur für dich und Personen, mit denen du sie teilst · öffnen zum Bearbeiten, Teilen, Abschließen oder Löschen</div>
     ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
     ${(()=>{ // Persönliches Archiv (User 11.11.2026): Erledigtes verschwindet sofort hierher – abgeschlossene Projekte + erledigte private Aufgaben
       const aa=(window.crmMyArchivedAufg?window.crmMyArchivedAufg():[]).sort((x,y)=>String(y.n.doneAt||'').localeCompare(String(x.n.doneAt||'')));

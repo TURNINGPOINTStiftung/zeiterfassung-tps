@@ -287,7 +287,7 @@ verweigert. Vollständige v17-Datei vom Compiler akzeptiert. Testdaten gelöscht
 tpsPw @ab44d6d deployt 04.11.2026 (Moritz, rev tpspw-00021-luk, ACTIVE) – Backup/Einspielen mit ze_private.
 sha256 (raw @ab44d6d): 5589373f3b0b0ed9f651fe4f32447a886bd4fda4d4ae8f608963e73f1aa206f0 · Prüfwort `zePrivOnly` = 1 Treffer (v16: 0).
 
-## GETESTET CANDIDATE-v18.json – persönliche Projekte gezielt teilen (App v563; noch NICHT live)
+## Stand 2026-11-11: CANDIDATE-v18.json ist LIVE (veröffentlicht von Moritz per Cloud Shell) – persönliche Projekte gezielt teilen (App v563)
 = v16 (live) + eine weitere Schreib-Erlaubnis in `crm/teamprojekte/$id`: Mitglieder eines persönlichen Projekts
 (`teilen` = Text `|uid1|uid2|`, enthält die eigene Personen-ID aus `uidUser`) dürfen Inhalte ändern – aber nur, wenn
 `owner` und `teilen` gleich bleiben und das Projekt bestehen bleibt (kein Löschen, kein Anlegen fremder Projekte).
