@@ -104,7 +104,7 @@ function _open(a){ if(a.art==='aufgaben') return `crmAufgEdit(${jsq(a.containerI
 
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
-  const today=iso(new Date()); const wkEnd=iso(addD(new Date(), 6-dowMon(new Date())));
+  const today=iso(new Date());
   // Was ansteht: (1) mir zugeteilt – auch Aufgaben mit Unterpunkten, aus jedem Behälter; (2) mit Frist aus meinen persönlichen
   // Projekten; (3) einem meiner Teams zugeordnet und noch niemandem zugeteilt (gilt für alle Mitglieder, bis jemand übernimmt).
   const _ass=n=>(Array.isArray(n.assigneeIds)&&n.assigneeIds.length)?n.assigneeIds:(n.assigneeId?[n.assigneeId]:[]);
@@ -114,16 +114,19 @@ function _todoCard(){
   const isTeamTask=a=>!a.node.assigneeId && !a.owner && leaf(a) && !isCol(a) && (a.teamsEff||[]).some(t=>myT.has(t));
   const mine=all.filter(a=>a.node.status!=='erledigt' && !mineDone(a) && (_ass(a.node).includes(me()) || (a.kind==='teamprojekt' && a.owner===me() && (a.node.due || a.art==='aufgaben') && leaf(a)) || isTeamTask(a)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
-  const groups=[['Überfällig',mine.filter(a=>a.node.due&&a.node.due<today),'crit'],['Diese Woche',mine.filter(a=>a.node.due&&a.node.due>=today&&a.node.due<=wkEnd),''],['Später',mine.filter(a=>!a.node.due||a.node.due>wkEnd),'']];
-  const row=a=>{ const n=a.node; const col=_teamCol((a.teamsEff||[])[0]);
+  // Dringlichkeit (User 11.11.2026): eine Liste nach Frist, farbig – rot überfällig/bis 2 Tage, gelb bis 2 Wochen, grün später
+  const urg=n=>{ if(!n.due) return { k:'n', t:'ohne Frist' }; const d=Math.round((parse(n.due)-parse(today))/864e5);
+    if(d<0) return { k:'r', t:'überfällig · '+fmt(n.due) }; if(d===0) return { k:'r', t:'heute' }; if(d===1) return { k:'r', t:'morgen' };
+    if(d<=2) return { k:'r', t:fmt(n.due)+' · in 2 Tagen' }; if(d<=14) return { k:'y', t:fmt(n.due)+' · in '+d+' Tagen' }; return { k:'g', t:fmt(n.due) }; };
+  const row=a=>{ const n=a.node; const u=urg(n);
     const free=!n.assigneeId && !a.owner; const isA=a.art==='aufgaben';
     const jd=(isA&&n.jeder&&window.crmAufgWho)?(()=>{ const w=window.crmAufgWho(a.containerId,n)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
     const acts=(isA?`<button type="button" class="plan-act ok" onclick="crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
       +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
-    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
-  const MAXN=5;
-  const col=g=>`<div class="plan-gcol"><div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].slice(0,MAXN).map(row).join('')||'<div class="plan-empty sm">nichts</div>'}${g[1].length>MAXN?`<details class="plan-more"><summary>${g[1].length-MAXN} weitere anzeigen</summary>${g[1].slice(MAXN).map(row).join('')}</details>`:''}</div>`;
-  const body=mine.length?`<div class="plan-gcols">${groups.map(col).join('')}</div>`:''
+    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
+  const MAXN=12; const cnt=k=>mine.filter(a=>urg(a.node).k===k).length;
+  const legend=`<div class="plan-legend">${[['r','überfällig / bis 2 Tage'],['y','bis 2 Wochen'],['g','später'],['n','ohne Frist']].map(([k,l])=>`<span><i class="u-${k}"></i>${l}${cnt(k)?` <b>${cnt(k)}</b>`:''}</span>`).join('')}</div>`;
+  const body=mine.length?`${legend}<div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
   return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}</section>`;
 }
@@ -233,6 +236,15 @@ function _styles(){
   .plan-grp.crit{color:var(--danger,#c0392b)}
   .plan-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
   .plan-item:hover{background:var(--info-bg,#eef3fb)}
+  .plan-tlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:8px;align-items:start}
+  .plan-tlist .plan-irow{margin-bottom:0}
+  .plan-barc.u-r,.plan-legend i.u-r{background:var(--danger,#c0392b)} .plan-barc.u-y,.plan-legend i.u-y{background:#e6b400}
+  .plan-barc.u-g,.plan-legend i.u-g{background:var(--ok,#16a34a)} .plan-barc.u-n,.plan-legend i.u-n{background:var(--border-strong,#9aa7b6)}
+  .plan-due{flex:none;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .plan-due.u-r{background:var(--danger-bg,#fde8e8);color:var(--danger,#b42318)} .plan-due.u-y{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#7a4a00)}
+  .plan-due.u-g{background:var(--ok-bg,#e3f3e9);color:var(--ok-text,#166534)} .plan-due.u-n{background:var(--surface,#fff);color:var(--muted,#5d7086);border:1px solid var(--border,#dce3ec)}
+  .plan-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted,#5d7086);margin:0 0 10px}
+  .plan-legend span{display:inline-flex;align-items:center;gap:6px} .plan-legend i{width:10px;height:10px;border-radius:3px;display:inline-block} .plan-legend b{color:var(--text,#15263a)}
   .plan-irow{background:var(--surface-2,#f6f8fb);border-radius:10px;margin-bottom:8px} .plan-irow>.plan-item{margin-bottom:0;background:transparent}
   .plan-irow:hover{background:var(--info-bg,#eef3fb)}
   .plan-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;padding:0 12px 10px 28px}
