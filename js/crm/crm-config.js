@@ -86,7 +86,7 @@ export function memberFunctions(){
 
 // ── Aufgaben-Status (bewusst FIX – „erledigt" ist Logik-tragend) ───
 export const TASK_STATUS = [
-  { key:'offen',    label:'Offen',     color:'#7f8c8d' },
+  { key:'offen',    label:'Offen',     color:'#5f6b6d' },   // dunkler: Kontrast ≥ 4.5 zu weißer Schrift
   { key:'inarbeit', label:'In Arbeit', color:'#2d6099' },
   { key:'erledigt', label:'Erledigt',  color:'#48ae4d' },
 ];

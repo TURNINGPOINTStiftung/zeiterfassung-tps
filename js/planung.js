@@ -128,8 +128,23 @@ function _todoCard(){
   const legend=`<div class="plan-legend">${[['r','überfällig / bis 2 Tage'],['y','bis 2 Wochen'],['g','später'],['n','ohne Frist']].map(([k,l])=>`<span><i class="u-${k}"></i>${l}${cnt(k)?` <b>${cnt(k)}</b>`:''}</span>`).join('')}</div>`;
   const body=mine.length?`${legend}<div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}</section>`;
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}${_myArchiveHtml()}</section>`;
 }
+// 🗄 Mein Archiv (User 11.11.2026): Erledigtes, das mir zugeteilt war / das ich abgehakt habe, + abgeschlossene Projekte
+function _myArchiveHtml(){
+  let ar={ tasks:[], projects:[] }; try{ ar=window.crmMyArchive?window.crmMyArchive():ar; }catch(e){}
+  if(!ar.tasks.length && !ar.projects.length) return '';
+  const d=t=>t?fmt(iso(new Date(t))):'';
+  const tRow=x=>{ const a=x.a, n=a.node; return `<div class="plan-irow"><div class="plan-item done" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}${n.doneBy?`<span class="plan-tag">✓ ${esc(n.doneBy)}</span>`:''}</div></div><span class="plan-when">${esc(d(x.at))}</span></div><div class="plan-acts"><button type="button" class="plan-act" onclick="crmTaskReopen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">↩ Wieder öffnen</button></div></div>`; };
+  const pRow=p=>`<div class="plan-item done" role="button" tabindex="0" onclick="planOpenProj(${jsq(p.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">🏁 ${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${p.owner?(p.owner===me()?'persönlich':'geteilt von '+esc(_uName(p.owner))):'Team '+esc(p.team||'')}</span></div></div><span class="plan-when">${esc(d(p.closedAt))}</span></div>`;
+  const N=20; const t=ar.tasks;
+  return `<details class="plan-arch"><summary class="plan-arch-s">🗄 Mein Archiv <span class="plan-sub">${t.length} Aufgabe${t.length===1?'':'n'} · ${ar.projects.length} Projekt${ar.projects.length===1?'':'e'}</span></summary>
+    ${ar.projects.map(pRow).join('')}${t.slice(0,N).map(tRow).join('')}
+    ${t.length>N?`<details class="plan-more"><summary>${t.length-N} ältere anzeigen</summary>${t.slice(N).map(tRow).join('')}</details>`:''}</details>`;
+}
+function planOpenProj(id){ try{ const p=(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{})[id]; if(!p) return;
+  if(p.owner) return planOpenMyProj(id);
+  window._crmTeamProjSel=id; window._crmProjReturn='team'; planGo('teams',{ team:p.team||'', keep:true }); setTimeout(()=>{ try{ window.crmOpenTeamProjekt&&window.crmOpenTeamProjekt(id); }catch(e){} },0); }catch(e){ console.warn('Planung:',e); } }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
 function _myProjCard(){
@@ -142,11 +157,7 @@ function _myProjCard(){
   return `<section class="plan-card"><div class="plan-h"><h2>📂 Persönliche Projekte</h2>${can?`<button class="btn-sm-crm primary" onclick="planNewMyProj()">＋ Projekt</button>`:''}</div>
     <div class="plan-sub" style="margin:-4px 0 8px">nur für dich und Personen, mit denen du sie teilst · öffnen zum Bearbeiten, Teilen, Abschließen oder Löschen</div>
     ${open.map(row).join('')||'<div class="plan-empty">Noch keine eigenen Projekte.</div>'}
-    ${(()=>{ // Persönliches Archiv (User 11.11.2026): Erledigtes verschwindet sofort hierher – abgeschlossene Projekte + erledigte private Aufgaben
-      const aa=(window.crmMyArchivedAufg?window.crmMyArchivedAufg():[]).sort((x,y)=>String(y.n.doneAt||'').localeCompare(String(x.n.doneAt||'')));
-      const cl=closed.slice().sort((a,b)=>(b.closedAt||0)-(a.closedAt||0)); if(!cl.length&&!aa.length) return '';
-      const aRow=x=>`<div class="plan-irow"><div class="plan-item done" role="button" tabindex="0" onclick="crmAufgEdit(${jsq(x.cid)},${jsq(x.n.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(x.n.text||'Aufgabe')}</div></div><span class="plan-when">${esc(x.n.doneAt?fmt(String(x.n.doneAt).slice(0,10)):'')}</span></div><div class="plan-acts"><button type="button" class="plan-act" onclick="crmAufgReopen(${jsq(x.cid)},${jsq(x.n.id)})">↩ Wieder öffnen</button></div></div>`;
-      return `<details style="margin-top:10px"><summary class="plan-arch-s">🗄 Archiv <span class="plan-sub">${cl.length} Projekt${cl.length===1?'':'e'} · ${aa.length} Aufgabe${aa.length===1?'':'n'}</span></summary>${cl.map(row).join('')}${aa.map(aRow).join('')}</details>`; })()}</section>`;
+</section>`;
 }
 // Persönliches Projekt im Projektmanagement-Teil der Planung öffnen; „Zurück" führt wieder zu „Was ansteht"
 function planOpenMyProj(id){ try{ window._crmTeamProjSel=id; window._crmMode='meine'; window._crmProjReturn='meine'; planGo('teams',{keep:true}); setTimeout(()=>{ try{ window.crmOpenMeinProjekt&&window.crmOpenMeinProjekt(id); }catch(e){} },0); }catch(e){ console.warn('Planung:',e); } }
@@ -241,6 +252,7 @@ function _styles(){
   .plan-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
   .plan-item:hover{background:var(--info-bg,#eef3fb)}
   .plan-item.done .plan-t{font-weight:600;color:var(--muted,#5d7086)}
+  .plan-arch{margin-top:14px;border-top:1px dashed var(--border,#dce3ec);padding-top:10px}
   .plan-arch-s{cursor:pointer;color:var(--primary-d,#15263a);font-weight:700;font-size:14px;padding:4px 0}
   .plan-tlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:8px;align-items:start}
   .plan-tlist .plan-irow{margin-bottom:0}
@@ -282,7 +294,7 @@ function _styles(){
   document.head.appendChild(st);
 }
 
-try{ Object.assign(window, { planOpenMyProj, planNewMyProj, planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
+try{ Object.assign(window, { planOpenProj, planOpenMyProj, planNewMyProj, planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
 export { renderPlanungStart };
 // Tastatur: Einträge mit role=button per Enter/Leertaste öffnen
 document.addEventListener('keydown', e=>{ if(e.key!=='Enter' && e.key!==' ') return; const t=e.target; if(!t || !t.classList || !t.classList.contains('plan-item') || t.getAttribute('role')!=='button') return; e.preventDefault(); t.click(); });

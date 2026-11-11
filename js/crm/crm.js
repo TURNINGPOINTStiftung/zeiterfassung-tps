@@ -1760,7 +1760,7 @@ function kbCardHtml(c, n){
     </div>`;
     const kdone=k.status==='erledigt';
     return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
-      <input type="checkbox" ${kdone?'checked':''} onchange="crmToggleDone(${jsq(k.id)})">
+      <input type="checkbox" ${kdone?'checked':''} aria-label="Erledigt: ${esc(k.text||'Unterpunkt')}" onchange="crmToggleDone(${jsq(k.id)})">
       <span class="kb-check-tx" onclick="crmOpenTask(${jsq(k.id)})">${esc(k.text)}</span>
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
     </div>`;
@@ -1770,7 +1770,7 @@ function kbCardHtml(c, n){
   return `<div class="kb-card${cdone?' done':''}${collapsed?' collapsed':''}" data-id="${esc(n.id)}" draggable="${_kbMob?'false':'true'}" ondragstart="crmDragStart(event,${jsq(n.id)})" ondragend="crmDragEnd(event)">
     <div class="kb-card-top">
       <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(n.id)})">${collapsed?'▸':'▾'}</button>
-      ${vo?'':`<input type="checkbox" ${cdone?'checked':''} onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
+      ${vo?'':`<input type="checkbox" ${cdone?'checked':''} aria-label="Erledigt: ${esc(n.text||'Aufgabe')}" onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
       <span class="kb-card-title" onclick="crmOpenTask(${jsq(n.id)})">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
       ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode(${jsq(n.id)})">✕</button>`:''}
     </div>
@@ -4690,9 +4690,28 @@ function _oeaRedaktionHtml(){
   <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span>${c.oea?'':' <span style="font-size:13px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">– alle Aufgaben des Teams, unabhängig vom Zeitraum oben</span>'}</h4>
     ${(r.v==='jahr'&&c.oea)?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
   </div>
+  ${_teamArchivHtml(c.team)}
   ${c.oea?_oeaNoTasksHtml():''}`;
 }
 
+// Team-Archiv (älter als 7 Tage erledigt): Team-Übersicht UND unten im Projekt-/Redaktionsplan – für alle im Team sichtbar
+function _teamArchivHtml(team){
+  const ohne=team==='Ohne Team'; const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
+  const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
+  const all=listAllTasks({ includeClosed:true }).filter(a=>!a.owner);
+  const tAll=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
+  const archP=tAll.filter(p=>p.closed&&_ts(p.closedAt)<wk).sort((a,b)=>_ts(b.closedAt)-_ts(a.closedAt));
+  const archA=[]; if(!ohne){ const box=_aufgBox(team,''); if(box) (box.todos||[]).forEach(n=>{ if(n&&n.status==='erledigt'&&_ts(n.doneAt)<wk) archA.push(n); }); }
+  archA.sort((a,b)=>_ts(b.doneAt)-_ts(a.doneAt));
+  const archT=all.filter(a=>inTeam(a) && a.art!=='aufgaben' && a.node.status==='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && _ts(a.node.doneAt)<wk)
+    .sort((x,y)=>_ts(y.node.doneAt)-_ts(x.node.doneAt));
+  const archHtml=(archP.length||archA.length||archT.length)?`<section class="plan-card"><details><summary class="plan-arch-s"><h2 style="display:inline">🗄 Archiv</h2> <span class="plan-sub">${archP.length} Projekt${archP.length===1?'':'e'} · ${archA.length+archT.length} Aufgabe${(archA.length+archT.length)===1?'':'n'} – älter als 7 Tage erledigt</span></summary>
+    ${archP.map(p=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">📂 ${esc(p.name||'Projekt')}</div></div><span class="plan-when">🏁 ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' · '+esc(p.closedByKuerzel):''}</span></div>`).join('')}
+    ${archA.map(n=>`<div class="plan-irow"><div class="plan-item done" role="button" tabindex="0" onclick="crmAufgEdit(${jsq(_aufgId(team,''))},${jsq(n.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div></div><span class="plan-when">${esc(n.doneAt?fmtDate(Date.parse(n.doneAt)):'')}${n.doneBy?' · '+esc(n.doneBy):''}</span></div>${_aufgMay(_aufgBox(team,''))?`<div class="plan-acts"><button type="button" class="plan-act" onclick="crmAufgReopen(${jsq(_aufgId(team,''))},${jsq(n.id)})">↩ Wieder öffnen</button></div>`:''}</div>`).join('')}
+    ${archT.slice(0,50).map(a=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span></div></div><span class="plan-when">${esc(a.node.doneAt?fmtDate(Date.parse(a.node.doneAt)):'')}${a.node.doneBy?' · '+esc(a.node.doneBy):''}</span></div>`).join('')}${archT.length>50?`<div class="plan-sub">… und ${archT.length-50} ältere</div>`:''}
+    </details></section>`:'';
+  return archHtml;
+}
 // ── Planung: Team-Übersicht nach Prototyp (offene Aufgaben 6 Wochen + ohne Frist | Veranstaltungen, Projekte) ──
 function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
@@ -4723,16 +4742,7 @@ function _planTeamOverview(team){
   const vaCard=`<section class="plan-card"><div class="plan-h"><h2>📅 Veranstaltungen</h2>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</div>${vas.length?vas.map(vaRow).join(''):'<div class="plan-empty">Keine anstehenden Veranstaltungen für dieses Team.</div>'}</section>`;
   const tAll=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
   const projs=tAll.filter(p=>!p.closed||_ts(p.closedAt)>=wk);   // abgeschlossene noch 7 Tage sichtbar
-  const archP=tAll.filter(p=>p.closed&&_ts(p.closedAt)<wk).sort((a,b)=>_ts(b.closedAt)-_ts(a.closedAt));
-  const archA=[]; if(!ohne){ const box=_aufgBox(team,''); if(box) (box.todos||[]).forEach(n=>{ if(n&&n.status==='erledigt'&&_ts(n.doneAt)<wk) archA.push(n); }); }
-  archA.sort((a,b)=>_ts(b.doneAt)-_ts(a.doneAt));
-  const archT=all.filter(a=>inTeam(a) && a.art!=='aufgaben' && a.node.status==='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && _ts(a.node.doneAt)<wk)
-    .sort((x,y)=>_ts(y.node.doneAt)-_ts(x.node.doneAt));
-  const archHtml=(archP.length||archA.length||archT.length)?`<section class="plan-card"><details><summary class="plan-arch-s"><h2 style="display:inline">🗄 Archiv</h2> <span class="plan-sub">${archP.length} Projekt${archP.length===1?'':'e'} · ${archA.length+archT.length} Aufgabe${(archA.length+archT.length)===1?'':'n'} – älter als 7 Tage erledigt</span></summary>
-    ${archP.map(p=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">📂 ${esc(p.name||'Projekt')}</div></div><span class="plan-when">🏁 ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' · '+esc(p.closedByKuerzel):''}</span></div>`).join('')}
-    ${archA.map(n=>`<div class="plan-irow"><div class="plan-item done" role="button" tabindex="0" onclick="crmAufgEdit(${jsq(_aufgId(team,''))},${jsq(n.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div></div><span class="plan-when">${esc(n.doneAt?fmtDate(Date.parse(n.doneAt)):'')}${n.doneBy?' · '+esc(n.doneBy):''}</span></div>${_aufgMay(_aufgBox(team,''))?`<div class="plan-acts"><button type="button" class="plan-act" onclick="crmAufgReopen(${jsq(_aufgId(team,''))},${jsq(n.id)})">↩ Wieder öffnen</button></div>`:''}</div>`).join('')}
-    ${archT.slice(0,50).map(a=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span></div></div><span class="plan-when">${esc(a.node.doneAt?fmtDate(Date.parse(a.node.doneAt)):'')}${a.node.doneBy?' · '+esc(a.node.doneBy):''}</span></div>`).join('')}${archT.length>50?`<div class="plan-sub">… und ${archT.length-50} ältere</div>`:''}
-    </details></section>`:'';
+  const archHtml=_teamArchivHtml(team);
   const prRow=p=>{ const openN=flatTasks(p).filter(t=>t.status!=='erledigt').length; const z=p.start?(fmtDate(Date.parse(p.start)).replace(/\.\d{4}$/,'.')+'–'+(p.ende?fmtDate(Date.parse(p.ende)).replace(/\.\d{4}$/,'.'):'')):'';
     if(p.closed) return `<div class="plan-item done" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:var(--ok,#16a34a)"></span><div class="plan-main"><div class="plan-t">🏁 ${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">abgeschlossen am ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' von '+esc(p.closedByKuerzel):''}</span></div></div></div>`;
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${openN} offen</span>${p.start?'':'<span class="plan-tag">ohne Zeitraum</span>'}</div></div><span class="plan-when">${esc(z)}</span></div>`; };
@@ -4917,6 +4927,27 @@ function crmAufgReopen(cid, tid){
   const c=getTeamProjekt(cid); if(!c||!_aufgMay(c)) return; normTasks(c); const f=findNode(c, tid); if(!f) return;
   f.node.status='offen'; f.node.doneAt=''; f.node.doneBy=''; _aufgSave(c); toast('Wieder offen ✓','ok'); _aufgRefresh();
 }
+// „Mein Archiv" (Was ansteht): alles Erledigte, das mir zugeteilt war oder das ich abgehakt habe – aus jedem Behälter –
+// plus abgeschlossene Projekte (eigene/geteilte und Team-Projekte, in denen ich Aufgaben hatte)
+function crmMyArchive(){
+  const me=(window.cu&&window.cu.id)||''; const kz=curKuerzel(); const ts=v=>{ const t=Date.parse(v||''); return isFinite(t)?t:0; };
+  const all=listAllTasks({ includeClosed:true });
+  const tasks=all.filter(a=>{ const n=a.node; if(n.status!=='erledigt' || (Array.isArray(n.children)&&n.children.length)) return false;
+      if(a.depth===0 && a.kind==='teamprojekt' && a.art!=='aufgaben' && _projIsBoard(getTeamProjekt(a.containerId)||{})) return false;   // Board-Spalte
+      return _isAss(n, me) || (a.owner===me) || (!!kz && n.doneBy===kz); })
+    .map(a=>({ a, at:ts(a.node.doneAt) })).sort((x,y)=>y.at-x.at);
+  const mineIn=new Set(all.filter(a=>_isAss(a.node, me)).map(a=>a.containerId));
+  const projects=listTeamProjekte().filter(p=>p && p.closed && p.art!=='aufgaben' && (p.owner===me || projIsMember(p, me) || (!p.owner && mineIn.has(p.id))))
+    .sort((a,b)=>(b.closedAt||0)-(a.closedAt||0));
+  return { tasks, projects };
+}
+function crmTaskReopen(kind, tree, cid, tid){
+  if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben') return crmAufgReopen(cid, tid); }
+  _meSetCtx(kind, tree, cid, tid);
+  mutateContainer(en=>{ const g=findNode(en, tid); if(!g) return; g.node.status='offen'; g.node.doneAt=''; g.node.doneBy=''; g.node.erledigtVon=null;
+    if(g.node.phase){ const f=oeaCfg().ablauf.find(x=>x.base==='inarbeit')||oeaCfg().ablauf[0]; if(f) g.node.phase=f.key; } });
+  toast('Wieder offen ✓','ok'); _aufgRefresh();
+}
 // Persönliches Archiv: erledigte eigene Aufgaben (privat)
 function crmMyArchivedAufg(){ const c=_aufgBox('', _aMe()); return c?(c.todos||[]).filter(n=>n&&n.status==='erledigt').map(n=>({ cid:c.id, n })):[]; }
 // „Übernehmen": freie Team-Aufgabe (aus jedem Behälter) mir zuteilen
@@ -4927,7 +4958,7 @@ function crmTakeTask(kind, tree, cid, tid){
       normTasks(c); fn(c); _aufgSave(c); toast('Übernommen ✓','ok'); _aufgRefresh(); return; } }
   _meSetCtx(kind, tree, cid, tid); mutateContainer(fn); toast('Übernommen ✓','ok'); _aufgRefresh();
 }
-try{ Object.assign(window, { crmTaskDone, crmAufgReopen, crmMyArchivedAufg, crmAufgNew, crmAufgEdit, crmAufgSave, crmAufgDelete, crmAufgDone, crmAufgFormChg, crmTakeTask, crmAufgWdhLabel:aufgWdhLabel, crmAufgWho:(cid,n)=>aufgWho(getTeamProjekt(cid),n) }); }catch(e){}
+try{ Object.assign(window, { crmMyArchive, crmTaskReopen, crmTaskDone, crmAufgReopen, crmMyArchivedAufg, crmAufgNew, crmAufgEdit, crmAufgSave, crmAufgDelete, crmAufgDone, crmAufgFormChg, crmTakeTask, crmAufgWdhLabel:aufgWdhLabel, crmAufgWho:(cid,n)=>aufgWho(getTeamProjekt(cid),n) }); }catch(e){}
 
 // ── Eigenständige Team-Projekte ────────────────────────────────────
 function paintTeamProjektDetail(){
@@ -5003,7 +5034,8 @@ function _projListHtml(p){
       <button type="button" class="pl-main" onclick="crmOpenTask(${jsq(n.id)})"><span class="pl-t">${esc(n.text||'Aufgabe')}</span>${tags?`<span class="pl-tags">${tags}</span>`:''}</button>
       ${(sub&&!n.due)?'':`<span class="pl-due u-${isDone?'n':u.k}">${esc(u.t)}</span>`}</div>`
       +(sub?'':kids.map(k=>row(k,'',true)).join('')); };
-  const who=p.team?`<select id="pl-new-who" aria-label="Zuständig">${assigneeOptsHtml([p.team], '')}</select>`
+  const _vaT=(window._crmTaskCtx&&window._crmTaskCtx.kind==='veranstaltung')?vaTeams(p):[];   // Veranstaltung: ihre Teams
+  const who=(p.team||_vaT.length)?`<select id="pl-new-who" aria-label="Zuständig">${assigneeOptsHtml(p.team?[p.team]:_vaT, '')}</select>`
     :(projShared(p).length?`<select id="pl-new-who" aria-label="Zuständig"><option value="">– niemand –</option>${[p.owner].concat(projShared(p)).map(id=>`<option value="${esc(id)}">${esc(userName(id)||id)}</option>`).join('')}</select>`:'');
   const add=may?`<div class="pl-add"><input id="pl-new" placeholder="＋ Neue Aufgabe … (Enter)" aria-label="Neue Aufgabe" onkeydown="if(event.key==='Enter'){event.preventDefault();crmProjQuickAdd();}">
       <input id="pl-new-due" type="date" aria-label="Fällig">${who}<button type="button" class="btn-sm-crm primary" onclick="crmProjQuickAdd()">Hinzufügen</button></div>`:'';
@@ -5288,12 +5320,13 @@ function paintVeranstaltungDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>${window._planActive?_planVaSummary(v):''}
         <span class="hbtns">
-          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
+          <span class="pl-seg" role="group" aria-label="Ansicht"><button class="${v.ansicht==='liste'?'on':''}" aria-pressed="${v.ansicht==='liste'}" onclick="crmProjAnsicht('liste')">☰ Liste</button><button class="${v.ansicht==='liste'?'':'on'}" aria-pressed="${v.ansicht!=='liste'}" onclick="crmProjAnsicht('board')">▦ Board</button></span>
+          ${v.ansicht==='liste'?'':`<button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>`}
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
+          ${v.ansicht==='liste'?'':`<button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>`}
         </span>
       </h4>
-      ${taskBoardHtml(v)}
+      ${v.ansicht==='liste'?_projListHtml(v):taskBoardHtml(v)}
     </div>
     ${window._planActive?_planVorlageHtml(v):''}
   </div>`;
