@@ -100,7 +100,8 @@ const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };
 function _srcTag(a){
   if(a.art==='aufgaben'){ const w=(window.crmAufgWdhLabel&&window.crmAufgWdhLabel(a.node))||''; return `<span class="plan-tag">${w?'🔁 '+esc(w):'✔ Aufgabe'}${a.owner?' · privat':''}</span>`; }
   const ic=a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'); return `<span class="plan-tag">${ic} ${esc(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))}</span>`; }
-function _open(a){ if(a.art==='aufgaben') return `crmAufgEdit(${jsq(a.containerId)},${jsq(a.node.id)})`; return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
+function _open(a){ return `crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
+function _openOld(a){ if(a.art==='aufgaben') return `crmAufgEdit(${jsq(a.containerId)},${jsq(a.node.id)})`; return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
 
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
@@ -123,10 +124,12 @@ function _todoCard(){
     const jd=(n.jeder&&window.crmTaskWhoA)?(()=>{ const w=window.crmTaskWhoA(a)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
     const acts=((isA||leaf(a))?`<button type="button" class="plan-act ok" onclick="${isA?`crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})`:`crmTaskDone(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
       +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
-    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
+    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}${window.crmNoteBadge?window.crmNoteBadge(n):''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
   const MAXN=12; const cnt=k=>mine.filter(a=>urg(a.node).k===k).length;
   const legend=`<div class="plan-legend">${[['r','überfällig / bis 2 Tage'],['y','bis 2 Wochen'],['g','später'],['n','ohne Frist']].map(([k,l])=>`<span><i class="u-${k}"></i>${l}${cnt(k)?` <b>${cnt(k)}</b>`:''}</span>`).join('')}</div>`;
-  const body=mine.length?`${legend}<div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
+  const ment=(()=>{ try{ return window.crmMyMentions?window.crmMyMentions():[]; }catch(e){ return []; } })();
+  const mentHtml=ment.length?`<div class="plan-ment">${ment.slice(0,5).map(m=>`<div class="plan-item" role="button" tabindex="0" onclick="${_open(m.a)}"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">💬 ${esc(m.x.name||'')} hat dich erwähnt · ${esc(m.a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">„${esc(String(m.x.text||'').slice(0,90))}${String(m.x.text||'').length>90?'…':''}“</span>${_srcTag(m.a)}</div></div><span class="plan-when">${esc(new Date(m.x.ts).toLocaleDateString('de-DE',{day:'numeric',month:'numeric'}))}</span></div>`).join('')}</div>`:'';
+  const body=mine.length?`${mentHtml}${legend}<div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
   return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}${_myArchiveHtml()}</section>`;
 }
@@ -254,6 +257,9 @@ function _styles(){
   .plan-item.done .plan-t{font-weight:600;color:var(--muted,#5d7086)}
   .plan-arch{margin-top:14px;border-top:1px dashed var(--border,#dce3ec);padding-top:10px}
   .plan-arch-s{cursor:pointer;color:var(--primary-d,#15263a);font-weight:700;font-size:14px;padding:4px 0}
+  .plan-ment{margin:0 0 12px} .plan-ment .plan-item{background:var(--info-bg,#eef3fb)}
+  .tv-badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--muted,#5d7086)}
+  .tv-badge.neu{background:var(--info-bg,#dbe6fb);color:var(--primary,#203869);border-color:transparent;font-weight:700}
   .plan-tlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:8px;align-items:start}
   .plan-tlist .plan-irow{margin-bottom:0}
   .plan-barc.u-r,.plan-legend i.u-r{background:var(--danger,#c0392b)} .plan-barc.u-y,.plan-legend i.u-y{background:#e6b400}

@@ -682,6 +682,31 @@ function injectStyles(){
   .crm-modal-field{margin-bottom:14px}
   .af-seg{display:flex;gap:6px;flex-wrap:wrap}.af-seg label{display:inline-flex!important;align-items:center;gap:6px;margin:0!important;padding:7px 12px;border:1.5px solid var(--border);border-radius:999px;font-size:14px!important;font-weight:500!important;text-transform:none!important;letter-spacing:0!important;color:var(--text)!important;cursor:pointer}.af-seg label:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,transparent)}.af-seg input{width:auto;margin:0}
   #tk-pers .crm-ass-act>button+button,#tk-pers .crm-ass-act>span{display:none}
+  .tv{display:flex;flex-direction:column;gap:10px}
+  .tv-src .tv-link{all:unset;cursor:pointer;font-size:13px;color:var(--primary);font-weight:600} .tv-link:focus-visible{outline:2px solid var(--primary);border-radius:3px}
+  .tv-h{margin:0;color:var(--primary-d,#15263a);font-size:20px;line-height:1.3}
+  .tv-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .tv-grid{display:grid;gap:6px;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px}
+  .tv-row{display:flex;gap:10px;font-size:14px} .tv-k{flex:0 0 78px;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding-top:2px}
+  .tv-sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:6px}
+  .tv-desc{font-size:14px;line-height:1.55;overflow-wrap:anywhere}
+  .tv-subs{display:flex;flex-direction:column;gap:6px} .tv-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
+  .tv-sub.done .tv-st{text-decoration:line-through;color:var(--muted)} .tv-sub .pl-chk{width:24px;height:24px;font-size:13px}
+  .tv-add input{width:100%}
+  .tv-deps{margin:0;padding-left:18px;font-size:14px}
+  .tv-notes{display:flex;flex-direction:column;gap:8px}
+  .tv-note{background:var(--surface-2,#f6f8fb);border-radius:10px;padding:8px 12px;font-size:14px}
+  .tv-note.mine{background:var(--info-bg,#eef3fb)}
+  .tv-nh{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--muted)} .tv-nh b{color:var(--text);font-size:13px}
+  .tv-ndel{margin-left:auto;border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px}
+  .tv-nt{margin-top:3px;line-height:1.5;overflow-wrap:anywhere} .tv-at{color:var(--primary)}
+  .tv-nadd{display:flex;gap:8px;align-items:flex-end} .tv-nadd textarea{flex:1;min-width:0;resize:vertical}
+  .tv-empty{font-size:13px;color:var(--muted)}
+  .tv-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:12px;border-top:1px solid var(--border)}
+  .tv-badge{font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface,#fff);color:var(--muted)}
+  .tv-badge.neu{background:var(--info-bg,#dbe6fb);color:var(--primary);border-color:transparent;font-weight:700}
+  .tv-pin summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px} .tv-pin summary::-webkit-details-marker{display:none}
+  .tv-pin-n{font-size:13px;color:var(--muted)} .tv-pin .tv-notes{margin:10px 0}
   .pl-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;vertical-align:middle}
   .pl-seg button{border:0;background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;cursor:pointer}
   .pl-seg button.on{background:var(--primary);color:var(--on-primary,#fff)}
@@ -1771,7 +1796,7 @@ function kbCardHtml(c, n){
     <div class="kb-card-top">
       <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(n.id)})">${collapsed?'▸':'▾'}</button>
       ${vo?'':`<input type="checkbox" ${cdone?'checked':''} aria-label="Erledigt: ${esc(n.text||'Aufgabe')}" onclick="event.stopPropagation()" onchange="crmToggleDone(${jsq(n.id)})">`}
-      <span class="kb-card-title" onclick="crmOpenTask(${jsq(n.id)})">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
+      <span class="kb-card-title" onclick="${vo?'crmOpenTask':'crmTaskView'}(${jsq(n.id)})">${esc(n.text)}${(collapsed&&kids.length)?`<span class="kb-count">${kids.length}</span>`:''}</span>
       ${vo?`<button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode(${jsq(n.id)})">✕</button>`:''}
     </div>
     <div class="kb-card-body">
@@ -4532,7 +4557,7 @@ function _oeaBoardHtml(r, posts){
     const fr=`<div class="red-fr">Freigabe: ${esc(n.freigabeId?(userName(n.freigabeId)||n.freigabeId):'–')} · Bildrechte: ${n.bildrechte===true?'✓':'<b class="red-off">offen</b>'}</div>`;
     const issH=iss.map(x=>`<span class="red-tag ${x.lv==='crit'?'c':'w'}">${esc(x.t)}</span>`).join('');
     const sel=may?`<select class="red-ph" aria-label="Spalte ändern" onchange="crmRedPhaseSet(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)},this.value)">${ab.map(p=>`<option value="${esc(p.key)}" ${p.key===ph?'selected':''}>${esc(p.label)}</option>`).join('')}</select>`:'';
-    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="${a.art==='aufgaben'?`crmAufgEdit(${jsq(a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}">${esc(n.text||(_rc.oea?'Beitrag':'Aufgabe'))}</div>
+    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${esc(n.text||(_rc.oea?'Beitrag':'Aufgabe'))}</div>
       <div class="red-meta">${chips}</div>${_rc.oea?fr:''}${issH?`<div class="red-meta">${issH}</div>`:''}${sel}</div>`; };
   // Erledigtes bleibt 7 Tage in der Erledigt-Spalte (damit das Team es sieht), danach Archiv (User 11.11.2026)
   const wk=Date.now()-7*864e5; const recent=a=>{ const t=Date.parse(a.node.doneAt||''); return isFinite(t)&&t>=wk; };
@@ -4722,7 +4747,7 @@ function _planTeamOverview(team){
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="${a.art==='aufgaben'?`crmAufgEdit(${jsq(a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
+    return `<div class="plan-item" role="button" tabindex="0" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
   // Erledigtes (User 11.11.2026): im Team noch 7 Tage sichtbar, damit alle sehen, was erledigt ist – danach im Archiv
   const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
   const done=[];
@@ -4986,6 +5011,7 @@ function paintTeamProjektDetail(){
     ${(p.createdAt||p.updatedByKuerzel)?`<div class="small" style="color:var(--muted);margin:-8px 0 14px">${p.createdAt?`angelegt ${p.createdByKuerzel?'von '+esc(p.createdByKuerzel)+' ':''}am ${esc(fmtDate(p.createdAt))}`:''}${p.updatedByKuerzel?` · zuletzt von ${esc(p.updatedByKuerzel)}${p.updatedAt?' am '+esc(fmtDateTime(p.updatedAt)):''}`:''}</div>`:''}
     ${linkedEntityName(p)?`<div style="margin:-6px 0 14px"><button class="btn-sm-crm" onclick="crmOpenLinkedEntity(${jsq(p.linkTree)},${jsq(p.linkEid)})">🔗 ${esc(linkedEntityName(p))}</button></div>`:''}
     ${p.beschreibung?`<div class="crm-sec"><div class="v" style="white-space:pre-line">${nl2br(p.beschreibung)}</div></div>`:''}
+    ${_pinHtml(p)}
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
@@ -5031,7 +5057,7 @@ function _projListHtml(p){
     return `<div class="pl-row${sub?' sub':''}${isDone?' done':''}">
       <span class="pl-bar u-${isDone?'n':u.k}"></span>
       ${may?`<button type="button" class="pl-chk${isDone?' on':''}" aria-pressed="${isDone}" aria-label="${isDone?'Wieder öffnen':'Erledigt'}: ${esc(n.text||'Aufgabe')}" onclick="crmToggleDone(${jsq(n.id)})">${isDone?'✓':''}</button>`:''}
-      <button type="button" class="pl-main" onclick="crmOpenTask(${jsq(n.id)})"><span class="pl-t">${esc(n.text||'Aufgabe')}</span>${tags?`<span class="pl-tags">${tags}</span>`:''}</button>
+      <button type="button" class="pl-main" onclick="crmTaskView(${jsq(n.id)})"><span class="pl-t">${esc(n.text||'Aufgabe')}</span>${(tags||crmNoteBadge(n))?`<span class="pl-tags">${tags}${crmNoteBadge(n)}</span>`:''}</button>
       ${(sub&&!n.due)?'':`<span class="pl-due u-${isDone?'n':u.k}">${esc(u.t)}</span>`}</div>`
       +(sub?'':kids.map(k=>row(k,'',true)).join('')); };
   const _vaT=(window._crmTaskCtx&&window._crmTaskCtx.kind==='veranstaltung')?vaTeams(p):[];   // Veranstaltung: ihre Teams
@@ -5060,6 +5086,118 @@ function crmProjAnsicht(v){
   mutateContainer(en=>{ en.ansicht=(v==='liste')?'liste':'board'; }); repaintContainer();
 }
 try{ Object.assign(window, { crmProjQuickAdd, crmProjAnsicht, crmTeilenFilter }); }catch(e){}
+// ══ Aufgaben-Ansicht (v565, User 11.11.2026): Klick auf eine Aufgabe zeigt erst alle Infos zum Lesen (Seitenleiste),
+// mit Unterpunkten, Abhängigkeiten und „💬 Notizen fürs Team" (inkl. @Erwähnung). Bearbeiten erst über ✎.
+// Notizen liegen am Knoten (n.notizen=[{id,uid,name,ts,text,mentions[]}]) bzw. am Projekt/der Veranstaltung (Pinnwand) –
+// schreiben darf, wer dort Aufgaben bearbeiten darf (keine Regeländerung).
+function _tvSeenKey(){ return 'tps_tv_seen_'+((window.cu&&window.cu.id)||''); }
+function _tvSeen(){ try{ return JSON.parse(localStorage.getItem(_tvSeenKey())||'{}')||{}; }catch(e){ return {}; } }
+function _tvMarkSeen(id){ try{ const m=_tvSeen(); m[id]=Date.now(); localStorage.setItem(_tvSeenKey(), JSON.stringify(m)); }catch(e){} }
+function _notes(o){ return Array.isArray(o&&o.notizen)?o.notizen.filter(Boolean):[]; }
+// für Listen: „💬 2" bzw. „💬 neu" (neu = Notiz einer anderen Person nach meinem letzten Blick)
+function crmNoteBadge(o){ const ns=_notes(o); if(!ns.length) return ''; const me=(window.cu&&window.cu.id)||''; const seen=_tvSeen()[o.id]||0;
+  const neu=ns.some(x=>x.uid!==me && (x.ts||0)>seen); return `<span class="tv-badge${neu?' neu':''}" title="${ns.length} Notiz${ns.length===1?'':'en'} fürs Team">💬 ${neu?'neu':ns.length}</span>`; }
+window.crmNoteBadge=crmNoteBadge;
+function _mentionsIn(text){ const t=String(text||''); if(t.indexOf('@')<0) return []; const out=[];
+  zeUsers().forEach(u=>{ if(!u||!u.id||u.id==='admin') return; const full=String(u.name||''); const first=full.split(/\s+/)[0]; if(!first) return;
+    const rx=s=>new RegExp('@'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![\\wäöüÄÖÜß])','i');
+    if(rx(full).test(t) || rx(first).test(t)) out.push(u.id); }); return [...new Set(out)]; }
+function _noteHtml(x, canDel, delCall){ const me=(window.cu&&window.cu.id)||'';
+  const txt=linkify(x.text||'').replace(/@([A-Za-zÄÖÜäöüß][\wÄÖÜäöüß-]*)/g,'<b class="tv-at">@$1</b>');
+  return `<div class="tv-note${x.uid===me?' mine':''}"><div class="tv-nh"><b>${esc(x.name||userName(x.uid)||'?')}</b> <span>${esc(new Date(x.ts||0).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span>${(canDel&&x.uid===me)?`<button type="button" class="tv-ndel" aria-label="Notiz löschen" onclick="${delCall}">✕</button>`:''}</div><div class="tv-nt">${txt}</div></div>`; }
+function _newNote(text){ const cu=window.cu||{}; return { id:newId(), uid:cu.id||'', name:cu.name||'', ts:Date.now(), text:String(text).slice(0,2000), mentions:_mentionsIn(text) }; }
+// Hintergrund nach einer Änderung neu zeichnen (Planner-Start oder die gerade offene Seite)
+function _tvBg(){ try{ if(window._activeModule==='planung' && window.renderPlanungStart) window.renderPlanungStart(); else if(window._tvBgPaint) window._tvBgPaint(); }catch(e){} }
+
+function crmTaskViewAt(kind, tree, cid, tid){
+  const keep=window._crmAfterTask; _meSetCtx(kind, tree, cid, tid);
+  if(window._activeModule!=='planung' && keep) window._crmAfterTask=keep;
+  window._tvArgs={ kind, tree:tree||'', cid, tid }; _tvRender();
+}
+function crmTaskView(tid){   // aus einem offenen Projekt/einer Veranstaltung/einem Board (Kontext steht schon)
+  const ctx=window._crmTaskCtx||{}; window._tvBgPaint=repaintContainer;
+  window._tvArgs={ kind:ctx.kind, tree:ctx.tree||'', cid:ctx.kind==='entity'?ctx.eid:ctx.id, tid, ctx:Object.assign({},ctx) }; _tvRender();
+}
+function _tvCtx(){ const a=window._tvArgs; if(!a) return null; if(a.ctx) window._crmTaskCtx=Object.assign({},a.ctx); else _meSetCtx(a.kind, a.tree, a.cid, a.tid); return a; }
+function _tvRender(){
+  const a=_tvCtx(); if(!a) return; const c=curContainer(); if(!c){ toast('Aufgabe nicht gefunden.','err'); return; }
+  const f=findNode(c, a.tid); if(!f){ toast('Aufgabe nicht gefunden.','err'); return; }
+  const n=f.node; const me=(window.cu&&window.cu.id)||''; const may=_ctxMay(window._crmTaskCtx); const today=localISODate();
+  const isA=c.art==='aufgaben'; const done=n.status==='erledigt'; const u=_plUrg(n, today);
+  const kids=(n.children||[]).filter(Boolean); const kDone=kids.filter(k=>k.status==='erledigt').length;
+  const ass=_taskAss(n); const who=_taskWhoIn(c, n);
+  const cName=a.kind==='veranstaltung'?('📅 '+(c.titel||'Veranstaltung')):(a.kind==='entity'?('📇 '+(c.name||'Projekt')):(isA?(c.owner?'✔ Meine Aufgaben':'✔ Aufgaben '+(c.team||'')):('📂 '+(c.name||'Projekt'))));
+  const teams=(()=>{ try{ return effectiveTeams(c, n.id)||[]; }catch(e){ return []; } })();
+  const stLbl=(getTaskStatus().find(x=>x.key===n.status)||{}).label||'Offen';
+  const deps=(n.deps||[]).map(d=>{ const g=findNode(c,d); return g?`<li>${g.node.status==='erledigt'?'✓':'○'} ${esc(g.node.text||'')}</li>`:''; }).join('');
+  const jeder=n.jeder?`<div class="tv-row"><span class="tv-k">Abhaken</span><span>jede Person einzeln: ${who.map(id=>`${esc(userName(id)||id)} ${(n.erledigtVon||{})[id]?'✓':'○'}`).join(' · ')||'–'}</span></div>`:'';
+  const notes=_notes(n);
+  _tvMarkSeen(n.id);
+  crmOpenModalShell();
+  openModal(`<div class="tv">
+    <div class="tv-src"><button type="button" class="tv-link" onclick="crmTaskViewOpenSrc()">${esc(cName)}${f.parent?' · '+esc(f.parent.text||''):''} ›</button></div>
+    <h3 class="tv-h">${done?'✓ ':''}${esc(n.text||'Aufgabe')}</h3>
+    <div class="tv-chips"><span class="pl-due u-${done?'n':u.k}">${esc(done?('erledigt'+(n.doneAt?' · '+fmtDate(Date.parse(n.doneAt)):'')):u.t)}</span><span class="pl-tag">${esc(stLbl)}</span>${n.wdh?`<span class="pl-tag">🔁 ${esc(aufgWdhLabel(n))}</span>`:''}</div>
+    <div class="tv-grid">
+      <div class="tv-row"><span class="tv-k">Wer</span><span>${ass.length?esc(ass.map(userName).filter(Boolean).join(', ')):(c.owner?'–':`<i>Ganzes Team · ${n.jeder?'alle':'noch frei'}</i>`)}</span></div>
+      ${teams.length?`<div class="tv-row"><span class="tv-k">Teams</span><span>${esc(teams.join(', '))}</span></div>`:''}
+      ${jeder}
+      ${n.createdByName?`<div class="tv-row"><span class="tv-k">Angelegt</span><span>${esc(n.createdByName)}${n.createdAt?' · '+esc(fmtDate(n.createdAt)):''}</span></div>`:''}
+    </div>
+    ${n.note?`<div class="tv-sec">Beschreibung</div><div class="tv-desc">${linkify(n.note)}</div>`:''}
+    ${(kids.length||may)?`<div class="tv-sec">Unterpunkte${kids.length?` · ${kDone} von ${kids.length} erledigt`:''}</div>
+      <div class="tv-subs">${kids.map(k=>`<div class="tv-sub${k.status==='erledigt'?' done':''}">${may?`<button type="button" class="pl-chk${k.status==='erledigt'?' on':''}" aria-pressed="${k.status==='erledigt'}" aria-label="${k.status==='erledigt'?'Wieder öffnen':'Erledigt'}: ${esc(k.text||'')}" onclick="crmTvSubToggle(${jsq(k.id)})">${k.status==='erledigt'?'✓':''}</button>`:''}<span class="tv-st">${esc(k.text||'')}</span>${k.due?`<span class="pl-tag">${esc(fmtDate(Date.parse(k.due)))}</span>`:''}${_taskAss(k).length?`<span class="pl-tag">👤 ${esc(_taskAss(k).map(userName).join(', '))}</span>`:''}</div>`).join('')}
+      ${may?`<div class="tv-add"><input id="tv-sub-new" placeholder="＋ Unterpunkt … (Enter)" aria-label="Neuer Unterpunkt" onkeydown="if(event.key==='Enter'){event.preventDefault();crmTvSubAdd();}"></div>`:''}</div>`:''}
+    ${deps?`<div class="tv-sec">Abhängig von</div><ul class="tv-deps">${deps}</ul>`:''}
+    <div class="tv-sec">💬 Notizen fürs Team${notes.length?' · '+notes.length:''}</div>
+    <div class="tv-notes">${notes.map(x=>_noteHtml(x, may, `crmTvNoteDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Noch keine Notizen. Hinterlass dem Team hier eine Info zur Aufgabe.</div>'}</div>
+    ${may?`<div class="tv-nadd"><textarea id="tv-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Notiz fürs Team" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmTvNoteAdd();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmTvNoteAdd()">Senden</button></div>`:'<div class="tv-empty">Notizen schreiben kann, wer hier Aufgaben bearbeiten darf.</div>'}
+    <div class="tv-act">
+      ${done?(may?`<button class="btn-sm-crm" onclick="crmTvReopen()">↩ Wieder öffnen</button>`:''):`<button class="btn-sm-crm primary" onclick="crmTvDone()">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`}
+      ${(!done&&!ass.length&&!c.owner&&!n.jeder)?`<button class="btn-sm-crm" onclick="crmTvTake()">Übernehmen</button>`:''}
+      ${may?`<button class="btn-sm-crm" onclick="crmTvEdit()">✎ Bearbeiten</button>`:''}
+      <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+    </div></div>`);
+  _crmSide();
+}
+function crmTaskViewOpenSrc(){ const a=window._tvArgs; if(!a) return; crmCloseModal();
+  try{ if(a.kind==='veranstaltung'){ if(window.planVaSet) window.planVaSet(a.cid); }
+    else if(a.kind==='teamprojekt'){ const c=getTeamProjekt(a.cid); if(c&&c.art==='aufgaben'){ if(c.team&&window.planGo) window.planGo('teams',{team:c.team}); else if(window.planGo) window.planGo('start'); }
+      else if(c&&c.owner&&window.planOpenMyProj) window.planOpenMyProj(a.cid); else if(window.planOpenProj) window.planOpenProj(a.cid); else crmOpenTeamProjekt(a.cid); }
+    else crmOpenAssignedFromHome(a.tree, a.cid, a.tid); }catch(e){} }
+function _tvMut(fn){ _tvCtx(); mutateContainer(en=>{ const g=findNode(en, window._tvArgs.tid); if(g) fn(g.node, en); }); _tvBg(); _tvRender(); }
+function crmTvNoteAdd(){ const t=(val('tv-note')||'').trim(); if(!t) return; const x=_newNote(t);
+  _tvMut(n=>{ if(!Array.isArray(n.notizen)) n.notizen=[]; n.notizen.push(x); });
+  if(x.mentions.length) toast('Notiz gespeichert ✓ – '+x.mentions.map(userName).join(', ')+' wird benachrichtigt','ok'); }
+function crmTvNoteDel(id){ if(!confirm('Notiz löschen?')) return; const me=(window.cu&&window.cu.id)||''; _tvMut(n=>{ n.notizen=_notes(n).filter(x=>!(x.id===id&&x.uid===me)); }); }
+function crmTvSubToggle(id){ const me=(window.cu&&window.cu.id)||''; _tvCtx();
+  mutateContainer(en=>{ const g=findNode(en, id); if(!g) return; const k=g.node; if(k.status==='erledigt'){ k.status='offen'; k.doneAt=''; k.doneBy=''; } else _doneStep(k, _taskWhoIn(en,k), me); });
+  _tvBg(); _tvRender(); }
+function crmTvSubAdd(){ const t=(val('tv-sub-new')||'').trim(); if(!t) return;
+  _tvMut(n=>{ if(!Array.isArray(n.children)) n.children=[]; n.children.push({ id:newId(), text:t, status:'offen', due:'', note:'', deps:[], children:[], createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() }); });
+  setTimeout(()=>{ try{ document.getElementById('tv-sub-new').focus(); }catch(e){} },30); }
+function crmTvDone(){ const a=window._tvArgs; if(!a) return; crmTaskDone(a.kind, a.tree, a.cid, a.tid); _tvBg(); _tvRender(); }
+function crmTvReopen(){ const a=window._tvArgs; if(!a) return; crmTaskReopen(a.kind, a.tree, a.cid, a.tid); _tvBg(); _tvRender(); }
+function crmTvTake(){ const a=window._tvArgs; if(!a) return; crmTakeTask(a.kind, a.tree, a.cid, a.tid); _tvRender(); }
+function crmTvEdit(){ const a=window._tvArgs; if(!a) return; const c=a.kind==='teamprojekt'?getTeamProjekt(a.cid):null;
+  crmCloseModal(); if(c&&c.art==='aufgaben') return crmAufgEdit(a.cid, a.tid); _tvCtx(); crmOpenTask(a.tid); }
+// Pinnwand am Projekt / an der Veranstaltung (Kontext = offener Behälter)
+function _pinHtml(c){ const ns=_notes(c); const may=_ctxMay(window._crmTaskCtx); const seen=_tvSeen()[c.id]||0; const me=(window.cu&&window.cu.id)||'';
+  const neu=ns.some(x=>x.uid!==me&&(x.ts||0)>seen);
+  return `<details class="crm-sec tv-pin"${neu?' open':''} ontoggle="if(this.open)crmPinSeen(${jsq(c.id)})"><summary><span class="ttl">💬 Pinnwand fürs Team</span> <span class="tv-pin-n">${ns.length?ns.length+' Notiz'+(ns.length===1?'':'en'):'noch leer'}${neu?' · <b>neu</b>':''}</span></summary>
+    <div class="tv-notes">${ns.map(x=>_noteHtml(x, may, `crmPinDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Allgemeine Infos zum Projekt fürs ganze Team, z. B. „Budget ist freigegeben“.</div>'}</div>
+    ${may?`<div class="tv-nadd"><textarea id="pin-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Pinnwand-Notiz" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmPinAdd();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmPinAdd()">Senden</button></div>`:''}</details>`; }
+function crmPinSeen(id){ _tvMarkSeen(id); }
+function crmPinAdd(){ const t=(val('pin-note')||'').trim(); if(!t) return; const x=_newNote(t);
+  mutateContainer(en=>{ if(!Array.isArray(en.notizen)) en.notizen=[]; en.notizen.push(x); }); repaintContainer();
+  setTimeout(()=>{ const d=document.querySelector('.tv-pin'); if(d) d.open=true; },30); }
+function crmPinDel(id){ if(!confirm('Notiz löschen?')) return; const me=(window.cu&&window.cu.id)||''; mutateContainer(en=>{ en.notizen=_notes(en).filter(x=>!(x.id===id&&x.uid===me)); }); repaintContainer(); }
+// Erwähnungen für „Was ansteht": Notizen (an Aufgaben oder Pinnwänden), die mich nennen und die ich noch nicht gesehen habe
+function crmMyMentions(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_tvSeen(); const out=[];
+  listAllTasks().forEach(a=>{ _notes(a.node).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>(seen[a.node.id]||0)) out.push({ a, x }); }); });
+  return out.sort((p,q)=>(q.x.ts||0)-(p.x.ts||0)); }
+try{ Object.assign(window, { crmTaskView, crmTaskViewAt, crmTaskViewOpenSrc, crmTvNoteAdd, crmTvNoteDel, crmTvSubToggle, crmTvSubAdd, crmTvDone, crmTvReopen, crmTvTake, crmTvEdit, crmPinAdd, crmPinDel, crmPinSeen, crmMyMentions }); }catch(e){}
+
 // Optionen für die Zuordnung eines Projekts zu einem CRM-Eintrag (alle Bäume)
 function entityLinkOptions(selVal){
   const opts=['<option value="">– keinem Eintrag zugeordnet –</option>'];
@@ -5317,6 +5455,7 @@ function paintVeranstaltungDetail(){
       ${v.beschreibung?`<div style="margin-top:12px" class="v">${linkify(v.beschreibung)}</div>`:''}
     </div>
 `}
+    ${_pinHtml(v)}
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>${window._planActive?_planVaSummary(v):''}
         <span class="hbtns">
@@ -5328,7 +5467,7 @@ function paintVeranstaltungDetail(){
       </h4>
       ${v.ansicht==='liste'?_projListHtml(v):taskBoardHtml(v)}
     </div>
-    ${window._planActive?_planVorlageHtml(v):''}
+    <!-- Vorlage: nur noch über den Knopf „📋 Vorlage“ oben (User 11.11.2026) -->
   </div>`;
 }
 // ── Planung: Seite „Veranstaltung" nach Prototyp (Auswahl, Kopf, Kurzbilanz, Vorlage mit Vorschau) ──
