@@ -44,7 +44,7 @@ const STATUS={
   erledigt:  {l:'Erledigt',       c:'#16a34a'},
   abgelehnt: {l:'Abgelehnt',      c:'#c0392b'},
 };
-const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt', zuordnung:'👤 Zuordnung' };
+const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt', zuordnung:'👤 Zuordnung', inventur:'📋 Inventur' };
 
 let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv', fOpen=false;   // fOpen: Filter-Feld auf dem Handy aufgeklappt
 
@@ -362,9 +362,22 @@ function _styles(){
   .shop-cart-pill.bump{animation:shopBump .35s ease}
   @keyframes shopBump{40%{transform:scale(1.08)}}
   @media(prefers-reduced-motion:reduce){.shop-cart-pill.bump{animation:none}}
+  .shop-inv-head{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+  .shop-inv-prog{font-size:13px;color:var(--muted)} .shop-inv-prog b{color:var(--text)}
+  .shop-inv-bar{height:6px;border-radius:3px;background:var(--surface-2,#eef2f7);overflow:hidden;margin:0 0 10px} .shop-inv-bar span{display:block;height:100%;background:var(--ok,#16a34a)}
+  .shop-inv-list{display:flex;flex-direction:column;gap:6px}
+  .shop-inv-row{display:flex;gap:10px;align-items:center;border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;background:var(--surface,#fff)}
+  .shop-inv-row.done{border-color:var(--ok,#16a34a)} .shop-inv-row.diff{border-color:var(--warn,#d97706);background:var(--warn-bg,#fff8e1)}
+  .shop-inv-ic{width:44px;height:44px;flex:0 0 44px;border-radius:8px;background:var(--surface-2,#f1f4f8);display:flex;align-items:center;justify-content:center;font-size:22px;overflow:hidden}
+  .shop-inv-ic img{width:100%;height:100%;object-fit:contain}
+  .shop-inv-nm{flex:1;min-width:0;font-size:14px;font-weight:600;overflow-wrap:anywhere} .shop-inv-nm small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+  .shop-inv-ok{min-width:40px}
+  .shop-inv-row .shop-qty input{width:52px!important}
+  .shop-inv-sum .shop-iv-row .r.plus{color:var(--ok,#16a34a)} .shop-inv-sum .shop-iv-row .r.minus{color:var(--danger,#c0392b)}
   @media(max-width:640px){ .shop-wrap{padding:12px 12px 90px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr}
     .shop-cart{right:8px;left:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:65vh} .shop-cart.min{right:auto}
     .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1}
+    .shop-inv-row{flex-wrap:wrap} .shop-inv-nm{flex:1 1 calc(100% - 60px)} .shop-inv-row .shop-qty{flex:1} .shop-inv-row .shop-qty input{flex:1;width:auto!important}
     .shop-posadd{flex-wrap:wrap} .shop-posadd select{flex:1 1 100%!important} .shop-posadd .shop-btn{flex:1}
     /* Handy (v451): Reiter in einer wischbaren Zeile, Filter geordnet, größere Knöpfe, kompakte Artikelkarten */
     /* Paket 2 (v556): alle Reiter ohne Wischen sichtbar – Symbol oben, Kurzname darunter */
@@ -466,6 +479,7 @@ function _bestandHtml(mgr){
         <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button></div></details>`:''}
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
+    ${fPlace&&!fPlace.startsWith('loan:')&&placeOf(fPlace)&&_can('la_bestand')?`<div class="shop-bar"><button class="shop-btn" onclick="shopInv(${jsq(fPlace)})">📋 Inventur für ${esc(placeLabel(fPlace))}${_invDraft(fPlace)?' (begonnen)':''}</button></div>`:''}
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
 }
 
@@ -811,7 +825,8 @@ function shopItemDelete(id){
 // Mengenfeld mit − / ＋ zum Tippen (Paket 1, v556); löst „change" aus, damit Korb/Positionen mitziehen
 function _qtyHtml(id, val, min, extra){ return `<div class="shop-qty"><button type="button" aria-label="weniger" onclick="shopQtyStep(this,-1)">−</button><input${id?` id="${id}"`:''} type="number" inputmode="numeric" min="${min}" step="1" value="${esc(val)}" ${extra||''}><button type="button" aria-label="mehr" onclick="shopQtyStep(this,1)">＋</button></div>`; }
 function shopQtyStep(btn, d){ const el=btn.parentNode.querySelector('input'); if(!el) return; const min=_num(el.min);
-  el.value=Math.max(min, Math.round(_num(el.value))+d); el.dispatchEvent(new Event('change',{bubbles:true})); el.dispatchEvent(new Event('input',{bubbles:true})); }
+  const cur=(el.value===''&&el.dataset.base!=null)?_num(el.dataset.base):Math.round(_num(el.value));
+  el.value=Math.max(min, el.value===''&&el.dataset.base!=null?cur+(d>0?0:d):cur+d);   /* leer + „＋" = App-Wert übernehmen */ el.dispatchEvent(new Event('change',{bubbles:true})); el.dispatchEvent(new Event('input',{bubbles:true})); }
 function _placeSelect(id, sel, withQty, it){
   return `<select id="${id}">${places().map(p=>`<option value="${esc(p.id)}"${sel===p.id?' selected':''}>${esc(placeLabel(p.id))}${withQty&&it?` (${_num((it.stock||{})[p.id])})`:''}</option>`).join('')}</select>`;
 }
@@ -2019,10 +2034,12 @@ function _orteHtml(){
     return `<div class="shop-row"${le&&_overdue(le)?' style="border-color:var(--danger,#e5484d)"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
         ${z?`<span class="shop-st" style="background:${_ZUORD_C}">👤 ${esc(bName(z))}</span>`:''}
         ${le?`<span class="shop-st" style="background:${_overdue(le)?'#c0392b':'#2563eb'}">🔁 ausgeliehen an ${esc(bName(le))}${le.due?' bis '+_fmtDate(le.due):' (Dauerleihe)'}</span>`:''}</div>
+      ${(()=>{ const li=_lastInv(p.id); return li?`<div class="m">📋 Letzte Inventur: ${_fmtTs(li.ts)}${li.byName?' · '+esc(li.byName):''}</div>`:''; })()}
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">${isMovable(p)?`
         ${z?`<button class="shop-btn sm" onclick="shopReassign(${jsq(z.id)})" title="An anderen Mitarbeiter übergeben">👤 Übergeben</button>`:`<button class="shop-btn sm" onclick="shopLendPlace(${jsq(p.id)},'zuord')">👤 Zuordnen</button>`}
         ${le?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(le.id)})">↩ Zurück</button>`:`<button class="shop-btn sm" onclick="shopLendPlace(${jsq(p.id)},'leihe')">🔁 Ausleihen</button>`}`:''}
+      ${_can('la_bestand')?`<button class="shop-btn sm" onclick="shopInv(${jsq(p.id)})">📋 Inventur${_invDraft(p.id)?' (begonnen)':''}</button>`:''}
       <button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
       <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
   }).join('');
@@ -2102,6 +2119,87 @@ function shopPlaceDelete(id){
   deleteShop('shopPlaces', id); if(fPlace===id) fPlace=''; closeModal(); toast('Ort gelöscht.','ok'); renderShop();
 }
 
+// ── Inventur am Ort (Paket 3, v557) ──────────────────────────────────
+// Zählen auf dem Handy: alle Artikel des Orts, „gezählt" eintragen (leer = nicht gezählt, bleibt unverändert).
+// Entwurf pro Person+Ort im Browser (Unterbrechen möglich). Buchen = je Abweichung eine Korrektur + ein Inventur-Eintrag am Ort.
+function _invKey(pid){ return 'tps_shop_inv_'+(_me().id||'')+'_'+pid; }
+function _invDraft(pid){ try{ const d=JSON.parse(localStorage.getItem(_invKey(pid))||'null'); return d&&typeof d==='object'?d:null; }catch(e){ return null; } }
+function _invSave(pid, d){ try{ localStorage.setItem(_invKey(pid), JSON.stringify(d)); }catch(e){} }
+function _invClear(pid){ try{ localStorage.removeItem(_invKey(pid)); }catch(e){} }
+function _lastInv(pid){ return listShop('shopLog').filter(l=>l.type==='inventur'&&l.from===pid).sort((a,b)=>(b.ts||0)-(a.ts||0))[0]||null; }
+function _invItems(pid, d){ const extra=new Set((d&&d.extra)||[]);
+  return items().filter(it=>!isEinzeln(it) && (_num((it.stock||{})[pid])>0 || sollAt(it,pid)>0 || extra.has(it.id))); }
+function shopInv(pid){
+  if(!_can('la_bestand')){ toast('Für die Inventur braucht es das Recht „Bestand pflegen".','err'); return; }
+  const pl=placeOf(pid); if(!pl) return;
+  const d=_invDraft(pid)||{ counts:{}, extra:[], ts:Date.now() };
+  const list=_invItems(pid, d); const ein=items().filter(it=>isEinzeln(it)&&_num((it.stock||{})[pid])>0);
+  const others=items().filter(it=>!isEinzeln(it) && !list.includes(it));
+  const row=it=>{ const app=_num((it.stock||{})[pid]); const c=d.counts[it.id]; const has=c!==undefined&&c!=='';
+    const ic=_imgUrl(it.foto)?`<img src="${esc(_imgUrl(it.foto))}" alt="">`:_catIcon(it.kategorie);
+    return `<div class="shop-inv-row${has?(_num(c)!==app?' diff':' done'):''}" data-id="${esc(it.id)}" data-app="${app}">
+      <div class="shop-inv-ic" aria-hidden="true">${ic}</div>
+      <div class="shop-inv-nm">${esc(itemLabel(it))}<small>laut App: ${app} ${esc(it.einheit||'Stück')}${sollAt(it,pid)?` · Soll ${sollAt(it,pid)}`:''}</small></div>
+      ${_qtyHtml('', has?_num(c):'', 0, `data-base="${app}" placeholder="?" aria-label="Gezählt: ${esc(itemLabel(it))} (laut App ${app})" oninput="shopInvChg(${jsq(pid)})" onchange="shopInvChg(${jsq(pid)})"`)}
+      <button type="button" class="shop-btn sm shop-inv-ok" title="Stimmt – ${app} übernehmen" aria-label="${esc(itemLabel(it))}: stimmt, ${app}" onclick="shopInvSame(this,${jsq(pid)})">✓</button></div>`; };
+  openModal(`<h3>📋 Inventur: ${esc(placeLabel(pid))}</h3>
+    <p class="shop-var" style="margin:0 0 8px">Zähle, was hier <b>gerade liegt</b>, und trage die Zahl ein. <b>✓</b> = stimmt mit der App. Leer gelassene Artikel bleiben unverändert. Du kannst jederzeit unterbrechen – der Stand bleibt auf diesem Gerät gespeichert.</p>
+    <div class="shop-inv-head"><span class="shop-inv-prog" id="inv-prog"></span></div>
+    <div class="shop-inv-bar"><span id="inv-bar" style="width:0"></span></div>
+    <div class="shop-inv-list" id="inv-list">${list.map(row).join('')||'<div class="shop-empty">Laut App liegt hier nichts. Füge unten hinzu, was du findest.</div>'}</div>
+    ${others.length?`<div class="shop-posadd" style="margin-top:10px"><select id="inv-add" aria-label="Artikel, der auch hier liegt"><option value="">＋ Artikel liegt auch hier …</option>${others.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}</option>`).join('')}</select>
+      <button type="button" class="shop-btn sm" onclick="shopInvAdd(${jsq(pid)})">Hinzufügen</button></div>`:''}
+    <div class="shop-var" style="margin-top:6px">Nicht im Katalog? Erst mit „＋ Artikel" anlegen, dann hier hinzufügen.${ein.length?` · Einzeln erfasste Artikel (${ein.map(i=>esc(i.name)).join(', ')}) prüfst du unter „🏷️ Stücke".`:''}</div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="shopInvDiscard(${jsq(pid)})">Verwerfen</button>
+      <button class="btn btn-outline" onclick="closeModal();renderShop()">Später weiter</button>
+      <button class="btn btn-primary" onclick="shopInvReview(${jsq(pid)})">Weiter: prüfen ›</button></div>`);
+  shopInvChg(pid);
+}
+function _invRead(){ const c={}; document.querySelectorAll('#inv-list .shop-inv-row').forEach(r=>{ const v=r.querySelector('input').value; if(v!=='') c[r.dataset.id]=Math.max(0,Math.round(_num(v))); }); return c; }
+function shopInvChg(pid){
+  const d=_invDraft(pid)||{ counts:{}, extra:[], ts:Date.now() }; d.counts=_invRead(); _invSave(pid,d);
+  const rows=[...document.querySelectorAll('#inv-list .shop-inv-row')]; let done=0, diff=0;
+  rows.forEach(r=>{ const v=r.querySelector('input').value; const has=v!==''; const df=has&&Math.round(_num(v))!==_num(r.dataset.app);
+    r.classList.toggle('done', has&&!df); r.classList.toggle('diff', df); if(has) done++; if(df) diff++; });
+  const pg=document.getElementById('inv-prog'), bar=document.getElementById('inv-bar');
+  if(pg) pg.innerHTML=`<b>${done}</b> von ${rows.length} gezählt${diff?` · <b style="color:var(--warn,#b45309)">${diff} Abweichung${diff===1?'':'en'}</b>`:''}`;
+  if(bar) bar.style.width=(rows.length?Math.round(done/rows.length*100):0)+'%';
+}
+function shopInvSame(btn, pid){ const r=btn.closest('.shop-inv-row'); const i=r&&r.querySelector('input'); if(!i) return; i.value=r.dataset.app; shopInvChg(pid); }
+function shopInvAdd(pid){ const id=_val('inv-add'); if(!id) return; const d=_invDraft(pid)||{ counts:{}, extra:[], ts:Date.now() };
+  d.counts=_invRead(); if(!d.extra.includes(id)) d.extra.push(id); _invSave(pid,d); shopInv(pid); }
+function shopInvDiscard(pid){ if(!confirm('Gezählte Zahlen dieser Inventur verwerfen?')) return; _invClear(pid); closeModal(); renderShop(); }
+function shopInvReview(pid){
+  const d=_invDraft(pid)||{ counts:{}, extra:[] }; d.counts=_invRead(); _invSave(pid,d);
+  const list=_invItems(pid,d); const counted=list.filter(it=>d.counts[it.id]!==undefined);
+  if(!counted.length){ toast('Noch nichts gezählt.','err'); return; }
+  const diffs=counted.filter(it=>_num(d.counts[it.id])!==_num((it.stock||{})[pid]));
+  const open=list.length-counted.length;
+  const dRows=diffs.map(it=>{ const a=_num((it.stock||{})[pid]), c=_num(d.counts[it.id]), x=c-a;
+    return `<div class="shop-iv-row"><span>${esc(itemLabel(it))}</span><span class="r ${x>0?'plus':'minus'}">${a} → ${c} (${x>0?'+':''}${x})</span></div>`; }).join('');
+  openModal(`<h3>📋 Inventur prüfen: ${esc(placeLabel(pid))}</h3>
+    <div class="shop-inv-sum">
+    <div class="shop-iv-sec">${diffs.length?`Abweichungen (${diffs.length}) – werden korrigiert`:'Keine Abweichungen'}</div>
+    ${dRows||'<div class="shop-var">Alles Gezählte stimmt mit der App überein. 👍</div>'}
+    <div class="shop-var" style="margin-top:8px">✓ ${counted.length-diffs.length} Artikel stimmen${open?` · <b>${open} nicht gezählt</b> – bleiben unverändert`:''}</div></div>
+    <div class="shop-f" style="margin-top:10px"><label>Notiz <span style="font-weight:400;color:var(--muted)">(erscheint im Verlauf)</span></label><input id="inv-note" value="Inventur ${esc(_fmtDate(_todayIso()))}"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="shopInv(${jsq(pid)})">‹ Zurück zum Zählen</button>
+      <button class="btn btn-primary" onclick="shopInvSave(${jsq(pid)})">${diffs.length?`Inventur buchen (${diffs.length} Korrektur${diffs.length===1?'':'en'})`:'Inventur abschließen'}</button></div>`);
+}
+function shopInvSave(pid){
+  if(!_can('la_bestand')) return;
+  const pl=placeOf(pid); const d=_invDraft(pid); if(!pl||!d) return;
+  const note=_val('inv-note')||'Inventur';
+  let n=0, k=0;
+  _invItems(pid,d).forEach(it0=>{ if(d.counts[it0.id]===undefined) return; n++;
+    const it=getShop('shopItems',it0.id); if(!it) return;   // frisch lesen: inzwischen gebuchte Änderungen zählen mit
+    const cur=_num((it.stock||{})[pid]), c=Math.max(0,Math.round(_num(d.counts[it.id])));
+    if(c===cur) return;
+    if(!_applyDelta(it, pid, c-cur)) return;
+    saveShop('shopItems', it); _log(it,'korrektur',c-cur,pid,pid,`${note} · ${cur} → ${c}`); k++; });
+  _logPlace(pl,'inventur',`${note} · ${n} gezählt, ${k} korrigiert`);
+  _invClear(pid); closeModal(); toast(`Inventur gebucht ✓ – ${n} gezählt, ${k} korrigiert`,'ok'); renderShop();
+}
 // ── Tab: Verlauf ───────────────────────────────────────────────────
 function _verlaufHtml(){
   const its=items();
@@ -2230,7 +2328,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopInv, shopInvChg, shopInvSame, shopInvAdd, shopInvDiscard, shopInvReview, shopInvSave, shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
