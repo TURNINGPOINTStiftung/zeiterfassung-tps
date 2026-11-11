@@ -302,6 +302,9 @@ Welche Bereiche du siehst, hängt von deinen Zugriffen ab (siehe Abschnitt 2).
 - **Lager:** **Bestand** (Flaggen, Flyer, Bootsmaterial … je Ort), **Bestellungen** melden,
   **Ausleihen** verwalten, **Fällig**-Liste (Prüftermine). Bestellen und Ausleihen dürfen alle mit
   „Nutzen"; Artikel, Orte und Buchungen pflegen nur „Verwaltend".
+  Einen Artikel antippen öffnet seine **Artikel-Ansicht** (Foto, Bestand je Ort, Ausleihen, offene Bestellungen, alle Aktionen);
+  das Foto antippen vergrößert es. Mit **🛒 ＋** landet ein Artikel im Korb, die Leiste unten führt zum Bestellen.
+  Auf dem Handy öffnet **⚙ Filter** Kategorie, Ort und Team; Excel-Export und -Import liegen unter **⋯**.
 - **Verteiler:** gespeicherte E-Mail- und Adresslisten (z. B. für Serienbriefe).
 - **Messemodus:** Besucher tragen sich am Tablet selbst ein (Vollbild, nur das leere Formular sichtbar).
   Veranstaltungen und erfasste Kontakte gelten für **alle Messe-Geräte gemeinsam** – mehrere Tablets am Stand

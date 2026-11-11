@@ -930,7 +930,7 @@ html body{font-family:var(--font);font-size:var(--fs-base)}
 html :is(button,input,select,textarea){font-family:var(--font)}
 
 /* Eingabefelder & Auswahlmenüs – überall gleich (außer Monatstabelle, Messe-Formular, Kopfleiste) */
-html :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]):not([type=button]):not([type=submit]),select):not(.zt *):not(#messe-overlay *):not(.module-bar *):not(.zoom-ctrl *){
+html :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]):not([type=button]):not([type=submit]),select):not(.zt *):not(#messe-overlay *):not(.module-bar *):not(.zoom-ctrl *):not(.shop-qty *){
   min-height:var(--ctl-h)!important;font-size:var(--fs-base)!important;padding-top:7px!important;padding-bottom:7px!important;
   border:1px solid var(--border-strong)!important;border-radius:var(--radius-sm)!important;box-sizing:border-box;line-height:1.3;
   background-color:var(--surface);color:var(--text)}

@@ -46,7 +46,7 @@ const STATUS={
 };
 const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt', zuordnung:'👤 Zuordnung' };
 
-let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv';
+let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv', fOpen=false;   // fOpen: Filter-Feld auf dem Handy aufgeklappt
 
 // ── Rechte ─────────────────────────────────────────────────────────
 function _acc(){
@@ -334,15 +334,52 @@ function _styles(){
   .shop-cart-free input{width:100%;box-sizing:border-box;padding:6px 8px;border:1.5px dashed var(--border);border-radius:6px;font-size:13px}
   .shop-cart-act{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border)}
   .shop-cart-act .shop-btn{flex:1}
+  .shop-tabs .ts{display:none}
+  .shop-qty{display:inline-flex;align-items:stretch;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface,#fff)}
+  .shop-qty button{border:0;background:var(--surface-2,#f1f4f8);color:var(--primary,#203869);font-size:18px;font-weight:700;min-width:38px;cursor:pointer}
+  .shop-qty input,.modal .shop-qty input{border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;text-align:center;width:64px!important;min-width:0;min-height:0!important;font-size:15px;padding:6px 4px!important;-moz-appearance:textfield}
+  .shop-tabs button{display:inline-flex;align-items:center;gap:6px}
+  .shop-qty input::-webkit-outer-spin-button,.shop-qty input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .shop-f>.shop-qty{display:flex;min-height:var(--ctl-h,40px)} .shop-f>.shop-qty input{flex:1;width:auto!important}
+  .shop-pos .shop-qty input,.shop-cart .shop-qty input,.shop-posadd .shop-qty input{width:44px!important}
+  .shop-pos .shop-qty button,.shop-cart .shop-qty button,.shop-posadd .shop-qty button{min-width:34px}
+  .shop-posadd .shop-qty{flex:0 0 auto}
+  .shop-filters{display:contents}
+  .shop-fbtn{display:none}
+  .shop-more{position:relative}
+  .shop-more>summary{list-style:none} .shop-more>summary::-webkit-details-marker{display:none}
+  .shop-more-m{position:absolute;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;display:flex;flex-direction:column;gap:4px;min-width:200px}
+  .shop-more-m .shop-btn{text-align:left;border:0}
+  .shop-card{cursor:pointer} button.shop-name{all:unset;font-weight:700;font-size:15px;color:var(--text);cursor:pointer;text-align:left} button.shop-name:focus-visible{outline:3px solid var(--primary,#203869);outline-offset:2px;border-radius:4px}
+  .shop-card:hover{border-color:var(--primary,#203869)}
+  .shop-iv-top{display:flex;gap:14px;align-items:flex-start;margin-bottom:10px}
+  .shop-iv-top .shop-img{width:130px;height:130px;flex:0 0 130px;border-radius:10px;margin:0}
+  .shop-iv-sec{margin:12px 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+  .shop-iv-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--border)}
+  .shop-iv-row .r{font-weight:700;white-space:nowrap}
+  .shop-iv-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .shop-cart-pill .go{margin-left:8px;padding-left:10px;border-left:1px solid rgba(255,255,255,.4)}
+  .shop-cart-pill.bump{animation:shopBump .35s ease}
+  @keyframes shopBump{40%{transform:scale(1.08)}}
+  @media(prefers-reduced-motion:reduce){.shop-cart-pill.bump{animation:none}}
   @media(max-width:640px){ .shop-wrap{padding:12px 12px 90px} .shop-f2{grid-template-columns:1fr} .shop-grid{grid-template-columns:1fr}
     .shop-cart{right:8px;left:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:65vh} .shop-cart.min{right:auto}
     .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1}
+    .shop-posadd{flex-wrap:wrap} .shop-posadd select{flex:1 1 100%!important} .shop-posadd .shop-btn{flex:1}
     /* Handy (v451): Reiter in einer wischbaren Zeile, Filter geordnet, größere Knöpfe, kompakte Artikelkarten */
-    .shop-tabs{position:relative;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-    .shop-tabs button{flex:0 0 auto;white-space:nowrap;padding:10px 12px;min-height:42px}
+    /* Paket 2 (v556): alle Reiter ohne Wischen sichtbar – Symbol oben, Kurzname darunter */
+    .shop-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;flex-wrap:nowrap}
+    .shop-tabs button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px 7px;min-height:52px;font-size:12px;position:relative;white-space:nowrap}
+    .shop-tabs .ti{font-size:19px;line-height:1.1} .shop-tabs .tl{display:none} .shop-tabs .ts{display:block}
+    .shop-tabs .shop-badge{position:absolute;top:2px;left:calc(50% + 6px);margin:0}
+    .shop-filters{display:none;flex-wrap:wrap;gap:8px;width:100%} .shop-filters.open{display:flex}
+    .shop-filters select{flex:1 1 calc(50% - 4px)}
+    .shop-fbtn{display:inline-block}
+    .shop-bar input[type=search]{flex:1 1 0!important}
+    .shop-cart.min{left:8px;right:8px} .shop-cart-pill{width:100%;padding:13px 16px;font-size:15px;display:flex;align-items:center;justify-content:center}
     .shop-bar{gap:8px}
     .shop-bar input,.shop-bar select{font-size:16px;min-height:42px;padding:8px 10px;box-sizing:border-box}
-    .shop-bar input[type=search]{flex:1 1 100%;min-width:0}
+    .shop-bar input[type=search]{min-width:0}
     .shop-bar select{flex:1 1 calc(50% - 4px);min-width:0;max-width:100%}
     .shop-bar .shop-sp{display:none}
     .shop-btn{min-height:40px;padding:8px 12px;font-size:14px}
@@ -377,10 +414,11 @@ export function renderShop(){
       : os.filter(o=>(o.byId===me.id || held.places.has(o.ortId)) && (o.status==='offen'||o.status==='inarbeit')).length;
     const myLoans=activeLoans().filter(l=>!isZuord(l) && (mgr ? (l.borrowerId===me.id || forMe(loanTeams(l))) : l.borrowerId===me.id));   // Zuordnungen zählen nicht als offene Ausleihe
     const nLate=myLoans.filter(_overdue).length;
-    const tabs=[['bestand','📦 Bestand'],['bestellungen','🛒 Bestellungen'+(nOpen?`<span class="shop-badge">${nOpen}</span>`:'')],
-      ['ausleihen','🔁 Ausleihen'+(myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]]
-      .concat([['faellig','⏰ Fällig'+(nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')]])
-      .concat(mgr?[['orte','📍 Orte'],['verlauf','📜 Verlauf']]:[]);
+    const T=(k,i,l,sh,badge)=>[k,`<span class="ti" aria-hidden="true">${i}</span><span class="tl">${l}</span><span class="ts">${sh}</span>${badge||''}`,l];
+    const tabs=[T('bestand','📦','Bestand','Bestand'),T('bestellungen','🛒','Bestellungen','Bestellt',nOpen?`<span class="shop-badge">${nOpen}</span>`:''),
+      T('ausleihen','🔁','Ausleihen','Leihe',myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]
+      .concat([T('faellig','⏰','Fällig','Fällig',nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')])
+      .concat(mgr?[T('orte','📍','Orte','Orte'),T('verlauf','📜','Verlauf','Verlauf')]:[]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
@@ -391,7 +429,7 @@ export function renderShop(){
     root.innerHTML=`<div class="shop-wrap">
       <div class="shop-h">📦 Lager</div>
       <p class="shop-sub">Was liegt wo – und was wird gebraucht? ${mgr?'Du verwaltest das Lager.':'Bestelle hier Material, Werbemittel und Werkzeug.'}</p>
-      <div class="shop-tabs">${tabs.map(t=>`<button class="${TAB===t[0]?'on':''}" onclick="shopTab(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
+      <div class="shop-tabs">${tabs.map(t=>`<button class="${TAB===t[0]?'on':''}" aria-label="${esc(t[2])}"${TAB===t[0]?' aria-current="page"':''} onclick="shopTab(${jsq(t[0])})">${t[1]}</button>`).join('')}</div>
       ${body}
     </div><div id="shop-cart"></div>`;
     _cartPaint();
@@ -412,13 +450,20 @@ function _bestandHtml(mgr){
   const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('')
     +(bws.length?`<optgroup label="🔁 Ausgeliehen an">${bws.map(b=>`<option value="${esc('loan:'+b.key)}"${fPlace==='loan:'+b.key?' selected':''}>${esc(b.label)}</option>`).join('')}</optgroup>`:'');
   const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
+  const nF=(fCat?1:0)+(fPlace?1:0)+(fTeam?1:0);
   return `${hint}<div class="shop-bar">
-      <input type="search" id="shop-q" placeholder="Suchen …" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
-      <select aria-label="Kategorie" onchange="shopSetCat(this.value)">${catOpts}</select>
-      <select aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
-      ${_teamFilterHtml()}
+      <input type="search" id="shop-q" placeholder="Suchen …" aria-label="Artikel suchen" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
+      <button class="shop-btn shop-fbtn${nF?' pri':''}" aria-expanded="${fOpen?'true':'false'}" aria-controls="shop-filters" onclick="shopFilterToggle()">⚙ Filter${nF?` (${nF})`:''}</button>
+      <div class="shop-filters${fOpen?' open':''}" id="shop-filters">
+        <select aria-label="Kategorie" onchange="shopSetCat(this.value)">${catOpts}</select>
+        <select aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
+        ${_teamFilterHtml()}
+        ${nF?`<button class="shop-btn" onclick="shopFilterReset()">✕ Filter zurücksetzen</button>`:''}
+      </div>
       <span class="shop-sp"></span>
-      ${mgr?`<button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel</button><button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Import</button>`:''}
+      ${mgr?`<details class="shop-more"><summary class="shop-btn" aria-label="Weitere Aktionen">⋯</summary><div class="shop-more-m">
+        <button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel-Export</button>
+        <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button></div></details>`:''}
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
     <div id="shop-items">${_itemsGrid(mgr)}</div>`;
@@ -586,13 +631,13 @@ function _itemsGrid(mgr){
     const pl=pids.sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
       .map(pid=>{ const ist=_num((it.stock||{})[pid]), s=sollAt(it,pid), under=s>0&&ist<s;
         return `<span class="${fPlace===pid?'hl':''}${under?' short':''}" ${under?`title="Soll ${s} – es fehlen ${s-ist}"`:''}>${esc(placeLabel(pid))}: <b>${ist}</b>${s?` / ${s}`:''}${under?' ⚠':''}</span>`; }).join('');
-    const img=_imgUrl(it.foto)?`<div class="shop-img"><img src="${esc(_imgUrl(it.foto))}" alt="Foto: ${esc(it.name||'Artikel')} (antippen zum Vergrößern)" loading="lazy" onclick="shopImgZoom(this)"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+    const img=_imgUrl(it.foto)?`<div class="shop-img"><img src="${esc(_imgUrl(it.foto))}" alt="Foto: ${esc(it.name||'Artikel')} (antippen zum Vergrößern)" loading="lazy" onclick="event.stopPropagation();shopImgZoom(this)"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
     const ln=activeLoans(it.id);
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
-    return `<div class="shop-card${(low||short.length)?' low':''}">${img}<div class="shop-cb">
+    return `<div class="shop-card${(low||short.length)?' low':''}" onclick="shopItemView(${jsq(it.id)})">${img}<div class="shop-cb">
       <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:var(--info-bg,#dbe6fb);color:var(--info-text,#1e40af)">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}${_teamChip(it.team)}</div>
-      <div class="shop-name">${esc(it.name)}</div>
+      <button type="button" class="shop-name" onclick="event.stopPropagation();shopItemView(${jsq(it.id)})">${esc(it.name)}</button>
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
       <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
@@ -602,20 +647,59 @@ function _itemsGrid(mgr){
       ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
         const nOver=ts.filter(t=>t.datum&&t.datum<_todayIso()).length;
         return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:var(--danger,#c0392b)">(${nOver} überfällig)</b>`:''}</div>`; })():''}
-      <div class="shop-act">
-        ${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} ＋</button>`:''}
-        ${!isEinzeln(it)&&usePlaces(it).length||isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
-        ${mgr&&art==='ausstattung'&&!isEinzeln(it)&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="Einem Mitarbeiter / Verein zuordnen">🔁 Zuordnen</button>`:''}
-        ${mgr&&isEinzeln(it)?`<button class="shop-btn sm" onclick="shopUnits(${jsq(it.id)})">🏷️ Stücke (${unitsOf(it).length})</button>`:''}
-        ${mgr&&!isEinzeln(it)?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
-        <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>`:''}
-        ${mgr?`<button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎</button>`:''}
-      </div></div></div>`;
+      <div class="shop-act" onclick="event.stopPropagation()">${_itemPrimary(it)}<button class="shop-btn sm" onclick="shopItemView(${jsq(it.id)})" aria-label="Details und alle Aktionen zu ${esc(it.name)}">⋯</button>      </div></div></div>`;
   }).join('')}</div>`;
+}
+// Alle Aktionen zu einem Artikel (in der Artikel-Ansicht); die Karte zeigt nur die Hauptaktion
+function _itemActs(it, mgr){ const art=itemArt(it);
+  return `${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} In den Korb</button>`:''}
+    ${!isEinzeln(it)&&usePlaces(it).length||isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
+    ${mgr&&art==='ausstattung'&&!isEinzeln(it)&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="Einem Mitarbeiter / Verein zuordnen">🔁 Zuordnen</button>`:''}
+    ${mgr&&isEinzeln(it)?`<button class="shop-btn sm" onclick="shopUnits(${jsq(it.id)})">🏷️ Stücke (${unitsOf(it).length})</button>`:''}
+    ${mgr&&!isEinzeln(it)?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
+    <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>`:''}
+    ${mgr?`<button class="shop-btn sm" onclick="shopItemEdit(${jsq(it.id)})">✎ Bearbeiten</button>`:''}`;
+}
+function _itemPrimary(it){ const art=itemArt(it);
+  if(art!=='ausstattung'&&!isEinzeln(it)) return `<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen" aria-label="${esc(it.name)} in den Korb">${art==='leihe'?'🔁':'🛒'} ＋</button>`;
+  if((!isEinzeln(it)&&usePlaces(it).length)||(isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0)) return `<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})">➖ Verbrauch</button>`;
+  return '';
+}
+// ── Artikel-Ansicht: alles zu einem Artikel an einer Stelle (Paket 2, v556) ──
+function shopItemView(id){
+  const it=getShop('shopItems',id); if(!it) return; const mgr=canManage();
+  const art=itemArt(it); const u=esc(it.einheit||'Stück');
+  const img=_imgUrl(it.foto)?`<div class="shop-img"><img src="${esc(_imgUrl(it.foto))}" alt="Foto: ${esc(it.name)} (antippen zum Vergrößern)" onclick="shopImgZoom(this)"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+  const pids=[...new Set([...Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0), ...Object.keys(it.soll||{}).filter(pid=>placeOf(pid)&&sollAt(it,pid)>0)])]
+    .sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'));
+  const plRows=pids.map(pid=>{ const ist=_num((it.stock||{})[pid]), so=sollAt(it,pid);
+    return `<div class="shop-iv-row"><span>${esc(placeLabel(pid))}</span><span class="r"${so&&ist<so?' style="color:var(--danger,#c0392b)"':''}>${ist}${so?` / Soll ${so}${ist<so?' ⚠':''}`:''}</span></div>`; }).join('');
+  const lnRows=activeLoans(it.id).map(l=>`<div class="shop-iv-row"><span>${esc(bLabel(l))}${l.due?` · bis ${_fmtDate(l.due)}`:' · dauerhaft'}</span><span class="r"${_overdue(l)?' style="color:var(--danger,#c0392b)"':''}>${_num(l.qty)}</span></div>`).join('');
+  const me=_me(); const act=o=>o.status==='offen'||o.status==='inarbeit';
+  const ors=orders().filter(o=>act(o) && _pos(o).some(p=>p.itemId===it.id) && (mgr||o.byId===me.id));
+  const orRows=ors.map(o=>{ const q=_pos(o).filter(p=>p.itemId===it.id).reduce((s,p)=>s+_num(p.menge),0); const st=STATUS[o.status]||STATUS.offen;
+    return `<div class="shop-iv-row"><span>${esc(o.byName||'?')} · ${_fmtTs(o.ts)} <span class="shop-st" style="background:${st.c}">${st.l}</span></span><span class="r">${q}</span></div>`; }).join('');
+  const logs=mgr?listShop('shopLog').filter(l=>l.itemId===it.id).sort((a,b)=>(b.ts||0)-(a.ts||0)):[];
+  const lgRows=logs.slice(0,5).map(l=>`<div class="shop-iv-row"><span>${_fmtTs(l.ts)} · ${LOG_T[l.type]||esc(l.type)}${l.byName?' · '+esc(l.byName):''}</span><span class="r">${l.type==='korrektur'?(l.qty>0?'+':'')+l.qty:l.qty}</span></div>`).join('');
+  const chips=[it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:'', art==='leihe'?'<span class="shop-cat">🔁 Leihmaterial</span>':'', art==='ausstattung'?'<span class="shop-cat">🧰 Ausstattung</span>':'', _teamChip(it.team)].join(' ');
+  openModal(`<div class="shop-iv-top">${img}<div style="min-width:0">
+      <h3 style="margin:0 0 4px">${esc(it.name)}</h3>${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">${chips}</div>
+      <div class="shop-tot">${total(it)} <small>${u} gesamt${activeLoans(it.id).length?` · ${inPlaces(it)} im Lager`:''}</small></div>
+      ${_num(it.min)>0&&total(it)<_num(it.min)?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)})</div>`:''}</div></div>
+    ${it.note?`<div class="shop-var" style="margin-bottom:6px">📝 ${esc(it.note)}</div>`:''}
+    <div class="shop-iv-sec">Wo liegt es?</div>${plRows||'<div class="shop-var">kein Bestand</div>'}
+    ${lnRows?`<div class="shop-iv-sec">Ausgeliehen / zugeordnet</div>${lnRows}`:''}
+    ${orRows?`<div class="shop-iv-sec">${mgr?'Offene Bestellungen':'Meine offenen Bestellungen'}</div>${orRows}`:''}
+    ${lgRows?`<div class="shop-iv-sec">Letzte Bewegungen</div>${lgRows}${logs.length>5?`<button class="shop-btn sm" style="margin-top:6px" onclick="closeModal();fLogItem=${jsq(it.id)};shopTab('verlauf')">Alle ${logs.length} Bewegungen</button>`:''}`:''}
+    <div class="shop-iv-act">${_itemActs(it,mgr)}</div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>`);
 }
 function _catIcon(c){ return ({'Flaggen':'🚩','Flyer':'📄','Branding':'🎨','Visitenkarten':'🪪','Bootsmaterial':'⛵','Werkzeug':'🛠️'})[c]||'📦'; }
 function shopSetQ(v){ fQ=v; const g=document.getElementById('shop-items'); if(g) g.innerHTML=_itemsGrid(canManage()); }
 function shopSetCat(v){ fCat=v; renderShop(); }
+function shopFilterToggle(){ fOpen=!fOpen; renderShop(); }
+function shopFilterReset(){ fCat=''; fPlace=''; fTeam=''; renderShop(); }
 function shopSetPlace(v){ fPlace=v; renderShop(); }
 
 // ── Artikel anlegen / bearbeiten ───────────────────────────────────
@@ -724,6 +808,10 @@ function shopItemDelete(id){
 }
 
 // ── Buchen (Zugang / Abgang / Korrektur) ───────────────────────────
+// Mengenfeld mit − / ＋ zum Tippen (Paket 1, v556); löst „change" aus, damit Korb/Positionen mitziehen
+function _qtyHtml(id, val, min, extra){ return `<div class="shop-qty"><button type="button" aria-label="weniger" onclick="shopQtyStep(this,-1)">−</button><input${id?` id="${id}"`:''} type="number" inputmode="numeric" min="${min}" step="1" value="${esc(val)}" ${extra||''}><button type="button" aria-label="mehr" onclick="shopQtyStep(this,1)">＋</button></div>`; }
+function shopQtyStep(btn, d){ const el=btn.parentNode.querySelector('input'); if(!el) return; const min=_num(el.min);
+  el.value=Math.max(min, Math.round(_num(el.value))+d); el.dispatchEvent(new Event('change',{bubbles:true})); el.dispatchEvent(new Event('input',{bubbles:true})); }
 function _placeSelect(id, sel, withQty, it){
   return `<select id="${id}">${places().map(p=>`<option value="${esc(p.id)}"${sel===p.id?' selected':''}>${esc(placeLabel(p.id))}${withQty&&it?` (${_num((it.stock||{})[p.id])})`:''}</option>`).join('')}</select>`;
 }
@@ -733,16 +821,21 @@ function shopBook(id, preType, prePl, preQty){
   const it=getShop('shopItems',id); if(!it) return;
   if(!places().length){ toast('Bitte zuerst unter „📍 Orte" einen Ort anlegen.','err'); return; }
   openModal(`<h3>± Bestand buchen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · gesamt ${total(it)} ${esc(it.einheit||'Stück')}</p>
-    <div class="shop-f"><label>Art</label><select id="sb-type">
+    <div class="shop-f"><label>Art</label><select id="sb-type" onchange="shopBookPrefill(${jsq(id)})">
       <option value="zugang"${preType==='zugang'?' selected':''}>➕ Zugang (geliefert, gedruckt, gekauft)</option>
       <option value="abgang"${preType==='abgang'?' selected':''}>➖ Abgang (verbraucht, verteilt, kaputt)</option>
       <option value="korrektur"${preType==='korrektur'?' selected':''}>✎ Korrektur (gezählt – Bestand genau setzen)</option></select></div>
     <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('sb-pl', prePl||fPlace, true, it)}</div>
-      <div class="shop-f"><label>Menge</label><input id="sb-qty" type="number" min="0" step="1" placeholder="0" value="${preQty?esc(preQty):''}"></div></div>
+      <div class="shop-f"><label id="sb-qty-l">Menge</label>${_qtyHtml('sb-qty', preQty||1, 0)}</div></div>
     <div class="shop-f"><label>Notiz</label><input id="sb-note" placeholder="z. B. Lieferung Druckerei, Messe Kiel"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopBookSave(${jsq(id)})">Buchen</button></div>`);
+  const pl=document.getElementById('sb-pl'); if(pl) pl.addEventListener('change',()=>shopBookPrefill(id));
+  if(preType==='korrektur') shopBookPrefill(id);
 }
+// Korrektur = „gezählt": Feld mit dem aktuellen Bestand des Orts füllen; sonst 1
+function shopBookPrefill(id){ const it=getShop('shopItems',id); const q=document.getElementById('sb-qty'), l=document.getElementById('sb-qty-l'); if(!it||!q) return;
+  const k=_val('sb-type')==='korrektur'; q.value=k?_num((it.stock||{})[_val('sb-pl')]):1; if(l) l.textContent=k?'Gezählt (neuer Bestand)':'Menge'; }
 function shopBookSave(id){
   const it=getShop('shopItems',id); if(!it) return;
   const type=_val('sb-type'), pl=_val('sb-pl'), note=_val('sb-note');
@@ -769,11 +862,16 @@ function shopMove(id, preFrom, preTo, preQty){
   openModal(`<h3>⇄ Umlagern</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b></p>
     <div class="shop-f2"><div class="shop-f"><label>Von</label><select id="sm-from">${from.map(p=>`<option value="${esc(p)}"${(preFrom||fPlace)===p?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
       <div class="shop-f"><label>Nach</label>${_placeSelect('sm-to',preTo||'',true,it)}</div></div>
-    <div class="shop-f2"><div class="shop-f"><label>Menge</label><input id="sm-qty" type="number" min="1" step="1" value="${preQty?esc(preQty):1}"></div>
+    <div class="shop-f2"><div class="shop-f"><label>Menge</label>${_qtyHtml('sm-qty', preQty||1, 1)}</div>
       <div class="shop-f"><label>Notiz</label><input id="sm-note" placeholder="z. B. für Regatta am Wochenende"></div></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopMoveSave(${jsq(id)})">Umlagern</button></div>`);
+  const f=document.getElementById('sm-from'); if(f){ f.addEventListener('change',_moveToSync); _moveToSync(); }
 }
+// „Nach": den Von-Ort ausblenden; steht dort derselbe Ort, den ersten anderen wählen
+function _moveToSync(){ const f=_val('sm-from'), t=document.getElementById('sm-to'); if(!t) return;
+  [...t.options].forEach(o=>{ o.hidden=o.disabled=(o.value===f); });
+  if(t.value===f){ const o=[...t.options].find(o=>o.value!==f); if(o) t.value=o.value; } }
 function shopMoveSave(id){
   const it=getShop('shopItems',id); if(!it) return;
   const from=_val('sm-from'), to=_val('sm-to'), q=Math.round(_num(_val('sm-qty'))), note=_val('sm-note');
@@ -796,7 +894,7 @@ function shopUse(id){
   const def=from.includes(fPlace)?fPlace:from[0];
   openModal(`<h3>➖ Verbrauch melden</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b></p>
     <div class="shop-f2"><div class="shop-f"><label>Wo?</label><select id="su-pl">${from.map(p=>`<option value="${esc(p)}"${p===def?' selected':''}>${esc(placeLabel(p))} (${_num(it.stock[p])})</option>`).join('')}</select></div>
-      <div class="shop-f"><label>Menge</label><input id="su-qty" type="number" min="1" step="1" value="1"></div></div>
+      <div class="shop-f"><label>Menge</label>${_qtyHtml('su-qty', 1, 1)}</div></div>
     <div class="shop-f"><label>Notiz <span style="font-weight:400;color:var(--muted)">(optional)</span></label><input id="su-note" placeholder="z. B. bei Kenterung benutzt, Training 12.10."></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopUseSave(${jsq(id)})">Verbrauch melden</button></div>`);
@@ -892,7 +990,7 @@ function shopCartAdd(itemId, qty){
   if(itemArt(it)==='ausstattung'){ toast('Ausstattung ist fest am Ort und nicht bestellbar – fehlt etwas, bitte „➖ Verbrauch" melden.','err'); return; }
   const a=cartGet(); const p=a.find(x=>x.itemId===itemId);
   if(p) p.menge=_num(p.menge)+(qty||1); else a.push({key:newId(), itemId, menge:qty||1});
-  cartOpen=true; cartSet(a); toast(`${itemLabel(it)} im Korb ✓`,'ok');
+  cartSet(a); const pill=document.querySelector('.shop-cart-pill'); if(pill){ pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump'); pill.setAttribute('aria-label', itemLabel(it)+' im Korb – Korb öffnen'); }
 }
 function shopCartAddFree(inpId){
   const t=_val(inpId||'pos-free'); if(!t){ toast('Bitte beschreiben, was gebraucht wird.','err'); return; }
@@ -916,13 +1014,13 @@ function _cartPaint(){
   const a=cartGet(); const mgr=canManage();
   if(!a.length){ box.innerHTML=''; box.className=''; return; }
   const n=a.reduce((s,p)=>s+_num(p.menge),0);
-  if(!cartOpen){ box.className='shop-cart min'; box.innerHTML=`<button class="shop-cart-pill" onclick="shopCartToggle()">🛒 Korb <b>${a.length}</b>${a.length!==n?` <span style="opacity:.8">(${n} Stück)</span>`:''}</button>`; return; }
+  if(!cartOpen){ box.className='shop-cart min'; box.innerHTML=`<button class="shop-cart-pill" aria-live="polite" onclick="shopCartToggle()">🛒 Korb <b style="margin-left:5px">${a.length}</b>${a.length!==n?` <span style="opacity:.8;margin-left:4px">(${n} Stück)</span>`:''}<span class="go">Ansehen &amp; bestellen ›</span></button>`; return; }
   box.className='shop-cart';
   box.innerHTML=`<div class="shop-cart-h"><b>🛒 Korb</b> <span style="color:var(--muted);font-size:12px">${a.length} Position${a.length===1?'':'en'}</span><span class="shop-sp"></span>
       <button class="shop-btn sm" onclick="shopCartClear()" title="Korb leeren">🗑</button><button class="shop-btn sm" onclick="shopCartToggle()" title="Einklappen">▾</button></div>
     <div class="shop-cart-list">${a.map(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null;
       return `<div class="shop-cart-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>
-        <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
+        ${_qtyHtml('', _num(p.menge), 1, `aria-label="Menge ${esc(_posLabel(p))}" onchange="shopCartQty(${jsq(p.key)},this.value)"`)}
         <button class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" onclick="shopCartDel(${jsq(p.key)})" title="Entfernen">✕</button></div>`; }).join('')}</div>
     <div class="shop-cart-free"><input id="cart-free" placeholder="＋ Freier Wunsch (nicht im Katalog) …" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('cart-free');}"></div>
     <div class="shop-cart-act"><button class="shop-btn pri" onclick="shopOrderNew()">🛒 Bestellen …</button>
@@ -935,7 +1033,7 @@ function _posEditorHtml(mode){
   const its=items().filter(i=>itemArt(i)!=='ausstattung' && !isEinzeln(i) && (mode!=='send'||freeTotal(i)>0));
   return `<div class="shop-f"><label>Positionen *</label><div id="shop-pos" class="shop-pos"></div>
     <div class="shop-posadd"><select id="pos-item"><option value="">＋ Artikel hinzufügen …</option>${its.map(i=>`<option value="${esc(i.id)}">${i.leihbar?'🔁 ':''}${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}${mode==='send'?` (${freeTotal(i)} verfügbar)`:''}</option>`).join('')}</select>
-      <input id="pos-qty" type="number" min="1" step="1" value="1" style="width:70px"><button type="button" class="shop-btn sm" onclick="shopPosAddSel()">＋</button></div>
+      ${_qtyHtml('pos-qty', 1, 1)}<button type="button" class="shop-btn sm" onclick="shopPosAddSel()">Hinzufügen</button></div>
     ${mode==='order'?`<div class="shop-posadd"><input id="pos-free" placeholder="Freier Wunsch (nicht im Katalog), z. B. 200 Visitenkarten für mich" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('pos-free');}"><button type="button" class="shop-btn sm" onclick="shopCartAddFree('pos-free')">＋</button></div>`:''}</div>`;
 }
 function _posPaint(){
@@ -949,7 +1047,7 @@ function _posPaint(){
       src=fr.length?`<select onchange="shopCartFrom(${jsq(p.key)},this.value)" title="Aus Ort">${fr.map(x=>`<option value="${esc(x)}"${x===p.from?' selected':''}>${esc(srcLabel(it,x))}</option>`).join('')}</select>`
         :`<span style="font-size:12px;color:var(--danger,#c0392b)">kein freier Bestand</span>`; }
     return `<div class="shop-pos-row"><span class="nm">${it&&it.leihbar?'🔁 ':''}${p.itemId?'':'✏️ '}${esc(_posLabel(p))}</span>${src}
-      <input type="number" min="1" step="1" value="${_num(p.menge)}" onchange="shopCartQty(${jsq(p.key)},this.value)">
+      ${_qtyHtml('', _num(p.menge), 1, `aria-label="Menge ${esc(_posLabel(p))}" onchange="shopCartQty(${jsq(p.key)},this.value)"`)}
       <button type="button" class="crm-x" style="border:none;background:none;color:var(--danger,#c0392b);cursor:pointer" onclick="shopCartDel(${jsq(p.key)})">✕</button></div>`; }).join('');
   if(_posMode==='send'){ try{ localStorage.setItem(_cartKey(), JSON.stringify(cartGet().map(p=>{ const q=a.find(x=>x.key===p.key); return q?Object.assign(p,{from:q.from}):p; }))); }catch(e){} }
   // Bestellen: Leihmaterial im Korb → „Rückgabe bis" einblenden
@@ -990,6 +1088,13 @@ function shopOrderNew(itemId){
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
   _posPaint();
+  // Vorbelegung (Paket 1, v556): Ziel der letzten eigenen Bestellung, sonst „Ins Büro / an einen Ort" mit meinem Büro
+  try{ const z=document.getElementById('so-ziel'); const last=orders().find(o=>o.byId===_me().id && !o.auto && !o.direkt && o.ziel);
+    const want=last&&['home','place'].includes(last.ziel)?last.ziel:(pls.length?'place':'');
+    if(z && want && [...z.options].some(o=>o.value===want)){ z.value=want;
+      if(want==='place'){ const sp=document.getElementById('so-place'); const pid=(last&&last.ziel==='place'&&last.ortId)||'';
+        if(sp && pid && [...sp.options].some(o=>o.value===pid)) sp.value=pid; }
+      shopOrderZielChg(); } }catch(e){}
 }
 function shopOrderItemChg(){ _posPaint(); }   // (alt, bleibt für evtl. noch offene Fenster)
 // Ziel umschalten: passende Felder zeigen + Lieferadresse vorbelegen
@@ -2125,7 +2230,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { shopImgZoom, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
