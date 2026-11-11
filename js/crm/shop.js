@@ -378,6 +378,7 @@ function _styles(){
     .shop-cart{right:8px;left:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:65vh} .shop-cart.min{right:auto}
     .shop-pos-row{flex-wrap:wrap} .shop-pos-row select{max-width:none;flex:1}
     .shop-inv-row{flex-wrap:wrap} .shop-inv-nm{flex:1 1 calc(100% - 60px)} .shop-inv-row .shop-qty{flex:1} .shop-inv-row .shop-qty input{flex:1;width:auto!important}
+    .shop-more.l .shop-more-m{left:0;right:auto}
     .shop-posadd{flex-wrap:wrap} .shop-posadd select{flex:1 1 100%!important} .shop-posadd .shop-btn{flex:1}
     /* Handy (v451): Reiter in einer wischbaren Zeile, Filter geordnet, größere Knöpfe, kompakte Artikelkarten */
     /* Paket 2 (v556): alle Reiter ohne Wischen sichtbar – Symbol oben, Kurzname darunter */
@@ -2036,12 +2037,13 @@ function _orteHtml(){
         ${le?`<span class="shop-st" style="background:${_overdue(le)?'#c0392b':'#2563eb'}">🔁 ausgeliehen an ${esc(bName(le))}${le.due?' bis '+_fmtDate(le.due):' (Dauerleihe)'}</span>`:''}</div>
       ${(()=>{ const li=_lastInv(p.id); return li?`<div class="m">📋 Letzte Inventur: ${_fmtTs(li.ts)}${li.byName?' · '+esc(li.byName):''}</div>`:''; })()}
       <div class="m">${here.length?`${here.length} Artikel · ${n} Teile: `+here.slice(0,6).map(i=>esc(i.name)+' ('+_num(i.stock[p.id])+')').join(', ')+(here.length>6?' …':''):'leer'}${p.note?'<br>📝 '+esc(p.note):''}</div></div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">${isMovable(p)?`
-        ${z?`<button class="shop-btn sm" onclick="shopReassign(${jsq(z.id)})" title="An anderen Mitarbeiter übergeben">👤 Übergeben</button>`:`<button class="shop-btn sm" onclick="shopLendPlace(${jsq(p.id)},'zuord')">👤 Zuordnen</button>`}
-        ${le?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(le.id)})">↩ Zurück</button>`:`<button class="shop-btn sm" onclick="shopLendPlace(${jsq(p.id)},'leihe')">🔁 Ausleihen</button>`}`:''}
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:flex-start">
+      ${le?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(le.id)})">↩ Zurück</button>`:''}
       ${_can('la_bestand')?`<button class="shop-btn sm" onclick="shopInv(${jsq(p.id)})">📋 Inventur${_invDraft(p.id)?' (begonnen)':''}</button>`:''}
-      <button class="shop-btn sm" onclick="shopSetPlace(${jsq(p.id)});shopTab('bestand')">Ansehen</button>
-      <button class="shop-btn sm" onclick="shopPlaceEdit(${jsq(p.id)})">✎</button></div></div>`;
+      <details class="shop-more l"><summary class="shop-btn sm" aria-label="${esc(p.name)}: bearbeiten und weitere Aktionen">✎ ▾</summary><div class="shop-more-m">
+        <button class="shop-btn" onclick="shopPlaceEdit(${jsq(p.id)})">✎ Ort bearbeiten</button>${isMovable(p)?`
+        ${z?`<button class="shop-btn" onclick="shopReassign(${jsq(z.id)})" title="An anderen Mitarbeiter übergeben">👤 Übergeben</button>`:`<button class="shop-btn" onclick="shopLendPlace(${jsq(p.id)},'zuord')">👤 Zuordnen</button>`}
+        ${le?`<button class="shop-btn" onclick="shopReturn(${jsq(le.id)})">↩ Zurückgeben</button>`:`<button class="shop-btn" onclick="shopLendPlace(${jsq(p.id)},'leihe')">🔁 Ausleihen</button>`}`:''}</div></details></div></div>`;
   }).join('');
   const bws=_borrowers();
   const bRows=bws.map(b=>`<div class="shop-row"><div class="main"><div class="t">${esc(b.label)}</div>
