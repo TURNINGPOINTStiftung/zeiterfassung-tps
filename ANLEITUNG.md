@@ -325,6 +325,7 @@ Die Startseite der App (🏠 Start) bleibt davon unberührt.
 
 - **Was ansteht:** alles, was dir zugeteilt ist (auch Aufgaben mit Unterpunkten), Aufgaben deiner Teams, die noch niemand übernommen hat („Team … · noch frei“), und offene Aufgaben **mit Frist** aus deinen **persönlichen Projekten**
   Alles steht in **einer Liste nach Frist**: **rot** = überfällig oder in den nächsten 2 Tagen, **gelb** = innerhalb von 2 Wochen, **grün** = später, **grau** = ohne Frist.
+  Mit **„👤 Nur meine“** blendest du freie Team-Aufgaben aus – der Filter gilt auch in der Team-Übersicht und im Projektplan.
   (aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇) –
   getrennt nach **Überfällig**, **Diese Woche**, **Später**. Daneben **⚠ Hinweise** (was dich in den nächsten
   4 Wochen betrifft – nur sichtbar, wenn es welche gibt: deine Aufgaben, Beiträge, die du freigibst, und Aufgaben in Veranstaltungen, in denen du

@@ -113,7 +113,7 @@ function _todoCard(){
   const isCol=a=>a.depth===0 && (a.kind==='veranstaltung'||(a.kind==='teamprojekt'&&a.art!=='aufgaben'));   // oberste Ebene = Spalte des Boards (nicht bei Aufgaben ohne Projekt)
   const mineDone=a=>!!(a.node.jeder && a.node.erledigtVon && a.node.erledigtVon[me()]);   // „jede Person einzeln": meinen Teil schon erledigt
   const isTeamTask=a=>!a.node.assigneeId && !a.owner && leaf(a) && !isCol(a) && (a.teamsEff||[]).some(t=>myT.has(t));
-  const mine=all.filter(a=>a.node.status!=='erledigt' && !mineDone(a) && (_ass(a.node).includes(me()) || (a.kind==='teamprojekt' && a.owner===me() && (a.node.due || a.art==='aufgaben') && leaf(a)) || isTeamTask(a)))
+  let mine=all.filter(a=>a.node.status!=='erledigt' && !mineDone(a) && (_ass(a.node).includes(me()) || (a.kind==='teamprojekt' && a.owner===me() && (a.node.due || a.art==='aufgaben') && leaf(a)) || isTeamTask(a)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   // Dringlichkeit (User 11.11.2026): eine Liste nach Frist, farbig – rot überfällig/bis 2 Tage, gelb bis 2 Wochen, grün später
   const urg=n=>{ if(!n.due) return { k:'n', t:'ohne Frist' }; const d=Math.round((parse(n.due)-parse(today))/864e5);
@@ -125,11 +125,15 @@ function _todoCard(){
     const acts=((isA||leaf(a))?`<button type="button" class="plan-act ok" onclick="${isA?`crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})`:`crmTaskDone(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
       +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
     return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}${window.crmNoteBadge?window.crmNoteBadge(n):''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
+  // Filter „👤 Nur meine" (User 11.11.2026): ohne freie Team-Aufgaben – gemerkt pro Gerät, gilt auch in Team-Übersicht/Projektplan
+  const onlyMine=_mineOnly(); const all0=mine.length;
+  if(onlyMine) mine=mine.filter(a=>_ass(a.node).includes(me()) || (a.owner===me() && !_ass(a.node).length));   // eigenes Projekt: nur Unzugeteiltes, nicht das anderer
   const MAXN=12; const cnt=k=>mine.filter(a=>urg(a.node).k===k).length;
   const legend=`<div class="plan-legend">${[['r','überfällig / bis 2 Tage'],['y','bis 2 Wochen'],['g','später'],['n','ohne Frist']].map(([k,l])=>`<span><i class="u-${k}"></i>${l}${cnt(k)?` <b>${cnt(k)}</b>`:''}</span>`).join('')}</div>`;
   const ment=(()=>{ try{ return (window.crmMyMentions?window.crmMyMentions():[]).filter(m=>!m.pin); }catch(e){ return []; } })();
   const mentHtml=ment.length?`<div class="plan-ment">${ment.slice(0,5).map(m=>`<div class="plan-item" role="button" tabindex="0" onclick="${_open(m.a)}"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">💬 ${esc(m.x.name||'')} hat dich erwähnt · ${esc(m.a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">„${esc(String(m.x.text||'').slice(0,90))}${String(m.x.text||'').length>90?'…':''}“</span>${_srcTag(m.a)}</div></div><span class="plan-when">${esc(new Date(m.x.ts).toLocaleDateString('de-DE',{day:'numeric',month:'numeric'}))}</span></div>`).join('')}</div>`:'';
-  const body=mine.length?`${mentHtml}${legend}<div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
+  const seg=`<span class="plan-mseg" role="group" aria-label="Filter"><button type="button" class="${onlyMine?'':'on'}" aria-pressed="${!onlyMine}" onclick="planMineSet(false)">Alle</button><button type="button" class="${onlyMine?'on':''}" aria-pressed="${onlyMine}" onclick="planMineSet(true)">👤 Nur meine</button></span>`;
+  const body=(onlyMine&&!mine.length&&all0)?`${mentHtml}${seg}<div class="plan-empty">Dir ist gerade nichts zugeteilt – ${all0} freie Team-Aufgabe${all0===1?'':'n'} unter „Alle“.</div>`:mine.length?`${mentHtml}<div class="plan-fbar">${seg}${legend}</div><div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
   return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}${_myArchiveHtml()}</section>`;
 }
@@ -148,6 +152,9 @@ function _myArchiveHtml(){
 function planOpenProj(id){ try{ const p=(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{})[id]; if(!p) return;
   if(p.owner) return planOpenMyProj(id);
   window._crmTeamProjSel=id; window._crmProjReturn='team'; planGo('teams',{ team:p.team||'', keep:true }); setTimeout(()=>{ try{ window.crmOpenTeamProjekt&&window.crmOpenTeamProjekt(id); }catch(e){} },0); }catch(e){ console.warn('Planung:',e); } }
+function _mineOnly(){ try{ return localStorage.getItem('tps_plan_mine')==='1'; }catch(e){ return false; } }
+function planMineSet(v){ try{ localStorage.setItem('tps_plan_mine', v?'1':'0'); }catch(e){}
+  try{ if(window._activeModule==='planung') renderPlanungStart(); else if(window.crmTeamRepaint) window.crmTeamRepaint(); }catch(e){} }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
 function _myProjCard(){
@@ -260,6 +267,10 @@ function _styles(){
   .plan-ment{margin:0 0 12px} .plan-ment .plan-item{background:var(--info-bg,#eef3fb)}
   .tv-badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--muted,#5d7086)}
   .tv-badge.neu{background:var(--info-bg,#dbe6fb);color:var(--primary,#203869);border-color:transparent;font-weight:700}
+  .plan-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:0 0 10px} .plan-fbar .plan-legend{margin:0}
+  .plan-mseg{display:inline-flex;border:1.5px solid var(--border,#dce3ec);border-radius:8px;overflow:hidden}
+  .plan-mseg button{border:0;background:var(--surface,#fff);color:var(--text,#15263a);font:inherit;font-size:13px;font-weight:600;padding:5px 12px;cursor:pointer;min-height:32px}
+  .plan-mseg button.on{background:var(--primary,#203869);color:var(--on-primary,#fff)}
   .plan-tlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:8px;align-items:start}
   .plan-tlist .plan-irow{margin-bottom:0}
   .plan-barc.u-r,.plan-legend i.u-r{background:var(--danger,#c0392b)} .plan-barc.u-y,.plan-legend i.u-y{background:#e6b400}
@@ -300,7 +311,7 @@ function _styles(){
   document.head.appendChild(st);
 }
 
-try{ Object.assign(window, { planOpenProj, planOpenMyProj, planNewMyProj, planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
+try{ Object.assign(window, { planMineSet, planOpenProj, planOpenMyProj, planNewMyProj, planGo, planBarHtml, planTeamSet, planVaSet, renderPlanungStart, planTabs }); }catch(e){}
 export { renderPlanungStart };
 // Tastatur: Einträge mit role=button per Enter/Leertaste öffnen
 document.addEventListener('keydown', e=>{ if(e.key!=='Enter' && e.key!==' ') return; const t=e.target; if(!t || !t.classList || !t.classList.contains('plan-item') || t.getAttribute('role')!=='button') return; e.preventDefault(); t.click(); });

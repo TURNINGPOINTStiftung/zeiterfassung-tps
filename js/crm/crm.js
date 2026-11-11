@@ -4553,7 +4553,8 @@ function _oeaBoardHtml(r, posts){
   const inR=a=>a.node.due&&a.node.due>=r.a&&a.node.due<=r.b;
   // Projektplan (nicht ÖA): ALLE Aufgaben des Teams, unabhängig vom Zeitraum – es geht um den Überblick (User 11.11.2026).
   // Redaktionsplan (ÖA) bleibt beim gewählten Zeitraum (+ Ideen ohne Datum).
-  const list=_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice();
+  const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
+  const list=(_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice()).filter(a=>!_om || _isAss(a.node,_me));
   const card=a=>{ const n=a.node; const ph=oeaPhaseOf(n);
     const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     const over=iss.some(x=>x.lv==='crit');
@@ -4719,13 +4720,18 @@ function _oeaRedaktionHtml(){
     ${(c.oea&&_R('crm_einst'))?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
   </div>
   <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, posts, members, abs)}</div>
-  <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span>${c.oea?'':' <span style="font-size:13px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">– alle Aufgaben des Teams, unabhängig vom Zeitraum oben</span>'}</h4>
+  <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span>${c.oea?'':' <span style="font-size:13px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">– alle Aufgaben des Teams, unabhängig vom Zeitraum oben</span>'}<span class="hbtns">${_mineSegHtml()}</span></h4>
     ${(r.v==='jahr'&&c.oea)?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
   </div>
   ${_teamArchivHtml(c.team)}
   ${c.oea?_oeaNoTasksHtml():''}`;
 }
 
+// Filter „👤 Nur meine" (gemeinsam mit „Was ansteht" im Planner, gemerkt pro Gerät)
+function _planMineOnly(){ try{ return localStorage.getItem('tps_plan_mine')==='1'; }catch(e){ return false; } }
+function _mineSegHtml(){ const on=_planMineOnly(); return `<span class="pl-seg" role="group" aria-label="Filter"><button type="button" class="${on?'':'on'}" aria-pressed="${!on}" onclick="crmMineSet(false)">Alle</button><button type="button" class="${on?'on':''}" aria-pressed="${on}" onclick="crmMineSet(true)">👤 Nur meine</button></span>`; }
+function crmMineSet(v){ try{ localStorage.setItem('tps_plan_mine', v?'1':'0'); }catch(e){} paintTeamDetail(); }
+window.crmMineSet=crmMineSet; window.crmTeamRepaint=()=>{ try{ paintTeamDetail(); }catch(e){} };
 // Team-Archiv (älter als 7 Tage erledigt): Team-Übersicht UND unten im Projekt-/Redaktionsplan – für alle im Team sichtbar
 function _teamArchivHtml(team){
   const ohne=team==='Ohne Team'; const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
@@ -4750,7 +4756,8 @@ function _planTeamOverview(team){
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks().filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
-  const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until))
+  const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
+  const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until) && (!_om || _isAss(a.node,_me)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
@@ -4765,7 +4772,7 @@ function _planTeamOverview(team){
   done.sort((x,y)=>y.at-x.at);
   const doneRow=d=>{ const n=d.a.node; return `<div class="plan-item done" role="button" tabindex="0" onclick="${d.a.art==='aufgaben'?`crmAufgEdit(${jsq(d.a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(d.a.kind)},${jsq(d.a.tree||'')},${jsq(d.a.containerId)},${jsq(n.id)})`}"><span class="plan-barc" style="background:var(--ok,#16a34a)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${d.a.art==='aufgaben'?(d.wdh?'🔁 '+esc(aufgWdhLabel(n))+' · nächstes Mal '+esc(fmtDate(Date.parse(n.due))):'✔ Aufgabe'):((d.a.kind==='veranstaltung'?'📅':(d.a.kind==='entity'?'📇':'📂'))+' '+esc(d.a.containerName||''))}</span></div></div><span class="plan-when">${esc(fmtDate(d.at).replace(/\.\d{4}$/,'.'))}${d.by?' · '+esc(d.by):''}</span></div>`; };
   const doneHtml=done.length?`<div class="plan-grp" style="margin-top:14px">✓ Erledigt in den letzten 7 Tagen · ${done.length}</div>${done.map(doneRow).join('')}`:'';
-  const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
+  const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div style="margin:0 0 8px">${_mineSegHtml()}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
     ${leaves.length?leaves.map(taskRow).join(''):'<div class="plan-empty">Diesem Team ist in den nächsten 6 Wochen keine offene Aufgabe zugeordnet. Aufgaben bekommen ein Team über die Veranstaltung/das Projekt oder direkt in der Aufgabe.</div>'}
     <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist.</div>${doneHtml}</section>`;
   const vas=teamVeranstaltungen(team).filter(v=>!v.closed && String(v.ende||v.start||'')>=today).sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
