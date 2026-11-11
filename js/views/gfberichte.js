@@ -461,7 +461,7 @@ function _ensureNoticeCss(){
       +'.ze-notice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:#5a3a00}'
       +'.ze-notice .tx{flex:1;min-width:220px}'
       +'.ze-notice button{font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;border:1px solid #c98a10;background:var(--surface,#fff);color:#7a5200;font-weight:600}'
-      +'.ze-notice button.pri{background:#c98a10;color:#fff}'
+      +'.ze-notice button.pri{background:#8a5a00;border-color:#8a5a00;color:#fff}'
       +'.gf-emp{white-space:nowrap}'
       +'.gf-ret-btn{margin-left:3px;border:1px solid var(--danger);background:var(--surface,#fff);color:var(--danger);border-radius:5px;font-size:12px;line-height:1;padding:1px 5px;cursor:pointer;vertical-align:middle}'
       +'.gf-ret-btn:hover{background:var(--danger);color:var(--on-primary,#fff)}';

@@ -118,6 +118,7 @@ Projektmanagement, Kalender, Lager …) fest:
 Karten wie **Wetter & Wind**, **Stempeln**, **Was ansteht**, **Mitteilungen**, **Team** (Leitung/GF)
 und **Kacheln** zu allen Bereichen. Mit **„Anordnen"** verschiebst oder versteckst du Karten;
 ⭐ merkt sich Favoriten. Welche Karten erscheinen, stellst du im **Profil** unter „Meine Startseite" ein.
+**📌 Was ansteht** zeigt deine **Termine und Veranstaltungen**. Alles andere steht unter **🔔 Neuigkeiten** – z. B. neu dir zugeteilte Aufgaben, @-Erwähnungen in Notizen, Lager und Zeiterfassung. Mit **Öffnen** oder **✓ Gelesen** verschwindet eine Neuigkeit (auf allen Geräten). Deine Aufgaben findest du im **Planner** unter „Was ansteht“.
 
 **Menü ☰ (oben links):** Wechsel zwischen den Bereichen (Zeiterfassung, CRM, **Planner** – das sind
 Kalender und Projektmanagement zusammen –, Lager, **Anleitung** …) – du siehst nur die Bereiche, für die du freigeschaltet bist.

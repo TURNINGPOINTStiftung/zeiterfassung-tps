@@ -203,7 +203,14 @@ function assigneeBoxHtml(team, selIds){
 }
 function crmAssAll(on){ document.querySelectorAll('.crm-ass-cb').forEach(x=>{ x.checked=on; }); }
 function _readAss(){ return Array.from(document.querySelectorAll('.crm-ass-cb:checked')).map(x=>x.value).filter(Boolean); }
-function _setAss(rec, ids){ rec.assigneeId=ids[0]||''; rec.assigneeIds=ids.length>1?ids:null; rec.assigneeName=ids.map(userName).filter(Boolean).join(', '); }
+// noStamp: rec ist nur ein Formular-Zwischenstand (wird später auf den Knoten kopiert) → dort _stampAss mit den alten Zuständigen
+function _setAss(rec, ids, noStamp){ const old=_taskAss(rec); rec.assigneeId=ids[0]||''; rec.assigneeIds=ids.length>1?ids:null; rec.assigneeName=ids.map(userName).filter(Boolean).join(', ');
+  if(!noStamp) _stampAss(rec, old); }
+// Zuteilung merken (v566): wer kam wann von wem dazu → „📌 Dir zugeteilt" in den Neuigkeiten der Startseite
+function _stampAss(n, oldIds){ const me=(window.cu&&window.cu.id)||''; const now=Date.now(); const cur=_taskAss(n); const z=Object.assign({}, (n.zugeteilt&&typeof n.zugeteilt==='object')?n.zugeteilt:{});
+  cur.forEach(id=>{ if(!(oldIds||[]).includes(id)) z[id]={ ts:now, by:me, byName:curName() }; });
+  Object.keys(z).forEach(id=>{ if(!cur.includes(id)) delete z[id]; });
+  n.zugeteilt=Object.keys(z).length?z:null; }
 function assigneeOptsHtml(team, selId){
   const opts=[`<option value="">– niemand –</option>`];
   teamMembers(team).forEach(u=>{ opts.push(`<option value="${esc(u.id)}" ${u.id===selId?'selected':''}>${esc(u.name)}</option>`); });
@@ -4052,7 +4059,7 @@ function _readNodeForm(e, isTop){
   const deps=readChecked('crm-task-deps');
   const status=enforceBlock(e, deps, val('crm-task-status')||'offen');
   const rec={ text, note:val('crm-task-note'), due:val('crm-task-due'), status, deps };
-  const werR=document.querySelector('input[name="tk-wer"]:checked'); _setAss(rec, (werR && werR.value==='team') ? [] : _readAss());
+  const werR=document.querySelector('input[name="tk-wer"]:checked'); _setAss(rec, (werR && werR.value==='team') ? [] : _readAss(), true);
   const wdhEl=document.getElementById('crm-task-wdh'); if(wdhEl) rec.wdh=_AUFG_WDH[wdhEl.value]?wdhEl.value:null;
   const jR=document.querySelector('input[name="tk-jeder"]:checked'); if(jR) rec.jeder=jR.value==='1'?true:null;
   if(isTop && _ctxAllowsTeams()) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);  // mehrere Teams je Top-Aufgabe (Eintrag/Veranstaltung/Vorlage)
@@ -4061,7 +4068,7 @@ function _readNodeForm(e, isTop){
     const ov=String(val('crm-task-offset')||'').trim(); const o=ov===''?null:Math.round(Number(ov));
     rec.offsetTage=(o===null||!isFinite(o))?null:Math.max(-365,Math.min(365,o));
     if(!isTop) rec.teams=Array.from(document.querySelectorAll('.crm-task-team-cb:checked')).map(x=>x.value);
-    rec.due=''; _setAss(rec, []);
+    rec.due=''; _setAss(rec, [], true);
   }
   const _ph=document.getElementById('crm-oea-phase');
   if(_ph && !_ph.disabled){   // ÖA-Beitrag: Phase/Kanal/Freigabe/Bildrechte; Phasenwechsel setzt den Basis-Status
@@ -4079,8 +4086,8 @@ function crmSaveTask(tid){  // neue Hauptaufgabe (tid='') oder Bearbeiten
   mutateContainer(en=>{
     if(!Array.isArray(en.todos)) en.todos=[];
     const stamp=(n,was)=>{ if(n.status==='erledigt'){ if(was!=='erledigt'||!n.doneAt){ n.doneAt=new Date().toISOString(); n.doneBy=curKuerzel(); } } else { n.doneAt=''; n.doneBy=''; } };
-    if(tid){ const f=findNode(en, tid); if(f){ const was=f.node.status; Object.assign(f.node, rec); stamp(f.node, was); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
-    else { const nn={ id:newId(), children:[], teams: _ctxAllowsTeams()?(rec.teams||[]):[], ...rec }; stamp(nn,''); en.todos.push(nn); }
+    if(tid){ const f=findNode(en, tid); if(f){ const was=f.node.status; const wasAss=_taskAss(f.node); Object.assign(f.node, rec); stamp(f.node, was); _stampAss(f.node, wasAss); if(!Array.isArray(f.node.children)) f.node.children=[]; } }
+    else { const nn={ id:newId(), children:[], teams: _ctxAllowsTeams()?(rec.teams||[]):[], ...rec }; stamp(nn,''); _stampAss(nn, []); en.todos.push(nn); }
   });
   crmCloseModal(); repaintContainer();
 }
@@ -4090,7 +4097,7 @@ function crmSaveChild(parentId){
   mutateContainer(en=>{
     const f=findNode(en, parentId); if(!f) return;
     if(!Array.isArray(f.node.children)) f.node.children=[];
-    f.node.children.push({ id:newId(), children:[], ...rec });
+    const nn={ id:newId(), children:[], ...rec }; _stampAss(nn, []); f.node.children.push(nn);
   });
   crmCloseModal(); repaintContainer();
 }
@@ -4791,7 +4798,7 @@ function crmTeamSetStatus(tree,eid,id,value){
 }
 function crmTeamSetAssignee(tree,eid,id,value){
   const name=value?userName(value):'';
-  updateAnyTask(tree,eid,id, t=>{ t.assigneeId=value; t.assigneeName=name; t.assigneeIds=null; });
+  updateAnyTask(tree,eid,id, t=>{ const was=_taskAss(t); t.assigneeId=value; t.assigneeName=name; t.assigneeIds=null; _stampAss(t, was); });
   paintTeamDetail();
 }
 // Häkchen / Unterpunkt / Bearbeiten aus der Team-Ansicht (zielt auf den Eintrag)
@@ -4978,7 +4985,7 @@ function crmMyArchivedAufg(){ const c=_aufgBox('', _aMe()); return c?(c.todos||[
 // „Übernehmen": freie Team-Aufgabe (aus jedem Behälter) mir zuteilen
 function crmTakeTask(kind, tree, cid, tid){
   const me=_aMe(); if(!me) return;
-  const fn=root=>{ const f=findNode(root, tid); if(f){ f.node.assigneeId=me; f.node.assigneeIds=null; f.node.assigneeName=userName(me); } };
+  const fn=root=>{ const f=findNode(root, tid); if(f){ const was=_taskAss(f.node); f.node.assigneeId=me; f.node.assigneeIds=null; f.node.assigneeName=userName(me); _stampAss(f.node, was); } };
   if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben'){ if(!_aufgMay(c)){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
       normTasks(c); fn(c); _aufgSave(c); toast('Übernommen ✓','ok'); _aufgRefresh(); return; } }
   _meSetCtx(kind, tree, cid, tid); mutateContainer(fn); toast('Übernommen ✓','ok'); _aufgRefresh();
@@ -5132,7 +5139,7 @@ function _tvRender(){
   const deps=(n.deps||[]).map(d=>{ const g=findNode(c,d); return g?`<li>${g.node.status==='erledigt'?'✓':'○'} ${esc(g.node.text||'')}</li>`:''; }).join('');
   const jeder=n.jeder?`<div class="tv-row"><span class="tv-k">Abhaken</span><span>jede Person einzeln: ${who.map(id=>`${esc(userName(id)||id)} ${(n.erledigtVon||{})[id]?'✓':'○'}`).join(' · ')||'–'}</span></div>`:'';
   const notes=_notes(n);
-  _tvMarkSeen(n.id);
+  _tvMarkSeen(n.id); _tvMarkNews(n);
   crmOpenModalShell();
   openModal(`<div class="tv">
     <div class="tv-src"><button type="button" class="tv-link" onclick="crmTaskViewOpenSrc()">${esc(cName)}${f.parent?' · '+esc(f.parent.text||''):''} ›</button></div>
@@ -5187,16 +5194,30 @@ function _pinHtml(c){ const ns=_notes(c); const may=_ctxMay(window._crmTaskCtx);
   return `<details class="crm-sec tv-pin"${neu?' open':''} ontoggle="if(this.open)crmPinSeen(${jsq(c.id)})"><summary><span class="ttl">💬 Pinnwand fürs Team</span> <span class="tv-pin-n">${ns.length?ns.length+' Notiz'+(ns.length===1?'':'en'):'noch leer'}${neu?' · <b>neu</b>':''}</span></summary>
     <div class="tv-notes">${ns.map(x=>_noteHtml(x, may, `crmPinDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Allgemeine Infos zum Projekt fürs ganze Team, z. B. „Budget ist freigegeben“.</div>'}</div>
     ${may?`<div class="tv-nadd"><textarea id="pin-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Pinnwand-Notiz" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmPinAdd();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmPinAdd()">Senden</button></div>`:''}</details>`; }
-function crmPinSeen(id){ _tvMarkSeen(id); }
+function crmPinSeen(id){ _tvMarkSeen(id); try{ const c=getTeamProjekt(id)||getVeranstaltung(id); const me=(window.cu&&window.cu.id)||'';
+  if(c && window.homeNewsMark){ const l=_notes(c).filter(x=>Array.isArray(x.mentions)&&x.mentions.includes(me)).map(x=>['men',x.id,x.ts||0]); if(l.length) window.homeNewsMark(l); } }catch(e){} }
 function crmPinAdd(){ const t=(val('pin-note')||'').trim(); if(!t) return; const x=_newNote(t);
   mutateContainer(en=>{ if(!Array.isArray(en.notizen)) en.notizen=[]; en.notizen.push(x); }); repaintContainer();
   setTimeout(()=>{ const d=document.querySelector('.tv-pin'); if(d) d.open=true; },30); }
 function crmPinDel(id){ if(!confirm('Notiz löschen?')) return; const me=(window.cu&&window.cu.id)||''; mutateContainer(en=>{ en.notizen=_notes(en).filter(x=>!(x.id===id&&x.uid===me)); }); repaintContainer(); }
-// Erwähnungen für „Was ansteht": Notizen (an Aufgaben oder Pinnwänden), die mich nennen und die ich noch nicht gesehen habe
-function crmMyMentions(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_tvSeen(); const out=[];
-  listAllTasks().forEach(a=>{ _notes(a.node).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>(seen[a.node.id]||0)) out.push({ a, x }); }); });
+// Neuigkeiten (Startseite, v566): Erwähnungen und neue Zuteilungen der letzten 14 Tage. „Gelesen" liegt geräteübergreifend
+// in crm/userPrefs (home.js: homeNewsIsSeen / homeNewsMark, Schlüssel 'men'/<Notiz-ID> bzw. 'zut'/<Aufgaben-ID>).
+const _NEWS_DAYS=14;
+function _newsSeenFn(){ return window.homeNewsIsSeen || ((c,id,ts)=>false); }
+function crmMyMentions(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_newsSeenFn(); const old=Date.now()-_NEWS_DAYS*864e5; const out=[];
+  listAllTasks().forEach(a=>{ _notes(a.node).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>old && !seen('men', x.id, x.ts||0)) out.push({ a, x }); }); });
+  try{ [...listTeamProjekte(), ...listVeranstaltungen()].forEach(c=>{ if(!c||c.art==='aufgaben') return; _notes(c).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>old && !seen('men', x.id, x.ts||0))
+      out.push({ pin:true, c, kind:c.titel!==undefined&&c.name===undefined?'veranstaltung':'teamprojekt', x }); }); }); }catch(e){}
   return out.sort((p,q)=>(q.x.ts||0)-(p.x.ts||0)); }
-try{ Object.assign(window, { crmTaskView, crmTaskViewAt, crmTaskViewOpenSrc, crmTvNoteAdd, crmTvNoteDel, crmTvSubToggle, crmTvSubAdd, crmTvDone, crmTvReopen, crmTvTake, crmTvEdit, crmPinAdd, crmPinDel, crmPinSeen, crmMyMentions }); }catch(e){}
+function crmMyAssignNews(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_newsSeenFn(); const old=Date.now()-_NEWS_DAYS*864e5; const out=[];
+  listAllTasks().forEach(a=>{ const z=a.node.zugeteilt&&a.node.zugeteilt[me]; if(!z || z.by===me || (z.ts||0)<=old || a.node.status==='erledigt' || seen('zut', a.node.id, z.ts||0)) return; out.push({ a, z }); });
+  return out.sort((p,q)=>(q.z.ts||0)-(p.z.ts||0)); }
+// Ansicht geöffnet → zugehörige Neuigkeiten als gelesen (geräteübergreifend)
+function _tvMarkNews(n){ try{ const me=(window.cu&&window.cu.id)||''; if(!window.homeNewsMark) return; const l=[];
+  const z=n.zugeteilt&&n.zugeteilt[me]; if(z) l.push(['zut', n.id, z.ts||0]);
+  _notes(n).forEach(x=>{ if(Array.isArray(x.mentions)&&x.mentions.includes(me)) l.push(['men', x.id, x.ts||0]); });
+  if(l.length) window.homeNewsMark(l); }catch(e){} }
+try{ Object.assign(window, { crmMyAssignNews, crmTaskView, crmTaskViewAt, crmTaskViewOpenSrc, crmTvNoteAdd, crmTvNoteDel, crmTvSubToggle, crmTvSubAdd, crmTvDone, crmTvReopen, crmTvTake, crmTvEdit, crmPinAdd, crmPinDel, crmPinSeen, crmMyMentions }); }catch(e){}
 
 // Optionen für die Zuordnung eines Projekts zu einem CRM-Eintrag (alle Bäume)
 function entityLinkOptions(selVal){

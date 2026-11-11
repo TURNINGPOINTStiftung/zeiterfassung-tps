@@ -368,8 +368,24 @@ function _newsItems(){
     out.push({ key:'crm|asg|'+a.tid, area:'crm', label:'📌 Aufgabe aus Kontaktnotiz', ts:a.ts||0,
       html:`📌 Dir zugewiesen${a.by?' von '+esc(a.by):''}: <b>${esc(a.text)}</b> · ${esc(a.name)}${a.due?' · fällig '+esc(fmtD(a.due)):''}`,
       open:`homeAsgOpen(${args})`, ack:`homeNewsSeen('asg',${JSON.stringify(String(a.tid))},${+a.ts||0})` }); }); }catch(e){}
+  // Neu zugeteilt (Projekte, Veranstaltungen, Aufgaben ohne Projekt) und @-Erwähnungen in Notizen (v566)
+  try{ (window.crmMyAssignNews?window.crmMyAssignNews():[]).forEach(({a,z})=>{
+    const args=[a.kind,a.tree||'',a.containerId,a.node.id].map(v=>JSON.stringify(String(v))).join(',');
+    out.push({ key:'crm|zut|'+a.node.id, area:'crm', label:'📌 Neu zugeteilt', ts:z.ts||0,
+      html:`Dir zugeteilt${z.byName?' von '+esc(z.byName):''}: <b>${esc(a.node.text||'Aufgabe')}</b> · ${esc(a.containerName||'')}${a.node.due?' · fällig '+esc(fmtD(a.node.due)):''}`,
+      open:`homeTaskOpen(${args},'zut',${JSON.stringify(String(a.node.id))},${+z.ts||0})`, ack:`homeNewsSeen('zut',${JSON.stringify(String(a.node.id))},${+z.ts||0})` }); }); }catch(e){}
+  try{ (window.crmMyMentions?window.crmMyMentions():[]).forEach(m=>{ const x=m.x;
+    const open=m.pin ? `homeNewsSeen('men',${JSON.stringify(String(x.id))},${+x.ts||0});homeOpenItem(${JSON.stringify((m.kind==='veranstaltung'?'va|':'tp|')+m.c.id)})`
+      : `homeTaskOpen(${[m.a.kind,m.a.tree||'',m.a.containerId,m.a.node.id].map(v=>JSON.stringify(String(v))).join(',')},'men',${JSON.stringify(String(x.id))},${+x.ts||0})`;
+    out.push({ key:'crm|men|'+x.id, area:'crm', label:'💬 Erwähnung', ts:x.ts||0,
+      html:`<b>${esc(x.name||'')}</b> hat dich erwähnt${m.pin?' (Pinnwand)':''} · ${esc(m.pin?(m.c.name||m.c.titel||''):(m.a.node.text||'Aufgabe'))}: „${esc(String(x.text||'').slice(0,100))}${String(x.text||'').length>100?'…':''}“`,
+      open, ack:`homeNewsSeen('men',${JSON.stringify(String(x.id))},${+x.ts||0})` }); }); }catch(e){}
   return out.sort((x,y)=>(y.ts||0)-(x.ts||0));
 }
+function homeTaskOpen(kind,tree,cid,tid,c,id,ts){ _markCrmSeen([[c,id,ts]]); setTimeout(_fillNotes,250); try{ window.crmTaskViewAt&&window.crmTaskViewAt(kind,tree,cid,tid); }catch(e){} }
+// Für Planner/crm.js: Gelesen-Stand der Neuigkeiten abfragen bzw. setzen (geräteübergreifend in crm/userPrefs)
+function homeNewsIsSeen(c,id,ts){ return (+_newsSeenMap()[_nk(c,id)]||0) >= (+ts||0) && (+ts||0)>0; }
+function homeNewsMark(list){ _markCrmSeen(list||[]); }
 function homeAsgOpen(tree,eid,tid,ts){ _markCrmSeen([['asg',tid,ts]]); try{ window.crmOpenAssignedFromHome&&window.crmOpenAssignedFromHome(tree,eid,tid); }catch(e){} }
 function _fillNotes(){
   const box=document.querySelector('#home-notes .home-notes'); if(!box) return;
@@ -432,12 +448,7 @@ async function _fillTodo(){
   const box=_el('home-todo'); if(!box) return;
   const rows=[]; const today=isoDay(new Date()); const in7=isoDay(new Date(Date.now()+7*864e5));
   const ov=_overviewMode(window.cu), canOpen=_crmOpenOk();
-  // Shop (sofort verfügbar)
-  try{ const s=window.shopHomeItems?window.shopHomeItems():null;
-    if(s){ (s.late||[]).slice(0,4).forEach(l=>rows.push({ sort:l.datum, html:`<div class="home-row" onclick="shopLoanNoticeOpen()"><span>⏰</span><span class="tx">${l.who?'Ausleihe '+esc(l.who)+': ':'Zurückgeben: '}${esc(l.title)}</span><span class="home-pill red">seit ${fmtD(l.datum)}</span></div>` }));
-      s.due.slice(0,4).forEach(d=>rows.push({ sort:d.datum, html:`<div class="home-row" onclick="shopDueNoticeOpen()"><span>🔧</span><span class="tx">${esc(d.title)} – ${esc(d.label)}</span><span class="home-pill ${d.over?'red':'amber'}">${d.over?'überfällig':fmtD(d.datum)}</span></div>` }));
-      if(s.orders) rows.push({ sort:'0', html:`<div class="home-row" onclick="shopOpenTab('bestellungen')"><span>🛒</span><span class="tx">${s.orders} ${s.mgr?'neue Bestellung':'offene Bestellung'}${s.orders===1?'':'en'}</span><span class="home-pill">Lager</span></div>` }); }
-  }catch(e){}
+  // (v566) Lager, Aufgaben und Zuteilungen stehen in den 🔔 Neuigkeiten – hier nur Termine & Veranstaltungen
   // CRM (Daten ggf. erst laden)
   try{
     await _crmSoon();
@@ -447,8 +458,6 @@ async function _fillTodo(){
     const cfIds=new Set();
     try{ const cf=window.kalMyConflicts?window.kalMyConflicts(28):null;
       if(cf){
-        cf.tasks.forEach(t=>{ cfIds.add(t.id);
-          rows.push({ sort:'!'+t.due, html:`<div class="home-row mine"${canOpen?` onclick="crmMeineOpen(${jsq(t.kind)},${jsq(t.tree||'')},${jsq(t.cid)},${jsq(t.id)})"`:''}><span>⚠️</span><span class="tx">${esc(t.text)} <span class="home-sub">· ${esc(t.issue)} · ${esc(t.src)}</span></span><span class="home-pill red">${t.due<today?'überfällig':fmtD(t.due)}</span></div>` }); });
         cf.events.forEach(e=>{
           const on=!canOpen?'':(e.typ==='va'?` onclick="homeOpenVa(${jsq(e.id)})"`:(e.tree&&e.eid?` onclick="crmOpenTerminFromHome(${jsq(e.tree)},${jsq(e.eid)},${jsq(e.id)})"`:''));
           rows.push({ sort:'!'+e.von, html:`<div class="home-row mine"${on}><span>⚠️</span><span class="tx">${esc(e.titel)} <span class="home-sub">· du bist eingeplant, aber abwesend</span></span><span class="home-pill red">${fmtD(e.von)}</span></div>` }); });
@@ -462,17 +471,6 @@ async function _fillTodo(){
         const noA=list.filter(n=>!n.assigneeId).length, noD=list.filter(n=>!n.due).length;
         const txt=[noA?noA+' ohne Zuständige':'', noD?noD+' ohne Frist':''].filter(Boolean).join(' · ');
         rows.push({ sort:'!'+s+'~', html:`<div class="home-row"${canOpen?` onclick="homeOpenVa(${jsq(v.id)})"`:''}><span>📋</span><span class="tx">${esc(v.titel||'Veranstaltung')} <span class="home-sub">· offene Punkte: ${esc(txt)}</span></span><span class="home-pill amber">${s<=today?'heute':fmtD(s)}</span></div>` }); }); } }catch(e){}
-    const tasks=[]; const _ass=n=>(Array.isArray(n.assigneeIds)&&n.assigneeIds.length)?n.assigneeIds:(n.assigneeId?[n.assigneeId]:[]);
-    const scan=(kind,o,name)=>{ if(!o||o.closed) return; _flat(o.todos,[]).forEach(t=>{ if(_ass(t).includes(me) && t.status!=='erledigt' && !cfIds.has(t.id)) tasks.push({kind,id:o.id,name,t}); }); };
-    if(window.crmListAllTasks){   // gemeinsame Sammelstelle (crm.js, Release A)
-      window.crmListAllTasks({ kinds:['veranstaltung','teamprojekt'] }).forEach(a=>{ if(_ass(a.node).includes(me) && a.node.status!=='erledigt')
-        if(!cfIds.has(a.node.id)) tasks.push({ kind:a.kind, id:a.containerId, name:a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':'Projekt'), t:a.node }); });
-    } else {
-      (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>scan('veranstaltung',v,v.titel||'Veranstaltung'));
-      (CD.listTeamProjekte?CD.listTeamProjekte():[]).forEach(p=>scan('teamprojekt',p,p.name||'Projekt'));
-    }
-    tasks.forEach(a=>{ const due=a.t.due||''; const over=due&&due<today;
-      rows.push({ sort:due||'9999', html:`<div class="home-row mine" onclick="crmMeineOpen(${jsq(a.kind)},'',${jsq(a.id)},${jsq(a.t.id)})"><span>☑️</span><span class="tx">${esc(a.t.text||'Aufgabe')} <span class="home-sub">· ${esc(a.name)}</span></span>${due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(due)}</span>`:''}</div>` }); });
     (CD.listVeranstaltungen?CD.listVeranstaltungen():[]).forEach(v=>{
       if(v.closed||!v.start) return; const s=String(v.start).slice(0,10), e=String(v.ende||v.start).slice(0,10);
       if(e<today||(!ov && s>in7)) return;
@@ -483,8 +481,6 @@ async function _fillTodo(){
     // Vereine/Kontakte: Aufgaben + Fristen (auch aus Kontaktnotizen) und Termine, denen ich zugewiesen bin
     const ci=window.crmHomeItems?window.crmHomeItems(today,in7,ov):null;
     if(ci){
-      ci.tasks.forEach(a=>{ if(cfIds.has(a.tid)) return; const over=a.due&&a.due<today;
-        rows.push({ sort:a.due||'9999', html:`<div class="home-row mine" onclick="crmOpenAssignedFromHome(${jsq(a.tree)},${jsq(a.eid)},${jsq(a.tid)})"><span>${/^⏰/.test(a.text)?'⏰':'☑️'}</span><span class="tx">${esc(String(a.text).replace(/^⏰\s*/,''))} <span class="home-sub">· ${esc(a.name)}${a.team?' · 👥 Team':''}</span></span>${a.due?`<span class="home-pill ${over?'red':''}">${over?'überfällig':fmtD(a.due)}</span>`:''}</div>` }); });
       ci.termine.forEach(t=>{
         rows.push({ sort:t.datum, html:`<div class="home-row${t.mine?' mine':''}"${canOpen?` onclick="crmOpenTerminFromHome(${jsq(t.tree)},${jsq(t.eid)},${jsq(t.tid)})"`:''}><span>🗓️</span><span class="tx">${esc(t.titel)}${t.mine?' '+_MINE:''} <span class="home-sub">· ${esc(t.name)}${t.uhr?' · '+esc(t.uhr):''}</span></span><span class="home-pill green">${t.datum<=today?'heute':fmtD(t.datum)}</span></div>` }); });
     }
@@ -492,7 +488,7 @@ async function _fillTodo(){
   rows.sort((a,b)=>String(a.sort).localeCompare(String(b.sort)));
   const LIM=ov?10:8;
   const more=rows.length>LIM?`<details class="home-more"><summary class="home-sub" style="padding-top:6px;cursor:pointer">… und ${rows.length-LIM} weitere anzeigen</summary>${rows.slice(LIM).map(r=>r.html).join('')}</details>`:'';
-  box.innerHTML='<p class="home-h">📌 Was in der Stiftung ansteht</p>'+(rows.length?rows.slice(0,LIM).map(r=>r.html).join('')+more:'<div class="home-empty">Gerade steht nichts an. ✓</div>');
+  box.innerHTML='<p class="home-h">📌 Was ansteht</p>'+(rows.length?rows.slice(0,LIM).map(r=>r.html).join('')+more:'<div class="home-empty">Keine anstehenden Termine. Aufgaben findest du im Planner unter „Was ansteht“, Neues unter 🔔 Neuigkeiten.</div>');
 }
 function homeOpenVa(id){ try{ const pb=document.querySelector('.mb-mod[data-mod="planung"]'); if(pb && pb.style.display!=='none' && window.planVaSet){ window.planVaSet(id); return; }
   window._crmMode='veranstaltungen'; window._crmVaSel=id; window.switchModule&&window.switchModule('crm'); }catch(e){} }
@@ -757,4 +753,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen, homeAsgOpen }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen, homeAsgOpen, homeTaskOpen, homeNewsIsSeen, homeNewsMark }); }catch(e){}
