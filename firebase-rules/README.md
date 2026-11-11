@@ -287,6 +287,19 @@ verweigert. Vollständige v17-Datei vom Compiler akzeptiert. Testdaten gelöscht
 tpsPw @ab44d6d deployt 04.11.2026 (Moritz, rev tpspw-00021-luk, ACTIVE) – Backup/Einspielen mit ze_private.
 sha256 (raw @ab44d6d): 5589373f3b0b0ed9f651fe4f32447a886bd4fda4d4ae8f608963e73f1aa206f0 · Prüfwort `zePrivOnly` = 1 Treffer (v16: 0).
 
+## GETESTET CANDIDATE-v18.json – persönliche Projekte gezielt teilen (App v563; noch NICHT live)
+= v16 (live) + eine weitere Schreib-Erlaubnis in `crm/teamprojekte/$id`: Mitglieder eines persönlichen Projekts
+(`teilen` = Text `|uid1|uid2|`, enthält die eigene Personen-ID aus `uidUser`) dürfen Inhalte ändern – aber nur, wenn
+`owner` und `teilen` gleich bleiben und das Projekt bestehen bleibt (kein Löschen, kein Anlegen fremder Projekte).
+Test im Testprojekt 11.11.2026 (Abschnitt `ruletest/teamprojekte`): 11 Simulator-Fälle wie erwartet – Mitglied hakt ab /
+benennt um → erlaubt; Mitglied ändert Teilen-Liste / macht sich zum Besitzer / löscht → verweigert; Nicht-Mitglied →
+verweigert; Mitglied in nicht geteiltem Projekt → verweigert; fremdes geteiltes Projekt anlegen → verweigert; Besitzerin ändert
+Teilen / hakt ab / löscht → erlaubt. Vollständige v18-Datei vom Compiler akzeptiert (im Testprojekt veröffentlicht), danach
+Testdaten gelöscht, Original-Regeln zurück (PUT/GET `ruletest` ohne Anmeldung → 401).
+sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490a06a7b3 · Prüfwort `teilen` ≥ 1 Treffer (v16: 0).
+Rückweg: CANDIDATE-v16.json.
+**CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json
