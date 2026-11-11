@@ -157,11 +157,20 @@ function mutateContainer(fn){
     saveEntity(ctx.tree, ent);
   }
 }
+// Im Planner: die Seite neu zeichnen, auf der man gerade ist (statt einer festen Ziel-Seite) – v569, User 11.11.2026:
+// nach dem Bearbeiten einer Aufgabe aus der Aufgaben-Ansicht landete man sonst auf der alten „Meine Aufgaben"-Seite
+function _planRepaint(){ try{
+  if(window._activeModule==='planung'){ if(window.renderPlanungStart) window.renderPlanungStart(); return; }
+  if(window._planTab==='veranstaltung' && window._crmVaSel){ paintVeranstaltungDetail(); return; }
+  if(window._crmTeamProjSel && getTeamProjekt(window._crmTeamProjSel)){ paintTeamProjektDetail(); return; }
+  if(window._crmTeamSel){ paintTeamDetail(); return; }
+  if(window.planGo) window.planGo(window._planTab||'start', { keep:true });
+}catch(e){ console.warn('Planner neu zeichnen:', e); } }
 function repaintContainer(){
   switch(window._crmAfterTask){
     case 'projektdetail': paintTeamProjektDetail(); break;
     case 'teamdetail':    paintTeamDetail(); break;
-    case 'meine':         paintMeine(); break;
+    case 'meine':         if(window._planActive){ _planRepaint(); break; } paintMeine(); break;   // im Planner nie die alte „Meine Aufgaben"-Seite
     case 'veranstaltung': paintVeranstaltungDetail(); break;
     case 'vorlage':       paintVorlageEditor(window._crmVorlageEditId); break;
     default:              paintDetail();
@@ -5133,6 +5142,7 @@ function _tvBg(){ try{ if(window._activeModule==='planung' && window.renderPlanu
 function crmTaskViewAt(kind, tree, cid, tid){
   const keep=window._crmAfterTask; _meSetCtx(kind, tree, cid, tid);
   if(window._activeModule!=='planung' && keep) window._crmAfterTask=keep;
+  window._tvBgPaint=window._planActive?_planRepaint:repaintContainer;
   window._tvArgs={ kind, tree:tree||'', cid, tid }; _tvRender();
 }
 function crmTaskView(tid){   // aus einem offenen Projekt/einer Veranstaltung/einem Board (Kontext steht schon)
