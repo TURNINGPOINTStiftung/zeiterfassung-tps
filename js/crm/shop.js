@@ -277,7 +277,11 @@ function _styles(){
   .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
   .shop-card{background:var(--surface,#fff);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
   .shop-card.low{border-color:var(--danger,#e5484d)}
-  .shop-img{height:130px;background:var(--surface-2,#f1f4f8) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:42px;color:#b6c0cc}
+  .shop-img{height:160px;background:var(--surface-2,#f1f4f8);display:flex;align-items:center;justify-content:center;font-size:42px;color:#b6c0cc;overflow:hidden}
+  .shop-img img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in}
+  .shop-zoom{position:fixed;inset:0;z-index:10000;background:rgba(10,20,40,.88);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
+  .shop-zoom img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;background:#fff}
+  .shop-zoom button{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;font-size:22px;cursor:pointer}
   .shop-cb{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
   .shop-name{font-weight:700;font-size:15px;color:var(--text)}
   .shop-var{font-size:12px;color:var(--muted)}
@@ -310,7 +314,7 @@ function _styles(){
   .shop-f label{display:block;font-size:12px;font-weight:600;margin-bottom:3px}
   .shop-f input,.shop-f select,.shop-f textarea{width:100%;box-sizing:border-box;padding:6px 8px;font-size:14px;border:1.5px solid var(--border);border-radius:6px}
   .shop-f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .shop-ph{width:110px;height:110px;border-radius:8px;border:1.5px dashed var(--border);background:#f6f8fa center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center}
+  .shop-ph{width:110px;height:110px;border-radius:8px;border:1.5px dashed var(--border);background:#f6f8fa center/contain no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center}
   .shop-log td,.shop-log th{padding:5px 8px;font-size:12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
   .shop-log{width:100%;border-collapse:collapse;background:var(--surface,#fff)}
   .shop-pos{display:flex;flex-direction:column;gap:4px;border:1.5px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px;max-height:40vh;overflow-y:auto}
@@ -344,7 +348,7 @@ function _styles(){
     .shop-btn{min-height:40px;padding:8px 12px;font-size:14px}
     .shop-btn.sm{min-height:38px;padding:7px 10px;font-size:13px}
     .shop-card{flex-direction:row}
-    .shop-img{width:88px;height:auto;min-height:88px;flex:0 0 88px;font-size:32px}
+    .shop-img{width:96px;height:96px;flex:0 0 96px;align-self:flex-start;margin:10px 0 10px 10px;border-radius:8px;font-size:32px}
     .shop-cb{min-width:0}
     .shop-act{gap:6px}
     .shop-row .main{min-width:0;flex:1 1 100%}
@@ -582,7 +586,7 @@ function _itemsGrid(mgr){
     const pl=pids.sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
       .map(pid=>{ const ist=_num((it.stock||{})[pid]), s=sollAt(it,pid), under=s>0&&ist<s;
         return `<span class="${fPlace===pid?'hl':''}${under?' short':''}" ${under?`title="Soll ${s} – es fehlen ${s-ist}"`:''}>${esc(placeLabel(pid))}: <b>${ist}</b>${s?` / ${s}`:''}${under?' ⚠':''}</span>`; }).join('');
-    const img=_imgUrl(it.foto)?`<div class="shop-img" style="background-image:url('${esc(_imgUrl(it.foto))}')"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
+    const img=_imgUrl(it.foto)?`<div class="shop-img"><img src="${esc(_imgUrl(it.foto))}" alt="Foto: ${esc(it.name||'Artikel')} (antippen zum Vergrößern)" loading="lazy" onclick="shopImgZoom(this)"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
     const ln=activeLoans(it.id);
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
@@ -669,6 +673,15 @@ function shopPhotoPick(inp){
       const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage='url('+JSON.stringify(String(window._shopPhoto||''))+')'; ph.textContent=''; }
     }; img.onerror=()=>toast('Bild konnte nicht gelesen werden.','err'); img.src=rd.result; };
   rd.readAsDataURL(f);
+}
+// Artikelfoto groß ansehen (ganzes Bild, auch auf dem Handy); Klick/Esc schließt
+function shopImgZoom(el){
+  const src=el&&el.getAttribute('src'); if(!_imgUrl(src)) return;
+  const z=document.createElement('div'); z.className='shop-zoom'; z.setAttribute('role','dialog'); z.setAttribute('aria-label','Foto vergrößert');
+  const im=document.createElement('img'); im.src=src; im.alt=el.alt||'Foto';
+  const b=document.createElement('button'); b.type='button'; b.textContent='✕'; b.setAttribute('aria-label','Schließen');
+  const close=()=>{ z.remove(); document.removeEventListener('keydown', esc_); }; const esc_=e=>{ if(e.key==='Escape') close(); };
+  z.onclick=close; z.append(im,b); document.body.appendChild(z); document.addEventListener('keydown', esc_); b.focus();
 }
 function shopPhotoClear(){ window._shopPhoto=''; const ph=document.getElementById('shop-ph'); if(ph){ ph.style.backgroundImage=''; ph.textContent='kein Foto'; } }
 function _val(id){ const el=document.getElementById(id); return el?String(el.value||'').trim():''; }
@@ -2112,7 +2125,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopImgZoom, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
