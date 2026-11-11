@@ -97,8 +97,10 @@ function _abs(){ const out=[]; try{ const vr=(getData()||{}).vacRequests||{}; Ob
 function _emps(){ try{ return ((getData()||{}).users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.archived); }catch(e){ return []; } }
 function _teamCol(t){ const ts=_teamsVisible(); const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':'var(--team-'+((i%8)+1)+')'; }
 const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };
-function _srcTag(a){ const ic=a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'); return `<span class="plan-tag">${ic} ${esc(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))}</span>`; }
-function _open(a){ return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
+function _srcTag(a){
+  if(a.art==='aufgaben'){ const w=(window.crmAufgWdhLabel&&window.crmAufgWdhLabel(a.node))||''; return `<span class="plan-tag">${w?'🔁 '+esc(w):'✔ Aufgabe'}${a.owner?' · privat':''}</span>`; }
+  const ic=a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'); return `<span class="plan-tag">${ic} ${esc(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))}</span>`; }
+function _open(a){ if(a.art==='aufgaben') return `crmAufgEdit(${jsq(a.containerId)},${jsq(a.node.id)})`; return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
 
 function _todoCard(){
   let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
@@ -107,23 +109,28 @@ function _todoCard(){
   // Projekten; (3) einem meiner Teams zugeordnet und noch niemandem zugeteilt (gilt für alle Mitglieder, bis jemand übernimmt).
   const _ass=n=>(Array.isArray(n.assigneeIds)&&n.assigneeIds.length)?n.assigneeIds:(n.assigneeId?[n.assigneeId]:[]);
   const myT=new Set(_myTeams()); const leaf=a=>!(Array.isArray(a.node.children)&&a.node.children.length);
-  const isCol=a=>a.depth===0 && (a.kind==='veranstaltung'||a.kind==='teamprojekt');   // oberste Ebene = Spalte des Boards, keine Aufgabe
+  const isCol=a=>a.depth===0 && (a.kind==='veranstaltung'||(a.kind==='teamprojekt'&&a.art!=='aufgaben'));   // oberste Ebene = Spalte des Boards (nicht bei Aufgaben ohne Projekt)
+  const mineDone=a=>!!(a.node.jeder && a.node.erledigtVon && a.node.erledigtVon[me()]);   // „jede Person einzeln": meinen Teil schon erledigt
   const isTeamTask=a=>!a.node.assigneeId && !a.owner && leaf(a) && !isCol(a) && (a.teamsEff||[]).some(t=>myT.has(t));
-  const mine=all.filter(a=>a.node.status!=='erledigt' && (_ass(a.node).includes(me()) || (a.kind==='teamprojekt' && a.owner===me() && a.node.due && leaf(a)) || isTeamTask(a)))
+  const mine=all.filter(a=>a.node.status!=='erledigt' && !mineDone(a) && (_ass(a.node).includes(me()) || (a.kind==='teamprojekt' && a.owner===me() && (a.node.due || a.art==='aufgaben') && leaf(a)) || isTeamTask(a)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const groups=[['Überfällig',mine.filter(a=>a.node.due&&a.node.due<today),'crit'],['Diese Woche',mine.filter(a=>a.node.due&&a.node.due>=today&&a.node.due<=wkEnd),''],['Später',mine.filter(a=>!a.node.due||a.node.due>wkEnd),'']];
   const row=a=>{ const n=a.node; const col=_teamCol((a.teamsEff||[])[0]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))} · noch frei</span>`:''}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>`; };
+    const free=!n.assigneeId && !a.owner; const isA=a.art==='aufgaben';
+    const jd=(isA&&n.jeder&&window.crmAufgWho)?(()=>{ const w=window.crmAufgWho(a.containerId,n)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
+    const acts=(isA?`<button type="button" class="plan-act ok" onclick="crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
+      +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
+    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc" style="background:${col}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}</div></div><span class="plan-when">${esc(fmt(n.due))}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
   const MAXN=5;
   const col=g=>`<div class="plan-gcol"><div class="plan-grp ${g[2]}">${g[0]} · ${g[1].length}</div>${g[1].slice(0,MAXN).map(row).join('')||'<div class="plan-empty sm">nichts</div>'}${g[1].length>MAXN?`<details class="plan-more"><summary>${g[1].length-MAXN} weitere anzeigen</summary>${g[1].slice(MAXN).map(row).join('')}</details>`:''}</div>`;
   const body=mine.length?`<div class="plan-gcols">${groups.map(col).join('')}</div>`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><span class="plan-sub">mir zugeteilt, meinem Team zugeordnet oder mit Frist aus meinen persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</span></div>${body}</section>`;
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div><div class="plan-sub" style="margin:-4px 0 8px">mir zugeteilt, meinem Team zugeordnet, eigene Aufgaben ✔ 🔁 und Fristen aus persönlichen Projekten · aus Veranstaltungen 📅, Projekten 📂 und CRM-Einträgen 📇</div>${body}</section>`;
 }
 function _uName(id){ try{ const u=((getData()||{}).users||[]).find(x=>x&&x.id===id); return (u&&u.name)||id; }catch(e){ return id; } }
 // Persönliche Projekte (owner = ich): nur hier sichtbar, öffnen = bearbeiten/abschließen/löschen
 function _myProjCard(){
-  let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.owner===me()); }catch(e){}
+  let ps=[]; try{ ps=Object.values(((CD.getCrm&&CD.getCrm())||{}).teamprojekte||{}).filter(p=>p&&p.owner===me()&&p.art!=='aufgaben'); }catch(e){}
   const can=(()=>{ try{ const u=window.cu; return !u||u.role==='admin'||!window.tpsRechteOf||!!window.tpsRechteOf(u).pm_proj_eigen; }catch(e){ return true; } })();
   if(!ps.length && !can) return '';
   const cnt=p=>{ let n=0; const w=a=>(a||[]).forEach(t=>{ if(!t) return; if(!(Array.isArray(t.children)&&t.children.length) && t.status!=='erledigt') n++; w(t.children); }); w(p.todos); return n; };
@@ -226,6 +233,12 @@ function _styles(){
   .plan-grp.crit{color:var(--danger,#c0392b)}
   .plan-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
   .plan-item:hover{background:var(--info-bg,#eef3fb)}
+  .plan-irow{background:var(--surface-2,#f6f8fb);border-radius:10px;margin-bottom:8px} .plan-irow>.plan-item{margin-bottom:0;background:transparent}
+  .plan-irow:hover{background:var(--info-bg,#eef3fb)}
+  .plan-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;padding:0 12px 10px 28px}
+  .plan-act{font:inherit;font-size:13px;font-weight:600;padding:5px 12px;min-height:34px;border-radius:999px;border:1.5px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--primary,#203869);cursor:pointer;white-space:nowrap}
+  .plan-act.ok{color:var(--ok-text,#166534);border-color:var(--ok,#16a34a)}
+  .plan-act:hover{background:var(--info-bg,#eef3fb)}
   .plan-item:not([role]){cursor:default}
   .plan-item:not([role]):hover{background:var(--surface-2,#f6f8fb)}
   .plan-item[role]:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}

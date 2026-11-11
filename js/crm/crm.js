@@ -2214,7 +2214,7 @@ function crmSearchAll(q){
   listTeamProjekte().forEach(p=>{
     const me=(window.cu&&window.cu.id)||'';
     const sub=p.owner?(p.owner===me?'Mein Projekt':'Eigenes Projekt'):(p.team||'Team-Projekt');
-    if(hit(p.name,p.beschreibung)) res.projects.push({kind:'teamprojekt', id:p.id, name:p.name||'Projekt', sub, closed:!!p.closed});
+    if(p.art!=='aufgaben' && hit(p.name,p.beschreibung)) res.projects.push({kind:'teamprojekt', id:p.id, name:p.name||'Projekt', sub, closed:!!p.closed});
     flatNodes(p.todos).forEach(x=>{ if(hit(x.text,x.note))
       res.tasks.push({kind:'teamprojekt', id:p.id, name:x.text||'(Aufgabe)', sub:p.name||'Projekt'}); });
   });
@@ -3291,7 +3291,7 @@ function listAllTasks(opts){
         walk(v.todos, { kind:k, containerId:v.id, containerName:v.titel||'', tree:'', eid:'', pid:'', projName:'', owner:'', closed:!!v.closed }, vaTeams(v).slice(0,1)); });
       // Persönliche Projekte (owner) gehören nur ihrer Person – nie in fremde Listen, Team-Ansichten oder Zählungen
       else if(k==='teamprojekt') listTeamProjekte().forEach(p=>{ if(!p || (p.closed&&!incl)) return; if(p.owner && p.owner!==((window.cu&&window.cu.id)||'')) return; normTasks(p);
-        walk(p.todos, { kind:k, containerId:p.id, containerName:p.name||'', tree:'', eid:'', pid:'', projName:'', owner:p.owner||'', closed:!!p.closed }, p.team?[p.team]:[]); });
+        walk(p.todos, { kind:k, containerId:p.id, containerName:p.name||'', tree:'', eid:'', pid:'', projName:'', owner:p.owner||'', closed:!!p.closed, art:p.art||'' }, p.team?[p.team]:[]); });
       else if(k==='entity') getTrees().forEach(tr=>listEntities(tr.key).forEach(e=>{ migEntityProjekte(e);
         (e.projekte||[]).forEach(p=>{ if(!p || (p.closed&&!incl)) return;
           walk(p.todos, { kind:k, containerId:e.id, containerName:(e.stamm&&e.stamm.name)||'', tree:tr.key, eid:e.id, pid:p.id, projName:p.name||'', owner:'', closed:!!p.closed }, []); }); }));
@@ -4231,7 +4231,7 @@ function crmBackToTeamProjekte(){
 // Zählt eigene Team-Projekte eines Teams (ohne persönliche) + offene Aufgaben darin.
 function teamProjektCounts(team){
   try{
-    const ps=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
+    const ps=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
     let openN=0; ps.forEach(p=>{ if(!p.closed) openN+=flatTasks(p).filter(t=>t.status!=='erledigt').length; });
     return { total:ps.length, open:openN };
   }catch(e){ return { total:0, open:0 }; }
@@ -4301,7 +4301,7 @@ function paintTeamDetail(){
     ${vaPast.length?`<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600">Vergangene / abgeschlossene (${vaPast.length})</summary><div class="crm-list" style="margin-top:8px">${vaPast.map(vaCard).join('')}</div></details>`:''}
   </div>`;
   // Eigenständige Team-Projekte (persönliche ausschließen)
-  const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner);
+  const allProj=listTeamProjekte(team==='Ohne Team'?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
   const projCardHtml=p=>{ const all=flatTasks(p); const openN=p.closed?0:all.filter(t=>t.status!=='erledigt').length;
     return `<div class="crm-card" onclick="crmOpenTeamProjekt(${jsq(p.id)})">
       <h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3>
@@ -4648,15 +4648,15 @@ function _planTeamOverview(team){
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span>${n.assigneeId?`<span class="plan-tag">${esc(userName(n.assigneeId)||'')}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · niemand</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
-  const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2><span class="plan-sub">eigenes Team der Aufgabe, sonst federführendes Team des Behälters</span></div>
+    return `<div class="plan-item" role="button" tabindex="0" onclick="${a.art==='aufgaben'?`crmAufgEdit(${jsq(a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
+  const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
     ${leaves.length?leaves.map(taskRow).join(''):'<div class="plan-empty">Diesem Team ist in den nächsten 6 Wochen keine offene Aufgabe zugeordnet. Aufgaben bekommen ein Team über die Veranstaltung/das Projekt oder direkt in der Aufgabe.</div>'}
     <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist.</div></section>`;
   const vas=teamVeranstaltungen(team).filter(v=>!v.closed && String(v.ende||v.start||'')>=today).sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
   const vaRow=v=>{ const vt=vaTeams(v); const lead=vt[0]||''; const openN=all.filter(a=>a.kind==='veranstaltung'&&a.containerId===v.id&&inTeam(a)&&a.node.status!=='erledigt'&&!(Array.isArray(a.node.children)&&a.node.children.length)).length;
     return `<div class="plan-item" role="button" tabindex="0" onclick="planVaSet(${jsq(v.id)})"><span class="plan-barc" style="background:${_tc(lead)}"></span><div class="plan-main"><div class="plan-t">${esc(v.titel||'Veranstaltung')}</div><div class="plan-row">${(lead&&lead!==team&&!ohne)?`<span class="plan-tag">beteiligt · federführend ${esc(lead)}</span>`:''}<span class="plan-tag">${openN} offen fürs Team</span></div></div><span class="plan-when">${esc(v.start?fmtDate(Date.parse(v.start)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
   const vaCard=`<section class="plan-card"><div class="plan-h"><h2>📅 Veranstaltungen</h2>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</div>${vas.length?vas.map(vaRow).join(''):'<div class="plan-empty">Keine anstehenden Veranstaltungen für dieses Team.</div>'}</section>`;
-  const projs=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed);
+  const projs=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&!p.closed&&p.art!=='aufgaben');
   const prRow=p=>{ const openN=flatTasks(p).filter(t=>t.status!=='erledigt').length; const z=p.start?(fmtDate(Date.parse(p.start)).replace(/\.\d{4}$/,'.')+'–'+(p.ende?fmtDate(Date.parse(p.ende)).replace(/\.\d{4}$/,'.'):'')):'';
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${openN} offen</span>${p.start?'':'<span class="plan-tag">ohne Zeitraum</span>'}</div></div><span class="plan-when">${esc(z)}</span></div>`; };
   const prCard=`<section class="plan-card"><div class="plan-h"><h2>📂 Team-Projekte</h2>${_kbManage()?`<button class="btn-sm-crm primary" onclick="crmNewTeamProjekt()">＋ Projekt</button>`:''}</div>${projs.length?projs.map(prRow).join(''):'<div class="plan-empty">Noch keine Projekte für dieses Team.</div>'}</section>`;
@@ -4692,6 +4692,136 @@ function _entityNodeCtx(tree,eid,id){
 function crmTeamToggleDone(tree,eid,id){ _entityNodeCtx(tree,eid,id); crmToggleDone(id); }
 function crmTeamAddChild(tree,eid,id){ _entityNodeCtx(tree,eid,id); crmAddChild(id); }
 function crmTeamEditNode(tree,eid,id){ _entityNodeCtx(tree,eid,id); crmOpenTask(id); }
+
+// ── Aufgaben ohne Projekt (v559, User 11.11.2026) ─────────────────────
+// „Nicht jede Aufgabe ist ein Projekt": einzelne und wiederkehrende Aufgaben, persönlich oder fürs Team.
+// Ablage OHNE Regeländerung: je Team bzw. Person EIN Behälter unter crm/teamprojekte mit art:'aufgaben'
+// (nie als Projekt angezeigt). Team-Behälter: anlegen darf nur „Team-Projekte anlegen" (Regel v15), ändern alle mit
+// „Aufgaben bearbeiten". Persönlicher Behälter: owner = ich. Aufgabe = normaler Knoten auf oberster Ebene mit
+//   wdh:'woche'|'2wochen'|'monat'|'quartal'|'jahr'  → beim Abhaken rückt die Frist weiter (verlauf merkt sich wer/wann)
+//   jeder:true → jede zuständige Person hakt für sich ab (erledigtVon{uid:datum}); fertig, wenn alle durch sind
+const _AUFG_WDH={ woche:{l:'wöchentlich',d:7}, '2wochen':{l:'alle 2 Wochen',d:14}, monat:{l:'monatlich',m:1}, quartal:{l:'vierteljährlich',m:3}, jahr:{l:'jährlich',m:12} };
+const _aMe=()=>(window.cu&&window.cu.id)||'';
+const _isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function _aufgId(team, owner){
+  if(owner) return 'aufg-u-'+String(owner).replace(/[.#$\[\]\/]/g,'_');
+  let h=0; const t=String(team||''); for(let i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))|0; return 'aufg-t-'+(h>>>0).toString(36);
+}
+function _aufgBox(team, owner){ const c=getTeamProjekt(_aufgId(team, owner)); if(c){ normTasks(c); if(!Array.isArray(c.todos)) c.todos=[]; } return c||null; }
+function _aufgNewBox(team, owner){ return { id:_aufgId(team, owner), art:'aufgaben', name:owner?'Meine Aufgaben':'Aufgaben '+team, team:owner?'':team, owner:owner||'',
+  createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] }; }
+function _aufgMay(c, neu){ if(!c) return false; if(c.owner) return c.owner===_aMe(); return neu ? (_R('pm_aufg_neu')||_R('pm_aufg_bearb')) : _R('pm_aufg_bearb'); }
+function _aufgSave(c){ c.updatedByKuerzel=curKuerzel(); c.updatedByName=curName(); saveTeamProjekt(c); }
+function aufgWdhLabel(n){ return (n&&_AUFG_WDH[n.wdh])?_AUFG_WDH[n.wdh].l:''; }
+// Wer muss abhaken? Zuständige – sonst (Team-Aufgabe „jede Person einzeln") alle im Team
+function aufgWho(c, n){ const a=_taskAss(n); if(a.length) return a; return (c&&c.team)?teamMembers([c.team]).map(u=>u.id):(c&&c.owner?[c.owner]:[]); }
+function _aufgNext(due, w){ const x=_AUFG_WDH[w]; const today=localISODate(); let cur=due||today; let guard=0;
+  do{ const d=new Date(cur+'T12:00:00');
+    if(x.d) d.setDate(d.getDate()+x.d);
+    else { const day=d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+x.m); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate())); }
+    cur=_isoD(d); } while(cur<=today && ++guard<500);   // verpasste Termine überspringen – die nächste liegt immer in der Zukunft
+  return cur; }
+function _aufgRefresh(){ try{ if(window._activeModule==='planung' && window.renderPlanungStart) window.renderPlanungStart(); else if(window._crmMode==='teams' && window._crmTeamSel) paintTeamDetail(); }catch(e){} }
+
+function _aufgFormHtml(n, curFor, team){
+  const myT=(window.cu&&window.cu.role==='admin')?zeTeams():[...new Set(userTeamsAll(window.cu||{}))].filter(Boolean);
+  if(team && !myT.includes(team)) myT.unshift(team);
+  const forOpts=[`<option value="me"${curFor==='me'?' selected':''}>👤 Nur für mich (privat)</option>`].concat(myT.map(t=>`<option value="${esc('t:'+t)}"${curFor==='t:'+t?' selected':''}>👥 Team ${esc(t)}</option>`)).join('');
+  const ids=_taskAss(n); const pers=ids.length>0;
+  const wdhOpts=[['','einmalig']].concat(Object.keys(_AUFG_WDH).map(k=>[k,_AUFG_WDH[k].l])).map(([k,l])=>`<option value="${k}"${(n.wdh||'')===k?' selected':''}>${esc(l)}</option>`).join('');
+  return `<div class="crm-modal-field"><label>Aufgabe *</label><input id="af-text" value="${esc(n.text||'')}" placeholder="z. B. Hänger-TÜV prüfen, Monatsbericht abgeben"></div>
+    <div class="crm-modal-field"><label>Für</label><select id="af-for" onchange="crmAufgFormChg()">${forOpts}</select></div>
+    <div class="crm-modal-field" id="af-wer-w"><label>Wer</label>
+      <div class="af-seg"><label><input type="radio" name="af-wer" value="team" ${pers?'':'checked'} onchange="crmAufgFormChg()"> Ganzes Team</label><label><input type="radio" name="af-wer" value="pers" ${pers?'checked':''} onchange="crmAufgFormChg()"> Bestimmte Personen</label></div>
+      <div id="af-pers" style="margin-top:6px${pers?'':';display:none'}"><div id="crm-task-assignee">${assigneeBoxHtml(team?[team]:[], ids)}</div></div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Fällig</label><input id="af-due" type="date" value="${esc(n.due||'')}"></div>
+      <div class="crm-modal-field" style="flex:1;min-width:140px"><label>Wiederholung</label><select id="af-wdh" onchange="crmAufgFormChg()">${wdhOpts}</select></div></div>
+    <div class="crm-modal-field" id="af-jeder-w"><label>Abhaken</label>
+      <div class="af-seg"><label><input type="radio" name="af-jeder" value="0" ${n.jeder?'':'checked'}> Eine Person reicht</label><label><input type="radio" name="af-jeder" value="1" ${n.jeder?'checked':''}> Jede Person einzeln</label></div>
+      <div class="small" style="color:var(--muted);margin-top:4px" id="af-jeder-h"></div></div>
+    <div class="crm-modal-field"><label>Notiz</label><textarea id="af-note" rows="2" placeholder="Details, Links, Hinweise …">${esc(n.note||'')}</textarea></div>`;
+}
+function crmAufgFormChg(){
+  const f=val('af-for')||'me'; const isTeam=f.startsWith('t:'); const team=isTeam?f.slice(2):'';
+  const ww=document.getElementById('af-wer-w'); if(ww) ww.style.display=isTeam?'':'none';
+  const r=document.querySelector('input[name="af-wer"]:checked'); const pers=isTeam && r && r.value==='pers';
+  const pw=document.getElementById('af-pers'); if(pw) pw.style.display=pers?'':'none';
+  const box=document.getElementById('crm-task-assignee'); if(box && box.dataset.team!==team){ const cur=_readAss(); box.innerHTML=assigneeBoxHtml(team?[team]:[], cur); box.dataset.team=team; }
+  const jw=document.getElementById('af-jeder-w'); if(jw) jw.style.display=isTeam?'':'none';
+  const h=document.getElementById('af-jeder-h'); if(h) h.textContent=pers?'„Jede Person einzeln": jede angehakte Person hakt für sich ab, z. B. Stundenzettel abgeben.':'„Jede Person einzeln": alle im Team haken für sich ab. „Eine Person reicht": wer sie übernimmt, erledigt sie für alle.';
+}
+function _aufgModal(title, n, curFor, team, saveCall, delCall){
+  injectStyles();   // auch direkt aus „Was ansteht" (Projektmanagement evtl. noch nie gezeichnet)
+  crmOpenModalShell();
+  openModal(`<h3 style="color:var(--primary);margin:0 0 14px">${esc(title)}</h3>
+    <style>.af-seg{display:flex;gap:6px;flex-wrap:wrap}.af-seg label{display:inline-flex!important;align-items:center;gap:6px;margin:0!important;padding:7px 12px;border:1.5px solid var(--border);border-radius:999px;font-size:14px!important;font-weight:500!important;text-transform:none!important;letter-spacing:0!important;color:var(--text)!important;cursor:pointer}.af-seg label:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,transparent)}.af-seg input{width:auto;margin:0}#af-pers .crm-ass-act>button+button,#af-pers .crm-ass-act>span{display:none}</style>
+    ${_aufgFormHtml(n, curFor, team)}
+    ${(n.verlauf&&n.verlauf.length)?`<details class="crm-modal-field"><summary style="cursor:pointer;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Bisher erledigt (${n.verlauf.length})</summary><div class="small" style="margin-top:6px">${n.verlauf.slice().reverse().map(v=>`${esc(fmtDate(Date.parse(v.at)))} · ${esc(v.by||'')}${v.due?` <span style="color:var(--muted)">(fällig ${esc(fmtDate(Date.parse(v.due)))})</span>`:''}`).join('<br>')}</div></details>`:''}
+    <div class="crm-modal-actions">${delCall?`<button class="btn-sm-crm" style="margin-right:auto;color:var(--danger,#c0392b)" onclick="${delCall}">🗑 Löschen</button>`:''}<button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
+    <button class="btn-sm-crm primary" onclick="${saveCall}">Speichern</button></div>`);
+  const box=document.getElementById('crm-task-assignee'); if(box) box.dataset.team=team||'';
+  crmAufgFormChg(); setTimeout(()=>{ try{ document.getElementById('af-text').focus(); }catch(e){} },50);
+}
+function crmAufgNew(team){
+  const t=team||'';
+  _aufgModal('＋ Aufgabe', {}, t?'t:'+t:'me', t, "crmAufgSave('','')", '');
+}
+function crmAufgEdit(cid, tid){
+  const c=getTeamProjekt(cid); if(!c) return; normTasks(c); const f=findNode(c, tid); if(!f) return;
+  _aufgModal('✎ Aufgabe', f.node, c.owner?'me':'t:'+(c.team||''), c.team||'', `crmAufgSave(${jsq(cid)},${jsq(tid)})`, _aufgMay(c)?`crmAufgDelete(${jsq(cid)},${jsq(tid)})`:'');
+}
+function crmAufgSave(cid, tid){
+  const text=(val('af-text')||'').trim(); if(!text){ toast('Bitte beschreiben, was zu tun ist.','err'); return; }
+  const f=val('af-for')||'me'; const team=f.startsWith('t:')?f.slice(2):''; const owner=team?'':_aMe();
+  const r=document.querySelector('input[name="af-wer"]:checked'); const ids=(team && r && r.value==='pers')?_readAss():[];
+  if(team && r && r.value==='pers' && !ids.length){ toast('Bitte mindestens eine Person anhaken – oder „Ganzes Team" wählen.','err'); return; }
+  const jr=document.querySelector('input[name="af-jeder"]:checked');
+  const wdh=val('af-wdh')||''; const jeder=!!team && !!jr && jr.value==='1';
+  // Ziel-Behälter (neu anlegen, falls es ihn noch nicht gibt)
+  let dst=_aufgBox(team, owner);
+  if(!dst){ if(team && !_kbManage()){ toast(`Für das Team „${team}" gibt es noch keine Aufgabenliste. Sie wird beim ersten Mal von jemandem mit dem Recht „Team-Projekte anlegen" eingerichtet – bitte dort kurz Bescheid geben.`,'err'); return; }
+    dst=_aufgNewBox(team, owner); }
+  if(!_aufgMay(dst, !tid) && !(!getTeamProjekt(dst.id) && (owner||_kbManage()))){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
+  const src=cid?getTeamProjekt(cid):null; if(src) normTasks(src);
+  const old=(src&&tid)?findNode(src, tid):null;
+  const node=old?old.node:{ id:newId(), status:'offen', createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName(), deps:[], children:[] };
+  node.text=text; node.due=val('af-due')||''; node.note=val('af-note')||''; node.wdh=_AUFG_WDH[wdh]?wdh:null; node.jeder=jeder||null;
+  _setAss(node, ids);
+  if(old && src.id!==dst.id){ src.todos=src.todos.filter(x=>x.id!==tid); if(!_aufgMay(src)){ toast('Die Aufgabe kann hier nicht verschoben werden (Berechtigung).','err'); return; } _aufgSave(src); }
+  if(!dst.todos.some(x=>x.id===node.id)) dst.todos.push(node);
+  _aufgSave(dst); crmCloseModal(); toast(tid?'Gespeichert ✓':'Aufgabe angelegt ✓','ok'); _aufgRefresh();
+}
+function crmAufgDelete(cid, tid){
+  const c=getTeamProjekt(cid); if(!c||!_aufgMay(c)) return; normTasks(c);
+  const f=findNode(c, tid); if(!f) return;
+  if(!confirm(`Aufgabe „${f.node.text||''}" löschen?`+(f.node.wdh?' Auch alle künftigen Wiederholungen entfallen.':''))) return;
+  c.todos=c.todos.filter(x=>x.id!==tid); _aufgSave(c); crmCloseModal(); toast('Gelöscht ✓','ok'); _aufgRefresh();
+}
+// Abhaken aus „Was ansteht" / Team-Übersicht
+function crmAufgDone(cid, tid){
+  const c=getTeamProjekt(cid); if(!c) return; normTasks(c);
+  const me=_aMe(); const f=findNode(c, tid); if(!f) return; const n=f.node;
+  if(!(_aufgMay(c) || _taskAss(n).includes(me))){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
+  const today=localISODate();
+  if(n.jeder){ const who=aufgWho(c,n); n.erledigtVon=Object.assign({}, n.erledigtVon||{}, { [me]:today });
+    const done=who.filter(u=>n.erledigtVon[u]).length;
+    if(who.length && done<who.length){ _aufgSave(c); toast(`Für dich erledigt ✓ – ${done} von ${who.length}`,'ok'); _aufgRefresh(); return; } }
+  n.verlauf=(Array.isArray(n.verlauf)?n.verlauf:[]).concat([{ due:n.due||'', at:today, by:curName() }]).slice(-20);
+  if(_AUFG_WDH[n.wdh]){ n.due=_aufgNext(n.due||today, n.wdh); n.status='offen'; n.erledigtVon=null; _aufgSave(c);
+    toast(`Erledigt ✓ – nächstes Mal am ${fmtDate(Date.parse(n.due))}`,'ok'); }
+  else { n.status='erledigt'; n.doneAt=new Date().toISOString(); n.doneBy=curKuerzel(); n.erledigtVon=null; _aufgSave(c); toast('Erledigt ✓','ok'); }
+  _aufgRefresh();
+}
+// „Übernehmen": freie Team-Aufgabe (aus jedem Behälter) mir zuteilen
+function crmTakeTask(kind, tree, cid, tid){
+  const me=_aMe(); if(!me) return;
+  const fn=root=>{ const f=findNode(root, tid); if(f){ f.node.assigneeId=me; f.node.assigneeIds=null; f.node.assigneeName=userName(me); } };
+  if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben'){ if(!_aufgMay(c)){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
+      normTasks(c); fn(c); _aufgSave(c); toast('Übernommen ✓','ok'); _aufgRefresh(); return; } }
+  _meSetCtx(kind, tree, cid, tid); mutateContainer(fn); toast('Übernommen ✓','ok'); _aufgRefresh();
+}
+try{ Object.assign(window, { crmAufgNew, crmAufgEdit, crmAufgSave, crmAufgDelete, crmAufgDone, crmAufgFormChg, crmTakeTask, crmAufgWdhLabel:aufgWdhLabel, crmAufgWho:(cid,n)=>aufgWho(getTeamProjekt(cid),n) }); }catch(e){}
 
 // ── Eigenständige Team-Projekte ────────────────────────────────────
 function paintTeamProjektDetail(){
@@ -4848,7 +4978,7 @@ function meineSectionsHtml(){
     </div>`;
   }).join('') || `<div class="empty-state"><span class="es-icon">✅</span><span>Dir sind aktuell keine Aufgaben zugewiesen.</span></div>`;
   // 2) Meine eigenen Projekte (offen + abgeschlossen getrennt)
-  const myProj=listTeamProjekte().filter(p=>p.owner===me);
+  const myProj=listTeamProjekte().filter(p=>p.owner===me&&p.art!=='aufgaben');
   const pcard=p=>{ const all=flatNodes(p.todos); const openN=all.filter(t=>t.status!=='erledigt').length; const ln=linkedEntityName(p);
     return `<div class="crm-card" onclick="crmOpenMeinProjekt(${jsq(p.id)})"><h3>📂 ${esc(p.name||'(ohne Name)')}${p.closed?' <span class="crm-chip" style="background:var(--accent);color:#fff;border-color:var(--accent)">abgeschlossen</span>':''}</h3><div class="meta"><span class="crm-chip">${all.length} Aufgabe${all.length===1?'':'n'}</span>${openN?`<span class="crm-chip warn">${openN} offen</span>`:''}${ln?`<span class="crm-chip">🔗 ${esc(ln)}</span>`:''}</div></div>`; };
   const openMine=myProj.filter(p=>!p.closed), closedMine=myProj.filter(p=>p.closed);
