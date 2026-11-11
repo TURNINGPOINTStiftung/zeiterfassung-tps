@@ -264,8 +264,12 @@ export function calcVrDays(){
       } else {
         info.textContent='';
       }
+    } else if(type==='Arbeitszeitausgleich'){
+      // AZA trägt keine Stunden ein – nur Bemerkung in der Zeiterfassung + Eintrag im Kalender (User 11.11.2026:
+      // vorher stand hier irreführend „Urlaubstage à 8h")
+      info.textContent=`→ ${effective} Tag${effective!==1?'e':''} Arbeitszeitausgleich · wird als Bemerkung in der Zeiterfassung und im Kalender eingetragen (ohne Stunden)`;
     } else {
-      let txt=`→ ${effective} Urlaubstag${effective!==1?'e':''} à ${hoursPerDay}h`;
+      let txt=`→ ${effective} ${type==='AU/Krank'?'Krankheitstag':'Urlaubstag'}${effective!==1?'e':''} à ${hoursPerDay}h`;
       if(type==='Urlaub'&&(weekdays-effective)>=1){
         const rest=weekdays-effective;
         txt+=` · übrige ${rest} Tag${rest!==1?'e':''} im Zeitraum nur als Vermerk „Urlaub" (ohne Stunden)`;

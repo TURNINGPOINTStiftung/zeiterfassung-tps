@@ -3350,10 +3350,10 @@ function listAllTasks(opts){
   const out=[];
   const _arr=v=>Array.isArray(v)?v.filter(Boolean):[];
   const walk=(todos, base, cTeams)=>{ (todos||[]).forEach(top=>{ const topT=_arr(top&&top.teams);
-    const rec=(n,d)=>{ if(!n) return; const own=_arr(n.teams);
-      out.push(Object.assign({ node:n, depth:d, top, teamsEff: own.length?own:(topT.length?topT:cTeams) }, base));
-      (n.children||[]).forEach(ch=>rec(ch,d+1)); };
-    rec(top,0); }); };
+    const rec=(n,d,inh)=>{ if(!n) return; const own=_arr(n.teams);
+      out.push(Object.assign({ node:n, depth:d, top, inhAss:inh||[], teamsEff: own.length?own:(topT.length?topT:cTeams) }, base));
+      const mine=_taskAss(n); (n.children||[]).forEach(ch=>rec(ch,d+1, mine.length?mine:(inh||[]))); };
+    rec(top,0,[]); }); };
   kinds.forEach(k=>{
     try{
       if(k==='veranstaltung') listVeranstaltungen().forEach(v=>{ if(!v || (v.closed&&!incl)) return; normTasks(v);
@@ -4554,7 +4554,7 @@ function _oeaBoardHtml(r, posts){
   // Projektplan (nicht ÖA): ALLE Aufgaben des Teams, unabhängig vom Zeitraum – es geht um den Überblick (User 11.11.2026).
   // Redaktionsplan (ÖA) bleibt beim gewählten Zeitraum (+ Ideen ohne Datum).
   const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
-  const list=(_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice()).filter(a=>!_om || _isAss(a.node,_me));
+  const list=(_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice()).filter(a=>!_om || crmIsMineA(a,_me));
   const card=a=>{ const n=a.node; const ph=oeaPhaseOf(n);
     const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     const over=iss.some(x=>x.lv==='crit');
@@ -4727,6 +4727,13 @@ function _oeaRedaktionHtml(){
   ${c.oea?_oeaNoTasksHtml():''}`;
 }
 
+// Ist die Aufgabe „meine"? (für „👤 Nur meine")
+function crmIsMineA(a, me){ me=me||((window.cu&&window.cu.id)||''); const n=a.node; const as=_taskAss(n);
+  if(as.includes(me)) return true;
+  if(!as.length && (a.inhAss||[]).includes(me)) return true;              // Unterpunkt einer Aufgabe, die mir (mit anderen) zugeteilt ist
+  if(n.jeder){ try{ return (window.crmTaskWhoA(a)||[]).includes(me); }catch(e){} }   // „jede Person einzeln" – ich gehöre dazu
+  return false; }
+window.crmIsMineA=crmIsMineA;
 // Filter „👤 Nur meine" (gemeinsam mit „Was ansteht" im Planner, gemerkt pro Gerät)
 function _planMineOnly(){ try{ return localStorage.getItem('tps_plan_mine')==='1'; }catch(e){ return false; } }
 function _mineSegHtml(){ const on=_planMineOnly(); return `<span class="pl-seg" role="group" aria-label="Filter"><button type="button" class="${on?'':'on'}" aria-pressed="${!on}" onclick="crmMineSet(false)">Alle</button><button type="button" class="${on?'on':''}" aria-pressed="${on}" onclick="crmMineSet(true)">👤 Nur meine</button></span>`; }
@@ -4757,7 +4764,7 @@ function _planTeamOverview(team){
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks().filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
   const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
-  const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until) && (!_om || _isAss(a.node,_me)))
+  const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until) && (!_om || crmIsMineA(a,_me)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
