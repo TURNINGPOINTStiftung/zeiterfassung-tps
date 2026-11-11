@@ -671,6 +671,32 @@ function injectStyles(){
   .crm-mic.rec{background:var(--danger-bg,#fdecea);border-color:var(--danger,#e74c3c);color:var(--danger,#c0392b);animation:crmPulse 1.1s infinite}
   @keyframes crmPulse{0%,100%{opacity:1}50%{opacity:.55}}
   .crm-modal-field{margin-bottom:14px}
+  .pl-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;vertical-align:middle}
+  .pl-seg button{border:0;background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;cursor:pointer}
+  .pl-seg button.on{background:var(--primary);color:var(--on-primary,#fff)}
+  .pl-list{display:flex;flex-direction:column;gap:6px}
+  .pl-row{display:flex;align-items:center;gap:10px;background:var(--surface-2,#f6f8fb);border-radius:10px;padding:8px 12px 8px 0;min-height:48px}
+  .pl-row.sub{margin-left:34px;background:var(--surface,#fff);border:1px solid var(--border)}
+  .pl-row:hover{background:var(--info-bg,#eef3fb)}
+  .pl-bar{flex:none;width:4px;align-self:stretch;border-radius:0 3px 3px 0}
+  .pl-bar.u-r,.pl-due.u-r{--c:var(--danger,#c0392b)} .pl-bar.u-y{--c:#e6b400} .pl-bar.u-g{--c:var(--ok,#16a34a)} .pl-bar.u-n{--c:var(--border-strong,#9aa7b6)}
+  .pl-bar{background:var(--c)}
+  .pl-chk{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--ok,#16a34a);background:var(--surface,#fff);color:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+  .pl-chk:hover{background:var(--ok-bg,#e3f3e9)} .pl-chk.on{background:var(--ok,#16a34a)}
+  .pl-main{all:unset;flex:1;min-width:0;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+  .pl-main:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
+  .pl-t{font-weight:700;color:var(--primary-d,#15263a);overflow-wrap:anywhere}
+  .pl-row.done .pl-t{color:var(--muted);text-decoration:line-through}
+  .pl-tags{display:flex;flex-wrap:wrap;gap:5px}
+  .pl-tag{font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface,#fff);color:var(--muted)}
+  .pl-due{flex:none;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .pl-due.u-r{background:var(--danger-bg,#fde8e8);color:var(--danger,#b42318)} .pl-due.u-y{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#7a4a00)}
+  .pl-due.u-g{background:var(--ok-bg,#e3f3e9);color:var(--ok-text,#166534)} .pl-due.u-n{background:var(--surface,#fff);color:var(--muted);border:1px solid var(--border)}
+  .pl-add{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pl-add #pl-new{flex:1 1 260px;min-width:0} .pl-add input[type=date]{flex:0 0 auto} .pl-add select{flex:0 1 200px;min-width:0}
+  .pl-done{margin-top:14px} .pl-done summary{cursor:pointer;font-weight:700;color:var(--muted);margin-bottom:8px}
+  .pl-empty{color:var(--muted);padding:6px 2px}
+  @media(max-width:640px){ .pl-row{flex-wrap:wrap} .pl-main{flex:1 1 calc(100% - 60px)} .pl-due{margin-left:46px} .pl-row.sub{margin-left:16px} .pl-add select,.pl-add input[type=date]{flex:1 1 45%} }
   .crm-modal-field label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:5px}
   .crm-ass-box{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:2px 0}
   .crm-modal-field label.crm-ass-o{display:inline-flex;align-items:center;gap:6px;margin:0;padding:5px 10px;border:1.5px solid var(--border);border-radius:999px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);cursor:pointer}
@@ -4472,18 +4498,20 @@ function _oeaWhoHtml(r, posts, members, abs){
 function _oeaBoardHtml(r, posts){
   const _rc=rpCfg(); const ab=_rc.ablauf; const may=_rpMay(); const today=localISODate();
   const inR=a=>a.node.due&&a.node.due>=r.a&&a.node.due<=r.b;
-  const list=posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key));
+  // Projektplan (nicht ÖA): ALLE Aufgaben des Teams, unabhängig vom Zeitraum – es geht um den Überblick (User 11.11.2026).
+  // Redaktionsplan (ÖA) bleibt beim gewählten Zeitraum (+ Ideen ohne Datum).
+  const list=_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice();
   const card=a=>{ const n=a.node; const ph=oeaPhaseOf(n);
     const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     const over=iss.some(x=>x.lv==='crit');
     const short=_rc.team.split(/\s+/)[0];
     const chips=[n.kanal?`<span class="red-tag k">${esc(String(n.kanal).toUpperCase())}</span>`:'', n.due?`<span class="red-tag">${_rc.oea?'live':'fällig'} ${esc(fmtDate(Date.parse(n.due)))}</span>`:'<span class="red-tag">ohne Datum</span>',
       n.assigneeId?`<span class="red-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="red-tag w">Team ${esc(short)} · niemand</span>`,
-      `<span class="red-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span>`].join('');
+      `<span class="red-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>`].join('');
     const fr=`<div class="red-fr">Freigabe: ${esc(n.freigabeId?(userName(n.freigabeId)||n.freigabeId):'–')} · Bildrechte: ${n.bildrechte===true?'✓':'<b class="red-off">offen</b>'}</div>`;
     const issH=iss.map(x=>`<span class="red-tag ${x.lv==='crit'?'c':'w'}">${esc(x.t)}</span>`).join('');
     const sel=may?`<select class="red-ph" aria-label="Spalte ändern" onchange="crmRedPhaseSet(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)},this.value)">${ab.map(p=>`<option value="${esc(p.key)}" ${p.key===ph?'selected':''}>${esc(p.label)}</option>`).join('')}</select>`:'';
-    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${esc(n.text||(_rc.oea?'Beitrag':'Aufgabe'))}</div>
+    return `<div class="red-card${over?' over':''}${ph===ab[ab.length-1].key?' done':''}"><div class="red-ct" onclick="${a.art==='aufgaben'?`crmAufgEdit(${jsq(a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}">${esc(n.text||(_rc.oea?'Beitrag':'Aufgabe'))}</div>
       <div class="red-meta">${chips}</div>${_rc.oea?fr:''}${issH?`<div class="red-meta">${issH}</div>`:''}${sel}</div>`; };
   // Erledigtes bleibt 7 Tage in der Erledigt-Spalte (damit das Team es sieht), danach Archiv (User 11.11.2026)
   const wk=Date.now()-7*864e5; const recent=a=>{ const t=Date.parse(a.node.doneAt||''); return isFinite(t)&&t>=wk; };
@@ -4535,6 +4563,8 @@ function _crmRedMove(kind, tree, cid, tid, dir){
   const e=curContainer(); const f=e&&findNode(e,tid); if(!f) return;
   const ab=rpCfg().ablauf; const from=oeaPhaseOf(f.node); const i=oeaPhaseIdx(from); const to=ab[i+dir]; if(!to) return;
   const why=oeaCheckMove(f.node, from, to.key); if(why){ toast(why,'err'); return; }
+  // Aufgabe ohne Projekt: „Erledigt" läuft über das normale Abhaken (Wiederholung rückt weiter, „jede Person einzeln")
+  if(kind==='teamprojekt' && to.base==='erledigt' && e.art==='aufgaben' && (f.node.wdh || f.node.jeder)){ window._crmTaskCtx=null; crmAufgDone(cid, tid); paintTeamDetail(); return; }
   const _isO=rpCfg().oea;
   mutateContainer(en=>{ const g=findNode(en,tid); if(!g) return; if(_isO) g.node.phase=to.key; g.node.status=to.base;
     if(to.base==='erledigt'){ g.node.doneAt=g.node.doneAt||new Date().toISOString(); g.node.doneBy=g.node.doneBy||curKuerzel(); } else { g.node.doneAt=''; g.node.doneBy=''; } });
@@ -4626,7 +4656,7 @@ function _oeaRedaktionHtml(){
     .red-tag.w{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#7a4a00);border-color:transparent} .red-tag.c{background:var(--danger-bg,#fde8e8);color:var(--danger,#b42318);border-color:transparent}
     .red-fr{font-size:13px;color:var(--muted,#5d7086);margin:6px 0} .red-off{color:var(--warn-text,#7a4a00)}
     .red-ph{width:100%;margin-top:6px;font:inherit;font-size:13px;padding:5px 8px;border:1.5px solid var(--border,#cdd7e2);border-radius:8px;background:var(--surface,#fff);color:var(--primary-d,#15263a)}
-    .red-card.done{opacity:.7} .red-colh small{font-weight:400;color:var(--muted,#5d7086)} .red-colh span{float:right}
+    .red-card.done .red-ct{color:var(--muted,#5d7086)} .red-colh small{font-weight:400;color:var(--muted,#5d7086)} .red-colh span{float:right}
   </style>
   <div class="red-bar">
     ${_rpNewMenu(c.team)}
@@ -4636,8 +4666,8 @@ function _oeaRedaktionHtml(){
     ${(c.oea&&_R('crm_einst'))?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
   </div>
   <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, posts, members, abs)}</div>
-  <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span></h4>
-    ${r.v==='jahr'?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
+  <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span>${c.oea?'':' <span style="font-size:13px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">– alle Aufgaben des Teams, unabhängig vom Zeitraum oben</span>'}</h4>
+    ${(r.v==='jahr'&&c.oea)?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
   </div>
   ${c.oea?_oeaNoTasksHtml():''}`;
 }
@@ -4876,7 +4906,9 @@ function paintTeamProjektDetail(){
   normTasks(p);
   window._crmTaskCtx={ kind:'teamprojekt', id:p.id };  // Aufgaben-Engine zielt aufs Projekt
   window._crmAfterTask='projektdetail';
-  const todos = taskBoardHtml(p);
+  const liste = p.ansicht==='liste';
+  const todos = liste ? _projListHtml(p) : taskBoardHtml(p);
+  const seg = `<span class="pl-seg" role="group" aria-label="Ansicht"><button class="${liste?'on':''}" aria-pressed="${liste}" onclick="crmProjAnsicht('liste')">☰ Liste</button><button class="${liste?'':'on'}" aria-pressed="${!liste}" onclick="crmProjAnsicht('board')">▦ Board</button></span>`;
   root.innerHTML = barHtml() + `<div class="crm-body">
     <div class="crm-detail-head">
       <button class="btn-sm-crm" onclick="crmBackToTeamProjekte()">← ${window._crmProjReturn==='meine'?(window._planActive?'Was ansteht':'Meine Aufgaben'):esc(p.team||'Team')}</button>
@@ -4891,15 +4923,75 @@ function paintTeamProjektDetail(){
     <div class="crm-sec">
       <h4><span class="ttl">✅ Aufgaben</span>
         <span class="hbtns">
-          <button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>
+          ${seg}
+          ${liste?'':`<button class="btn-sm-crm" onclick="crmToggleHideDone()">${window._crmHideDone?'👁 Erledigte zeigen':'✓ Erledigte ausblenden'}</button>`}
           <button class="btn-sm-crm" onclick="crmApplyVorlagePick()">📋 Vorlage</button>
-          <button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>
+          ${liste?'':`<button class="btn-sm-crm primary" onclick="crmOpenTask('')">＋ Spalte</button>`}
         </span>
       </h4>
       ${todos}
     </div>
   </div>`;
 }
+// ── Projekt als Liste (v562, User 11.11.2026): „ein Projekt hat meist nicht so viele Aufgaben, dass sich ein
+// Board lohnt" – Aufgaben nach Frist wie „Was ansteht", farbig, direkt abhaken, unten schnell anlegen.
+// Datenmodell bleibt das Board: oberste Ebene = Spalten, Aufgaben = deren Kinder. Neue Listen-Aufgaben landen in
+// der Spalte „Aufgaben" (liste:true, wird bei Bedarf angelegt) – im Board erscheinen sie dort als Karten.
+function _plUrg(n, today){ if(!n.due) return { k:'n', t:'ohne Frist' }; const d=Math.round((_oParse(n.due)-_oParse(today))/864e5);
+  const f=String(n.due).slice(0,4)===today.slice(0,4)?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):fmtDate(Date.parse(n.due));   // anderes Jahr → mit Jahreszahl
+  if(n.status==='erledigt') return { k:'n', t:f };
+  if(d<0) return { k:'r', t:'überfällig · '+f }; if(d===0) return { k:'r', t:'heute' }; if(d===1) return { k:'r', t:'morgen' };
+  if(d<=2) return { k:'r', t:f+' · in 2 Tagen' }; if(d<=14) return { k:'y', t:f+' · in '+d+' Tagen' }; return { k:'g', t:f }; }
+// Board-Projekt = oberste Ebene sind Spalten (mind. eine hat Karten); sonst „flach" (oberste Ebene = Aufgaben)
+const _PL_COLNAME=/^(offen|to ?do|zu erledigen|in arbeit|doing|erledigt|done|fertig|backlog|ideen?|warten|wartet|geplant|in planung|review|abgeschlossen)$/i;
+function _projIsBoard(p){ return (p.todos||[]).some(c=>c && !c.liste && Array.isArray(c.children) && c.children.some(Boolean)); }
+function _projListHtml(p){
+  const today=localISODate(); const rows=[];
+  const top=(p.todos||[]).filter(Boolean); const board=_projIsBoard(p);
+  top.forEach(c=>{ const kids=(c.children||[]).filter(Boolean);
+    if(c.liste){ kids.forEach(k=>rows.push({ n:k, col:'' })); return; }
+    if(!board){ rows.push({ n:c, col:'' }); return; }   // flaches Projekt: oberste Ebene sind die Aufgaben (Unterpunkte eingerückt)
+    if(kids.length) kids.forEach(k=>rows.push({ n:k, col:c.text||'' }));
+    else if(!_PL_COLNAME.test(String(c.text||'').trim()) && (c.due || _taskAss(c).length || c.note || (c.status&&c.status!=='offen'))) rows.push({ n:c, col:'' }); });
+  const multi=new Set(rows.map(r=>r.col).filter(Boolean)).size>1;
+  const open=rows.filter(r=>r.n.status!=='erledigt').sort((a,b)=>String(a.n.due||'9').localeCompare(String(b.n.due||'9')));
+  const done=rows.filter(r=>r.n.status==='erledigt').sort((a,b)=>String(b.n.doneAt||'').localeCompare(String(a.n.doneAt||'')));
+  const may=_ctxMay(window._crmTaskCtx);
+  const row=(n, col, sub)=>{ const u=_plUrg(n, today); const isDone=n.status==='erledigt'; const ass=_taskAss(n).map(userName).filter(Boolean);
+    const kids=(n.children||[]).filter(Boolean); const kOpen=kids.filter(x=>x.status!=='erledigt').length;
+    const tags=[ass.length?`<span class="pl-tag">👤 ${esc(ass.join(', '))}</span>`:'', n.status==='inarbeit'?'<span class="pl-tag">In Arbeit</span>':'',
+      (multi&&col)?`<span class="pl-tag">${esc(col)}</span>`:'', kids.length?`<span class="pl-tag">${kids.length-kOpen}/${kids.length} Unterpunkte</span>`:'',
+      isDone&&n.doneBy?`<span class="pl-tag">✓ ${esc(n.doneBy)}${n.doneAt?' · '+esc(fmtDate(Date.parse(n.doneAt))):''}</span>`:''].join('');
+    return `<div class="pl-row${sub?' sub':''}${isDone?' done':''}">
+      <span class="pl-bar u-${isDone?'n':u.k}"></span>
+      ${may?`<button type="button" class="pl-chk${isDone?' on':''}" aria-pressed="${isDone}" aria-label="${isDone?'Wieder öffnen':'Erledigt'}: ${esc(n.text||'Aufgabe')}" onclick="crmToggleDone(${jsq(n.id)})">${isDone?'✓':''}</button>`:''}
+      <button type="button" class="pl-main" onclick="crmOpenTask(${jsq(n.id)})"><span class="pl-t">${esc(n.text||'Aufgabe')}</span>${tags?`<span class="pl-tags">${tags}</span>`:''}</button>
+      ${(sub&&!n.due)?'':`<span class="pl-due u-${isDone?'n':u.k}">${esc(u.t)}</span>`}</div>`
+      +(sub?'':kids.map(k=>row(k,'',true)).join('')); };
+  const who=p.team?`<select id="pl-new-who" aria-label="Zuständig">${assigneeOptsHtml([p.team], '')}</select>`:'';
+  const add=may?`<div class="pl-add"><input id="pl-new" placeholder="＋ Neue Aufgabe … (Enter)" aria-label="Neue Aufgabe" onkeydown="if(event.key==='Enter'){event.preventDefault();crmProjQuickAdd();}">
+      <input id="pl-new-due" type="date" aria-label="Fällig">${who}<button type="button" class="btn-sm-crm primary" onclick="crmProjQuickAdd()">Hinzufügen</button></div>`:'';
+  return `<div class="pl-list">${open.map(r=>row(r.n,r.col,false)).join('')||'<div class="pl-empty">Noch keine offenen Aufgaben. Leg unten die erste an.</div>'}</div>
+    ${add}
+    ${done.length?`<details class="pl-done"><summary>✓ Erledigt (${done.length})</summary><div class="pl-list">${done.map(r=>row(r.n,r.col,false)).join('')}</div></details>`:''}`;
+}
+function crmProjQuickAdd(){
+  const text=(val('pl-new')||'').trim(); if(!text){ toast('Bitte beschreiben, was zu tun ist.','err'); return; }
+  const due=val('pl-new-due')||''; const who=val('pl-new-who')||'';
+  mutateContainer(en=>{ if(!Array.isArray(en.todos)) en.todos=[];
+    const node0={ id:newId(), text, due, note:'', status:'offen', deps:[], children:[], createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() };
+    // flaches Projekt (ohne Spalten-Struktur): neue Aufgabe auf oberster Ebene – sonst in die Spalte „Aufgaben"
+    if(!_projIsBoard(en) && !en.todos.some(c=>c&&c.liste) && en.todos.length){ _setAss(node0, who?[who]:[]); en.todos.push(node0); return; }
+    let col=en.todos.find(c=>c&&c.liste); if(!col){ col={ id:newId(), text:'Aufgaben', liste:true, status:'offen', note:'', due:'', deps:[], children:[] }; en.todos.push(col); }
+    if(!Array.isArray(col.children)) col.children=[];
+    const node={ id:newId(), text, due, note:'', status:'offen', deps:[], children:[], createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName() };
+    _setAss(node, who?[who]:[]); col.children.push(node); });
+  repaintContainer(); setTimeout(()=>{ try{ document.getElementById('pl-new').focus(); }catch(e){} },30);
+}
+function crmProjAnsicht(v){
+  mutateContainer(en=>{ en.ansicht=(v==='liste')?'liste':'board'; }); repaintContainer();
+}
+try{ Object.assign(window, { crmProjQuickAdd, crmProjAnsicht }); }catch(e){}
 // Optionen für die Zuordnung eines Projekts zu einem CRM-Eintrag (alle Bäume)
 function entityLinkOptions(selVal){
   const opts=['<option value="">– keinem Eintrag zugeordnet –</option>'];
@@ -4959,7 +5051,7 @@ function crmSaveTeamProjekt(isNew){
   const start=val('crm-tp-start'); let ende=val('crm-tp-ende'); if(ende && (!start || ende<start)) ende=start||'';   // Zeitraum (Schritt 5)
   if(isNew){
     const id=newId();
-    const p={ id, name, team, beschreibung, start, ende, createdAt:Date.now(),
+    const p={ id, name, team, beschreibung, start, ende, createdAt:Date.now(), ansicht:'liste',
       createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] };
     _applyLink(p, link);
     saveTeamProjekt(p);
@@ -5059,7 +5151,7 @@ function crmNewMeinProjekt(){
 function crmSaveMeinProjekt(){
   const name=val('crm-mp-name'); if(!name){ toast('Bitte einen Namen eingeben.','err'); return; }
   const id=newId();
-  const p={ id, name, team:'', owner:(window.cu&&window.cu.id)||'', beschreibung:val('crm-mp-besch'),
+  const p={ id, name, team:'', owner:(window.cu&&window.cu.id)||'', beschreibung:val('crm-mp-besch'), ansicht:'liste',
     createdAt:Date.now(), createdByKuerzel:curKuerzel(), createdByName:curName(), todos:[] };
   _applyLink(p, val('crm-mp-link'));
   saveTeamProjekt(p);
