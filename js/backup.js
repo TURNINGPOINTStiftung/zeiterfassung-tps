@@ -58,7 +58,7 @@ export async function runAutoBackup(){
         // ein anderes Gerät gleichzeitig schneller war – oder Regeln noch nicht aktiv), bleibt der
         // Merker unberührt; das erfolgreiche Gerät setzt ihn.
         try{ await (window.ensureAccessClaim&&window.ensureAccessClaim()); }catch(_){}   // Freigabe-Markierung (Storage-Regeln)
-        await firebase.storage().ref('backups/daily/'+today+'_'+firebase.auth().currentUser.uid+'.json').put(body, {contentType:'application/json'});
+        await window.tpsStore().ref('backups/daily/'+today+'_'+firebase.auth().currentUser.uid+'.json').put(body, {contentType:'application/json'});
         await mark.set(today);
         console.info('[Backup] Tages-Backup '+today+' gespeichert.');
       }
@@ -71,7 +71,7 @@ export async function runAutoBackup(){
 
 // Aufbewahrung: tägliche Backups älter als 90 Tage löschen – AUSSER dem 1. jedes Monats.
 async function _pruneOld(){
-  const res = await firebase.storage().ref('backups/daily').listAll();
+  const res = await window.tpsStore().ref('backups/daily').listAll();
   const cut = new Date(); cut.setDate(cut.getDate()-KEEP_DAILY_DAYS);
   const cutStr = localISODate(cut);
   for(const item of res.items){
@@ -82,14 +82,19 @@ async function _pruneOld(){
 }
 
 // Liste der App-Backups (nur Administrator) – für die Anzeige in der Verwaltung.
+// Übergang EU-Umzug: EU-Speicher + (falls noch vorhanden) alter US-Speicher, ohne Doppelte
 export async function listAppBackups(){
-  const res = await firebase.storage().ref('backups/daily').listAll();
-  return res.items.map(i=>i.name).sort().reverse();
+  const names=new Set();
+  for(const st of [window.tpsStore(), window.tpsStoreOld()]){
+    try{ const res = await st.ref('backups/daily').listAll(); res.items.forEach(i=>names.add(i.name)); }catch(e){ console.warn('[Backup] Liste:', e&&(e.code||e.message)); }
+  }
+  return [...names].sort().reverse();
 }
 
 // Einzelnes Backup herunterladen (nur Administrator).
 export async function downloadAppBackup(name){
-  const url = await firebase.storage().ref('backups/daily/'+name).getDownloadURL();
+  let url; try{ url = await window.tpsStore().ref('backups/daily/'+name).getDownloadURL(); }
+  catch(e){ url = await window.tpsStoreOld().ref('backups/daily/'+name).getDownloadURL(); }   // noch nicht kopiert → alter Speicher
   const a = document.createElement('a'); a.href = url; a.download = 'TPS-Backup_'+name; a.target = '_blank'; a.click();
 }
 

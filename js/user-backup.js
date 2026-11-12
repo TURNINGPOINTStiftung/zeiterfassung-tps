@@ -255,7 +255,7 @@ function _storageReady(){
 async function _putStorage(path, obj){
   const body = new Blob([JSON.stringify(obj)], { type: 'application/json' });
   try{ await (window.ensureAccessClaim&&window.ensureAccessClaim()); }catch(_){}   // Freigabe-Markierung (Storage-Regeln)
-  return firebase.storage().ref(path).put(body, { contentType: 'application/json' });
+  return window.tpsStore().ref(path).put(body, { contentType: 'application/json' });
 }
 
 // Wird 20 s nach Login über backup.js/runAutoBackup ausgelöst.
@@ -296,8 +296,12 @@ export async function showCloudSnapshots(){
   let items = [];
   try{
     const uid = firebase.auth().currentUser.uid;
-    const res = await firebase.storage().ref('backups/user/'+uid).listAll();
-    items = res.items.map(i => i.name).sort().reverse();
+    const names = new Set(); let ok=false, lastErr=null;
+    for(const st of [window.tpsStore(), window.tpsStoreOld()]){   // Übergang EU-Umzug: beide Speicher
+      try{ const res = await st.ref('backups/user/'+uid).listAll(); res.items.forEach(i=>names.add(i.name)); ok=true; }catch(e){ lastErr=e; }
+    }
+    if(!ok) throw lastErr;
+    items = [...names].sort().reverse();
   }catch(e){
     openModal('<h3 style="margin-bottom:10px">☁ Cloud-Schnappschüsse</h3><p style="color:var(--danger)">Konnte nicht geladen werden ('+esc((e&&(e.code||e.message))||'')+'). Ist die Storage-Regel veröffentlicht?</p><div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Schließen</button></div>');
     return;
@@ -325,7 +329,8 @@ export async function ubDownloadCloud(name){
   try{
     if(!_storageReady()){ toast('Cloud gerade nicht erreichbar.','err'); return; }
     const uid = firebase.auth().currentUser.uid;
-    const url = await firebase.storage().ref('backups/user/'+uid+'/'+name).getDownloadURL();
+    let url; try{ url = await window.tpsStore().ref('backups/user/'+uid+'/'+name).getDownloadURL(); }
+    catch(e){ url = await window.tpsStoreOld().ref('backups/user/'+uid+'/'+name).getDownloadURL(); }
     const a = document.createElement('a'); a.href = url; a.download = 'Cloud_'+name; a.target = '_blank';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     toast('Schnappschuss wird heruntergeladen – danach über „⬆ Backup wiederherstellen" einspielen.','ok');

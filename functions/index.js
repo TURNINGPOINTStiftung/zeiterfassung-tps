@@ -41,7 +41,7 @@
 const admin = require('firebase-admin');
 admin.initializeApp({ databaseURL: 'https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app' });
 const db = admin.database();
-const BUCKET = 'zeiterfassung-tps.firebasestorage.app';   // Storage (automatische Backups)
+const BUCKET = 'zeiterfassung-tps-eu';   // Storage (automatische Backups) – seit 12.11.2026 EU-Bucket (europe-west1) statt US-Standard-Bucket
 
 const ALLOWED_ORIGINS = [
   'https://turningpointstiftung.github.io',

@@ -77,6 +77,10 @@ export async function initFirebase(){
     messagingSenderId:'527053392310',
     appId:'1:527053392310:web:37d12a851b0e5c0acb9917'
   });
+  // Dateispeicher (v571, 12.11.2026): neuer EU-Bucket (europe-west1) statt des US-Standard-Buckets (us-east1).
+  // tpsStore() = EU (schreiben/lesen), tpsStoreOld() = alter US-Bucket – nur zum Lesen, bis alles kopiert ist.
+  window.tpsStore=()=>{ try{ return firebase.app().storage('gs://zeiterfassung-tps-eu'); }catch(e){ return firebase.storage(); } };
+  window.tpsStoreOld=()=>firebase.storage();
   const _fbRef=firebase.database().ref('zeiterfassung');
   window._fbRef=_fbRef;
   window._offlineMode=false;

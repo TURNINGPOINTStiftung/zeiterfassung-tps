@@ -3616,6 +3616,18 @@ function crmReopenBoard(){
 }
 // ── Anlagen an einer Aufgabe (Links + OneDrive/SharePoint-Dateien) ──
 function _storageOn(){ return !!(window.firebase && firebase.storage); }
+// Hochgeladene Anlage öffnen (v571, EU-Umzug): frischen Link über den Dateipfad aus dem EU-Speicher holen,
+// sonst aus dem alten Speicher, zuletzt der gespeicherte Link. So gehen alte Links nach dem Leeren des
+// US-Speichers nicht verloren. Fenster sofort öffnen (sonst blockiert der Browser das Pop-up).
+function crmAttGo(ev, a){ const path=a&&a.getAttribute('data-path'); if(!path || !_storageOn()) return true;
+  try{ ev.preventDefault(); }catch(e){}
+  const w=window.open('', '_blank'); const fall=a.getAttribute('href');
+  const go=u=>{ if(w){ try{ w.opener=null; w.location.href=u; }catch(e){ window.open(u,'_blank','noopener'); } } else window.open(u,'_blank','noopener'); };
+  window.tpsStore().ref(path).getDownloadURL()
+    .catch(()=>window.tpsStoreOld().ref(path).getDownloadURL())
+    .then(go).catch(()=>go(fall));
+  return false; }
+window.crmAttGo=crmAttGo;
 // Erkennt Datei-Freigaben (OneDrive/SharePoint/Teams oder Dateiendung) → 📎-Icon
 function _looksLikeFile(url){
   return /sharepoint\.com|onedrive|1drv\.ms|office\.com|\.(pdf|docx?|xlsx?|pptx?|csv|txt|jpe?g|png|gif|zip|rar)(\?|#|$)/i.test(String(url||''));
@@ -3623,7 +3635,7 @@ function _looksLikeFile(url){
 function attachChips(n){
   const a=(n&&n.attachments)||[]; if(!a.length) return '';
   return `<div class="kb-atts" onclick="event.stopPropagation()">${a.map(x=>
-    `<a class="kb-att" href="${esc(_safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.title||x.name||x.url)}">${x.type==='file'?'📎':'🔗'} ${esc((x.title||x.name||x.url).slice(0,26))}</a>`
+    `<a class="kb-att" href="${esc(_safeUrl(x.url))}"${x.path?` data-path="${esc(x.path)}" onclick="return crmAttGo(event,this)"`:''} target="_blank" rel="noopener" title="${esc(x.title||x.name||x.url)}">${x.type==='file'?'📎':'🔗'} ${esc((x.title||x.name||x.url).slice(0,26))}</a>`
   ).join('')}</div>`;
 }
 function crmAttOpen(nid){
@@ -3632,7 +3644,7 @@ function crmAttOpen(nid){
   crmOpenModalShell();
   const a=f.node.attachments||[];
   const rows=a.length ? a.map(x=>`<div class="crm-att-row">
-      <a href="${esc(_safeUrl(x.url))}" target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
+      <a href="${esc(_safeUrl(x.url))}"${x.path?` data-path="${esc(x.path)}" onclick="return crmAttGo(event,this)"`:''} target="_blank" rel="noopener" class="grow" style="color:var(--primary);font-weight:600;text-decoration:none">${x.type==='file'?'📎':'🔗'} ${esc(x.title||x.name||x.url)}</a>
       ${x.size?`<span class="small" style="color:var(--muted)">${Math.round(x.size/1024)} KB</span>`:''}
       <button class="btn-sm-crm" title="Anzeigename ändern" onclick="crmAttEdit(${jsq(nid)},${jsq(x.id)})">✎</button>
       <button class="crm-x" title="Entfernen" onclick="crmAttDel(${jsq(nid)},${jsq(x.id)})">✕</button>
@@ -3671,7 +3683,7 @@ function crmAttFile(nid){
   const path='crm-anlagen/'+nid+'/'+Date.now()+'_'+safe;
   toast('Lädt hoch …','');
   try{
-    const ref=firebase.storage().ref(path);
+    const ref=window.tpsStore().ref(path);
     Promise.resolve(window.ensureAccessClaim&&window.ensureAccessClaim()).catch(()=>{}).then(()=>ref.put(file,{ contentType:ctype, customMetadata:{ uploaderUid:((firebase.auth().currentUser||{}).uid||'') } })).then(s=>s.ref.getDownloadURL()).then(url=>{
       mutateContainer(c=>{ const f=findNode(c,nid); if(!f) return; if(!Array.isArray(f.node.attachments)) f.node.attachments=[]; f.node.attachments.push({id:newId(),type:'file',name:file.name,url,size:file.size,path}); });
       crmAttOpen(nid); toast('Datei hochgeladen ✓','ok');
@@ -3681,7 +3693,7 @@ function crmAttFile(nid){
 function crmAttDel(nid, attId){
   let delPath=null;
   mutateContainer(c=>{ const f=findNode(c,nid); if(!f||!Array.isArray(f.node.attachments)) return; const x=f.node.attachments.find(a=>a.id===attId); if(x&&x.path) delPath=x.path; f.node.attachments=f.node.attachments.filter(a=>a.id!==attId); });
-  if(delPath && _storageOn()){ try{ firebase.storage().ref(delPath).delete().catch(()=>{}); }catch(e){} }
+  if(delPath && _storageOn()){ [window.tpsStore, window.tpsStoreOld].forEach(f=>{ try{ f().ref(delPath).delete().catch(()=>{}); }catch(e){} }); }
   crmAttOpen(nid);
 }
 // Anzeigename (Titel) einer bestehenden Anlage ändern – so wird statt der langen URL der Name gezeigt.

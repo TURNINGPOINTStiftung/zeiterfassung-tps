@@ -16,5 +16,5 @@ Aktion `set` prüft selbst das ID-Token + `zeiterfassung/admins`.
 Der Standard-Dienstkonto-Zugriff (Admin SDK) umgeht die Datenbank-Regeln. Die Function schreibt deshalb nach
 eigener Prüfung u. a. `users`, `archivedUsers`, Freigabelisten (`allowed`, `uidUser`, `managers`, `gfAdmins`,
 `freelancers`, `grants`), `crm/access`, beim Einspielen eines Backups Inhaltsknoten von `zeiterfassung`/`crm`,
-Storage `backups/daily/` (Tages-Backup `_srv.json`, Sicherung `_vorEinspielen-…`) und das Protokoll `ze_admin_log`.
+Storage-Bucket `zeiterfassung-tps-eu` (europe-west1, seit 12.11.2026; vorher US-Standard-Bucket) `backups/daily/` (Tages-Backup `_srv.json`, Sicherung `_vorEinspielen-…`) und das Protokoll `ze_admin_log`.
 Speicher: für das Einspielen großer Backups ggf. `--memory=512MiB` verwenden.
