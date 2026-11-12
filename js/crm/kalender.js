@@ -39,8 +39,10 @@ function _laneAssign(evs){ const lanes=[]; evs.slice().sort((a,b)=>String(a.von)
 // Seit v472 (User 26.10.2026) auch in Beschriftung/Tooltip nur noch „Abwesend“ – der Grund geht niemanden an.
 // Seit v551 (Personaldaten privat): Krankheit erscheint ebenfalls nur als „Abwesend“ (Entscheidung Moritz), ebenso die
 // Pseudo-Anträge aus zeiterfassung/abwesend (type 'Abwesend') für Personen, deren Anträge man nicht lesen darf.
+// Seit v572 (User 12.11.2026): „Sonstiges" wird ebenfalls als „Abwesend" angezeigt – fehlte vorher in AB,
+// dadurch wurde eine Sonstiges-Abwesenheit im Kalender gar nicht dargestellt (_abs() übersprang sie).
 const AB={ 'Urlaub':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Arbeitszeitausgleich':{k:'a',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'},
-  'AU/Krank':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Abwesend':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
+  'AU/Krank':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Sonstiges':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'}, 'Abwesend':{k:'u',c:'#2563eb',light:'#dbe6fb',lbl:'Abwesend'} };
 const KMETA={u:AB['Urlaub'],a:AB['Arbeitszeitausgleich']};
 // Wählbare Farben je Termin/Veranstaltung (v495): [kräftig, hell]. Blau bleibt für „Abwesend“ reserviert.
 const KAL_FARBEN={ rot:['#dc2626','#f2b8b8'], orange:['#d97706','#f0c58a'], gruen:['#16a34a','#bfe5cb'], tuerkis:['#0d9488','#b5e3de'],

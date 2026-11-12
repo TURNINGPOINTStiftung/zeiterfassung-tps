@@ -579,6 +579,28 @@ function _abType(t){ return _AB_TYPES.find(x=>x[0]===t) || _AB_TYPES[3]; }
 function _typeBg(t){ const c=_abType(t)[2]; return c?`var(--${c}-bg)`:'var(--bg)'; }
 function _typeFg(t){ const c=_abType(t)[2]; return c?`var(--${c}-text)`:'var(--muted)'; }
 function _typeBar(t){ return _abType(t)[3]; }
+// ── Zeitgutschrift je Abwesenheit (v572, User 12.11.2026) ──
+// Ergänzt die Anzahl Arbeitstage um die Info, ob die Tage wie Arbeitszeit zählen:
+//  'ja'    = Gutschrift (Urlaub, AU/Krank, Veranstaltung, Sonstiges mit Häkchen „Arbeitszeit gutschreiben")
+//  'abbau' = keine Gutschrift, baut Überstunden ab (Arbeitszeitausgleich)
+//  'nein'  = keine Gutschrift, reiner Vermerk (Sonstiges ohne Häkchen)
+function _absCredit(r){
+  const t=r&&r.type;
+  if(t==='Urlaub'||t==='AU/Krank'||t==='Veranstaltung'||t==='Veranstaltung Krank / AU') return 'ja';
+  if(t==='Sonstiges') return (r&&r.creditWork)?'ja':'nein';
+  if(t==='Arbeitszeitausgleich') return 'abbau';
+  return 'nein';
+}
+function _creditChip(r,compact){
+  const c=_absCredit(r);
+  const base='display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap';
+  if(c==='ja'){
+    const h=(!compact&&r&&r.hoursPerDay!=null)?` (à ${r.hoursPerDay} h)`:'';
+    return `<span style="${base};background:var(--ok-bg);color:var(--ok-text)" title="Diese Tage werden wie Arbeitszeit gutgeschrieben">⏱ mit Zeitgutschrift${h}</span>`;
+  }
+  if(c==='abbau') return `<span style="${base};background:var(--warn-bg);color:var(--warn-text)" title="Keine Gutschrift – diese Tage bauen Überstunden ab">⏱ ${compact?'Überstd.-Abbau':'baut Überstunden ab'}</span>`;
+  return `<span style="${base};background:var(--surface-2,#eef0f3);color:var(--muted)" title="Keine Zeitgutschrift – reiner Vermerk">⏱ ohne Zeitgutschrift</span>`;
+}
 // Krankmeldungen anderer sehen nur Leitung, GF und Admin – für alle anderen „Abwesend" (v518, User 30.10.2026).
 // Seit v551 (Personaldaten privat) liegen Anträge anderer nur noch auf dem Gerät, wenn man sie lesen darf (Leitung ihrer
 // Teams, GF, Admin, Genehmiger:in); für alle übrigen kommen Pseudo-Anträge mit Art „Abwesend“ (ohne Grund) aus firebase.js.
@@ -655,7 +677,7 @@ export function renderAbwesenheiten(){
         ${statusBadge(r.status)}
         <span class="ab-c2-sub">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?'beantragt '+new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</span>
       </div>
-      <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''}</div>
+      <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''} · ${_creditChip(r)}</div>
       ${(r.note&&st===r.type)?`<div class="ab-c2-sub" style="margin-top:2px">💬 ${esc(r.note)}</div>`:''}
       ${extra}${rnBtns}${acts?`<div class="ab-c2-acts">${acts}</div>`:''}
     </div>`;
@@ -697,7 +719,7 @@ export function renderAbwesenheiten(){
       const st=_shownType(r);
       return `<div class="ab-row" style="border-left-color:${_typeBar(st)}">
         <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(st)}">${esc(_typeLabel(st))}</span></div>
-          <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''}</div></div>
+          <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''} · ${_creditChip(r,true)}</div></div>
         <span class="upc-badge ${cls}">${txt}</span></div>`;
     };
     // Nur die nächsten 40 Tage offen zeigen, der Rest ist ausklappbar (v517, User 30.10.2026)
