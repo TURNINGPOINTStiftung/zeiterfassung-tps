@@ -721,7 +721,7 @@ function injectStyles(){
   .tv-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:12px;border-top:1px solid var(--border)}
   .tv-badge{font-size:12px;padding:1px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface,#fff);color:var(--muted)}
   .tv-badge.neu{background:var(--info-bg,#dbe6fb);color:var(--primary);border-color:transparent;font-weight:700}
-  .tv-pin summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px} .tv-pin summary::-webkit-details-marker{display:none}
+  .tv-pin-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .tv-pin-new{margin-left:auto} .tv-pin .tv-nadd{margin-top:10px} .tv-pin .tv-nadd[hidden],.tv-pin-new[hidden]{display:none!important}
   .tv-pin-n{font-size:13px;color:var(--muted)} .tv-pin .tv-notes{margin:10px 0}
   .pl-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;vertical-align:middle}
   .pl-seg button{border:0;background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;padding:6px 12px;cursor:pointer}
@@ -5227,14 +5227,18 @@ function crmTvEdit(){ const a=window._tvArgs; if(!a) return; const c=a.kind==='t
 // Pinnwand am Projekt / an der Veranstaltung (Kontext = offener Behälter)
 function _pinHtml(c){ const ns=_notes(c); const may=_ctxMay(window._crmTaskCtx); const seen=_tvSeen()[c.id]||0; const me=(window.cu&&window.cu.id)||'';
   const neu=ns.some(x=>x.uid!==me&&(x.ts||0)>seen);
-  return `<details class="crm-sec tv-pin"${neu?' open':''} ontoggle="if(this.open)crmPinSeen(${jsq(c.id)})"><summary><span class="ttl">💬 Pinnwand fürs Team</span> <span class="tv-pin-n">${ns.length?ns.length+' Notiz'+(ns.length===1?'':'en'):'noch leer'}${neu?' · <b>neu</b>':''}</span></summary>
-    <div class="tv-notes">${ns.map(x=>_noteHtml(x, may, `crmPinDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Allgemeine Infos zum Projekt fürs ganze Team, z. B. „Budget ist freigegeben“.</div>'}</div>
-    ${may?`<div class="tv-nadd"><textarea id="pin-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Pinnwand-Notiz" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmPinAdd();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmPinAdd()">Senden</button></div>`:''}</details>`; }
+  // v572: Notizen immer sichtbar (sichtbar = gelesen); aufgeklappt wird nur das Schreibfeld für eine neue Notiz
+  if(neu) setTimeout(()=>crmPinSeen(c.id), 400);
+  return `<div class="crm-sec tv-pin"><div class="tv-pin-hd"><span class="ttl">💬 Pinnwand fürs Team</span> <span class="tv-pin-n">${ns.length?ns.length+' Notiz'+(ns.length===1?'':'en'):'noch leer'}${neu?' · <b>neu</b>':''}</span>
+      ${may?`<button type="button" class="btn-sm-crm tv-pin-new" onclick="crmPinWrite(true)">＋ Notiz schreiben</button>`:''}</div>
+    ${ns.length?`<div class="tv-notes">${ns.map(x=>_noteHtml(x, may, `crmPinDel(${jsq(x.id)})`)).join('')}</div>`:''}
+    ${may?`<div class="tv-nadd" id="pin-add" hidden><textarea id="pin-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Pinnwand-Notiz" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmPinAdd();}else if(event.key==='Escape'){crmPinWrite(false);}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmPinAdd()">Senden</button><button type="button" class="btn-sm-crm" onclick="crmPinWrite(false)">Abbrechen</button></div>`:''}</div>`; }
+function crmPinWrite(on){ const a=document.getElementById('pin-add'), b=document.querySelector('.tv-pin-new'); if(!a) return;
+  a.hidden=!on; if(b) b.hidden=!!on; const t=document.getElementById('pin-note'); if(on){ if(t) t.focus(); } else if(t) t.value=''; }
 function crmPinSeen(id){ _tvMarkSeen(id); try{ const c=getTeamProjekt(id)||getVeranstaltung(id); const me=(window.cu&&window.cu.id)||'';
   if(c && window.homeNewsMark){ const l=_notes(c).filter(x=>Array.isArray(x.mentions)&&x.mentions.includes(me)).map(x=>['men',x.id,x.ts||0]); if(l.length) window.homeNewsMark(l); } }catch(e){} }
 function crmPinAdd(){ const t=(val('pin-note')||'').trim(); if(!t) return; const x=_newNote(t);
-  mutateContainer(en=>{ if(!Array.isArray(en.notizen)) en.notizen=[]; en.notizen.push(x); }); repaintContainer();
-  setTimeout(()=>{ const d=document.querySelector('.tv-pin'); if(d) d.open=true; },30); }
+  mutateContainer(en=>{ if(!Array.isArray(en.notizen)) en.notizen=[]; en.notizen.push(x); }); repaintContainer(); }
 function crmPinDel(id){ if(!confirm('Notiz löschen?')) return; const me=(window.cu&&window.cu.id)||''; mutateContainer(en=>{ en.notizen=_notes(en).filter(x=>!(x.id===id&&x.uid===me)); }); repaintContainer(); }
 // Neuigkeiten (Startseite, v566): Erwähnungen und neue Zuteilungen der letzten 14 Tage. „Gelesen" liegt geräteübergreifend
 // in crm/userPrefs (home.js: homeNewsIsSeen / homeNewsMark, Schlüssel 'men'/<Notiz-ID> bzw. 'zut'/<Aufgaben-ID>).
@@ -5253,7 +5257,7 @@ function _tvMarkNews(n){ try{ const me=(window.cu&&window.cu.id)||''; if(!window
   const z=n.zugeteilt&&n.zugeteilt[me]; if(z) l.push(['zut', n.id, z.ts||0]);
   _notes(n).forEach(x=>{ if(Array.isArray(x.mentions)&&x.mentions.includes(me)) l.push(['men', x.id, x.ts||0]); });
   if(l.length) window.homeNewsMark(l); }catch(e){} }
-try{ Object.assign(window, { crmMyAssignNews, crmTaskView, crmTaskViewAt, crmTaskViewOpenSrc, crmTvNoteAdd, crmTvNoteDel, crmTvSubToggle, crmTvSubAdd, crmTvDone, crmTvReopen, crmTvTake, crmTvEdit, crmPinAdd, crmPinDel, crmPinSeen, crmMyMentions }); }catch(e){}
+try{ Object.assign(window, { crmMyAssignNews, crmTaskView, crmTaskViewAt, crmTaskViewOpenSrc, crmTvNoteAdd, crmTvNoteDel, crmTvSubToggle, crmTvSubAdd, crmTvDone, crmTvReopen, crmTvTake, crmTvEdit, crmPinAdd, crmPinDel, crmPinSeen, crmPinWrite, crmMyMentions }); }catch(e){}
 
 // Optionen für die Zuordnung eines Projekts zu einem CRM-Eintrag (alle Bäume)
 function entityLinkOptions(selVal){
