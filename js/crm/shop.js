@@ -505,12 +505,12 @@ function _bestandHtml(mgr){
       </div>
       ${mineN?`<button type="button" class="shop-btn shop-mine-btn${fMine?' on':''}${mineLate?' late':''}" aria-pressed="${fMine}" onclick="shopMineToggle()" title="Was ich gerade habe und was ich bestellt habe">👤 Bei mir <b>${mineN}</b></button>`:''}
       <span class="shop-sp"></span>
-      ${mgr?`<details class="shop-more"><summary class="shop-btn" aria-label="Weitere Aktionen">⋯</summary><div class="shop-more-m">
+      <details class="shop-more"><summary class="shop-btn" aria-label="Weitere Aktionen">⋯</summary><div class="shop-more-m">
+        <button class="shop-btn" onclick="shopItemEdit('')" title="Neuen Artikel ins Lager aufnehmen">＋ Artikel anlegen</button>${mgr?`
         <button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel-Export</button>
         <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button>
-        <button class="shop-btn" onclick="shopSettings()" title="Eigene Organisation, Lager-Zuständige je Team, Vorlauf für Termine">⚙ Einstellungen</button></div></details>`:''}
-      <button class="shop-btn" onclick="shopOrderNew()" title="Etwas bestellen, das es (noch) nicht im Bestand gibt – oder mehrere Artikel auf einmal">🛒 Bestellen</button>
-      <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
+        <button class="shop-btn" onclick="shopSettings()" title="Eigene Organisation, Lager-Zuständige je Team, Vorlauf für Termine">⚙ Einstellungen</button>`:''}</div></details>
+      <button class="shop-btn pri" onclick="shopOrderNew()" title="Etwas bestellen, das es (noch) nicht im Bestand gibt – oder mehrere Artikel auf einmal">🛒 Bestellen</button>
     </div>
     ${fMine?_beiMirHtml():''}
     ${fPlace==='unterwegs' ? `<div class="shop-list">${_unterwegsHtml()||'<div class="shop-empty">Gerade ist nichts ausgeliehen.</div>'}</div>`
@@ -672,7 +672,7 @@ function _itemsGrid(mgr){
     if(q && !(`${it.name} ${it.variante||''} ${it.kategorie||''} ${it.note||''}`.toLowerCase().includes(q))) return false;
     return true;
   });
-  if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten mit „＋ Artikel" an.':'Noch keine Artikel im Lager.')}</div>`;
+  if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten über ⋯ → „＋ Artikel anlegen" an.':'Noch keine Artikel im Lager.')}</div>`;
   return `<div class="shop-grid">${list.map(it=>{
     const tot=total(it); const low=_num(it.min)>0 && tot<_num(it.min);
     const art=itemArt(it); const short=shortages(it);
@@ -2235,7 +2235,7 @@ function shopInv(pid){
     <div class="shop-inv-list" id="inv-list">${list.map(row).join('')||'<div class="shop-empty">Laut App liegt hier nichts. Füge unten hinzu, was du findest.</div>'}</div>
     ${others.length?`<div class="shop-posadd" style="margin-top:10px"><select id="inv-add" aria-label="Artikel, der auch hier liegt"><option value="">＋ Artikel liegt auch hier …</option>${others.map(i=>`<option value="${esc(i.id)}">${esc(itemLabel(i))}${i.kategorie?' – '+esc(i.kategorie):''}</option>`).join('')}</select>
       <button type="button" class="shop-btn sm" onclick="shopInvAdd(${jsq(pid)})">Hinzufügen</button></div>`:''}
-    <div class="shop-var" style="margin-top:6px">Nicht im Katalog? Erst mit „＋ Artikel" anlegen, dann hier hinzufügen.${ein.length?` · Einzeln erfasste Artikel (${ein.map(i=>esc(i.name)).join(', ')}) prüfst du unter „🏷️ Stücke".`:''}</div>
+    <div class="shop-var" style="margin-top:6px">Nicht im Katalog? Erst über ⋯ → „＋ Artikel anlegen" aufnehmen, dann hier hinzufügen.${ein.length?` · Einzeln erfasste Artikel (${ein.map(i=>esc(i.name)).join(', ')}) prüfst du unter „🏷️ Stücke".`:''}</div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="shopInvDiscard(${jsq(pid)})">Verwerfen</button>
       <button class="btn btn-outline" onclick="closeModal();renderShop()">Später weiter</button>
       <button class="btn btn-primary" onclick="shopInvReview(${jsq(pid)})">Weiter: prüfen ›</button></div>`);
