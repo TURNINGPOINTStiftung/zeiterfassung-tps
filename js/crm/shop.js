@@ -47,7 +47,8 @@ const STATUS={
 const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt', zuordnung:'👤 Zuordnung', inventur:'📋 Inventur' };
 
 let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv', fOpen=false;
-let fLogPlace='', fLogType='', fLogWho='';   // v576: Verlauf-Filter   // fOpen: Filter-Feld auf dem Handy aufgeklappt
+let fLogPlace='', fLogType='', fLogWho='';   // v576: Verlauf-Filter
+let fMine=false;   // v579: „Bei mir" – nur meine Sachen   // fOpen: Filter-Feld auf dem Handy aufgeklappt
 
 // ── Rechte ─────────────────────────────────────────────────────────
 function _acc(){
@@ -265,6 +266,10 @@ function _styles(){
   st.textContent=`
   .shop-wrap{padding:16px 22px;width:100%;box-sizing:border-box}
   .shop-pbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+  .shop-plsel{max-width:240px}
+  .shop-mine-btn b{display:inline-block;min-width:18px;padding:0 5px;margin-left:3px;border-radius:9px;background:var(--primary,#203869);color:#fff;font-size:11px}
+  .shop-mine-btn.on{background:var(--primary,#203869);color:#fff;border-color:var(--primary,#203869)} .shop-mine-btn.on b{background:#fff;color:var(--primary,#203869)}
+  .shop-mine-btn.late b{background:var(--danger,#c0392b);color:#fff}
   .shop-pchip{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1.5px solid var(--border,#d0d7e2);background:var(--surface,#fff);color:var(--text,#15263a);cursor:pointer}
   .shop-pchip.on{background:var(--primary,#203869);border-color:var(--primary,#203869);color:#fff;font-weight:600}
   .shop-pchip.add{border-style:dashed;color:var(--primary,#203869)}
@@ -281,6 +286,7 @@ function _styles(){
   .shop-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .shop-bar input,.shop-bar select{padding:6px 8px;font-size:13px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface,#fff);color:var(--text)}
   .shop-bar input[type=search]{flex:1;min-width:160px}
+  .shop-bar select{max-width:190px}   /* v580: Kopfzeile bleibt am Desktop einzeilig */
   .shop-sp{flex:1}
   .shop-btn{padding:6px 12px;font-size:13px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface,#fff);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap}
   .shop-btn.pri{background:var(--primary,#203869);border-color:var(--primary,#203869);color:var(--on-primary,#fff)}
@@ -402,7 +408,7 @@ function _styles(){
     .shop-filters{display:none;flex-wrap:wrap;gap:8px;width:100%} .shop-filters.open{display:flex}
     .shop-filters select{flex:1 1 calc(50% - 4px)}
     .shop-fbtn{display:inline-block}
-    .shop-bar input[type=search]{flex:1 1 0!important}
+    .shop-bar input[type=search]{flex:1 1 100%!important}   /* v580: Suche am Handy volle Breite */
     .shop-cart.min{left:8px;right:8px} .shop-cart-pill{width:100%;padding:13px 16px;font-size:15px;display:flex;align-items:center;justify-content:center}
     .shop-bar{gap:8px}
     .shop-bar input,.shop-bar select{font-size:16px;min-height:42px;padding:8px 10px;box-sizing:border-box}
@@ -478,18 +484,26 @@ function _bestandHtml(mgr){
   const pls=places();
   const catOpts=['<option value="">Alle Kategorien</option>'].concat(cats().map(c=>`<option${fCat===c?' selected':''}>${esc(c)}</option>`)).join('');
   const bws=_borrowers();
-  const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('')
-    +(bws.length?`<optgroup label="🔁 Ausgeliehen an">${bws.map(b=>`<option value="${esc('loan:'+b.key)}"${fPlace==='loan:'+b.key?' selected':''}>${esc(b.label)}</option>`).join('')}</optgroup>`:'');
+  const _G=[['Büro und Lager',['buero','lager']],['Boote',['boot']],['Fahrzeuge und Trailer',['bus','anhaenger']]];
+  const _in=new Set(_G.flatMap(g=>g[1])); const _o=p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`;
+  const plOpts=`<option value="">📍 Alle Orte</option>`
+    +_G.map(([l,ts])=>{ const ps=pls.filter(p=>ts.includes(p.typ)); return ps.length?`<optgroup label="${esc(l)}">${ps.map(_o).join('')}</optgroup>`:''; }).join('')
+    +(()=>{ const ps=pls.filter(p=>!_in.has(p.typ)); return ps.length?`<optgroup label="Weitere">${ps.map(_o).join('')}</optgroup>`:''; })()
+    +(bws.length?`<optgroup label="🔁 Unterwegs"><option value="unterwegs"${fPlace==='unterwegs'?' selected':''}>Alles Ausgeliehene</option>${bws.map(b=>`<option value="${esc('loan:'+b.key)}"${fPlace==='loan:'+b.key?' selected':''}>${esc(b.label)}</option>`).join('')}</optgroup>`:'')
+    +(mgr?`<option value="__new">＋ Ort anlegen …</option>`:'');
+  const mine=_mineData(); const mineN=mine.loans.length+mine.orders.length; const mineLate=mine.loans.some(_overdue);
   const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
   const nF=(fCat?1:0)+(fTeam?1:0);
   return `${hint}<div class="shop-bar">
       <input type="search" id="shop-q" placeholder="Suchen …" aria-label="Artikel suchen" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
+      <select class="shop-plsel" aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
       <button class="shop-btn shop-fbtn${nF?' pri':''}" aria-expanded="${fOpen?'true':'false'}" aria-controls="shop-filters" onclick="shopFilterToggle()">⚙ Filter${nF?` (${nF})`:''}</button>
       <div class="shop-filters${fOpen?' open':''}" id="shop-filters">
         <select aria-label="Kategorie" onchange="shopSetCat(this.value)">${catOpts}</select>
         ${_teamFilterHtml()}
         ${nF?`<button class="shop-btn" onclick="shopFilterReset()">✕ Filter zurücksetzen</button>`:''}
       </div>
+      ${mineN?`<button type="button" class="shop-btn shop-mine-btn${fMine?' on':''}${mineLate?' late':''}" aria-pressed="${fMine}" onclick="shopMineToggle()" title="Was ich gerade habe und was ich bestellt habe">👤 Bei mir <b>${mineN}</b></button>`:''}
       <span class="shop-sp"></span>
       ${mgr?`<details class="shop-more"><summary class="shop-btn" aria-label="Weitere Aktionen">⋯</summary><div class="shop-more-m">
         <button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel-Export</button>
@@ -498,8 +512,7 @@ function _bestandHtml(mgr){
       <button class="shop-btn" onclick="shopOrderNew()" title="Etwas bestellen, das es (noch) nicht im Bestand gibt – oder mehrere Artikel auf einmal">🛒 Bestellen</button>
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
-    ${_placeBarHtml(mgr)}
-    ${_beiMirHtml()}
+    ${fMine?_beiMirHtml():''}
     ${fPlace==='unterwegs' ? `<div class="shop-list">${_unterwegsHtml()||'<div class="shop-empty">Gerade ist nichts ausgeliehen.</div>'}</div>`
       : `${(fPlace&&placeOf(fPlace))?`<div class="shop-list shop-pcard">${_placeRowHtml(placeOf(fPlace), items())}</div>`:''}<div id="shop-items">${_itemsGrid(mgr)}</div>`}`;
 }
@@ -649,7 +662,9 @@ function shopImportApply(){
 }
 function _itemsGrid(mgr){
   const q=fQ.trim().toLowerCase();
+  const myIds=fMine?new Set(_mineData().loans.map(l=>l.itemId).filter(Boolean)):null;
   const list=items().filter(it=>{
+    if(myIds && !myIds.has(it.id)) return false;
     if(fCat && it.kategorie!==fCat) return false;
     if(fTeam && !_teamMatch(itemTeams(it))) return false;
     if(fPlace.startsWith('loan:')){ if(!activeLoans(it.id).some(l=>'loan:'+bKey(l)===fPlace)) return false; }
@@ -736,7 +751,8 @@ function shopSetQ(v){ fQ=v; const g=document.getElementById('shop-items'); if(g)
 function shopSetCat(v){ fCat=v; renderShop(); }
 function shopFilterToggle(){ fOpen=!fOpen; renderShop(); }
 function shopFilterReset(){ fCat=''; fPlace=''; fTeam=''; renderShop(); }
-function shopSetPlace(v){ fPlace=v; renderShop(); }
+function shopSetPlace(v){ if(v==='__new'){ renderShop(); shopPlaceEdit(''); return; } fPlace=v; renderShop(); }
+function shopMineToggle(){ fMine=!fMine; renderShop(); }
 
 // ── Artikel anlegen / bearbeiten ───────────────────────────────────
 function shopItemEdit(id){
@@ -1122,6 +1138,9 @@ function shopOrderNew(itemId){
     <div class="shop-f" id="so-adr-w" style="display:none"><label>Lieferadresse <span id="so-adr-h" style="font-weight:400;color:var(--muted)"></span></label>
       <textarea id="so-adr" rows="3" placeholder="Straße Nr.&#10;PLZ Ort"></textarea></div>
     <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
+    ${(()=>{ const ts=teamList(); if(!ts.length) return ''; const mine=myTeams()[0]||'';
+      return `<div class="shop-f"><label>Für welches Team? <span style="font-weight:400;color:var(--muted)">(für freie Wünsche und Artikel ohne Team – Artikel mit Team gehen automatisch an ihr Team)</span></label>
+      <select id="so-team"><option value="">– bitte wählen –</option>${ts.map(t=>`<option${t===mine?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`; })()}
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
   _posPaint();
@@ -1198,17 +1217,24 @@ function shopOrderSave(){
   const leih=positionen.some(p=>p.leihe); const ret=leih?_val('so-ret'):'';
   if(leih && !ret){ toast('Bitte angeben, bis wann das Leihmaterial zurückkommt.','err'); return; }
   if(leih && _val('so-date') && ret<_val('so-date')){ toast('Die Rückgabe liegt vor dem Startdatum.','err'); return; }
-  const cu=_me(); const one=positionen.length===1?positionen[0]:null;
-  saveShop('shopOrders',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'',
-    positionen,
-    // Einzel-Felder nur bei EINER Position (Abwärtskompatibilität mit älteren Ansichten)
-    itemId:one?one.itemId:null, itemName:one?one.itemName:'', freitext:one?one.freitext:'', menge:one?one.menge:positionen.reduce((s,p)=>s+p.menge,0), einheit:one?one.einheit:'',
-    termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
-    ziel, zielRef, zielName, zielUserId, adresse,
-    leihe:leih, rueckgabe:ret, status:'offen', seenBy:{}, ackOrderer:false });
+  // v581 (User 13.11.2026): je Team eine eigene Bestellung – jedes Team gibt nur seine Sachen aus.
+  // Team je Position: Artikel-Team → Team des Lieferorts → im Formular gewähltes Team (freie Wünsche)
+  const freiTeam=_val('so-team');
+  const teamOf=p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null; return _teamOfItemAt(it, ort)||freiTeam||''; };
+  if(teamList().length && positionen.some(p=>!teamOf(p))){ toast('Bitte angeben, für welches Team.','err'); return; }
+  const groups=new Map(); positionen.forEach(p=>{ const t=teamOf(p); if(!groups.has(t)) groups.set(t,[]); groups.get(t).push(p); });
+  const cu=_me(); const base={ byId:cu.id||'', byName:cu.name||'', termin:_val('so-date'), anlass:_val('so-anlass'), ortId:ort||null, ortText, note:_val('so-note'),
+    ziel, zielRef, zielName, zielUserId, adresse, status:'offen', seenBy:{}, ackOrderer:false };
+  const teamsSent=[];
+  groups.forEach((ps, t)=>{ const one=ps.length===1?ps[0]:null; const l=ps.some(p=>p.leihe);
+    saveShop('shopOrders', Object.assign({ id:newId(), ts:Date.now() }, base, { team:t||'', positionen:ps,
+      // Einzel-Felder nur bei EINER Position (Abwärtskompatibilität mit älteren Ansichten)
+      itemId:one?one.itemId:null, itemName:one?one.itemName:'', freitext:one?one.freitext:'', menge:one?one.menge:ps.reduce((s,p)=>s+p.menge,0), einheit:one?one.einheit:'',
+      leihe:l, rueckgabe:l?ret:'' }));
+    teamsSent.push(t||'ohne Team'); });
   cartOpen=false; cartSet([]);
-  closeModal(); toast('Bestellung abgeschickt ✓ – die Lager-Verwaltung bekommt eine Mitteilung.','ok');
-  TAB='bestellungen'; renderShop();
+  closeModal(); toast(teamsSent.length>1?`${teamsSent.length} Bestellungen abgeschickt ✓ – je Team eine: ${teamsSent.join(', ')}`:`Bestellung abgeschickt ✓ – geht als Aufgabe an Team ${teamsSent[0]}`,'ok');
+  TAB=(_me().role==='admin')?'bestellungen':'bestand'; renderShop();
 }
 
 // ── Tab: Bestellungen ──────────────────────────────────────────────
@@ -2080,12 +2106,15 @@ function _placeBarHtml(mgr){
   return `<div class="shop-pbar" role="group" aria-label="Ort wählen">${chip('','Alle Orte')}${pls.map(p=>chip(p.id, esc(placeLabel(p.id)))).join('')}${_borrowers().length?chip('unterwegs','🔁 Unterwegs'):''}${mgr?`<button type="button" class="shop-pchip add" onclick="shopPlaceEdit('')">＋ Ort</button>`:''}</div>`;
 }
 // „👤 Bei mir": was ich gerade habe + meine offenen Bestellungen (ersetzt „Meine" in Ausleihen/Bestellungen)
+function _mineData(){ const me=_me(); if(!me.id) return { loans:[], orders:[] };
+  return { loans:activeLoans().filter(l=>l.borrowerId===me.id),
+    orders:orders().filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit'||(o.status==='ausgegeben'&&!o.ackOrderer))) }; }
 function _beiMirHtml(){
-  const me=_me(); if(!me.id) return '';
-  const ls=activeLoans().filter(l=>l.borrowerId===me.id);
-  const os=orders().filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit'||(o.status==='ausgegeben'&&!o.ackOrderer)));
+  const d=_mineData(); const ls=d.loans, os=d.orders;
   if(!ls.length && !os.length) return '';
-  const what=l=>l.placeId?esc(placeLabel(l.placeId)):(l.unitId?esc(l.itemName||'')+' (Stück)':_num(l.qty)+'× '+esc(l.itemName||''));
+  const what=l=>{ if(l.placeId) return esc(placeLabel(l.placeId));
+    if(l.unitId){ const it=getShop('shopItems',l.itemId); const u=it&&it.units&&it.units[l.unitId]; return esc(u?_unitTitle(it,u):(l.itemName||''))+(u&&u.marke?` <span style="color:var(--muted)">· ${esc(u.marke)}</span>`:''); }
+    return _num(l.qty)+'× '+esc(l.itemName||''); };
   const lRows=ls.map(l=>`<div class="shop-iv-row"><span>${loanIcon(l)} ${what(l)} · ${isZuord(l)?'dir zugeordnet':(l.due?`<span class="${_overdue(l)?'shop-late':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:'Dauerleihe')}</span>${isZuord(l)?'':`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>`}</div>`).join('');
   const posTxt=o=>_pos(o).map(x=>{ const it=x.itemId&&getShop('shopItems',x.itemId); return _num(x.menge)+'× '+esc(it?itemLabel(it):(x.freitext||'')); }).join(', ');
   const oRows=os.map(o=>{ const st0=STATUS[o.status]||STATUS.offen; const st=(o.status==='ausgegeben'&&o.issueMode==='versand')?{l:'Verschickt',c:st0.c}:st0;
@@ -2392,7 +2421,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { shopSettings, shopSetLogF, shopInv, shopInvChg, shopInvSame, shopInvAdd, shopInvDiscard, shopInvReview, shopInvSave, shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopMineToggle, shopSettings, shopSetLogF, shopInv, shopInvChg, shopInvSame, shopInvAdd, shopInvDiscard, shopInvReview, shopInvSave, shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
@@ -2488,7 +2517,7 @@ function shopPlannerTasks(){
     orders().forEach(o=>{ const st=o.status; const open=st==='offen'||st==='inarbeit';
       const fin=!open && ['ausgegeben','erledigt','abgelehnt'].includes(st) && (o.handledTs||0)>=old;
       if(!open && !fin) return;
-      let teams=[...new Set(orderTeams(o).concat(o.team?[o.team]:[]).filter(Boolean))];
+      let teams=o.team?[o.team]:[...new Set(orderTeams(o).filter(Boolean))];   // v581: aufgeteilte Bestellungen tragen ihr Team
       if(!teams.length){ const u=_ptUsers().find(x=>x.id===o.byId); const ut=u?_ptUTeams(u):[]; if(ut[0]) teams=[ut[0]]; }   // freier Wunsch ohne Artikel-Team → Hauptteam der bestellenden Person
       const team=teams[0]||'';
       const ps=_pos(o); const nm=x=>{ const it=x.itemId&&getShop('shopItems',x.itemId); return _num(x.menge)+'× '+(it?itemLabel(it):(x.itemName||x.freitext||'?')); };
