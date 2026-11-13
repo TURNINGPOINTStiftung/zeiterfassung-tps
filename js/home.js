@@ -710,20 +710,28 @@ function _mbSubs(mod){
 }
 function _mbCss(){ if(document.getElementById('mb-sub-css')) return; const st=document.createElement('style'); st.id='mb-sub-css';
   st.textContent=`
-  #mb-dropdown{max-height:calc(100vh - 90px);overflow-y:auto}
+  #mb-dropdown.mb-has-subs{max-height:calc(100vh - 90px);overflow-y:auto;min-width:380px;padding:8px}
+  #mb-dropdown.mb-has-subs button.mb-mod{font-size:15.5px;padding:12px 16px}
   #mb-dropdown .mb-row{display:flex;align-items:stretch;gap:2px}
   #mb-dropdown .mb-row>.mb-mod{flex:1;min-width:0}
-  #mb-dropdown button.mb-caret{width:38px;flex:0 0 38px;text-align:center;padding:0;font-size:13px;color:var(--muted);border-radius:8px}
+  #mb-dropdown button.mb-caret{width:46px;flex:0 0 46px;text-align:center;padding:0;font-size:15px;color:var(--muted);border-radius:8px}
   #mb-dropdown button.mb-caret[aria-expanded="true"]{color:var(--primary)}
-  #mb-dropdown .mb-subs{margin:0 0 4px 12px;padding-left:8px;border-left:2px solid var(--border)}
-  #mb-dropdown button.mb-sub{font-weight:500;font-size:13.5px;padding:8px 12px;color:var(--text)}
+  #mb-dropdown .mb-subs{margin:2px 0 8px 18px;padding-left:10px;border-left:2px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:2px}
+  #mb-dropdown .mb-subs.one{grid-template-columns:1fr}
+  #mb-dropdown button.mb-sub{font-weight:500;font-size:14.5px;padding:9px 12px;color:var(--text);line-height:1.3}
   #mb-dropdown .mb-n{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:9px;background:var(--danger,#c0392b);color:#fff;font-size:11px;font-weight:700;text-align:center}
   #mb-dropdown button.mb-sub.on{color:var(--primary);font-weight:700;background:var(--surface-2,#f1f4f8)}
-  @media(max-width:640px){ #mb-dropdown button.mb-sub{padding:11px 12px;font-size:15px} #mb-dropdown button.mb-caret{width:46px;flex-basis:46px} }`;
+`;
   document.head.appendChild(st); }
-function mbSubsBuild(){
+// fresh=true beim Öffnen des Menüs: nur der aktuelle Bereich ist offen. Danach: immer nur EIN Bereich offen.
+// Handy (User 13.11.2026): altes Menü ohne Unterpunkte – dort war es zu viel.
+function mbSubsBuild(fresh){
   const dd=document.getElementById('mb-dropdown'); if(!dd) return; _mbCss();
   const cur=window._planActive?'planung':(window._activeModule||'');
+  const mobile=!!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+  dd.classList.toggle('mb-has-subs', !mobile);
+  if(mobile){ dd.querySelectorAll('.mb-caret,.mb-subs').forEach(x=>x.remove()); return; }
+  if(fresh){ Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); _mbOpen[cur]=true; }
   [...dd.querySelectorAll('.mb-mod')].forEach(b=>{ const mod=b.dataset.mod;
     let row=b.parentElement.classList.contains('mb-row')?b.parentElement:null;
     const vis=b.style.display!=='none'; const subs=vis?_mbSubs(mod):[];
@@ -731,11 +739,11 @@ function mbSubsBuild(){
     row.style.display=vis?'':'none';
     let car=row.querySelector('.mb-caret'); let box=row.nextElementSibling&&row.nextElementSibling.classList.contains('mb-subs')?row.nextElementSibling:null;
     if(subs.length<2){ if(car) car.remove(); if(box) box.remove(); return; }
-    if(_mbOpen[mod]===undefined || mod===cur) _mbOpen[mod]=(mod===cur);
-    if(!car){ car=document.createElement('button'); car.type='button'; car.className='mb-caret'; car.setAttribute('aria-label', b.textContent.trim()+': Unterpunkte'); car.onclick=e=>{ e.stopPropagation(); _mbOpen[mod]=!_mbOpen[mod]; mbSubsBuild(); }; row.appendChild(car); }
+    if(!car){ car=document.createElement('button'); car.type='button'; car.className='mb-caret'; car.setAttribute('aria-label', b.textContent.trim()+': Unterpunkte');
+      car.onclick=e=>{ e.stopPropagation(); const was=!!_mbOpen[mod]; Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); if(!was) _mbOpen[mod]=true; mbSubsBuild(); }; row.appendChild(car); }
     car.setAttribute('aria-expanded', _mbOpen[mod]?'true':'false'); car.textContent=_mbOpen[mod]?'▴':'▾';
     if(!box){ box=document.createElement('div'); box.className='mb-subs'; row.parentNode.insertBefore(box,row.nextSibling); }
-    box.style.display=_mbOpen[mod]?'':'none';
+    box.style.display=_mbOpen[mod]?'':'none'; box.classList.toggle('one', subs.length<4);
     box.innerHTML=subs.map(s=>`<button type="button" class="mb-sub${s.on?' on':''}" onclick="${s.go}">${esc(s.l)}${s.n?` <span class="mb-n">${+s.n}</span>`:''}</button>`).join('');
   });
 }

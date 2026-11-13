@@ -60,7 +60,7 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||!!(cu.perms&&cu.perms.zugriff_verwaltung);   // Versionsnummer für Admin + System-Verwaltung
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v585':'';
+  if(_hv) _hv.textContent=_showVer?'v586':'';
   // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
@@ -164,7 +164,7 @@ const MODULE_LABELS={planung:'Planner',start:'Start',zeiterfassung:'Zeiterfassun
 
 // ☰-Dropdown öffnen/schließen
 export function toggleModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(!d) return; const open=(d.style.display==='none'||!d.style.display);
-  if(open){ try{ window.mbSubsBuild&&window.mbSubsBuild(); }catch(e){ console.warn('Menü-Unterpunkte:', e); } }   // v585: aufklappbare Unterpunkte (home.js)
+  if(open){ try{ window.mbSubsBuild&&window.mbSubsBuild(true); }catch(e){ console.warn('Menü-Unterpunkte:', e); } }   // v585: aufklappbare Unterpunkte (home.js)
   d.style.display=open?'block':'none'; }
 export function closeModuleMenu(){ const d=document.getElementById('mb-dropdown'); if(d) d.style.display='none'; }
 
