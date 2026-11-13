@@ -300,6 +300,19 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
+## Stand 2026-11-13: CANDIDATE-v21.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle versand = 1) – Bestellungen im Planner (App v578)
+= v20 + für alle Angemeldeten (allowed, kein Kiosk, mit uidUser): `shopOrders/$id` bestehende Bestellung ändern, wenn `byId`
+gleich bleibt (kein Anlegen fremder, kein Löschen) · `shopLoans/$id` neu anlegen nur mit `orderId` einer bestehenden Bestellung,
+`status` aktiv, keine Zuordnung · `shopLog/$id` zusätzlich Typen `ausgabe`/`verleih`/`versand`/`umlagern` (Absender eigene Person).
+Test im Testprojekt 13.11.2026 (`ruletest_crm` = v21-crm umgeschrieben): 18 Simulator-Fälle wie erwartet – Status/Antwort/ausgegeben
+erlaubt; Besteller tauschen / löschen / fremde anlegen / Kiosk verweigert; Ausleihe aus Bestellung erlaubt, ohne/unbekannte Bestellung
+oder als Zuordnung verweigert; Verlauf Ausgabe/Verleih erlaubt, Korrektur / fremder Absender verweigert; Regression v20 (Bestand
+erlaubt, Artikelname verweigert) und Lager-Verwalter ganze Bestellung erlaubt. Vollständige v21-Datei vom Compiler akzeptiert,
+danach Testdaten gelöscht, Original-Regeln zurück (PUT `ruletest`/`ruletest_crm` ohne Anmeldung → 401).
+sha256 (raw @07f0f42): c3bf22599f6e5250a1999a5c20e3f358605b470e361493b3c40de077c7426363 · Prüfwort `'versand'` = 1 Treffer (v20: 0).
+Reihenfolge: erst Regeln v21, dann App v578. Rückweg: CANDIDATE-v20.json.
+**Phase 4 „Personaldaten privat“:** statt v19 eine **v22 = v19 + Lager-Freigaben aus v20 und v21**.
+
 ## Stand 2026-11-13: CANDIDATE-v20.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle shopTasks = 1) – Lager-Aufgaben im Planner (App v575)
 = v18 (live) + Lager-Freigaben für alle Angemeldeten (allowed, kein Kiosk, mit uidUser):
 `crm/shopTasks/$id` (Zuständige/Status/Notizen einer Lager-Aufgabe; .validate id = Schlüssel, datum Pflicht) ·

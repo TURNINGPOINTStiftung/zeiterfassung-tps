@@ -5238,7 +5238,7 @@ function crmLagerView(nodeId){
   openModal(`<div class="tv">
     <div class="tv-src"><button type="button" class="tv-link" onclick="crmLagerOpenSrc()">📦 Lager${L.where?' · '+esc(L.where):''} ›</button></div>
     <h3 class="tv-h">${done?'✓ ':''}${esc(n.text||'Aufgabe')}</h3>
-    <div class="tv-chips"><span class="pl-due u-${done?'n':u.k}">${esc(done?('erledigt'+(n.doneAt?' · '+fmtDate(Date.parse(n.doneAt)):'')+(n.doneBy?' · '+n.doneBy:'')):u.t)}</span>${done?'':`<span class="pl-tag">${n.status==='inarbeit'?'In Arbeit':'Offen'}</span>`}<span class="pl-tag">📦 aus dem Lager</span></div>
+    <div class="tv-chips"><span class="pl-due u-${done?'n':u.k}">${esc(done?((L.rej?'abgelehnt':(L.sub==='bestellung'?'ausgegeben / erledigt':'erledigt'))+(n.doneAt?' · '+fmtDate(Date.parse(n.doneAt)):'')+(n.doneBy?' · '+n.doneBy:'')):u.t)}</span>${done?'':`<span class="pl-tag">${n.status==='inarbeit'?'In Arbeit':'Offen'}</span>`}<span class="pl-tag">📦 aus dem Lager</span></div>
     <div class="tv-grid">
       <div class="tv-row"><span class="tv-k">Wer</span><span>${ass.length?esc(ass.map(userName).filter(Boolean).join(', ')):(a.owner?'–':`<i>Ganzes Team · noch frei</i>`)}${(!done&&L.autoWhy&&ass.length)?` <span class="pl-tag">${esc(L.autoWhy)}</span>`:''}</span></div>
       ${team?`<div class="tv-row"><span class="tv-k">Team</span><span>${esc(team)}</span></div>`:''}
@@ -5250,14 +5250,15 @@ function crmLagerView(nodeId){
     <div class="tv-notes">${notes.map(x=>_noteHtml(x, true, `crmLagerNoteDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Noch keine Notizen. Z. B. „Termin beim Prüfer am Dienstag“.</div>'}</div>
     <div class="tv-nadd"><textarea id="lv-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Notiz fürs Team" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmLagerNote();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmLagerNote()">Senden</button></div>`}
     <div class="tv-act">
-      ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">✓ Erledigen …</button>
+      ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">${L.sub==='bestellung'?'📦 Ausgeben …':'✓ Erledigen …'}</button>
+      ${L.sub==='bestellung'?`<button class="btn-sm-crm" onclick="crmLagerOrder(${jsq(L.id)},'erledigt')">✓ Erledigt ohne Ausgabe</button><button class="btn-sm-crm danger" onclick="crmLagerOrder(${jsq(L.id)},'abgelehnt')">✕ Ablehnen</button>`:''}
       ${(!ass.length&&!a.owner)?`<button class="btn-sm-crm" onclick="crmTakeTask('lager','',${jsq(L.id)},${jsq(n.id)})">Übernehmen</button>`:''}
       ${a.owner?'':`<button class="btn-sm-crm" onclick="crmLagerStatus(${jsq(n.status==='inarbeit'?'offen':'inarbeit')})">${n.status==='inarbeit'?'↩ Zurück auf Offen':'▶ In Arbeit'}</button>`}`}
-      ${(window.shopPtMay&&window.shopPtMay())?`${done?'':`<button class="btn-sm-crm" onclick="crmLagerEdit(${jsq(L.id)})">✎ ${L.sub==='leihe'?'Rückgabedatum':'Termin'} ändern</button>`}
+      ${(L.sub!=='bestellung'&&window.shopPtMay&&window.shopPtMay())?`${done?'':`<button class="btn-sm-crm" onclick="crmLagerEdit(${jsq(L.id)})">✎ ${L.sub==='leihe'?'Rückgabedatum':'Termin'} ändern</button>`}
       ${(L.sub!=='leihe'||done)?`<button class="btn-sm-crm danger" onclick="crmLagerDel(${jsq(n.id)})">🗑 ${done?'Eintrag':'Termin'} löschen</button>`:''}`:''}
       <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
     </div>
-    ${done?'':`<div class="tv-empty" style="margin-top:8px">„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.</div>`}</div>`);
+    ${done?'':`<div class="tv-empty" style="margin-top:8px">${L.sub==='bestellung'?'„Ausgeben“ öffnet den Lager-Dialog (aus welchem Ort, Menge, umlagern / verleihen / verschicken) – so stimmen Bestand, Ausleihe und Verlauf. Wer bestellt hat, wird benachrichtigt.':`„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.`}</div>`}</div>`);
   _crmSide();
 }
 function _lvA(){ return window._lvId&&window.shopPtFind?window.shopPtFind(window._lvId):null; }
@@ -5267,13 +5268,14 @@ function crmLagerNote(){ const t=(val('lv-note')||'').trim(); if(!t) return; con
   window.shopPtNote(a.lager.id, x); if(x.mentions.length) toast('Notiz gespeichert ✓ – '+x.mentions.map(userName).join(', ')+' wird benachrichtigt','ok'); crmPlanAfterLager(); }
 function crmLagerNoteDel(id){ if(!confirm('Notiz löschen?')) return; const a=_lvA(); if(!a) return; window.shopPtNoteDel(a.lager.id, id, (window.cu&&window.cu.id)||''); crmPlanAfterLager(); }
 function crmLagerDone(id){ crmCloseModal(); window._lvId=null; try{ window.shopPtDone(id); }catch(e){ console.warn(e); } }
+function crmLagerOrder(id, st){ crmCloseModal(); window._lvId=null; try{ window.shopPtOrderDone(id, st); }catch(e){ console.warn(e); } }
 function crmLagerEdit(id){ crmCloseModal(); window._lvId=null; try{ window.shopPtEdit(id); }catch(e){ console.warn(e); } }
 function crmLagerDel(nodeId){ try{ if(window.shopPtDel(nodeId)){ crmCloseModal(); window._lvId=null; crmPlanAfterLager(); } }catch(e){ console.warn(e); } }
 function crmLagerOpenSrc(){ const a=_lvA(); crmCloseModal(); if(a) try{ window.shopPtOpenLager(a.lager.id); }catch(e){} }
 // nach jeder Änderung: Planner neu zeichnen, offene Lager-Ansicht auffrischen
 function crmPlanAfterLager(){ try{ if(window._planActive) _planRepaint(); else _aufgRefresh(); }catch(e){ _aufgRefresh(); }
   if(window._lvId && document.querySelector('#modal-body .tv')){ const id=window._lvId; if(window.shopPtFind&&window.shopPtFind(id)) crmLagerView(id); } }
-try{ Object.assign(window, { crmLagerEdit, crmLagerDel, crmLagerView, crmLagerAss, crmLagerStatus, crmLagerNote, crmLagerNoteDel, crmLagerDone, crmLagerOpenSrc, crmPlanAfterLager }); }catch(e){}
+try{ Object.assign(window, { crmLagerOrder, crmLagerEdit, crmLagerDel, crmLagerView, crmLagerAss, crmLagerStatus, crmLagerNote, crmLagerNoteDel, crmLagerDone, crmLagerOpenSrc, crmPlanAfterLager }); }catch(e){}
 function crmTaskViewOpenSrc(){ const a=window._tvArgs; if(!a) return; crmCloseModal();
   try{ if(a.kind==='veranstaltung'){ if(window.planVaSet) window.planVaSet(a.cid); }
     else if(a.kind==='teamprojekt'){ const c=getTeamProjekt(a.cid); if(c&&c.art==='aufgaben'){ if(c.team&&window.planGo) window.planGo('teams',{team:c.team}); else if(window.planGo) window.planGo('start'); }

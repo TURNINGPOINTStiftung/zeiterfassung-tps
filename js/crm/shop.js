@@ -433,7 +433,7 @@ export function renderShop(){
     const _adm=!!(me&&me.role==='admin');   // v575: Fälligkeiten stehen als Aufgaben im Planner → Reiter „Fällig" nur noch Admin
     if(TAB==='faellig' && !_adm) TAB='bestand';
     // v576 schlankes Lager: Orte stecken im Bestand, Ausleihen-Übersicht nur noch Admin, Verlauf für alle
-    if(TAB==='orte' || (TAB==='ausleihen' && !_adm)) TAB='bestand';
+    if(TAB==='orte' || ((TAB==='ausleihen'||TAB==='bestellungen') && !_adm)) TAB='bestand';   // v578: Bestellungen laufen im Planner
     const held=myHeld();
     const myDue = allDue().filter(d=>forMe(dueTeams(d)) || dueHeld(d,held));   // Zähler nur fürs eigene Team + was mir zugeordnet ist
     const nDue = myDue.filter(d=>d.t.datum<=_soonIso(30)).length;
@@ -446,7 +446,7 @@ export function renderShop(){
     const myLoans=activeLoans().filter(l=>!isZuord(l) && (mgr ? (l.borrowerId===me.id || forMe(loanTeams(l))) : l.borrowerId===me.id));   // Zuordnungen zählen nicht als offene Ausleihe
     const nLate=myLoans.filter(_overdue).length;
     const T=(k,i,l,sh,badge)=>[k,`<span class="ti" aria-hidden="true">${i}</span><span class="tl">${l}</span><span class="ts">${sh}</span>${badge||''}`,l];
-    const tabs=[T('bestand','📦','Bestand','Bestand'),T('bestellungen','🛒','Bestellungen','Bestellt',nOpen?`<span class="shop-badge">${nOpen}</span>`:''),
+    const tabs=[T('bestand','📦','Bestand','Bestand'),..._adm?[T('bestellungen','🛒','Bestellungen','Bestellt',nOpen?`<span class="shop-badge">${nOpen}</span>`:'')]:[],
       ..._adm?[T('ausleihen','🔁','Ausleihen','Leihe',myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]:[]]
       .concat(_adm?[T('faellig','⏰','Fällig','Fällig',nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')]:[])
       .concat([T('verlauf','📜','Verlauf','Verlauf')]);
@@ -495,6 +495,7 @@ function _bestandHtml(mgr){
         <button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel-Export</button>
         <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button>
         <button class="shop-btn" onclick="shopSettings()" title="Eigene Organisation, Lager-Zuständige je Team, Vorlauf für Termine">⚙ Einstellungen</button></div></details>`:''}
+      <button class="shop-btn" onclick="shopOrderNew()" title="Etwas bestellen, das es (noch) nicht im Bestand gibt – oder mehrere Artikel auf einmal">🛒 Bestellen</button>
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
     ${_placeBarHtml(mgr)}
@@ -1299,11 +1300,11 @@ function _handled(o,status,extra){
   saveShop('shopOrders', o);
 }
 function shopOrderStatus(id,status){
-  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
-  _handled(o,status); toast('Status: '+STATUS[status].l,'ok'); renderShop();
+  const o=getShop('shopOrders',id); if(!o||(!_can('la_best_bearb')&&!window._shopFromPlan)) return;
+  _handled(o,status); toast('Status: '+STATUS[status].l,'ok'); renderShop(); _ptAfter();
 }
 function shopOrderDone(id,status){
-  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
+  const o=getShop('shopOrders',id); if(!o||(!_can('la_best_bearb')&&!window._shopFromPlan)) return;
   const isRej=status==='abgelehnt';
   openModal(`<h3>${isRej?'✕ Bestellung ablehnen':'✓ Als erledigt markieren'}</h3>
     <p style="font-size:13px;margin:0 0 10px">${_orderWhat(o)} · von <b>${esc(o.byName||'')}</b></p>
@@ -1317,12 +1318,12 @@ function shopOrderDoneSave(id,status){
   const ans=_val('sd-ans');
   if(status==='abgelehnt' && !ans){ toast('Bitte eine Begründung angeben.','err'); return; }
   _handled(o,status,{answer:ans});
-  closeModal(); toast(o.auto?(status==='abgelehnt'?'Auto-Bestellung abgelehnt – neue erst, wenn noch mehr fehlt.':'Erledigt ✓'):(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.'),'ok'); renderShop();
+  closeModal(); toast(o.auto?(status==='abgelehnt'?'Auto-Bestellung abgelehnt – neue erst, wenn noch mehr fehlt.':'Erledigt ✓'):(status==='abgelehnt'?'Bestellung abgelehnt – Besteller wird benachrichtigt.':'Erledigt ✓ – Besteller wird benachrichtigt.'),'ok'); renderShop(); _ptAfter();
 }
 // Ausgeben: Bestand am Quell-Ort abziehen ODER an den Lieferort umlagern (z. B. Werkzeug aufs Boot)
 // Ausgeben – PRO POSITION: Quell-Ort, Menge, Art (umlagern / verleihen / verschicken / abziehen / nicht)
 function shopOrderIssue(id){
-  const o=getShop('shopOrders',id); if(!o||!_can('la_best_bearb')) return;
+  const o=getShop('shopOrders',id); if(!o||(!_can('la_best_bearb')&&!window._shopFromPlan)) return;
   const canMoveTo=!!(o.ortId && placeOf(o.ortId));
   const rc=_orderRecipient(o);
   const ps=_pos(o);
@@ -1376,24 +1377,25 @@ function shopOrderIssueSave(id){
     if(need[k]>freeAt(it,r.from)){ toast(`${itemLabel(it)}: am Ort ${placeLabel(r.from)} sind nur ${freeAt(it,r.from)} frei${sollAt(it,r.from)?' (Rest ist fester Bestand)':''}.`,'err'); return; } }
   const note='Bestellung von '+(o.byName||'?')+(o.anlass?' · '+o.anlass:'');
   const rc=_orderRecipient(o); const cu=_me(); const issued=[];
+  const saveIt=it=>{ if(_fieldOnly()) _saveField('shopItems', it.id, 'stock', it.stock); else saveShop('shopItems', it); };
   rows.forEach(r=>{
     const it=getShop('shopItems',ps[r.i].itemId);
     _applyDelta(it, r.from, -r.q);
-    if(r.mode==='move' && o.ortId){ _applyDelta(it, o.ortId, r.q); saveShop('shopItems', it); _log(it,'umlagern',r.q,r.from,o.ortId,note,o.id); }
-    else if(r.mode==='leihe'){ saveShop('shopItems', it);
+    if(r.mode==='move' && o.ortId){ _applyDelta(it, o.ortId, r.q); saveIt(it); _log(it,'umlagern',r.q,r.from,o.ortId,note,o.id); }
+    else if(r.mode==='leihe'){ saveIt(it);
       // viaOrder=true nur, wenn der Besteller selbst der Ausleiher ist (er bekommt ja schon die Bestell-Mitteilung)
       _createLoan(it, r.from, r.q, rc.bId, rc.bName, due, o.anlass||'', o.note||'', o.id, rc.bId===o.byId, rc.bRef); }
-    else if(r.mode==='versand'){ saveShop('shopItems', it);
+    else if(r.mode==='versand'){ saveIt(it);
       saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:it.id, itemName:itemLabel(it),
         type:'versand', qty:r.q, from:r.from, to:null, note:note+(o.adresse?' · '+o.adresse.split('\n').join(', '):''),
         recipientName:rc.bName, recipientId:rc.bId||null, recipientRef:rc.bRef||null, orderId:o.id }); }
-    else { saveShop('shopItems', it); _log(it,'ausgabe',r.q,r.from,null,note,o.id); }
+    else { saveIt(it); _log(it,'ausgabe',r.q,r.from,null,note,o.id); }
     issued.push({ itemId:it.id, itemName:itemLabel(it), qty:r.q, from:r.from, mode:r.mode });
   });
   const modes=[...new Set(issued.map(x=>x.mode))];
   _handled(o,'ausgegeben',{answer:ans, fromPlace:issued[0].from, issuedQty:issued.reduce((s,x)=>s+x.qty,0),
     issueMode: modes.length===1?modes[0]:'mixed', issued, rueckgabe: modes.includes('leihe')?due:(o.rueckgabe||'')});
-  closeModal(); toast(`Ausgegeben ✓ (${issued.length} Position${issued.length===1?'':'en'})`+(o.auto?'':` – ${o.byName||'Besteller'} wird benachrichtigt.`),'ok'); renderShop();
+  closeModal(); toast(`Ausgegeben ✓ (${issued.length} Position${issued.length===1?'':'en'})`+(o.auto?'':` – ${o.byName||'Besteller'} wird benachrichtigt.`),'ok'); renderShop(); _ptAfter();
 }
 function shopOrderCancel(id){
   const o=getShop('shopOrders',id); if(!o) return;
@@ -2087,7 +2089,7 @@ function _beiMirHtml(){
   const lRows=ls.map(l=>`<div class="shop-iv-row"><span>${loanIcon(l)} ${what(l)} · ${isZuord(l)?'dir zugeordnet':(l.due?`<span class="${_overdue(l)?'shop-late':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:'Dauerleihe')}</span>${isZuord(l)?'':`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>`}</div>`).join('');
   const posTxt=o=>_pos(o).map(x=>{ const it=x.itemId&&getShop('shopItems',x.itemId); return _num(x.menge)+'× '+esc(it?itemLabel(it):(x.freitext||'')); }).join(', ');
   const oRows=os.map(o=>{ const st0=STATUS[o.status]||STATUS.offen; const st=(o.status==='ausgegeben'&&o.issueMode==='versand')?{l:'Verschickt',c:st0.c}:st0;
-    return `<div class="shop-iv-row"><span>🛒 ${posTxt(o)||esc(o.freitext||'Bestellung')} · ${_fmtTs(o.ts)}</span><button type="button" class="shop-st" style="background:${st.c};border:0;cursor:pointer" onclick="shopTab('bestellungen')">${st.l}</button></div>`; }).join('');
+    return `<div class="shop-iv-row"><span>🛒 ${posTxt(o)||esc(o.freitext||'Bestellung')} · ${_fmtTs(o.ts)}</span><span class="shop-st" style="background:${st.c}">${st.l}</span></div>`; }).join('');
   return `<div class="shop-mine"><div class="shop-iv-sec" style="margin-top:0">👤 Bei mir</div>${lRows}${oRows}</div>`;
 }
 // ⚙ Einstellungen (Verwalter): früher unten im Reiter „Orte"
@@ -2287,7 +2289,7 @@ function shopNotices(){
   const mgr=canManage(); const out=[]; const held=myHeld();
   orders().forEach(o=>{
     const heldPl=!!(o.ortId && held.places.has(o.ortId));   // für „meinen" Ort (Bus/Boot/Anhänger mir zugeordnet)
-    if(o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id]) && ((mgr && forMe(orderTeams(o))) || heldPl)){
+    if(false && o.status==='offen' && o.byId!==cu.id && !(o.seenBy&&o.seenBy[cu.id]) && ((mgr && forMe(orderTeams(o))) || heldPl)){
       out.push({ ts:o.ts, html:`🛒 Neue Bestellung von <b>${esc(o.byName||'?')}</b>${heldPl?` für ${esc(placeLabel(o.ortId))} (dir zugeordnet)`:''}: ${_orderWhat(o)}${o.termin?` (bis ${_fmtDate(o.termin)})`:''}${o.anlass?' – '+esc(o.anlass):''}`,
         open:`shopNoticeOpen(${JSON.stringify(o.id)})`, ack:`shopNoticeSeen(${JSON.stringify(o.id)})` });
     }
@@ -2448,12 +2450,12 @@ function _ptEntry(o){
   let zug=(meta&&meta.zugeteilt)||null;
   if(!(meta&&meta.manual) && auto.id && !o.done){ const ts=Math.min(Date.now(), _ptMinus(o.due||_todayIso(), o.owner?0:Math.min(14,_ptDays(o.team))));   // „Dir zugeteilt“ spätestens 2 Wochen vor Frist
     zug={ [auto.id]:{ ts, by:'lager', byName:'Lager' } }; }
-  const node={ id:'lg~'+id+(o.done?'~'+o.doneAt:''), text:o.text, due:o.due||'', status:o.done?'erledigt':((meta&&meta.status)==='inarbeit'?'inarbeit':'offen'),
+  const node={ id:'lg~'+id+(o.done?'~'+o.doneAt:''), text:o.text, due:o.due||'', status:o.done?'erledigt':(o.st?o.st:((meta&&meta.status)==='inarbeit'?'inarbeit':'offen')),
     assigneeId:ass[0]||'', assigneeIds:ass.length>1?ass:null, assigneeName:ass.map(_ptUName).filter(Boolean).join(', '),
     notizen:(meta&&!o.done&&meta.notizen)||null, zugeteilt:o.done?null:zug, note:'', children:[], doneAt:o.doneAt||'', doneBy:o.doneBy||'' };
-  const lager={ key:o.key, id, cycle:o.cycle, sub:o.sub, where:o.where||'', info:o.info||[], act:o.act||'', autoWhy:(meta&&meta.manual)?'von Hand':auto.why, done:!!o.done, team:o.team||'' };
+  const lager={ key:o.key, id, cycle:o.cycle, sub:o.sub, where:o.where||'', info:o.info||[], act:o.act||'', autoWhy:(meta&&meta.manual)?'von Hand':auto.why, done:!!o.done, team:o.team||'', rej:!!o.rej, orderId:o.orderId||'' };
   return { node, kind:'lager', containerId:id, containerName:'Lager', tree:'', eid:'', pid:'', projName:'', owner:o.owner||'', closed:false, art:'lager',
-    depth:0, top:node, inhAss:[], teamsEff:o.team?[o.team]:[], lager };
+    depth:0, top:node, inhAss:[], teamsEff:(o.teams&&o.teams.length)?o.teams:(o.team?[o.team]:[]), lager };
 }
 // Alle Lager-Aufgaben (offen + in den letzten 30 Tagen erledigt) für den Planner
 function shopPlannerTasks(){
@@ -2482,6 +2484,22 @@ function shopPlannerTasks(){
       out.push(_ptEntry(Object.assign({}, base, { key:'l|'+l.id, text:`🔁 Rückgabe nachhalten: ${what}` })));
       if(live && l.borrowerId && l.borrowerId===me) out.push(_ptEntry(Object.assign({}, base, { key:'lb|'+l.id, owner:l.borrowerId, text:`🔁 Zurückbringen: ${what}`, where:'zurück an '+placeLabel(l.fromPlace||l.placeId) })));
     });
+    // Bestellungen (Schritt B, v578): offen/in Bearbeitung → Aufgabe; ausgegeben/erledigt/abgelehnt (30 Tage) → erledigt
+    orders().forEach(o=>{ const st=o.status; const open=st==='offen'||st==='inarbeit';
+      const fin=!open && ['ausgegeben','erledigt','abgelehnt'].includes(st) && (o.handledTs||0)>=old;
+      if(!open && !fin) return;
+      let teams=[...new Set(orderTeams(o).concat(o.team?[o.team]:[]).filter(Boolean))];
+      if(!teams.length){ const u=_ptUsers().find(x=>x.id===o.byId); const ut=u?_ptUTeams(u):[]; if(ut[0]) teams=[ut[0]]; }   // freier Wunsch ohne Artikel-Team → Hauptteam der bestellenden Person
+      const team=teams[0]||'';
+      const ps=_pos(o); const nm=x=>{ const it=x.itemId&&getShop('shopItems',x.itemId); return _num(x.menge)+'× '+(it?itemLabel(it):(x.itemName||x.freitext||'?')); };
+      const all=ps.map(nm); const kurz=all.slice(0,2).join(', ')+(all.length>2?' …':'');
+      const leihe=!!(o.leihe||o.rueckgabe||ps.some(x=>x.leihe));
+      const text=o.auto?`🛒 Nachfüllen: ${placeLabel(o.ortId)} (${ps.length} Artikel)`:`${leihe?'🔁 Ausleihe':'🛒 Bestellung'}: ${kurz||o.freitext||''} – für ${o.byName||'?'}`;
+      const info=[all.join(', '), 'bestellt '+(o.auto?'automatisch (Ort unter Soll)':'von '+(o.byName||'?'))+' am '+_fmtDate(_ptIso(o.ts||Date.now())),
+        o.anlass?'Anlass: '+o.anlass:'', o.note?'Notiz: '+o.note:'', o.rueckgabe?'Rückgabe bis '+_fmtDate(o.rueckgabe):'', (fin&&o.answer)?'Antwort: '+o.answer:''].filter(Boolean);
+      out.push(_ptEntry({ key:'o|'+o.id, cycle:'o', team, teams, placeId:o.ortId||'', sub:'bestellung', due:o.termin||'', text,
+        where:o.ortId&&placeOf(o.ortId)?placeLabel(o.ortId):'', info, act:'ord:'+o.id, orderId:o.id, st:open?(st==='inarbeit'?'inarbeit':'offen'):'',
+        done:fin, rej:st==='abgelehnt', doneAt:fin?new Date(o.handledTs).toISOString():'', doneBy:fin?(o.handledByName||''):'' })); });
   }catch(e){ console.warn('[Lager→Planner]', e); }
   return out;
 }
@@ -2495,19 +2513,26 @@ function shopPtMut(id, fn){ const a=shopPtGet(id); if(!a) return null;
 function shopPtSetAss(id, ids){ const me=_me();
   return shopPtMut(id, m=>{ const was=m.ass||[]; m.ass=(ids||[]).filter(Boolean); m.manual=true; const z=Object.assign({}, m.zugeteilt||{});
     m.ass.forEach(u=>{ if(!was.includes(u)||!z[u]) z[u]={ ts:Date.now(), by:me.id||'', byName:me.name||'' }; }); Object.keys(z).forEach(u=>{ if(!m.ass.includes(u)) delete z[u]; }); m.zugeteilt=z; }); }
-function shopPtStatus(id, st){ return shopPtMut(id, m=>{ m.status=st==='inarbeit'?'inarbeit':'offen'; }); }
+function shopPtStatus(id, st){ const a=shopPtGet(id);
+  if(a && a.lager.sub==='bestellung'){ const o=getShop('shopOrders', a.lager.orderId); if(o){ _handled(o, st==='inarbeit'?'inarbeit':'offen'); renderShop(); } return null; }   // Status = Bestellstatus
+  return shopPtMut(id, m=>{ m.status=st==='inarbeit'?'inarbeit':'offen'; }); }
+// Bestellung aus dem Planner abschließen ohne Ausgabe bzw. ablehnen (Lager-Dialog mit Nachricht/Begründung)
+function shopPtOrderDone(id, status){ const a=shopPtGet(id); if(!a||a.lager.sub!=='bestellung') return; window._shopFromPlan=true;
+  try{ shopOrderDone(a.lager.orderId, status==='abgelehnt'?'abgelehnt':'erledigt'); } finally { window._shopFromPlan=false; } }
 function shopPtNote(id, note){ return shopPtMut(id, m=>{ m.notizen=(Array.isArray(m.notizen)?m.notizen:[]).concat([note]); }); }
 function shopPtNoteDel(id, nid, uid){ return shopPtMut(id, m=>{ m.notizen=(m.notizen||[]).filter(x=>!(x&&x.id===nid&&x.uid===uid)); }); }
 // Erledigen = Lager-Dialog (aus dem Planner auch ohne Lager-Recht)
 function shopPtDone(id){ const a=shopPtGet(id); if(!a){ toast('Diese Lager-Aufgabe ist schon erledigt.','ok'); return; }
   const i=String(a.lager.act).indexOf(':'); const k=a.lager.act.slice(0,i), v=a.lager.act.slice(i+1); window._shopFromPlan=true;
-  try{ if(k==='due') shopDueDone(v); else if(k==='ret') shopReturn(v); } finally { window._shopFromPlan=false; } }
-function shopPtOpenLager(id){ const a=shopPlannerTasks().find(x=>x.lager.id===id); const leihe=!!(a&&a.lager.sub==='leihe');
-  TAB=leihe?'ausleihen':((window.cu&&window.cu.role==='admin')?'faellig':'bestand'); if(leihe) fLoan='aktiv'; else fDue='all';
+  try{ if(k==='due') shopDueDone(v); else if(k==='ret') shopReturn(v); else if(k==='ord') shopOrderIssue(v); } finally { window._shopFromPlan=false; } }
+function shopPtOpenLager(id){ const a=shopPlannerTasks().find(x=>x.lager.id===id); const leihe=!!(a&&a.lager.sub==='leihe'); const adm=!!(window.cu&&window.cu.role==='admin');
+  TAB=!adm?'bestand':(leihe?'ausleihen':(a&&a.lager.sub==='bestellung'?'bestellungen':'faellig')); if(leihe) fLoan='aktiv'; else fDue='all';
+  if(!adm && a && a.lager.where){ const pl=places().find(p=>placeLabel(p.id)===a.lager.where); if(pl) fPlace=pl.id; }
   try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 function shopPtMay(){ return _can('la_artikel'); }
 function _ptDueKey(a){ return String(a.lager.key).replace(/^t\|/,''); }
 function shopPtEdit(id){ if(!shopPtMay()) return; const a=shopPtGet(id); if(!a) return;
+  if(a.lager.sub==='bestellung'){ toast('Bestellungen: Wunschtermin steht in der Bestellung.','ok'); return; }
   if(a.lager.sub==='leihe'){ const lid=String(a.lager.act).replace(/^ret:/,''); window._shopFromPlan=true; try{ shopLoanDue(lid); } finally { window._shopFromPlan=false; } return; }
   const k=_ptDueKey(a); const f=_dueFind(k); if(!f) return; const t=f.t;
   openModal(`<h3>✎ Termin ändern</h3><p style="font-size:13px;margin:0 0 10px">${esc(a.node.text)}</p>
@@ -2522,6 +2547,7 @@ function shopPtEditSave(id){ const a=shopPtGet(id); if(!a) return; const f=_dueF
   closeModal(); toast('Termin geändert ✓ – fällig '+_fmtDate(datum),'ok'); renderShop(); _ptAfter(); }
 // nodeId: offene Aufgabe → Termin ganz löschen; erledigter Eintrag → nur diesen Verlaufseintrag löschen
 function shopPtDel(nodeId){ if(!shopPtMay()) return false; const a=shopPtFind(nodeId); if(!a) return false;
+  if(a.lager.sub==='bestellung'){ toast('Bestellungen beenden über „Ablehnen“ oder „Erledigt ohne Ausgabe“.','err'); return false; }
   if(a.lager.sub==='leihe'){ if(!a.lager.done){ toast('Ausleihen beenden über „Erledigen“ (Rückgabe).','err'); return false; }
     toast('Erledigte Ausleihen verschwinden nach 30 Tagen von selbst.','ok'); return false; }
   const f=_dueFind(_ptDueKey(a)); if(!f) return false;
@@ -2546,4 +2572,4 @@ function shopPtCfgSet(team, k, v){ const c=JSON.parse(JSON.stringify(_ptCfg()));
   const x=Object.assign({}, c.teams[team]||{}); if(k==='tage') x.tage=Math.max(1,Math.min(365,Math.round(_num(v))||_PT_TAGE)); else x.zust=v||''; c.teams[team]=x;
   saveShop('shopConfig', c); toast('Gespeichert ✓','ok'); }
 function _ptAfter(){ try{ window.crmPlanAfterLager && window.crmPlanAfterLager(); }catch(e){} }
-try{ Object.assign(window, { shopPlannerTasks, shopPtGet, shopPtFind, shopPtSetAss, shopPtStatus, shopPtNote, shopPtNoteDel, shopPtDone, shopPtOpenLager, shopPtMembers, shopPtCfgSet, shopPtMay, shopPtEdit, shopPtEditSave, shopPtDel }); }catch(e){}
+try{ Object.assign(window, { shopPlannerTasks, shopPtGet, shopPtFind, shopPtSetAss, shopPtStatus, shopPtNote, shopPtNoteDel, shopPtDone, shopPtOpenLager, shopPtMembers, shopPtCfgSet, shopPtMay, shopPtEdit, shopPtEditSave, shopPtDel, shopPtOrderDone }); }catch(e){}
