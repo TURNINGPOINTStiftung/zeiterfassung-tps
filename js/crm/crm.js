@@ -545,7 +545,7 @@ function crmSetupModuleBar(){
       // (= exakt das bisherige Verhalten). So ändert sich ohne Konfiguration nichts.
       const show={};
       ['zeiterfassung','website','forum','kanban','crm','verteiler','ki','auswertung','kalender','verwaltung','messe','shop','anleitung']
-        .forEach(k=>{ show[k]=canUsePath(k, cu); });
+        .forEach(k=>{ show[k]=(k==='website'||k==='forum') ? true : canUsePath(k, cu); });   // v583: Website/Forum = externe Links für alle (wie auf der Startseite)
       let count=0;
       // Planung (js/planung.js) fasst Kalender + Projektmanagement zu EINEM Menüpunkt zusammen; die beiden
       // bleiben als Bereiche erreichbar (Adressen #/kalender, #/kanban), stehen aber nicht mehr einzeln im Menü.

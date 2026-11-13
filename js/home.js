@@ -672,15 +672,17 @@ const TILE_IC={ planung:'📅', zeiterfassung:'🕒', crm:'📇', kanban:'🗂�
 // Externe Links als Kacheln (für ALLE, öffnen in neuem Tab) – ersetzen die Platzhalter-Module Website/Forum.
 // Forum erscheint, sobald eine Adresse eingetragen ist.
 const LINKS=[
-  { l:'Website', ic:'🌐', url:'https://www.turningpoint-stiftung.com/' },
-  { l:'Forum', ic:'💬', url:'https://forum.turningpoint-stiftung.com/' },
+  { k:'website', l:'Website', ic:'🌐', url:'https://www.turningpoint-stiftung.com/' },
+  { k:'forum', l:'Forum', ic:'💬', url:'https://forum.turningpoint-stiftung.com/' },
 ];
 let _tileObs=null;
 function _fillTiles(){
   const box=_el('home-tiles'); if(!box) return;
-  const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>!['start','website','forum'].includes(b.dataset.mod) && b.style.display!=='none');
-  const html=bs.map(b=>`<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`).join('')
-    +LINKS.filter(x=>x.url).map(x=>`<a class="home-tile" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">${x.ic}</span>${esc(x.l)} <span style="font-size:12px;color:var(--muted)">↗</span></a>`).join('');
+  // v583: Reihenfolge wie im ☰-Menü – Website/Forum (externe Links) stehen dort über der Anleitung
+  const bs=[...document.querySelectorAll('#mb-dropdown .mb-mod')].filter(b=>b.dataset.mod!=='start' && b.style.display!=='none');
+  const link=x=>`<a class="home-tile" href="${esc(x.url)}" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">${x.ic}</span>${esc(x.l)} <span style="font-size:12px;color:var(--muted)">↗</span></a>`;
+  const html=bs.map(b=>{ const x=LINKS.find(l=>l.k===b.dataset.mod); if(x) return x.url?link(x):'';
+      return `<div class="home-tile" onclick="homeTile(${jsq(b.dataset.mod)})"><span class="ic">${TILE_IC[b.dataset.mod]||'📁'}</span>${esc(b.textContent.trim())}</div>`; }).join('');
   if(box.innerHTML!==html) box.innerHTML=html;
   // Das ☰-Menü bekommt seine Rechte erst NACH dem Laden der CRM-Daten (crmSetupModuleBar, asynchron) –
   // beim App-Start ist die Startseite schneller. Darum Kacheln nachziehen, sobald sich das Menü ändert.
@@ -688,6 +690,9 @@ function _fillTiles(){
     if(dd){ _tileObs=new MutationObserver(()=>{ if(window._activeModule==='start') _fillTiles(); });
       _tileObs.observe(dd,{ subtree:true, attributes:true, attributeFilter:['style'] }); } }
 }
+// ☰-Menü: Website/Forum öffnen die externe Seite in einem neuen Tab (v583)
+function homeExt(k){ try{ window.closeModuleMenu&&window.closeModuleMenu(); }catch(e){} const x=LINKS.find(l=>l.k===k); if(x&&x.url) window.open(x.url,'_blank','noopener'); }
+window.homeExt=homeExt;
 function homeTile(mod){ const b=document.querySelector('#mb-dropdown .mb-mod[data-mod="'+mod+'"]'); if(b) b.click(); }
 
 // ── Wetter & Wind (Open-Meteo, ohne Schlüssel; Wohnort aus dem Profil) ──
