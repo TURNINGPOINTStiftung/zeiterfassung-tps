@@ -300,6 +300,23 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
+## GETESTET CANDIDATE-v20.json – Lager-Aufgaben im Planner (noch NICHT live, App v575)
+= v18 (live) + Lager-Freigaben für alle Angemeldeten (allowed, kein Kiosk, mit uidUser):
+`crm/shopTasks/$id` (Zuständige/Status/Notizen einer Lager-Aufgabe; .validate id = Schlüssel, datum Pflicht) ·
+`shopPlaces/$id/termine` · `shopItems/$id/stock` · `shopItems/$id/units/$u/{termine,placeId}` ·
+`shopLog/$id` neu mit type `termin`/`rueckgabe` (Absender = eigene Person, wie bisher per .validate) ·
+`shopLoans/$id` aktive Ausleihe ändern, ohne borrowerId/itemId/placeId/unitId/zuord zu tauschen.
+Test im Testprojekt 13.11.2026 (Abschnitt `ruletest_crm` = v20-crm mit `zeiterfassung/`→`ruletest/`): 24 Simulator-Fälle wie
+erwartet – shopTasks anlegen erlaubt; Kiosk / falsche id / ohne Anmeldung verweigert; Ort-Termine erlaubt, Ort-Name verweigert;
+Bestand, Stück-Ort, Stück-Termine erlaubt, Artikelname/Stück-Bezeichnung verweigert; Verlauf rueckgabe erlaubt, anderer Typ /
+fremder Absender / bestehenden ändern verweigert; Ausleihe zurückbuchen erlaubt, Ausleiher tauschen / abgeschlossene ändern /
+Kiosk verweigert; Regression: Lager-Verwalter ganzer Ort erlaubt, Ausleiherin eigene Ausleihe erlaubt, Mitarbeiterin ganzer Ort
+verweigert. Vollständige v20-Datei vom Compiler akzeptiert (im Testprojekt veröffentlicht), danach Testdaten gelöscht,
+Original-Regeln zurück (PUT/GET `ruletest` ohne Anmeldung → 401).
+sha256 (raw @26d90ed): bc3162a8061e26675b2f740f53d6a93bfe2413f51ac1ad070b0ba63be4d5d98d · Prüfwort `shopTasks` = 1 Treffer (v18: 0).
+Reihenfolge: erst Regeln v20, dann App v575. Rückweg: CANDIDATE-v18.json.
+**Für Phase 4 „Personaldaten privat“:** statt v19 eine **v21 = v19 + diese Lager-Freigaben** bauen und veröffentlichen.
+
 ## Veröffentlichen per Cloud Shell (bewährt seit v10, statt Kopieren in der Konsole)
 ```
 cd ~ && curl -s "https://zeiterfassung-tps-default-rtdb.europe-west1.firebasedatabase.app/.settings/rules.json?access_token=$(gcloud auth print-access-token)" -o regeln_backup.json

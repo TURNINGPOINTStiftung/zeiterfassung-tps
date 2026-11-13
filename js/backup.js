@@ -47,7 +47,7 @@ export async function runAutoBackup(){
       if(ze && Array.isArray(ze.users) && ze.users.length){
         // CRM und Shop getrennt ablegen (Shop liegt technisch unter crm/shop*) – so lässt sich beim
         // Einspielen jeder Teil einzeln wiederherstellen.
-        const SHOP_KEYS=['shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig'];
+        const SHOP_KEYS=['shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','shopTasks'];
         let crmPart=crm, shopPart=null;
         if(crm && typeof crm==='object'){ crmPart={}; shopPart={ _v:1 };
           Object.keys(crm).forEach(k=>{ if(SHOP_KEYS.includes(k)) shopPart[k]=crm[k]; else crmPart[k]=crm[k]; }); }

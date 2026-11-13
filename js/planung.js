@@ -99,12 +99,13 @@ function _teamCol(t){ const ts=_teamsVisible(); const i=ts.indexOf(t); return i<
 const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };
 function _srcTag(a){
   if(a.art==='aufgaben'){ const w=(window.crmAufgWdhLabel&&window.crmAufgWdhLabel(a.node))||''; return `<span class="plan-tag">${w?'🔁 '+esc(w):'✔ Aufgabe'}${a.owner?' · privat':''}</span>`; }
+  if(a.kind==='lager') return `<span class="plan-tag">📦 Lager${a.lager&&a.lager.where?' · '+esc(a.lager.where):''}</span>`;
   const ic=a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'); return `<span class="plan-tag">${ic} ${esc(a.containerName||(a.kind==='veranstaltung'?'Veranstaltung':(a.kind==='entity'?'Eintrag':'Projekt')))}</span>`; }
 function _open(a){ return `crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
 function _openOld(a){ if(a.art==='aufgaben') return `crmAufgEdit(${jsq(a.containerId)},${jsq(a.node.id)})`; return `crmMeineOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})`; }
 
 function _todoCard(){
-  let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks():[]; }catch(e){}
+  let all=[]; try{ all=window.crmListAllTasks?window.crmListAllTasks({ lager:true }):[]; }catch(e){}
   const today=iso(new Date());
   // Was ansteht: (1) mir zugeteilt – auch Aufgaben mit Unterpunkten, aus jedem Behälter; (2) mit Frist aus meinen persönlichen
   // Projekten; (3) einem meiner Teams zugeordnet und noch niemandem zugeteilt (gilt für alle Mitglieder, bis jemand übernimmt).
@@ -182,7 +183,7 @@ function _hintCard(){
 function _termCard(){
   const today=iso(new Date()), until='9999-12-31'; const out=[];
   try{ _vasSorted().forEach(v=>{ const s=String(v.start||'').slice(0,10), e=String(v.ende||v.start||'').slice(0,10); if(!s||e<today||s>until) return; if(!(v.mitarbeiter||[]).includes(me())) return; out.push({ t:v.titel||'Veranstaltung', d:s, k:'va', id:v.id }); }); }catch(e){}
-  try{ const crm=(CD.getCrm&&CD.getCrm())||{}; const R=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
+  try{ const crm=(CD.getCrm&&CD.getCrm())||{}; const R=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','shopTasks','userPrefs']);
     Object.keys(crm).forEach(tk=>{ if(R.has(tk)) return; const es=crm[tk]; if(!es||typeof es!=='object') return; Object.values(es).forEach(e=>{ (e&&e.termine||[]).forEach(t=>{ if(!t||!t.datum) return; const s=t.datum, en=t.bis||t.datum; if(en<today||s>until) return; if(!(t.mitarbeiter||[]).includes(me())) return; out.push({ t:t.titel||'Termin', d:s, k:'te', tree:tk, eid:e.id, tid:t.id }); }); }); }); }catch(e){}
   out.sort((a,b)=>a.d.localeCompare(b.d));
   const row=x=>`<div class="plan-item" role="button" tabindex="0" onclick="${x.k==='va'?`planVaSet(${jsq(x.id)})`:`crmOpenTerminFromHome(${jsq(x.tree)},${jsq(x.eid)},${jsq(x.tid)})`}"><span class="plan-barc" style="background:${x.k==='va'?'var(--danger,#dc2626)':'var(--warn,#d97706)'}"></span><div class="plan-main"><div class="plan-t">${esc(x.t)}</div><div class="plan-sub">${x.k==='va'?'Veranstaltung':'Termin'}</div></div><span class="plan-when">${esc(fmt(x.d))}</span></div>`;

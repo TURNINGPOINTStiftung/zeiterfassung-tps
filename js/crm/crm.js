@@ -2856,7 +2856,7 @@ function crmImportContactsFile(inp){
 // Wer darf aus dem Kalender heraus anlegen? (gleiche Regeln wie im CRM)
 function crmCanCreateItems(){ return { termin: (_R('crm_termine')||_R('kal_eigene')), va: _R('kal_va') }; }
 // Kontakt-Auswahl per Suche (für „neuer Termin aus dem Kalender") – Login-Stil-Autocomplete.
-const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs']);
+const _KAL_RESERVED=new Set(['vorlagen','teamprojekte','access','config','verteiler','veranstaltungen','workflows','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','shopTasks','userPrefs']);
 function _kalContacts(){ const out=[]; try{ const d=getCrm()||{};
     Object.keys(d).forEach(tk=>{ if(_KAL_RESERVED.has(tk)) return; const ents=d[tk]; if(!ents||typeof ents!=='object') return;
       Object.keys(ents).forEach(eid=>{ const e=ents[eid]; if(!e||typeof e!=='object') return; out.push({tree:tk, eid, name:(e.stamm&&e.stamm.name)||'(ohne Name)'}); });
@@ -3375,8 +3375,11 @@ function listAllTasks(opts){
           walk(p.todos, { kind:k, containerId:e.id, containerName:(e.stamm&&e.stamm.name)||'', tree:tr.key, eid:e.id, pid:p.id, projName:p.name||'', owner:'', closed:!!p.closed }, []); }); }));
     }catch(err){ console.warn('listAllTasks '+k+':', err); }
   });
+  // 📦 Lager-Aufgaben (v575): Termine/überfällige Ausleihen aus dem Lager – nur lesen, Quelle bleibt das Lager (shop.js)
+  if(opts.lager){ try{ (window.shopPlannerTasks?window.shopPlannerTasks():[]).forEach(a=>{ if(!a.owner || a.owner===((window.cu&&window.cu.id)||'')) out.push(a); }); }catch(err){ console.warn('listAllTasks lager:', err); } }
   return out;
 }
+const _kIc=k=>k==='veranstaltung'?'📅':(k==='entity'?'📇':(k==='lager'?'📦':'📂'));
 window.crmListAllTasks=listAllTasks;   // für Kalender/Startseite (kein benannter Import – Gerätecache)
 function _entityAssignedTasks(pred){
   return listAllTasks({ kinds:['entity'] }).filter(a=>pred(a.node))
@@ -4298,7 +4301,7 @@ function _teamTaskSetCtx(kind,tree,id,tid){
   else { const e=getEntity(tree,id); let pid=''; if(e){ migEntityProjekte(e); const p=_projForNode(e,tid); if(p) pid=p.id; } window._crmTaskCtx={kind:'entity',tree,eid:id,pid}; }
   window._crmAfterTask='teamdetail';
 }
-function crmTeamTaskOpen(kind,tree,id,tid){ _teamTaskSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
+function crmTeamTaskOpen(kind,tree,id,tid){ if(kind==='lager') return crmLagerView(tid); _teamTaskSetCtx(kind,tree,id,tid); crmOpenTask(tid); }
 window.crmTeamTaskOpen=crmTeamTaskOpen;
 // Veranstaltungen eines Teams (Ohne Team = ohne team-Zuordnung / übergeordnet)
 function teamVeranstaltungen(team){
@@ -4501,7 +4504,7 @@ function oeaCheckMove(n, from, to){
   return '';
 }
 // Beiträge = Aufgaben (Blätter) des ÖA-Teams aus allen Behältern
-function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks().filter(a=>!a.owner && (a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
+function oeaTasks(){ const t=rpCfg().team; if(!t) return []; return listAllTasks({ lager:!rpCfg().oea }).filter(a=>!a.owner && (a.teamsEff||[]).includes(t) && !(Array.isArray(a.node.children)&&a.node.children.length)); }
 function _oeaMembers(){ const t=rpCfg().team; try{ return (getData().users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&userTeamsAll(u).includes(t)); }catch(e){ return []; } }
 // Abwesenheiten wie im Kalender: nur genehmigter Urlaub/Ausgleich, nie der Grund
 function _oeaAbs(){ const out=[]; const me=(window.cu&&window.cu.id)||''; const others=_R('kal_abw'); try{ const vr=getData().vacRequests||{}; Object.keys(vr).forEach(k=>{ const r=vr[k]; if(!r||r.status!=='approved'||!r.startDate) return; if(!others && r.userId!==me) return; if(!/^(Urlaub|Arbeitszeitausgleich|AU\/Krank|Sonstiges|Abwesend)$/.test(r.type||'')) return; out.push({ emp:r.userId, von:r.startDate, bis:r.endDate||r.startDate }); }); }catch(e){} return out; }   // v551: Krank/Pseudo-Anträge nur als „abwesend“
@@ -4582,7 +4585,7 @@ function _oeaBoardHtml(r, posts){
     const short=_rc.team.split(/\s+/)[0];
     const chips=[n.kanal?`<span class="red-tag k">${esc(String(n.kanal).toUpperCase())}</span>`:'', n.due?`<span class="red-tag">${_rc.oea?'live':'fällig'} ${esc(fmtDate(Date.parse(n.due)))}</span>`:'<span class="red-tag">ohne Datum</span>',
       n.assigneeId?`<span class="red-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="red-tag w">Team ${esc(short)} · niemand</span>`,
-      `<span class="red-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>`].join('');
+      `<span class="red-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):(_kIc(a.kind)+' '+esc(a.containerName||''))}</span>`].join('');
     const fr=`<div class="red-fr">Freigabe: ${esc(n.freigabeId?(userName(n.freigabeId)||n.freigabeId):'–')} · Bildrechte: ${n.bildrechte===true?'✓':'<b class="red-off">offen</b>'}</div>`;
     const issH=iss.map(x=>`<span class="red-tag ${x.lv==='crit'?'c':'w'}">${esc(x.t)}</span>`).join('');
     const sel=may?`<select class="red-ph" aria-label="Spalte ändern" onchange="crmRedPhaseSet(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)},this.value)">${ab.map(p=>`<option value="${esc(p.key)}" ${p.key===ph?'selected':''}>${esc(p.label)}</option>`).join('')}</select>`:'';
@@ -4620,6 +4623,7 @@ function crmRedPaketApply(vaId, vid){
   toast(n?'ÖA-Paket übernommen ('+n+' Hauptaufgabe'+(n===1?'':'n')+') ✓':'Nichts übernommen.', n?'ok':'err');
 }
 function crmRedPhaseSet(kind, tree, cid, tid, key){
+  if(kind==='lager'){ if(key==='erledigt') return crmLagerDone(cid); try{ window.shopPtStatus(cid, key); }catch(e){} return crmPlanAfterLager(); }
   _rpTeam=window._crmTeamSel||''; try{ _crmRedPhaseSet(kind, tree, cid, tid, key); } finally { _rpTeam=''; }
 }
 function _crmRedPhaseSet(kind, tree, cid, tid, key){
@@ -4764,7 +4768,7 @@ window.crmMineSet=crmMineSet; window.crmTeamRepaint=()=>{ try{ paintTeamDetail()
 function _teamArchivHtml(team){
   const ohne=team==='Ohne Team'; const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
-  const all=listAllTasks({ includeClosed:true }).filter(a=>!a.owner);
+  const all=listAllTasks({ includeClosed:true, lager:true }).filter(a=>!a.owner);
   const tAll=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
   const archP=tAll.filter(p=>p.closed&&_ts(p.closedAt)<wk).sort((a,b)=>_ts(b.closedAt)-_ts(a.closedAt));
   const archA=[]; if(!ohne){ const box=_aufgBox(team,''); if(box) (box.todos||[]).forEach(n=>{ if(n&&n.status==='erledigt'&&_ts(n.doneAt)<wk) archA.push(n); }); }
@@ -4783,13 +4787,13 @@ function _planTeamOverview(team){
   const ohne=team==='Ohne Team'; const today=localISODate(); const until=_addDaysIso(today, 42);
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
-  const all=listAllTasks().filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
+  const all=listAllTasks({ lager:true }).filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
   const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
   const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until) && (!_om || crmIsMineA(a,_me)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
-    return `<div class="plan-item" role="button" tabindex="0" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):((a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂'))+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
+    return `<div class="plan-item" role="button" tabindex="0" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):(_kIc(a.kind)+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
   // Erledigtes (User 11.11.2026): im Team noch 7 Tage sichtbar, damit alle sehen, was erledigt ist – danach im Archiv
   const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
   const done=[];
@@ -4798,7 +4802,7 @@ function _planTeamOverview(team){
     else if(a.art==='aufgaben' && n.wdh && Array.isArray(n.verlauf) && n.verlauf.length){ const v=n.verlauf[n.verlauf.length-1]; const t=_ts((v.at||'')+'T12:00:00');
       if(t>=wk) done.push({ a, at:t, by:v.by||'', wdh:true }); } });
   done.sort((x,y)=>y.at-x.at);
-  const doneRow=d=>{ const n=d.a.node; return `<div class="plan-item done" role="button" tabindex="0" onclick="${d.a.art==='aufgaben'?`crmAufgEdit(${jsq(d.a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(d.a.kind)},${jsq(d.a.tree||'')},${jsq(d.a.containerId)},${jsq(n.id)})`}"><span class="plan-barc" style="background:var(--ok,#16a34a)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${d.a.art==='aufgaben'?(d.wdh?'🔁 '+esc(aufgWdhLabel(n))+' · nächstes Mal '+esc(fmtDate(Date.parse(n.due))):'✔ Aufgabe'):((d.a.kind==='veranstaltung'?'📅':(d.a.kind==='entity'?'📇':'📂'))+' '+esc(d.a.containerName||''))}</span></div></div><span class="plan-when">${esc(fmtDate(d.at).replace(/\.\d{4}$/,'.'))}${d.by?' · '+esc(d.by):''}</span></div>`; };
+  const doneRow=d=>{ const n=d.a.node; return `<div class="plan-item done" role="button" tabindex="0" onclick="${d.a.kind==='lager'?`crmLagerView(${jsq(n.id)})`:d.a.art==='aufgaben'?`crmAufgEdit(${jsq(d.a.containerId)},${jsq(n.id)})`:`crmTeamTaskOpen(${jsq(d.a.kind)},${jsq(d.a.tree||'')},${jsq(d.a.containerId)},${jsq(n.id)})`}"><span class="plan-barc" style="background:var(--ok,#16a34a)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${d.a.art==='aufgaben'?(d.wdh?'🔁 '+esc(aufgWdhLabel(n))+' · nächstes Mal '+esc(fmtDate(Date.parse(n.due))):'✔ Aufgabe'):(_kIc(d.a.kind)+' '+esc(d.a.containerName||''))}</span></div></div><span class="plan-when">${esc(fmtDate(d.at).replace(/\.\d{4}$/,'.'))}${d.by?' · '+esc(d.by):''}</span></div>`; };
   const doneHtml=done.length?`<div class="plan-grp" style="margin-top:14px">✓ Erledigt in den letzten 7 Tagen · ${done.length}</div>${done.map(doneRow).join('')}`:'';
   const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div style="margin:0 0 8px">${_mineSegHtml()}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
     ${leaves.length?leaves.map(taskRow).join(''):'<div class="plan-empty">Diesem Team ist in den nächsten 6 Wochen keine offene Aufgabe zugeordnet. Aufgaben bekommen ein Team über die Veranstaltung/das Projekt oder direkt in der Aufgabe.</div>'}
@@ -4981,6 +4985,7 @@ function crmAufgDone(cid, tid){
   const r=_doneStep(n, aufgWho(c,n), me); _aufgSave(c); _doneToast(r); _aufgRefresh();
 }
 function crmTaskDone(kind, tree, cid, tid){
+  if(kind==='lager') return crmLagerDone(cid);
   if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben') return crmAufgDone(cid, tid); }
   _meSetCtx(kind, tree, cid, tid); const e=curContainer(); if(!e) return; const f=findNode(e, tid); if(!f) return;
   const blk=blockingTexts(e, f.node); if(blk){ toast('🔒 Blockiert durch: '+blk.join(', '),'err'); return; }
@@ -5009,6 +5014,7 @@ function crmMyArchive(){
   return { tasks, projects };
 }
 function crmTaskReopen(kind, tree, cid, tid){
+  if(kind==='lager'){ toast('Lager-Aufgaben öffnen sich von selbst wieder, sobald der nächste Termin fällig ist.','ok'); return; }
   if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben') return crmAufgReopen(cid, tid); }
   _meSetCtx(kind, tree, cid, tid);
   mutateContainer(en=>{ const g=findNode(en, tid); if(!g) return; g.node.status='offen'; g.node.doneAt=''; g.node.doneBy=''; g.node.erledigtVon=null;
@@ -5020,6 +5026,7 @@ function crmMyArchivedAufg(){ const c=_aufgBox('', _aMe()); return c?(c.todos||[
 // „Übernehmen": freie Team-Aufgabe (aus jedem Behälter) mir zuteilen
 function crmTakeTask(kind, tree, cid, tid){
   const me=_aMe(); if(!me) return;
+  if(kind==='lager'){ try{ window.shopPtSetAss(cid, [me]); }catch(e){} toast('Übernommen ✓','ok'); crmPlanAfterLager(); return; }
   const fn=root=>{ const f=findNode(root, tid); if(f){ const was=_taskAss(f.node); f.node.assigneeId=me; f.node.assigneeIds=null; f.node.assigneeName=userName(me); _stampAss(f.node, was); } };
   if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben'){ if(!_aufgMay(c)){ toast('Dafür fehlt die Berechtigung (Aufgaben bearbeiten).','err'); return; }
       normTasks(c); fn(c); _aufgSave(c); toast('Übernommen ✓','ok'); _aufgRefresh(); return; } }
@@ -5152,6 +5159,7 @@ function _newNote(text){ const cu=window.cu||{}; return { id:newId(), uid:cu.id|
 function _tvBg(){ try{ if(window._activeModule==='planung' && window.renderPlanungStart) window.renderPlanungStart(); else if(window._tvBgPaint) window._tvBgPaint(); }catch(e){} }
 
 function crmTaskViewAt(kind, tree, cid, tid){
+  if(kind==='lager') return crmLagerView(tid);
   const keep=window._crmAfterTask; _meSetCtx(kind, tree, cid, tid);
   if(window._activeModule!=='planung' && keep) window._crmAfterTask=keep;
   window._tvBgPaint=window._planActive?_planRepaint:repaintContainer;
@@ -5203,6 +5211,51 @@ function _tvRender(){
     </div></div>`);
   _crmSide();
 }
+// ══ 📦 Lager-Aufgabe ansehen (v575): wie die Aufgaben-Ansicht, Daten aus dem Lager. Erledigen = Lager-Dialog.
+function crmLagerView(nodeId){
+  const a=window.shopPtFind?window.shopPtFind(nodeId):null; if(!a){ toast('Diese Lager-Aufgabe gibt es nicht mehr (schon erledigt?).','ok'); crmPlanAfterLager(); return; }
+  window._lvId=nodeId; window._tvArgs=null;
+  const n=a.node, L=a.lager; const today=localISODate(); const done=n.status==='erledigt'; const u=_plUrg(n, today);
+  const ass=_taskAss(n); const notes=_notes(n); const team=L.team||'';
+  const mem=(window.shopPtMembers?window.shopPtMembers(team):[]);
+  if(!done){ _tvMarkSeen(n.id); _tvMarkNews(n); }
+  const assSel=done?'':`<select aria-label="Zuständig ändern" onchange="crmLagerAss(this.value)"><option value="">– ganzes Team · noch frei –</option>${mem.map(m=>`<option value="${esc(m.id)}"${ass[0]===m.id?' selected':''}>${esc(m.name)}</option>`).join('')}</select>`;
+  crmOpenModalShell();
+  openModal(`<div class="tv">
+    <div class="tv-src"><button type="button" class="tv-link" onclick="crmLagerOpenSrc()">📦 Lager${L.where?' · '+esc(L.where):''} ›</button></div>
+    <h3 class="tv-h">${done?'✓ ':''}${esc(n.text||'Aufgabe')}</h3>
+    <div class="tv-chips"><span class="pl-due u-${done?'n':u.k}">${esc(done?('erledigt'+(n.doneAt?' · '+fmtDate(Date.parse(n.doneAt)):'')+(n.doneBy?' · '+n.doneBy:'')):u.t)}</span>${done?'':`<span class="pl-tag">${n.status==='inarbeit'?'In Arbeit':'Offen'}</span>`}<span class="pl-tag">📦 aus dem Lager</span></div>
+    <div class="tv-grid">
+      <div class="tv-row"><span class="tv-k">Wer</span><span>${ass.length?esc(ass.map(userName).filter(Boolean).join(', ')):(a.owner?'–':`<i>Ganzes Team · noch frei</i>`)}${(!done&&L.autoWhy&&ass.length)?` <span class="pl-tag">${esc(L.autoWhy)}</span>`:''}</span></div>
+      ${team?`<div class="tv-row"><span class="tv-k">Team</span><span>${esc(team)}</span></div>`:''}
+      ${L.where?`<div class="tv-row"><span class="tv-k">Wo</span><span>${esc(L.where)}</span></div>`:''}
+      ${(L.info||[]).map(x=>`<div class="tv-row"><span class="tv-k">Info</span><span>${esc(x)}</span></div>`).join('')}
+    </div>
+    ${(!done&&!a.owner)?`<div class="tv-sec">Zuständig</div><div class="tv-add">${assSel}</div>`:''}
+    ${done?'':`<div class="tv-sec">💬 Notizen fürs Team${notes.length?' · '+notes.length:''}</div>
+    <div class="tv-notes">${notes.map(x=>_noteHtml(x, true, `crmLagerNoteDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Noch keine Notizen. Z. B. „Termin beim Prüfer am Dienstag“.</div>'}</div>
+    <div class="tv-nadd"><textarea id="lv-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Notiz fürs Team" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmLagerNote();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmLagerNote()">Senden</button></div>`}
+    <div class="tv-act">
+      ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">✓ Erledigen …</button>
+      ${(!ass.length&&!a.owner)?`<button class="btn-sm-crm" onclick="crmTakeTask('lager','',${jsq(L.id)},${jsq(n.id)})">Übernehmen</button>`:''}
+      ${a.owner?'':`<button class="btn-sm-crm" onclick="crmLagerStatus(${jsq(n.status==='inarbeit'?'offen':'inarbeit')})">${n.status==='inarbeit'?'↩ Zurück auf Offen':'▶ In Arbeit'}</button>`}`}
+      <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
+    </div>
+    ${done?'':`<div class="tv-empty" style="margin-top:8px">„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.</div>`}</div>`);
+  _crmSide();
+}
+function _lvA(){ return window._lvId&&window.shopPtFind?window.shopPtFind(window._lvId):null; }
+function crmLagerAss(uid){ const a=_lvA(); if(!a) return; window.shopPtSetAss(a.lager.id, uid?[uid]:[]); toast(uid?'Zugeteilt ✓ – '+userName(uid)+' sieht es unter „Was ansteht“':'Wieder fürs ganze Team frei','ok'); crmPlanAfterLager(); }
+function crmLagerStatus(st){ const a=_lvA(); if(!a) return; window.shopPtStatus(a.lager.id, st); crmPlanAfterLager(); }
+function crmLagerNote(){ const t=(val('lv-note')||'').trim(); if(!t) return; const a=_lvA(); if(!a) return; const x=_newNote(t);
+  window.shopPtNote(a.lager.id, x); if(x.mentions.length) toast('Notiz gespeichert ✓ – '+x.mentions.map(userName).join(', ')+' wird benachrichtigt','ok'); crmPlanAfterLager(); }
+function crmLagerNoteDel(id){ if(!confirm('Notiz löschen?')) return; const a=_lvA(); if(!a) return; window.shopPtNoteDel(a.lager.id, id, (window.cu&&window.cu.id)||''); crmPlanAfterLager(); }
+function crmLagerDone(id){ crmCloseModal(); window._lvId=null; try{ window.shopPtDone(id); }catch(e){ console.warn(e); } }
+function crmLagerOpenSrc(){ const a=_lvA(); crmCloseModal(); if(a) try{ window.shopPtOpenLager(a.lager.id); }catch(e){} }
+// nach jeder Änderung: Planner neu zeichnen, offene Lager-Ansicht auffrischen
+function crmPlanAfterLager(){ try{ if(window._planActive) _planRepaint(); else _aufgRefresh(); }catch(e){ _aufgRefresh(); }
+  if(window._lvId && document.querySelector('#modal-body .tv')){ const id=window._lvId; if(window.shopPtFind&&window.shopPtFind(id)) crmLagerView(id); } }
+try{ Object.assign(window, { crmLagerView, crmLagerAss, crmLagerStatus, crmLagerNote, crmLagerNoteDel, crmLagerDone, crmLagerOpenSrc, crmPlanAfterLager }); }catch(e){}
 function crmTaskViewOpenSrc(){ const a=window._tvArgs; if(!a) return; crmCloseModal();
   try{ if(a.kind==='veranstaltung'){ if(window.planVaSet) window.planVaSet(a.cid); }
     else if(a.kind==='teamprojekt'){ const c=getTeamProjekt(a.cid); if(c&&c.art==='aufgaben'){ if(c.team&&window.planGo) window.planGo('teams',{team:c.team}); else if(window.planGo) window.planGo('start'); }
@@ -5245,12 +5298,12 @@ function crmPinDel(id){ if(!confirm('Notiz löschen?')) return; const me=(window
 const _NEWS_DAYS=14;
 function _newsSeenFn(){ return window.homeNewsIsSeen || ((c,id,ts)=>false); }
 function crmMyMentions(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_newsSeenFn(); const old=Date.now()-_NEWS_DAYS*864e5; const out=[];
-  listAllTasks().forEach(a=>{ _notes(a.node).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>old && !seen('men', x.id, x.ts||0)) out.push({ a, x }); }); });
+  listAllTasks({ lager:true }).forEach(a=>{ _notes(a.node).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>old && !seen('men', x.id, x.ts||0)) out.push({ a, x }); }); });
   try{ [...listTeamProjekte(), ...listVeranstaltungen()].forEach(c=>{ if(!c||c.art==='aufgaben') return; _notes(c).forEach(x=>{ if(x.uid!==me && Array.isArray(x.mentions) && x.mentions.includes(me) && (x.ts||0)>old && !seen('men', x.id, x.ts||0))
       out.push({ pin:true, c, kind:c.titel!==undefined&&c.name===undefined?'veranstaltung':'teamprojekt', x }); }); }); }catch(e){}
   return out.sort((p,q)=>(q.x.ts||0)-(p.x.ts||0)); }
 function crmMyAssignNews(){ const me=(window.cu&&window.cu.id)||''; if(!me) return []; const seen=_newsSeenFn(); const old=Date.now()-_NEWS_DAYS*864e5; const out=[];
-  listAllTasks().forEach(a=>{ const z=a.node.zugeteilt&&a.node.zugeteilt[me]; if(!z || z.by===me || (z.ts||0)<=old || a.node.status==='erledigt' || seen('zut', a.node.id, z.ts||0)) return; out.push({ a, z }); });
+  listAllTasks({ lager:true }).forEach(a=>{ const z=a.node.zugeteilt&&a.node.zugeteilt[me]; if(!z || z.by===me || (z.ts||0)<=old || a.node.status==='erledigt' || seen('zut', a.node.id, z.ts||0)) return; out.push({ a, z }); });
   return out.sort((p,q)=>(q.z.ts||0)-(p.z.ts||0)); }
 // Ansicht geöffnet → zugehörige Neuigkeiten als gelesen (geräteübergreifend)
 function _tvMarkNews(n){ try{ const me=(window.cu&&window.cu.id)||''; if(!window.homeNewsMark) return; const l=[];
@@ -7043,7 +7096,7 @@ function crmHistRestore(key){
 // ══════════════════════════════════════════════════════════════════
 //  CRM-Konfiguration (admin): Bäume & Stammdaten-Felder editierbar
 // ══════════════════════════════════════════════════════════════════
-const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','userPrefs'];
+const CFG_RESERVED = ['vorlagen','teamprojekte','access','config','pathAccess','shopItems','shopPlaces','shopOrders','shopLog','shopLoans','shopConfig','shopTasks','userPrefs'];
 const _clone = o => JSON.parse(JSON.stringify(o));
 // Arbeitskopie der Config: aus crm/config oder (falls leer) aus den Defaults.
 function _cfgWork(){
