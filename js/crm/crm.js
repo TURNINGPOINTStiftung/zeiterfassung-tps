@@ -4765,20 +4765,21 @@ function _mineSegHtml(){ const on=_planMineOnly(); return `<span class="pl-seg" 
 function crmMineSet(v){ try{ localStorage.setItem('tps_plan_mine', v?'1':'0'); }catch(e){} paintTeamDetail(); }
 window.crmMineSet=crmMineSet; window.crmTeamRepaint=()=>{ try{ paintTeamDetail(); }catch(e){} };
 // Team-Archiv (älter als 7 Tage erledigt): Team-Übersicht UND unten im Projekt-/Redaktionsplan – für alle im Team sichtbar
-function _teamArchivHtml(team){
-  const ohne=team==='Ohne Team'; const wk=Date.now()-7*864e5; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
+// sofort=true (Team-Übersicht, User 13.11.2026): erledigte Aufgaben gleich ins Archiv – „Erledigt" zeigt nur der Projektplan
+function _teamArchivHtml(team, sofort){
+  const ohne=team==='Ohne Team'; const wk=Date.now()-7*864e5; const wkA=sofort?Infinity:wk; const _ts=v=>{ const t=typeof v==='number'?v:Date.parse(v||''); return isFinite(t)?t:0; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks({ includeClosed:true, lager:true }).filter(a=>!a.owner);
   const tAll=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
   const archP=tAll.filter(p=>p.closed&&_ts(p.closedAt)<wk).sort((a,b)=>_ts(b.closedAt)-_ts(a.closedAt));
-  const archA=[]; if(!ohne){ const box=_aufgBox(team,''); if(box) (box.todos||[]).forEach(n=>{ if(n&&n.status==='erledigt'&&_ts(n.doneAt)<wk) archA.push(n); }); }
+  const archA=[]; if(!ohne){ const box=_aufgBox(team,''); if(box) (box.todos||[]).forEach(n=>{ if(n&&n.status==='erledigt'&&_ts(n.doneAt)<wkA) archA.push(n); }); }
   archA.sort((a,b)=>_ts(b.doneAt)-_ts(a.doneAt));
-  const archT=all.filter(a=>inTeam(a) && a.art!=='aufgaben' && a.node.status==='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && _ts(a.node.doneAt)<wk)
+  const archT=all.filter(a=>inTeam(a) && a.art!=='aufgaben' && a.node.status==='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && _ts(a.node.doneAt)<wkA)
     .sort((x,y)=>_ts(y.node.doneAt)-_ts(x.node.doneAt));
-  const archHtml=(archP.length||archA.length||archT.length)?`<section class="plan-card"><details><summary class="plan-arch-s"><h2 style="display:inline">🗄 Archiv</h2> <span class="plan-sub">${archP.length} Projekt${archP.length===1?'':'e'} · ${archA.length+archT.length} Aufgabe${(archA.length+archT.length)===1?'':'n'} – älter als 7 Tage erledigt</span></summary>
+  const archHtml=(archP.length||archA.length||archT.length)?`<section class="plan-card"><details><summary class="plan-arch-s"><h2 style="display:inline">🗄 Archiv</h2> <span class="plan-sub">${archP.length} Projekt${archP.length===1?'':'e'} · ${archA.length+archT.length} Aufgabe${(archA.length+archT.length)===1?'':'n'}${sofort?' erledigt':' – älter als 7 Tage erledigt'}</span></summary>
     ${archP.map(p=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">📂 ${esc(p.name||'Projekt')}</div></div><span class="plan-when">🏁 ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' · '+esc(p.closedByKuerzel):''}</span></div>`).join('')}
     ${archA.map(n=>`<div class="plan-irow"><div class="plan-item done" role="button" tabindex="0" onclick="crmAufgEdit(${jsq(_aufgId(team,''))},${jsq(n.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(n.text||'Aufgabe')}</div></div><span class="plan-when">${esc(n.doneAt?fmtDate(Date.parse(n.doneAt)):'')}${n.doneBy?' · '+esc(n.doneBy):''}</span></div>${_aufgMay(_aufgBox(team,''))?`<div class="plan-acts"><button type="button" class="plan-act" onclick="crmAufgReopen(${jsq(_aufgId(team,''))},${jsq(n.id)})">↩ Wieder öffnen</button></div>`:''}</div>`).join('')}
-    ${archT.slice(0,50).map(a=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${a.kind==='veranstaltung'?'📅':(a.kind==='entity'?'📇':'📂')} ${esc(a.containerName||'')}</span></div></div><span class="plan-when">${esc(a.node.doneAt?fmtDate(Date.parse(a.node.doneAt)):'')}${a.node.doneBy?' · '+esc(a.node.doneBy):''}</span></div>`).join('')}${archT.length>50?`<div class="plan-sub">… und ${archT.length-50} ältere</div>`:''}
+    ${archT.slice(0,50).map(a=>`<div class="plan-item done" role="button" tabindex="0" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(a.node.id)})"><span class="plan-barc" style="background:var(--border-strong,#9aa7b6)"></span><div class="plan-main"><div class="plan-t">✓ ${esc(a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">${_kIc(a.kind)} ${esc(a.containerName||'')}</span></div></div><span class="plan-when">${esc(a.node.doneAt?fmtDate(Date.parse(a.node.doneAt)):'')}${a.node.doneBy?' · '+esc(a.node.doneBy):''}</span></div>`).join('')}${archT.length>50?`<div class="plan-sub">… und ${archT.length-50} ältere</div>`:''}
     </details></section>`:'';
   return archHtml;
 }
@@ -4806,14 +4807,14 @@ function _planTeamOverview(team){
   const doneHtml=done.length?`<div class="plan-grp" style="margin-top:14px">✓ Erledigt in den letzten 7 Tagen · ${done.length}</div>${done.map(doneRow).join('')}`:'';
   const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div style="margin:0 0 8px">${_mineSegHtml()}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
     ${leaves.length?leaves.map(taskRow).join(''):'<div class="plan-empty">Diesem Team ist in den nächsten 6 Wochen keine offene Aufgabe zugeordnet. Aufgaben bekommen ein Team über die Veranstaltung/das Projekt oder direkt in der Aufgabe.</div>'}
-    <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist.</div>${doneHtml}</section>`;
+    <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist. Erledigtes steht unten im Archiv.</div></section>`;
   const vas=teamVeranstaltungen(team).filter(v=>!v.closed && String(v.ende||v.start||'')>=today).sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
   const vaRow=v=>{ const vt=vaTeams(v); const lead=vt[0]||''; const openN=all.filter(a=>a.kind==='veranstaltung'&&a.containerId===v.id&&inTeam(a)&&a.node.status!=='erledigt'&&!(Array.isArray(a.node.children)&&a.node.children.length)).length;
     return `<div class="plan-item" role="button" tabindex="0" onclick="planVaSet(${jsq(v.id)})"><span class="plan-barc" style="background:${_tc(lead)}"></span><div class="plan-main"><div class="plan-t">${esc(v.titel||'Veranstaltung')}</div><div class="plan-row">${(lead&&lead!==team&&!ohne)?`<span class="plan-tag">beteiligt · federführend ${esc(lead)}</span>`:''}<span class="plan-tag">${openN} offen fürs Team</span></div></div><span class="plan-when">${esc(v.start?fmtDate(Date.parse(v.start)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
   const vaCard=`<section class="plan-card"><div class="plan-h"><h2>📅 Veranstaltungen</h2>${_R('kal_va')?`<button class="btn-sm-crm primary" onclick="crmNewVeranstaltungForTeam(${jsq(team)})">＋ Veranstaltung</button>`:''}</div>${vas.length?vas.map(vaRow).join(''):'<div class="plan-empty">Keine anstehenden Veranstaltungen für dieses Team.</div>'}</section>`;
   const tAll=listTeamProjekte(ohne?'':team).filter(p=>!p.owner&&p.art!=='aufgaben');
   const projs=tAll.filter(p=>!p.closed||_ts(p.closedAt)>=wk);   // abgeschlossene noch 7 Tage sichtbar
-  const archHtml=_teamArchivHtml(team);
+  const archHtml=_teamArchivHtml(team, true);
   const prRow=p=>{ const openN=flatTasks(p).filter(t=>t.status!=='erledigt').length; const z=p.start?(fmtDate(Date.parse(p.start)).replace(/\.\d{4}$/,'.')+'–'+(p.ende?fmtDate(Date.parse(p.ende)).replace(/\.\d{4}$/,'.'):'')):'';
     if(p.closed) return `<div class="plan-item done" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:var(--ok,#16a34a)"></span><div class="plan-main"><div class="plan-t">🏁 ${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">abgeschlossen am ${esc(fmtDate(p.closedAt))}${p.closedByKuerzel?' von '+esc(p.closedByKuerzel):''}</span></div></div></div>`;
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmOpenTeamProjekt(${jsq(p.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(p.name||'Projekt')}</div><div class="plan-row"><span class="plan-tag">${openN} offen</span>${p.start?'':'<span class="plan-tag">ohne Zeitraum</span>'}</div></div><span class="plan-when">${esc(z)}</span></div>`; };
@@ -5239,6 +5240,8 @@ function crmLagerView(nodeId){
       ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">✓ Erledigen …</button>
       ${(!ass.length&&!a.owner)?`<button class="btn-sm-crm" onclick="crmTakeTask('lager','',${jsq(L.id)},${jsq(n.id)})">Übernehmen</button>`:''}
       ${a.owner?'':`<button class="btn-sm-crm" onclick="crmLagerStatus(${jsq(n.status==='inarbeit'?'offen':'inarbeit')})">${n.status==='inarbeit'?'↩ Zurück auf Offen':'▶ In Arbeit'}</button>`}`}
+      ${(window.shopPtMay&&window.shopPtMay())?`${done?'':`<button class="btn-sm-crm" onclick="crmLagerEdit(${jsq(L.id)})">✎ ${L.sub==='leihe'?'Rückgabedatum':'Termin'} ändern</button>`}
+      ${(L.sub!=='leihe'||done)?`<button class="btn-sm-crm danger" onclick="crmLagerDel(${jsq(n.id)})">🗑 ${done?'Eintrag':'Termin'} löschen</button>`:''}`:''}
       <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
     </div>
     ${done?'':`<div class="tv-empty" style="margin-top:8px">„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.</div>`}</div>`);
@@ -5251,11 +5254,13 @@ function crmLagerNote(){ const t=(val('lv-note')||'').trim(); if(!t) return; con
   window.shopPtNote(a.lager.id, x); if(x.mentions.length) toast('Notiz gespeichert ✓ – '+x.mentions.map(userName).join(', ')+' wird benachrichtigt','ok'); crmPlanAfterLager(); }
 function crmLagerNoteDel(id){ if(!confirm('Notiz löschen?')) return; const a=_lvA(); if(!a) return; window.shopPtNoteDel(a.lager.id, id, (window.cu&&window.cu.id)||''); crmPlanAfterLager(); }
 function crmLagerDone(id){ crmCloseModal(); window._lvId=null; try{ window.shopPtDone(id); }catch(e){ console.warn(e); } }
+function crmLagerEdit(id){ crmCloseModal(); window._lvId=null; try{ window.shopPtEdit(id); }catch(e){ console.warn(e); } }
+function crmLagerDel(nodeId){ try{ if(window.shopPtDel(nodeId)){ crmCloseModal(); window._lvId=null; crmPlanAfterLager(); } }catch(e){ console.warn(e); } }
 function crmLagerOpenSrc(){ const a=_lvA(); crmCloseModal(); if(a) try{ window.shopPtOpenLager(a.lager.id); }catch(e){} }
 // nach jeder Änderung: Planner neu zeichnen, offene Lager-Ansicht auffrischen
 function crmPlanAfterLager(){ try{ if(window._planActive) _planRepaint(); else _aufgRefresh(); }catch(e){ _aufgRefresh(); }
   if(window._lvId && document.querySelector('#modal-body .tv')){ const id=window._lvId; if(window.shopPtFind&&window.shopPtFind(id)) crmLagerView(id); } }
-try{ Object.assign(window, { crmLagerView, crmLagerAss, crmLagerStatus, crmLagerNote, crmLagerNoteDel, crmLagerDone, crmLagerOpenSrc, crmPlanAfterLager }); }catch(e){}
+try{ Object.assign(window, { crmLagerEdit, crmLagerDel, crmLagerView, crmLagerAss, crmLagerStatus, crmLagerNote, crmLagerNoteDel, crmLagerDone, crmLagerOpenSrc, crmPlanAfterLager }); }catch(e){}
 function crmTaskViewOpenSrc(){ const a=window._tvArgs; if(!a) return; crmCloseModal();
   try{ if(a.kind==='veranstaltung'){ if(window.planVaSet) window.planVaSet(a.cid); }
     else if(a.kind==='teamprojekt'){ const c=getTeamProjekt(a.cid); if(c&&c.art==='aufgaben'){ if(c.team&&window.planGo) window.planGo('teams',{team:c.team}); else if(window.planGo) window.planGo('start'); }

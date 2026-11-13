@@ -46,7 +46,8 @@ const STATUS={
 };
 const LOG_T={ zugang:'➕ Zugang', abgang:'➖ Abgang', korrektur:'✎ Korrektur', umlagern:'⇄ Umlagern', ausgabe:'📦 Ausgabe', verleih:'🔁 Verliehen', rueckgabe:'↩ Rückgabe', versand:'📤 Verschickt', verbrauch:'🔻 Verbrauch gemeldet', termin:'✅ Termin erledigt', zuordnung:'👤 Zuordnung', inventur:'📋 Inventur' };
 
-let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv', fOpen=false;   // fOpen: Filter-Feld auf dem Handy aufgeklappt
+let TAB='bestand', fCat='', fPlace='', fQ='', fOrd='aktiv', fLogItem='', fLoan='aktiv', fOpen=false;
+let fLogPlace='', fLogType='', fLogWho='';   // v576: Verlauf-Filter   // fOpen: Filter-Feld auf dem Handy aufgeklappt
 
 // ── Rechte ─────────────────────────────────────────────────────────
 function _acc(){
@@ -263,6 +264,14 @@ function _styles(){
   const st=document.createElement('style');
   st.textContent=`
   .shop-wrap{padding:16px 22px;width:100%;box-sizing:border-box}
+  .shop-pbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+  .shop-pchip{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1.5px solid var(--border,#d0d7e2);background:var(--surface,#fff);color:var(--text,#15263a);cursor:pointer}
+  .shop-pchip.on{background:var(--primary,#203869);border-color:var(--primary,#203869);color:#fff;font-weight:600}
+  .shop-pchip.add{border-style:dashed;color:var(--primary,#203869)}
+  .shop-pchip:focus-visible{outline:2px solid var(--primary,#203869);outline-offset:2px}
+  .shop-pcard{margin:0 0 12px}
+  .shop-mine{border:1.5px solid var(--border,#d0d7e2);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:var(--surface,#fff)}
+  .shop-mine .shop-iv-row{align-items:center;gap:8px}
   .shop-h{font-size:20px;font-weight:700;color:var(--primary,#203869);margin:0 0 4px}
   .shop-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
   .shop-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:2px solid var(--border)}
@@ -420,9 +429,11 @@ export function renderShop(){
     const root=document.getElementById('shop-root'); if(!root) return;
     if(!canUse()){ root.innerHTML='<div class="shop-wrap"><div class="shop-empty">Für das Lager bist du noch nicht freigeschaltet.</div></div>'; return; }
     const mgr=canManage(); const me=_me();
-    if(!mgr && (TAB==='orte'||TAB==='verlauf'||TAB==='nachfuellen')) TAB='bestand';
+    if(!mgr && TAB==='nachfuellen') TAB='bestand';
     const _adm=!!(me&&me.role==='admin');   // v575: Fälligkeiten stehen als Aufgaben im Planner → Reiter „Fällig" nur noch Admin
     if(TAB==='faellig' && !_adm) TAB='bestand';
+    // v576 schlankes Lager: Orte stecken im Bestand, Ausleihen-Übersicht nur noch Admin, Verlauf für alle
+    if(TAB==='orte' || (TAB==='ausleihen' && !_adm)) TAB='bestand';
     const held=myHeld();
     const myDue = allDue().filter(d=>forMe(dueTeams(d)) || dueHeld(d,held));   // Zähler nur fürs eigene Team + was mir zugeordnet ist
     const nDue = myDue.filter(d=>d.t.datum<=_soonIso(30)).length;
@@ -436,9 +447,9 @@ export function renderShop(){
     const nLate=myLoans.filter(_overdue).length;
     const T=(k,i,l,sh,badge)=>[k,`<span class="ti" aria-hidden="true">${i}</span><span class="tl">${l}</span><span class="ts">${sh}</span>${badge||''}`,l];
     const tabs=[T('bestand','📦','Bestand','Bestand'),T('bestellungen','🛒','Bestellungen','Bestellt',nOpen?`<span class="shop-badge">${nOpen}</span>`:''),
-      T('ausleihen','🔁','Ausleihen','Leihe',myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]
+      ..._adm?[T('ausleihen','🔁','Ausleihen','Leihe',myLoans.length?`<span class="shop-badge" style="background:${nLate?'#c0392b':'#2563eb'}">${myLoans.length}</span>`:'')]:[]]
       .concat(_adm?[T('faellig','⏰','Fällig','Fällig',nDue?`<span class="shop-badge" style="background:${nOverDue?'#c0392b':'#d97706'}">${nDue}</span>`:'')]:[])
-      .concat(mgr?[T('orte','📍','Orte','Orte'),T('verlauf','📜','Verlauf','Verlauf')]:[]);
+      .concat([T('verlauf','📜','Verlauf','Verlauf')]);
     let body='';
     if(TAB==='bestand') body=_bestandHtml(mgr);
     else if(TAB==='bestellungen') body=_ordersHtml(mgr);
@@ -470,24 +481,26 @@ function _bestandHtml(mgr){
   const plOpts=['<option value="">Alle Orte</option>'].concat(pls.map(p=>`<option value="${esc(p.id)}"${fPlace===p.id?' selected':''}>${esc(placeLabel(p.id))}</option>`)).join('')
     +(bws.length?`<optgroup label="🔁 Ausgeliehen an">${bws.map(b=>`<option value="${esc('loan:'+b.key)}"${fPlace==='loan:'+b.key?' selected':''}>${esc(b.label)}</option>`).join('')}</optgroup>`:'');
   const hint = (mgr && !pls.length) ? `<div class="shop-empty" style="text-align:left;padding:8px 0">👉 Lege zuerst unter <b>📍 Orte</b> an, wo Sachen liegen (Büro, Bus, Boot 1 …).</div>` : '';
-  const nF=(fCat?1:0)+(fPlace?1:0)+(fTeam?1:0);
+  const nF=(fCat?1:0)+(fTeam?1:0);
   return `${hint}<div class="shop-bar">
       <input type="search" id="shop-q" placeholder="Suchen …" aria-label="Artikel suchen" value="${esc(fQ)}" oninput="shopSetQ(this.value)">
       <button class="shop-btn shop-fbtn${nF?' pri':''}" aria-expanded="${fOpen?'true':'false'}" aria-controls="shop-filters" onclick="shopFilterToggle()">⚙ Filter${nF?` (${nF})`:''}</button>
       <div class="shop-filters${fOpen?' open':''}" id="shop-filters">
         <select aria-label="Kategorie" onchange="shopSetCat(this.value)">${catOpts}</select>
-        <select aria-label="Ort" onchange="shopSetPlace(this.value)">${plOpts}</select>
         ${_teamFilterHtml()}
         ${nF?`<button class="shop-btn" onclick="shopFilterReset()">✕ Filter zurücksetzen</button>`:''}
       </div>
       <span class="shop-sp"></span>
       ${mgr?`<details class="shop-more"><summary class="shop-btn" aria-label="Weitere Aktionen">⋯</summary><div class="shop-more-m">
         <button class="shop-btn" onclick="shopExport()" title="Artikel und Bestand je Ort als Excel-Tabelle (z. B. für die Inventur)">⬇ Excel-Export</button>
-        <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button></div></details>`:''}
+        <button class="shop-btn" onclick="shopImportPick()" title="Excel-Tabelle einlesen: neue Artikel anlegen, Bestände setzen (mit Vorschau)">⬆ Excel-Import</button>
+        <button class="shop-btn" onclick="shopSettings()" title="Eigene Organisation, Lager-Zuständige je Team, Vorlauf für Termine">⚙ Einstellungen</button></div></details>`:''}
       <button class="shop-btn pri" onclick="shopItemEdit('')">＋ Artikel</button>
     </div>
-    ${fPlace&&!fPlace.startsWith('loan:')&&placeOf(fPlace)&&_can('la_bestand')?`<div class="shop-bar"><button class="shop-btn" onclick="shopInv(${jsq(fPlace)})">📋 Inventur für ${esc(placeLabel(fPlace))}${_invDraft(fPlace)?' (begonnen)':''}</button></div>`:''}
-    <div id="shop-items">${_itemsGrid(mgr)}</div>`;
+    ${_placeBarHtml(mgr)}
+    ${_beiMirHtml()}
+    ${fPlace==='unterwegs' ? `<div class="shop-list">${_unterwegsHtml()||'<div class="shop-empty">Gerade ist nichts ausgeliehen.</div>'}</div>`
+      : `${(fPlace&&placeOf(fPlace))?`<div class="shop-list shop-pcard">${_placeRowHtml(placeOf(fPlace), items())}</div>`:''}<div id="shop-items">${_itemsGrid(mgr)}</div>`}`;
 }
 
 // ── Excel-Export / -Import (Inventur) – nur Lager-Verwaltende (User 14.10.2026) ────────────────
@@ -676,6 +689,7 @@ function _itemActs(it, mgr){ const art=itemArt(it);
   return `${art!=='ausstattung'&&!isEinzeln(it)?`<button class="shop-btn sm pri" onclick="shopCartAdd(${jsq(it.id)})" title="In den Korb legen">${art==='leihe'?'🔁':'🛒'} In den Korb</button>`:''}
     ${!isEinzeln(it)&&usePlaces(it).length||isEinzeln(it)&&art==='ausstattung'&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopUse(${jsq(it.id)})" title="Etwas wurde verbraucht (z. B. Erste-Hilfe-Päckchen benutzt)">➖ Verbrauch</button>`:''}
     ${mgr&&art==='ausstattung'&&!isEinzeln(it)&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="shopLend(${jsq(it.id)})" title="Einem Mitarbeiter / Verein zuordnen">🔁 Zuordnen</button>`:''}
+    ${mgr&&art==='leihe'&&!isEinzeln(it)&&inPlaces(it)>0?`<button class="shop-btn sm" onclick="closeModal();shopLend(${jsq(it.id)})" title="Direkt an Person oder Verein verleihen">🔁 Verleihen</button>`:''}
     ${mgr&&isEinzeln(it)?`<button class="shop-btn sm" onclick="shopUnits(${jsq(it.id)})">🏷️ Stücke (${unitsOf(it).length})</button>`:''}
     ${mgr&&!isEinzeln(it)?`<button class="shop-btn sm" onclick="shopBook(${jsq(it.id)})">± Buchen</button>
     <button class="shop-btn sm" onclick="shopMove(${jsq(it.id)})">⇄ Umlagern</button>`:''}
@@ -695,12 +709,12 @@ function shopItemView(id){
     .sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'));
   const plRows=pids.map(pid=>{ const ist=_num((it.stock||{})[pid]), so=sollAt(it,pid);
     return `<div class="shop-iv-row"><span>${esc(placeLabel(pid))}</span><span class="r"${so&&ist<so?' style="color:var(--danger,#c0392b)"':''}>${ist}${so?` / Soll ${so}${ist<so?' ⚠':''}`:''}</span></div>`; }).join('');
-  const lnRows=activeLoans(it.id).map(l=>`<div class="shop-iv-row"><span>${esc(bLabel(l))}${l.due?` · bis ${_fmtDate(l.due)}`:' · dauerhaft'}</span><span class="r"${_overdue(l)?' style="color:var(--danger,#c0392b)"':''}>${_num(l.qty)}</span></div>`).join('');
+  const lnRows=activeLoans(it.id).map(l=>`<div class="shop-iv-row"><span>${esc(bLabel(l))}${l.due?` · bis ${_fmtDate(l.due)}`:' · dauerhaft'}</span><span class="r"${_overdue(l)?' style="color:var(--danger,#c0392b)"':''}>${_num(l.qty)} <button class="shop-btn sm ok" onclick="closeModal();shopReturn(${jsq(l.id)})" aria-label="Zurückgeben: ${esc(bLabel(l))}">↩ Zurück</button></span></div>`).join('');
   const me=_me(); const act=o=>o.status==='offen'||o.status==='inarbeit';
   const ors=orders().filter(o=>act(o) && _pos(o).some(p=>p.itemId===it.id) && (mgr||o.byId===me.id));
   const orRows=ors.map(o=>{ const q=_pos(o).filter(p=>p.itemId===it.id).reduce((s,p)=>s+_num(p.menge),0); const st=STATUS[o.status]||STATUS.offen;
     return `<div class="shop-iv-row"><span>${esc(o.byName||'?')} · ${_fmtTs(o.ts)} <span class="shop-st" style="background:${st.c}">${st.l}</span></span><span class="r">${q}</span></div>`; }).join('');
-  const logs=mgr?listShop('shopLog').filter(l=>l.itemId===it.id).sort((a,b)=>(b.ts||0)-(a.ts||0)):[];
+  const logs=listShop('shopLog').filter(l=>l.itemId===it.id).sort((a,b)=>(b.ts||0)-(a.ts||0));   // v576: Verlauf für alle
   const lgRows=logs.slice(0,5).map(l=>`<div class="shop-iv-row"><span>${_fmtTs(l.ts)} · ${LOG_T[l.type]||esc(l.type)}${l.byName?' · '+esc(l.byName):''}</span><span class="r">${l.type==='korrektur'?(l.qty>0?'+':'')+l.qty:l.qty}</span></div>`).join('');
   const chips=[it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:'', art==='leihe'?'<span class="shop-cat">🔁 Leihmaterial</span>':'', art==='ausstattung'?'<span class="shop-cat">🧰 Ausstattung</span>':'', _teamChip(it.team)].join(' ');
   openModal(`<div class="shop-iv-top">${img}<div style="min-width:0">
@@ -1697,7 +1711,7 @@ function _backfillDirectOrders(){
 function _recipLabel(l){ if(!l.recipientName) return ''; return bLabel({borrowerRef:l.recipientRef,borrowerId:l.recipientId,borrowerName:l.recipientName}); }
 function shopReturn(loanId){
   const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv') return;
-  const me=_me(); if(!_can('la_ausleihen') && l.borrowerId!==me.id && !window._shopFromPlan) return;
+  const me=_me();   // v576: zurückbuchen dürfen alle (Regeln v20)
   if(l.placeId){   // beweglicher Ort: einfach zurück (Inhalt war ja die ganze Zeit am Ort gebucht)
     openModal(`<h3>${isZuord(l)?"👤 Zuordnung aufheben":"↩ Zurückgeben"}</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(placeLabel(l.placeId))}</b> · bei ${esc(bLabel(l))}${l.due?' · bis '+_fmtDate(l.due):''}</p>
       <div class="shop-f"><label>Zustand / Notiz</label><input id="sr-note" placeholder="z. B. alles ok, Kilometerstand, Schaden am Rücklicht"></div>
@@ -1737,7 +1751,7 @@ function shopReturnSave(loanId){
   closeModal(); toast(l.status==='zurueck'?'Zurückgegeben ✓':`${q} zurück – ${l.qty} noch ausgeliehen.`,'ok'); renderShop(); _ptAfter();
 }
 function shopLoanDue(loanId){
-  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||!_can('la_ausleihen')) return;
+  const l=getShop('shopLoans',loanId); if(!l||l.status!=='aktiv'||(!_can('la_ausleihen')&&!window._shopFromPlan)) return;
   openModal(`<h3>📅 Rückgabedatum</h3><p style="font-size:13px;margin:0 0 10px">${_num(l.qty)}× ${esc(l.itemName||'')} · ${esc(bLabel(l))}</p>
     <div class="shop-f"><label>Rückgabe bis <span style="font-weight:400;color:var(--muted)">(leer = Dauerleihe)</span></label><input id="sld-due" type="date" value="${esc(l.due||'')}"></div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -1818,13 +1832,13 @@ function dueBadge(t){
 }
 // „Rettungsweste 04" statt „Rettungsweste · Rettungsweste 04", wenn die Bezeichnung den Namen schon enthält
 function _unitTitle(it,u){ const nr=String(u.nr||"?"); return nr.toLowerCase().startsWith(String(it.name||"").toLowerCase()) ? nr+(it.variante?" · "+it.variante:"") : itemLabel(it)+" · "+nr; }
-function nextTermin(termine){ return (termine||[]).filter(t=>t&&t.datum).sort((a,b)=>a.datum.localeCompare(b.datum))[0]||null; }
+function nextTermin(termine){ return (termine||[]).filter(t=>t&&t.datum&&!t.erledigt).sort((a,b)=>a.datum.localeCompare(b.datum))[0]||null; }
 // Alle Termine (Stücke + Orte) → [{key, kind, itemId, unitId, placeId, t, title, where}]
-function allDue(){
-  const out=[];
-  items().filter(isEinzeln).forEach(it=>unitsOf(it).forEach(u=>(u.termine||[]).forEach(t=>{ if(t&&t.datum) out.push({ key:'u|'+it.id+'|'+u.id+'|'+t.id, kind:'unit', itemId:it.id, unitId:u.id, placeId:u.placeId, t,
+function allDue(inclDone){
+  const out=[]; const keep=t=>t&&t.datum&&(inclDone||!t.erledigt);   // einmalige Termine nach „Erledigt" (erledigt:true) nur noch im Verlauf
+  items().filter(isEinzeln).forEach(it=>unitsOf(it).forEach(u=>(u.termine||[]).forEach(t=>{ if(keep(t)) out.push({ key:'u|'+it.id+'|'+u.id+'|'+t.id, kind:'unit', itemId:it.id, unitId:u.id, placeId:u.placeId, t,
     title:_unitTitle(it,u), where:(u.placeId?placeLabel(u.placeId):(()=>{ const ul=unitLoan(u.id); return ul?'🏷️ bei '+bName(ul):'–'; })())+(u.marke?' · '+u.marke:'') }); })));
-  places().forEach(p=>(p.termine||[]).forEach(t=>{ if(t&&t.datum){ const z=placeZuord(p.id), le=placeLeihe(p.id); out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:[z?'👤 '+bName(z):'', le?'🔁 an '+bName(le):''].filter(Boolean).join(' · ') }); } }));
+  places().forEach(p=>(p.termine||[]).forEach(t=>{ if(keep(t)){ const z=placeZuord(p.id), le=placeLeihe(p.id); out.push({ key:'p|'+p.id+'|'+t.id, kind:'place', placeId:p.id, t, title:placeLabel(p.id), where:[z?'👤 '+bName(z):'', le?'🔁 an '+bName(le):''].filter(Boolean).join(' · ') }); } }));
   return out.sort((a,b)=>a.t.datum.localeCompare(b.t.datum));
 }
 
@@ -2008,7 +2022,7 @@ function shopDueDone(key){
   openModal(`<h3>✓ Erledigt – ${esc(title)}</h3>
     <p style="font-size:13px;margin:0 0 10px">${esc((TERMIN_ART[t.art]||TERMIN_ART.pruefung).l)}${t.label?' · '+esc(t.label):''} · fällig ${_fmtDate(t.datum)}</p>
     <div class="shop-f2"><div class="shop-f"><label>Erledigt am</label><input id="dd-am" type="date" value="${_todayIso()}" onchange="${iv?`document.getElementById('dd-next').value=shopAddMonths(this.value,${iv})`:''}"></div>
-      <div class="shop-f"><label>${t.art==='ablauf'?'Neues Ablaufdatum (nach Austausch)':'Nächster Termin'}${iv?` <span style="font-weight:400;color:var(--muted)">(+${iv} Mon.)</span>`:''}</label><input id="dd-next" type="date" value="${iv?_addMonths(_todayIso(),iv):''}"></div></div>
+      <div class="shop-f"><label>${t.art==='ablauf'?'Neues Ablaufdatum (nach Austausch)':'Nächster Termin'}${iv?` <span style="font-weight:400;color:var(--muted)">(+${iv} Mon.)</span>`:' <span style="font-weight:400;color:var(--muted)">(leer = einmalig, damit fertig)</span>'}</label><input id="dd-next" type="date" value="${iv?_addMonths(_todayIso(),iv):''}"></div></div>
     <div class="shop-f"><label>Notiz</label><input id="dd-note" placeholder="z. B. Prüfer, Ergebnis, neue Charge"></div>
     ${f.kind==='unit'?'<p style="font-size:12px;color:var(--muted);margin:0">Ohne neues Datum? Dann das Stück lieber unter „🏷️ Stücke" ausmustern.</p>':''}
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
@@ -2017,28 +2031,27 @@ function shopDueDone(key){
 function shopDueDoneSave(key){
   const f=_dueFind(key); if(!f) return;
   const am=_val('dd-am')||_todayIso(), next=_val('dd-next'), note=_val('dd-note'), cu=_me();
-  if(!next){ toast('Bitte das nächste Datum angeben.','err'); return; }
+  if(!next && _num(f.t.intervall)){ toast('Bitte das nächste Datum angeben.','err'); return; }
   if(!Array.isArray(f.t.verlauf)) f.t.verlauf=[];
-  f.t.verlauf.push({ am, faellig:f.t.datum, by:cu.name||'', note }); f.t.datum=next;
+  f.t.verlauf.push({ am, faellig:f.t.datum, by:cu.name||'', note }); if(next){ f.t.datum=next; f.t.erledigt=null; } else f.t.erledigt=true;   // einmalig: fertig
   const lbl=(f.t.label||(TERMIN_ART[f.t.art]||TERMIN_ART.pruefung).l);
-  if(f.kind==='unit'){ if(_fieldOnly()) _saveField('shopItems', f.it.id, 'units/'+f.u.id+'/termine', f.u.termine); else saveShop('shopItems', f.it); _log(f.it,'termin',1,f.u.placeId,null,`${f.u.nr}: ${lbl} erledigt ${_fmtDate(am)} → nächster ${_fmtDate(next)}${note?' · '+note:''}`); }
+  if(f.kind==='unit'){ if(_fieldOnly()) _saveField('shopItems', f.it.id, 'units/'+f.u.id+'/termine', f.u.termine); else saveShop('shopItems', f.it); _log(f.it,'termin',1,f.u.placeId,null,`${f.u.nr}: ${lbl} erledigt ${_fmtDate(am)}${next?' → nächster '+_fmtDate(next):' (einmalig, fertig)'}${note?' · '+note:''}`); }
   else { if(_fieldOnly()) _saveField('shopPlaces', f.p.id, 'termine', f.p.termine); else saveShop('shopPlaces', f.p);
     saveShop('shopLog',{ id:newId(), ts:Date.now(), byId:cu.id||'', byName:cu.name||'', itemId:null, itemName:'📍 '+f.p.name, type:'termin', qty:1, from:f.p.id, to:null,
-      note:`${lbl} erledigt ${_fmtDate(am)} → nächster ${_fmtDate(next)}${note?' · '+note:''}`, orderId:null }); }
-  closeModal(); toast('Erledigt ✓ – nächster Termin '+_fmtDate(next),'ok'); renderShop(); _ptAfter();
+      note:`${lbl} erledigt ${_fmtDate(am)}${next?' → nächster '+_fmtDate(next):' (einmalig, fertig)'}${note?' · '+note:''}`, orderId:null }); }
+  closeModal(); toast(next?'Erledigt ✓ – nächster Termin '+_fmtDate(next):'Erledigt ✓','ok'); renderShop(); _ptAfter();
 }
 function shopAddMonths(iso,m){ return _addMonths(iso,m); }
 function shopDueNoticeOpen(){ TAB='faellig'; fDue='soon'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 function shopDueAck(){ _bulkAckSet('due', _dueNoticeIds()); _noticesRefresh(); }
 
 // ── Tab: Orte ──────────────────────────────────────────────────────
-function _orteHtml(){
-  const its=items();
-  const rows=places().map(p=>{
+// ── Ort-Zeile (Bestand → gewählter Ort, früher Reiter „Orte") ──
+function _placeRowHtml(p, its){
     const here=its.filter(i=>_num((i.stock||{})[p.id])>0);
     const n=here.reduce((s,i)=>s+_num(i.stock[p.id]),0);
     const z=placeZuord(p.id), le=placeLeihe(p.id);
-    return `<div class="shop-row"${le&&_overdue(le)?' style="border-color:var(--danger,#e5484d)"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
+    return `<div class="shop-row"${le&&_overdue(le)?' style="border-color:var(--danger,#e5484d)"':''}><div class="main"><div class="t">${esc(placeLabel(p.id))} ${_teamChip(p.team)}${p.zust&&_ptUName(p.zust)?` <span class="shop-cat">📌 zuständig: ${esc(_ptUName(p.zust))}</span>`:''} ${(()=>{ const nt=nextTermin(p.termine); return nt?dueBadge(nt):""; })()}
         ${z?`<span class="shop-st" style="background:${_ZUORD_C}">👤 ${esc(bName(z))}</span>`:''}
         ${le?`<span class="shop-st" style="background:${_overdue(le)?'#c0392b':'#2563eb'}">🔁 ausgeliehen an ${esc(bName(le))}${le.due?' bis '+_fmtDate(le.due):' (Dauerleihe)'}</span>`:''}</div>
       ${(()=>{ const li=_lastInv(p.id); return li?`<div class="m">📋 Letzte Inventur: ${_fmtTs(li.ts)}${li.byName?' · '+esc(li.byName):''}</div>`:''; })()}
@@ -2046,15 +2059,46 @@ function _orteHtml(){
       <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:flex-start">
       ${le?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(le.id)})">↩ Zurück</button>`:''}
       ${_can('la_bestand')?`<button class="shop-btn sm" onclick="shopInv(${jsq(p.id)})">📋 Inventur${_invDraft(p.id)?' (begonnen)':''}</button>`:''}
-      <details class="shop-more l"><summary class="shop-btn sm" aria-label="${esc(p.name)}: bearbeiten und weitere Aktionen">✎ ▾</summary><div class="shop-more-m">
+      ${canManage()?`<details class="shop-more l"><summary class="shop-btn sm" aria-label="${esc(p.name)}: bearbeiten und weitere Aktionen">✎ ▾</summary><div class="shop-more-m">
         <button class="shop-btn" onclick="shopPlaceEdit(${jsq(p.id)})">✎ Ort bearbeiten</button>${isMovable(p)?`
         ${z?`<button class="shop-btn" onclick="shopReassign(${jsq(z.id)})" title="An anderen Mitarbeiter übergeben">👤 Übergeben</button>`:`<button class="shop-btn" onclick="shopLendPlace(${jsq(p.id)},'zuord')">👤 Zuordnen</button>`}
-        ${le?`<button class="shop-btn" onclick="shopReturn(${jsq(le.id)})">↩ Zurückgeben</button>`:`<button class="shop-btn" onclick="shopLendPlace(${jsq(p.id)},'leihe')">🔁 Ausleihen</button>`}`:''}</div></details></div></div>`;
-  }).join('');
-  const bws=_borrowers();
-  const bRows=bws.map(b=>`<div class="shop-row"><div class="main"><div class="t">${esc(b.label)}</div>
+        ${le?`<button class="shop-btn" onclick="shopReturn(${jsq(le.id)})">↩ Zurückgeben</button>`:`<button class="shop-btn" onclick="shopLendPlace(${jsq(p.id)},'leihe')">🔁 Ausleihen</button>`}`:''}</div></details>`:''}</div></div>`;
+}
+// „🔁 Unterwegs": alles, was gerade an Personen/Vereine ausgeliehen ist
+function _unterwegsHtml(){
+  return _borrowers().map(b=>`<div class="shop-row"><div class="main"><div class="t">${esc(b.label)}</div>
       <div class="m">${b.loans.length} Leihe${b.loans.length===1?'':'n'} · `+b.loans.map(l=>`${_num(l.qty)}× ${esc(l.itemName||'')}${l.due?` (bis <span class="${_overdue(l)?'shop-late':''}">${_fmtDate(l.due)}</span>)`:' (dauerhaft)'}`).join(', ')+`</div></div>
-      <div style="display:flex;gap:5px"><button class="shop-btn sm" onclick="shopSetPlace(${jsq('loan:'+b.key)});shopTab('bestand')">Ansehen</button></div></div>`).join('');
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${b.loans.length===1?`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(b.loans[0].id)})">↩ Zurück</button>`:''}<button class="shop-btn sm" onclick="shopSetPlace(${jsq('loan:'+b.key)})">Ansehen</button></div></div>`).join('');
+}
+// Orte-Leiste oben im Bestand (ersetzt Reiter „Orte" und den Ort-Filter)
+function _placeBarHtml(mgr){
+  const pls=places(); if(!pls.length && !mgr) return '';
+  const on=v=>v==='unterwegs'?(fPlace==='unterwegs'||String(fPlace).startsWith('loan:')):fPlace===v;
+  const chip=(v,l)=>`<button type="button" class="shop-pchip${on(v)?' on':''}" aria-pressed="${on(v)}" onclick="shopSetPlace(${jsq(v)})">${l}</button>`;
+  return `<div class="shop-pbar" role="group" aria-label="Ort wählen">${chip('','Alle Orte')}${pls.map(p=>chip(p.id, esc(placeLabel(p.id)))).join('')}${_borrowers().length?chip('unterwegs','🔁 Unterwegs'):''}${mgr?`<button type="button" class="shop-pchip add" onclick="shopPlaceEdit('')">＋ Ort</button>`:''}</div>`;
+}
+// „👤 Bei mir": was ich gerade habe + meine offenen Bestellungen (ersetzt „Meine" in Ausleihen/Bestellungen)
+function _beiMirHtml(){
+  const me=_me(); if(!me.id) return '';
+  const ls=activeLoans().filter(l=>l.borrowerId===me.id);
+  const os=orders().filter(o=>o.byId===me.id && (o.status==='offen'||o.status==='inarbeit'||(o.status==='ausgegeben'&&!o.ackOrderer)));
+  if(!ls.length && !os.length) return '';
+  const what=l=>l.placeId?esc(placeLabel(l.placeId)):(l.unitId?esc(l.itemName||'')+' (Stück)':_num(l.qty)+'× '+esc(l.itemName||''));
+  const lRows=ls.map(l=>`<div class="shop-iv-row"><span>${loanIcon(l)} ${what(l)} · ${isZuord(l)?'dir zugeordnet':(l.due?`<span class="${_overdue(l)?'shop-late':''}">zurück bis ${_fmtDate(l.due)}${_overdue(l)?' (überfällig)':''}</span>`:'Dauerleihe')}</span>${isZuord(l)?'':`<button class="shop-btn sm ok" onclick="shopReturn(${jsq(l.id)})">↩ Zurückgeben</button>`}</div>`).join('');
+  const posTxt=o=>_pos(o).map(x=>{ const it=x.itemId&&getShop('shopItems',x.itemId); return _num(x.menge)+'× '+esc(it?itemLabel(it):(x.freitext||'')); }).join(', ');
+  const oRows=os.map(o=>{ const st0=STATUS[o.status]||STATUS.offen; const st=(o.status==='ausgegeben'&&o.issueMode==='versand')?{l:'Verschickt',c:st0.c}:st0;
+    return `<div class="shop-iv-row"><span>🛒 ${posTxt(o)||esc(o.freitext||'Bestellung')} · ${_fmtTs(o.ts)}</span><button type="button" class="shop-st" style="background:${st.c};border:0;cursor:pointer" onclick="shopTab('bestellungen')">${st.l}</button></div>`; }).join('');
+  return `<div class="shop-mine"><div class="shop-iv-sec" style="margin-top:0">👤 Bei mir</div>${lRows}${oRows}</div>`;
+}
+// ⚙ Einstellungen (Verwalter): früher unten im Reiter „Orte"
+function shopSettings(){ if(!canManage()) return;
+  openModal(`<h3>⚙ Lager-Einstellungen</h3>${_ptSettingsHtml()}${_orgSettingHtml()}
+    <div class="modal-btns"><button class="btn btn-primary" onclick="closeModal();renderShop()">Fertig</button></div>`, true); }
+function _orteHtml(){
+  const its=items();
+  const rows=places().map(p=>_placeRowHtml(p, its)).join('');
+  const bws=_borrowers();
+  const bRows=_unterwegsHtml();
   return `<div class="shop-bar"><span style="font-size:13px;color:var(--muted)">Wo liegen Sachen? Büro, Bus, Boote, Lager …</span><span class="shop-sp"></span>
     <button class="shop-btn pri" onclick="shopPlaceEdit('')">＋ Ort</button></div>
     <div class="shop-list">${rows||'<div class="shop-empty">Noch keine Orte angelegt.</div>'}</div>
@@ -2215,17 +2259,24 @@ function shopInvSave(pid){
 function _verlaufHtml(){
   const its=items();
   let logs=listShop('shopLog').sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const who=[...new Set(logs.map(l=>l.byName||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'de'));
   if(fLogItem) logs=logs.filter(l=>l.itemId===fLogItem);
+  if(fLogPlace) logs=logs.filter(l=>l.from===fLogPlace||l.to===fLogPlace);
+  if(fLogType) logs=logs.filter(l=>l.type===fLogType);
+  if(fLogWho) logs=logs.filter(l=>(l.byName||'')===fLogWho);
   const shown=logs.slice(0,300);
+  const fSel=(k,cur,all,opts)=>`<select aria-label="${all}" onchange="shopSetLogF('${k}',this.value)"><option value="">${all}</option>${opts.map(([v,l])=>`<option value="${esc(v)}"${cur===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  const more=fSel('place',fLogPlace,'Alle Orte',places().map(p=>[p.id,placeLabel(p.id)]))+fSel('type',fLogType,'Alle Arten',Object.keys(LOG_T).map(k=>[k,LOG_T[k]]))+fSel('who',fLogWho,'Alle Personen',who.map(n=>[n,n]));
   const opts=['<option value="">Alle Artikel</option>'].concat(its.map(i=>`<option value="${esc(i.id)}"${fLogItem===i.id?' selected':''}>${esc(itemLabel(i))}</option>`)).join('');
   const rows=shown.map(l=>`<tr><td style="white-space:nowrap">${_fmtTs(l.ts)}</td><td>${esc(l.byName||'')}</td><td style="white-space:nowrap">${LOG_T[l.type]||esc(l.type)}</td>
     <td style="text-align:right;font-weight:700">${l.type==='korrektur'?(l.qty>0?'+':'')+l.qty:l.qty}</td><td>${esc(l.itemName||'')}</td>
     <td>${l.from?esc(placeLabel(l.from)):''}${l.from&&l.to&&l.from!==l.to?' → ':''}${l.to&&l.to!==l.from?esc(placeLabel(l.to)):''}${l.recipientName?' → '+esc(_recipLabel(l)):''}</td><td>${esc(l.note||'')}</td></tr>`).join('');
-  return `<div class="shop-bar"><select onchange="shopSetLogItem(this.value)">${opts}</select><span class="shop-sp"></span>
+  return `<div class="shop-bar" style="flex-wrap:wrap"><select aria-label="Artikel" onchange="shopSetLogItem(this.value)">${opts}</select>${more}<span class="shop-sp"></span>
     <span style="font-size:12px;color:var(--muted)">${logs.length} Buchung${logs.length===1?'':'en'}${logs.length>300?' (neueste 300)':''}</span></div>
     ${rows?`<div style="overflow-x:auto"><table class="shop-log"><thead><tr><th>Wann</th><th>Wer</th><th>Art</th><th>Menge</th><th>Artikel</th><th>Ort</th><th>Notiz</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="shop-empty">Noch keine Buchungen.</div>'}`;
 }
 function shopSetLogItem(v){ fLogItem=v; renderShop(); }
+function shopSetLogF(k,v){ if(k==='place') fLogPlace=v; else if(k==='type') fLogType=v; else fLogWho=v; renderShop(); }
 
 // ── Mitteilungen (für die gemeinsame Leiste in gfberichte.js) ──────
 // Verwalter: neue (offene) Bestellungen, die er noch nicht gesehen hat.
@@ -2339,7 +2390,7 @@ function shopNoticeAck(id){
   try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
 }
 
-Object.assign(window, { shopInv, shopInvChg, shopInvSame, shopInvAdd, shopInvDiscard, shopInvReview, shopInvSave, shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
+Object.assign(window, { shopSettings, shopSetLogF, shopInv, shopInvChg, shopInvSame, shopInvAdd, shopInvDiscard, shopInvReview, shopInvSave, shopImgZoom, shopItemView, shopQtyStep, shopBookPrefill, shopFilterToggle, shopFilterReset, shopExport, shopImportPick, shopImportApply, shopImportPlan:_shopImportPlan, renderShop, shopTab, shopSetQ, shopSetCat, shopSetPlace, shopSetOrd, shopSetLogItem,
   shopItemEdit, shopItemSave, shopItemDelete, shopPhotoPick, shopPhotoClear,
   shopBook, shopBookSave, shopMove, shopMoveSave,
   shopOrderNew, shopOrderItemChg, shopOrderZielChg, shopOrderCrmChg, shopWhoChg, shopOrderSave, shopOrderStatus, shopOrderDone, shopOrderDoneSave,
@@ -2408,13 +2459,13 @@ function _ptEntry(o){
 function shopPlannerTasks(){
   const out=[]; const me=_me().id||''; const old=Date.now()-30*864e5;
   try{
-    allDue().forEach(d=>{ const team=dueTeams(d)[0]||''; const t=d.t; const art=(TERMIN_ART[t.art]||TERMIN_ART.pruefung);
+    allDue(true).forEach(d=>{ const team=dueTeams(d)[0]||''; const t=d.t; const art=(TERMIN_ART[t.art]||TERMIN_ART.pruefung);
       let placeId=d.placeId, holder='';
       if(d.kind==='unit'){ const ul=unitLoan(d.unitId); if(ul&&isZuord(ul)) holder=ul.borrowerId||''; if(!placeId&&ul) placeId=ul.fromPlace||''; }
       else { const z=placeZuord(d.placeId); if(z) holder=z.borrowerId||''; }
       const what=(t.label||art.l);
       const base={ team, placeId, holder, sub:'termin', where:d.where||'', info:[art.l+(t.intervall?' · alle '+_num(t.intervall)+' Monate':' · einmalig')] };
-      if(t.datum<=_soonIso(_ptDays(team))) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
+      if(!t.erledigt && t.datum<=_soonIso(_ptDays(team))) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
       (t.verlauf||[]).forEach(v=>{ const at=Date.parse((v.am||'')+'T12:00:00'); if(!isFinite(at)||at<old) return;
         out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:v.faellig||'', due:v.faellig||'', text:`${art.i} ${what}: ${d.title}`, done:true, doneAt:new Date(at).toISOString(), doneBy:v.by||'', info:base.info.concat(v.note?['Notiz: '+v.note]:[]) }))); });
     });
@@ -2454,6 +2505,32 @@ function shopPtDone(id){ const a=shopPtGet(id); if(!a){ toast('Diese Lager-Aufga
 function shopPtOpenLager(id){ const a=shopPlannerTasks().find(x=>x.lager.id===id); const leihe=!!(a&&a.lager.sub==='leihe');
   TAB=leihe?'ausleihen':((window.cu&&window.cu.role==='admin')?'faellig':'bestand'); if(leihe) fLoan='aktiv'; else fDue='all';
   try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
+function shopPtMay(){ return _can('la_artikel'); }
+function _ptDueKey(a){ return String(a.lager.key).replace(/^t\|/,''); }
+function shopPtEdit(id){ if(!shopPtMay()) return; const a=shopPtGet(id); if(!a) return;
+  if(a.lager.sub==='leihe'){ const lid=String(a.lager.act).replace(/^ret:/,''); window._shopFromPlan=true; try{ shopLoanDue(lid); } finally { window._shopFromPlan=false; } return; }
+  const k=_ptDueKey(a); const f=_dueFind(k); if(!f) return; const t=f.t;
+  openModal(`<h3>✎ Termin ändern</h3><p style="font-size:13px;margin:0 0 10px">${esc(a.node.text)}</p>
+    <div class="shop-f2"><div class="shop-f"><label>Bezeichnung</label><input id="pe-label" value="${esc(t.label||'')}" placeholder="z. B. TÜV, Wartung"></div>
+      <div class="shop-f"><label>Fällig am</label><input id="pe-datum" type="date" value="${esc(t.datum||'')}"></div></div>
+    <div class="shop-f"><label>Wiederholen alle … Monate <span style="font-weight:400;color:var(--muted)">(leer = einmalig)</span></label><input id="pe-int" type="number" min="0" step="1" value="${t.intervall?_num(t.intervall):''}"></div>
+    <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="shopPtEditSave(${jsq(id)})">Speichern</button></div>`); }
+function shopPtEditSave(id){ const a=shopPtGet(id); if(!a) return; const f=_dueFind(_ptDueKey(a)); if(!f) return;
+  const datum=_val('pe-datum'); if(!datum){ toast('Bitte ein Datum angeben.','err'); return; }
+  const iv=_val('pe-int'); f.t.label=_val('pe-label'); f.t.datum=datum; f.t.intervall=iv?Math.max(0,Math.round(_num(iv))):''; f.t.erledigt=null;
+  if(f.kind==='unit') saveShop('shopItems', f.it); else saveShop('shopPlaces', f.p);
+  closeModal(); toast('Termin geändert ✓ – fällig '+_fmtDate(datum),'ok'); renderShop(); _ptAfter(); }
+// nodeId: offene Aufgabe → Termin ganz löschen; erledigter Eintrag → nur diesen Verlaufseintrag löschen
+function shopPtDel(nodeId){ if(!shopPtMay()) return false; const a=shopPtFind(nodeId); if(!a) return false;
+  if(a.lager.sub==='leihe'){ if(!a.lager.done){ toast('Ausleihen beenden über „Erledigen“ (Rückgabe).','err'); return false; }
+    toast('Erledigte Ausleihen verschwinden nach 30 Tagen von selbst.','ok'); return false; }
+  const f=_dueFind(_ptDueKey(a)); if(!f) return false;
+  if(a.lager.done){ if(!confirm('Diesen Erledigt-Eintrag löschen?')) return false;
+    const at=a.node.doneAt; f.t.verlauf=(f.t.verlauf||[]).filter(v=>{ const x=Date.parse((v.am||'')+'T12:00:00'); return !(isFinite(x) && new Date(x).toISOString()===at); }); }
+  else { if(!confirm(`Termin „${a.node.text}“ löschen? Er steht dann nicht mehr im Lager und nicht mehr im Planner.`)) return false;
+    const list=f.kind==='unit'?f.u.termine:f.p.termine; const i=(list||[]).indexOf(f.t); if(i>=0) list.splice(i,1); try{ deleteShop('shopTasks', a.lager.id); }catch(e){} }
+  if(f.kind==='unit') saveShop('shopItems', f.it); else saveShop('shopPlaces', f.p);
+  toast('Gelöscht ✓','ok'); renderShop(); return true; }
 function shopPtMembers(team){ return _ptMembers(team).map(u=>({ id:u.id, name:u.name })); }
 // Einstellungen (Lager → Orte, Verwalter): Lager-Zuständige + Vorlauf je Team
 function _ptSettingsHtml(){
@@ -2469,4 +2546,4 @@ function shopPtCfgSet(team, k, v){ const c=JSON.parse(JSON.stringify(_ptCfg()));
   const x=Object.assign({}, c.teams[team]||{}); if(k==='tage') x.tage=Math.max(1,Math.min(365,Math.round(_num(v))||_PT_TAGE)); else x.zust=v||''; c.teams[team]=x;
   saveShop('shopConfig', c); toast('Gespeichert ✓','ok'); }
 function _ptAfter(){ try{ window.crmPlanAfterLager && window.crmPlanAfterLager(); }catch(e){} }
-try{ Object.assign(window, { shopPlannerTasks, shopPtGet, shopPtFind, shopPtSetAss, shopPtStatus, shopPtNote, shopPtNoteDel, shopPtDone, shopPtOpenLager, shopPtMembers, shopPtCfgSet }); }catch(e){}
+try{ Object.assign(window, { shopPlannerTasks, shopPtGet, shopPtFind, shopPtSetAss, shopPtStatus, shopPtNote, shopPtNoteDel, shopPtDone, shopPtOpenLager, shopPtMembers, shopPtCfgSet, shopPtMay, shopPtEdit, shopPtEditSave, shopPtDel }); }catch(e){}
