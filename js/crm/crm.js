@@ -941,8 +941,10 @@ function injectStyles(){
   .kb-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;align-items:center}
   .kb-chip{font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)}
   .kb-checklist{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+  .kb-checklist:empty{margin:0;border:0;padding:0}   /* leere Checkliste unsichtbar … */
+  .kb-dragging .kb-checklist:empty{margin-top:8px;min-height:30px;border:1.5px dashed var(--primary,#203869);border-radius:8px;background:rgba(32,56,105,.04)}   /* … außer beim Ziehen: Drop-Zone „hierher als Unterpunkt" */
   /* Jeder Unterpunkt = eigener Chip (Rahmen + Grund) → klar voneinander abgehoben */
-  .kb-check{display:flex;align-items:center;gap:7px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px}
+  .kb-check{display:flex;align-items:center;gap:7px;font-size:13px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:5px 9px;cursor:grab}
   .kb-check.done{opacity:.7}
   .kb-check.done .kb-check-tx{text-decoration:line-through;color:var(--muted)}
   .kb-check-tx{cursor:pointer;flex:1;min-width:0;overflow-wrap:anywhere}
@@ -1794,13 +1796,13 @@ function kbCardHtml(c, n){
   const done=kids.filter(k=>k.status==='erledigt').length;
   const visKids=(!vo&&_hideDone())?kids.filter(k=>k.status!=='erledigt'):kids;
   const checklist=visKids.map(k=>{
-    if(vo) return `<div class="kb-check" onclick="event.stopPropagation()">
+    if(vo) return `<div class="kb-check" data-id="${esc(k.id)}" draggable="${_kbMob?'false':'true'}" ondragstart="event.stopPropagation();crmDragStart(event,${jsq(k.id)})" ondragend="crmDragEnd(event)" onclick="event.stopPropagation()">
       <span class="kb-check-tx" onclick="crmOpenTask(${jsq(k.id)})">${esc(k.text)}</span>
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.length}</span>`:''}
       <button class="crm-x kb-del" title="Löschen" onclick="event.stopPropagation();crmDeleteNode(${jsq(k.id)})">✕</button>
     </div>`;
     const kdone=k.status==='erledigt';
-    return `<div class="kb-check${kdone?' done':''}" onclick="event.stopPropagation()">
+    return `<div class="kb-check${kdone?' done':''}" data-id="${esc(k.id)}" draggable="${_kbMob?'false':'true'}" ondragstart="event.stopPropagation();crmDragStart(event,${jsq(k.id)})" ondragend="crmDragEnd(event)" onclick="event.stopPropagation()">
       <input type="checkbox" ${kdone?'checked':''} aria-label="Erledigt: ${esc(k.text||'Unterpunkt')}" onchange="crmToggleDone(${jsq(k.id)})">
       <span class="kb-check-tx" onclick="crmOpenTask(${jsq(k.id)})">${esc(k.text)}</span>
       ${(k.children&&k.children.length)?`<span class="crm-prog">${k.children.filter(x=>x.status==='erledigt').length}/${k.children.length}</span>`:''}
@@ -1824,7 +1826,7 @@ function kbCardHtml(c, n){
          ${n.due?`<span class="kb-chip">📅 ${esc(fmtDate(Date.parse(n.due)))}</span>`:''}${(_isVorlageCtx()&&_offOk(n.offsetTage))?`<span class="kb-chip">⏱ ${esc(_offLabel(n.offsetTage))}</span>`:''}
          ${(cdone&&n.doneAt)?`<span class="kb-chip" title="Erledigt${n.doneBy?' von '+esc(n.doneBy):''}">✓ ${esc(fmtDate(Date.parse(n.doneAt)))}</span>`:''}
        </div>`:''}
-      ${checklist?`<div class="kb-checklist">${checklist}</div>`:''}
+      <div class="kb-checklist" ondragover="crmDragOver(event)" ondrop="crmDropInSubs(event,${jsq(n.id)})">${checklist}</div>
       <input class="kb-qadd kb-qadd-step" id="kb-qa-step-${esc(n.id)}" placeholder="＋ Schritt (Enter)" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onkeydown="crmQaKey(event,'step',${jsq(n.id)})">
       ${attachChips(n)}
       <div class="kb-cardbtns">
@@ -1904,7 +1906,7 @@ function taskBoardHtml(c){
     return `<div class="kb-col${collapsed?' collapsed':''}"${w?` style="flex:0 0 ${w}px;width:${w}px"`:''} ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,${jsq(top.id)})">
       <div class="kb-col-head">
         <button class="kb-toggle" title="${collapsed?'Ausklappen':'Einklappen'}" onclick="event.stopPropagation();crmKbToggleCollapse(${jsq(top.id)})">${collapsed?'▸':'▾'}</button>
-        <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,${jsq(top.id)})" title="Spalte verschieben">⠿</span>
+        <span class="kb-grip" draggable="true" ondragstart="crmColDragStart(event,${jsq(top.id)})" ondragend="crmDragEnd(event)" title="Spalte verschieben">⠿</span>
         <span class="kb-col-title" onclick="crmOpenTask(${jsq(top.id)})">${esc(top.text)}${collapsed?`<span class="kb-count">${childs.length}</span>`:''}</span>
         <button class="crm-x" title="Spalte löschen" onclick="crmDeleteNode(${jsq(top.id)})">✕</button>
       </div>
@@ -1918,13 +1920,14 @@ function taskBoardHtml(c){
     <div class="kb-col kb-col-new" ondragover="crmDragOver(event)" ondrop="crmDropOnColumn(event,'__end__')"><input class="kb-qadd kb-qadd-col" id="kb-qa-col" placeholder="＋ Spalte (Enter)" onkeydown="crmQaKey(event,'col','')"></div>
   </div>`;
 }
-function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
-function crmColDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='col'; try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} ev.stopPropagation(); }
+function crmDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='card'; try{ document.body.classList.add('kb-dragging'); }catch(e){} try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} }
+function crmColDragStart(ev,id){ window._crmDragId=id; window._crmDragKind='col'; try{ document.body.classList.add('kb-dragging'); }catch(e){} try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',id); }catch(e){} ev.stopPropagation(); }
 function crmDragOver(ev){ ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(e){} }
 function crmDropOnColumn(ev,topId){
   ev.preventDefault();
   const dragId=window._crmDragId; const kind=window._crmDragKind;
   window._crmDragId=null; window._crmDragKind=null;
+  try{ document.body.classList.remove('kb-dragging'); }catch(e){}
   if(!dragId) return;
   if(kind==='col'){
     // Spalten (Hauptaufgaben) umsortieren
@@ -1950,7 +1953,7 @@ function crmDropOnColumn(ev,topId){
   }
   repaintContainer();
 }
-function crmDragEnd(ev){ window._crmDragId=null; window._crmDragKind=null; }   // Sicherheitsnetz nach Abbruch
+function crmDragEnd(ev){ window._crmDragId=null; window._crmDragKind=null; try{ document.body.classList.remove('kb-dragging'); }catch(e){} }   // Sicherheitsnetz nach Abbruch
 // Karte POSITIONSGENAU einsortieren: vertikal umsortieren (innerhalb der Spalte) UND horizontal in
 // eine andere Spalte verschieben. Zielposition = vor welcher Karte (Maus-Y). Spalten-Reorder wird
 // weitergereicht (kind!=='card' → an .kb-col/crmDropOnColumn via Bubbling).
@@ -1958,6 +1961,7 @@ function crmDropInCards(ev, colId){
   if(window._crmDragKind!=='card') return;
   ev.preventDefault(); ev.stopPropagation();
   const dragId=window._crmDragId; window._crmDragId=null; window._crmDragKind=null;
+  try{ document.body.classList.remove('kb-dragging'); }catch(e){}
   if(!dragId) return;
   let refId=null;
   try{
@@ -1978,7 +1982,36 @@ function crmDropInCards(ev, colId){
   });
   repaintContainer();
 }
-window.crmDropInCards=crmDropInCards; window.crmDragEnd=crmDragEnd;
+// Unterpunkt POSITIONSGENAU in EINE KARTE einsortieren: Reihenfolge innerhalb der Karte ändern,
+// in eine andere Karte verschieben, oder eine Karte zum Unterpunkt machen. Zielposition = vor
+// welchem Unterpunkt (Maus-Y). Analog crmDropInCards, nur Ziel = Kinder der Karte (statt Spalte).
+// Drop auf die Spalte (zwischen Karten) macht daraus wieder eine Karte (crmDropInCards, Bubbling).
+function crmDropInSubs(ev, cardId){
+  if(window._crmDragKind!=='card') return;
+  ev.preventDefault(); ev.stopPropagation();
+  const dragId=window._crmDragId; window._crmDragId=null; window._crmDragKind=null;
+  try{ document.body.classList.remove('kb-dragging'); }catch(e){}
+  if(!dragId || dragId===cardId) return;
+  let refId=null;
+  try{
+    const kids=Array.from(ev.currentTarget.querySelectorAll(':scope > .kb-check'));
+    for(const c of kids){ if(c.getAttribute('data-id')===dragId) continue; const r=c.getBoundingClientRect();
+      if(ev.clientY < r.top + r.height/2){ refId=c.getAttribute('data-id'); break; } }
+  }catch(e){}
+  mutateContainer(c=>{
+    const f=findNode(c,dragId); if(!f) return;
+    const target=findNode(c,cardId); if(!target) return;
+    if(flatNodes([f.node]).some(x=>x.id===cardId)) return;     // nicht in eigenen Teilbaum (kein Nest in Nachkomme)
+    const i=f.arr.indexOf(f.node); if(i<0) return;
+    f.arr.splice(i,1);
+    if(!Array.isArray(target.node.children)) target.node.children=[];
+    let idx = refId ? target.node.children.findIndex(x=>x.id===refId) : target.node.children.length;
+    if(idx<0) idx=target.node.children.length;
+    target.node.children.splice(idx,0,f.node);
+  });
+  repaintContainer();
+}
+window.crmDropInCards=crmDropInCards; window.crmDropInSubs=crmDropInSubs; window.crmDragEnd=crmDragEnd;
 
 // ── Detail eines Eintrags ──────────────────────────────────────────
 function paintDetail(){
