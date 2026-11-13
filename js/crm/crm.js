@@ -2377,6 +2377,8 @@ function crmGoTeamProj(id){
 }
 
 // ── Navigation ─────────────────────────────────────────────────────
+// ☰-Menü (v585): CRM-Bereiche als Unterpunkte – nur bei voller CRM-Sicht
+window.crmMenuTrees=()=>{ try{ if(!crmCanView()) return []; return getTrees().map(t=>({ key:t.key, label:t.label||t.key, icon:t.icon||'' })); }catch(e){ return []; } };
 function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
 function crmSearch(v){ window._crmSearch=v; paintList(); }
 function crmOpenDetail(id){ window._crmMode='kontakte'; window._crmSelId=id; paintDetail(); }

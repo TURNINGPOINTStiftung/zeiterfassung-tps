@@ -2396,6 +2396,11 @@ function shopHomeItems(){
     return { due, orders:os.length, mgr, late };
   }catch(e){ return { due:[], orders:0, late:[] }; }
 }
+// ☰-Menü (v585): Reiter des Lagers als Unterpunkte (gleiche Sichtbarkeit wie die Reiter)
+function shopMenuTabs(){ try{ if(!window.cu || !canUse()) return []; const adm=window.cu.role==='admin';
+  const t=[['bestand','📦 Bestand']]; if(adm) t.push(['bestellungen','🛒 Bestellungen'],['ausleihen','🔁 Ausleihen'],['faellig','⏰ Fällig']); t.push(['verlauf','📜 Verlauf']);
+  return t.map(([k,l])=>({ k, l, on:window._activeModule==='shop' && TAB===k })); }catch(e){ return []; } }
+window.shopMenuTabs=shopMenuTabs;
 function shopOpenTab(t){ TAB=t||'bestand'; try{ window.switchModule && window.switchModule('shop'); }catch(e){} }
 try{ window.shopHomeItems=shopHomeItems; window.shopOpenTab=shopOpenTab; }catch(e){}
 function shopRefillAck(){ try{ localStorage.setItem('tps_shop_soll_ack_'+(_me().id||''), _todayIso()); }catch(e){} _noticesRefresh(); }

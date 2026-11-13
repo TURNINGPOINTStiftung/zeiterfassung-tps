@@ -690,6 +690,66 @@ function _fillTiles(){
     if(dd){ _tileObs=new MutationObserver(()=>{ if(window._activeModule==='start') _fillTiles(); });
       _tileObs.observe(dd,{ subtree:true, attributes:true, attributeFilter:['style'] }); } }
 }
+// ══ ☰-Menü mit aufklappbaren Unterpunkten (v585, User 13.11.2026) ══
+// Klick auf den Namen = Bereich öffnen wie bisher; Klick auf ▾ = Unterpunkte auf/zu. Der aktuelle Bereich ist beim
+// Öffnen aufgeklappt, die aktuelle Seite markiert. Unterpunkte = dieselben Reiter wie in den Seiten (gleiche Rechte).
+const _mbOpen={};
+function _mbSubs(mod){
+  try{
+    if(mod==='zeiterfassung') return [...document.querySelectorAll('#app-nav [data-view]')].filter(b=>b.style.display!=='none')
+      .map(b=>{ const c=b.cloneNode(true); let n=0; c.querySelectorAll('span,sup,b').forEach(x=>{ const t=x.textContent.trim(); if(/^\d+$/.test(t)){ n+=+t; x.remove(); } });   // Zähler-Abzeichen getrennt
+        return { l:c.textContent.replace(/\s+/g,' ').trim(), n, on:window._activeModule==='zeiterfassung' && b.classList.contains('active'), go:`mbGo('ze',${jsq(b.dataset.view)})` }; });
+    if(mod==='planung') return (window.planTabs?window.planTabs():[]).map(t=>({ l:t[1], on:!!window._planActive && window._planTab===t[0], go:`mbGo('plan',${jsq(t[0])})` }));
+    if(mod==='crm') return (window.crmMenuTrees?window.crmMenuTrees():[]).map(t=>({ l:(t.icon?t.icon+' ':'')+t.label, on:window._activeModule==='crm' && window._crmMode==='kontakte' && window._crmTree===t.key, go:`mbGo('crm',${jsq(t.key)})` }));
+    if(mod==='shop') return (window.shopMenuTabs?window.shopMenuTabs():[]).map(t=>({ l:t.l, on:t.on, go:`mbGo('shop',${jsq(t.k)})` }));
+    if(mod==='verwaltung'){ let ts=[...document.querySelectorAll('#verw-root .verw-tab')];
+      if(!ts.length && window.renderVerwaltung){ try{ window.renderVerwaltung(); }catch(e){} ts=[...document.querySelectorAll('#verw-root .verw-tab')]; }
+      return ts.map(b=>({ l:b.textContent.replace(/\s+/g,' ').trim(), on:window._activeModule==='verwaltung' && b.classList.contains('active'), go:`mbGo('verw',${jsq(b.getAttribute('data-vtab'))})` })); }
+  }catch(e){}
+  return [];
+}
+function _mbCss(){ if(document.getElementById('mb-sub-css')) return; const st=document.createElement('style'); st.id='mb-sub-css';
+  st.textContent=`
+  #mb-dropdown{max-height:calc(100vh - 90px);overflow-y:auto}
+  #mb-dropdown .mb-row{display:flex;align-items:stretch;gap:2px}
+  #mb-dropdown .mb-row>.mb-mod{flex:1;min-width:0}
+  #mb-dropdown button.mb-caret{width:38px;flex:0 0 38px;text-align:center;padding:0;font-size:13px;color:var(--muted);border-radius:8px}
+  #mb-dropdown button.mb-caret[aria-expanded="true"]{color:var(--primary)}
+  #mb-dropdown .mb-subs{margin:0 0 4px 12px;padding-left:8px;border-left:2px solid var(--border)}
+  #mb-dropdown button.mb-sub{font-weight:500;font-size:13.5px;padding:8px 12px;color:var(--text)}
+  #mb-dropdown .mb-n{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:9px;background:var(--danger,#c0392b);color:#fff;font-size:11px;font-weight:700;text-align:center}
+  #mb-dropdown button.mb-sub.on{color:var(--primary);font-weight:700;background:var(--surface-2,#f1f4f8)}
+  @media(max-width:640px){ #mb-dropdown button.mb-sub{padding:11px 12px;font-size:15px} #mb-dropdown button.mb-caret{width:46px;flex-basis:46px} }`;
+  document.head.appendChild(st); }
+function mbSubsBuild(){
+  const dd=document.getElementById('mb-dropdown'); if(!dd) return; _mbCss();
+  const cur=window._planActive?'planung':(window._activeModule||'');
+  [...dd.querySelectorAll('.mb-mod')].forEach(b=>{ const mod=b.dataset.mod;
+    let row=b.parentElement.classList.contains('mb-row')?b.parentElement:null;
+    const vis=b.style.display!=='none'; const subs=vis?_mbSubs(mod):[];
+    if(!row){ if(subs.length<2) return; row=document.createElement('div'); row.className='mb-row'; b.parentNode.insertBefore(row,b); row.appendChild(b); }
+    row.style.display=vis?'':'none';
+    let car=row.querySelector('.mb-caret'); let box=row.nextElementSibling&&row.nextElementSibling.classList.contains('mb-subs')?row.nextElementSibling:null;
+    if(subs.length<2){ if(car) car.remove(); if(box) box.remove(); return; }
+    if(_mbOpen[mod]===undefined || mod===cur) _mbOpen[mod]=(mod===cur);
+    if(!car){ car=document.createElement('button'); car.type='button'; car.className='mb-caret'; car.setAttribute('aria-label', b.textContent.trim()+': Unterpunkte'); car.onclick=e=>{ e.stopPropagation(); _mbOpen[mod]=!_mbOpen[mod]; mbSubsBuild(); }; row.appendChild(car); }
+    car.setAttribute('aria-expanded', _mbOpen[mod]?'true':'false'); car.textContent=_mbOpen[mod]?'▴':'▾';
+    if(!box){ box=document.createElement('div'); box.className='mb-subs'; row.parentNode.insertBefore(box,row.nextSibling); }
+    box.style.display=_mbOpen[mod]?'':'none';
+    box.innerHTML=subs.map(s=>`<button type="button" class="mb-sub${s.on?' on':''}" onclick="${s.go}">${esc(s.l)}${s.n?` <span class="mb-n">${+s.n}</span>`:''}</button>`).join('');
+  });
+}
+function mbGo(kind, v){
+  try{ window.closeModuleMenu&&window.closeModuleMenu(); }catch(e){}
+  try{
+    if(kind==='ze'){ window.switchModule('zeiterfassung'); const b=document.querySelector('#app-nav [data-view="'+v+'"]'); if(b) b.click(); }
+    else if(kind==='plan'){ if(window.planGo) window.planGo(v); else window.switchModule('planung'); }
+    else if(kind==='crm'){ window._crmMode='kontakte'; window._crmTree=v; window._crmSelId=null; window._crmSearch=''; window.switchModule('crm'); }
+    else if(kind==='shop'){ window.shopOpenTab&&window.shopOpenTab(v); }
+    else if(kind==='verw'){ homeVerw(v); }
+  }catch(e){ console.warn('Menü:', e); }
+}
+window.mbSubsBuild=mbSubsBuild; window.mbGo=mbGo;
 // ☰-Menü: Website/Forum öffnen die externe Seite in einem neuen Tab (v583)
 function homeExt(k){ try{ window.closeModuleMenu&&window.closeModuleMenu(); }catch(e){} const x=LINKS.find(l=>l.k===k); if(x&&x.url) window.open(x.url,'_blank','noopener'); }
 window.homeExt=homeExt;
