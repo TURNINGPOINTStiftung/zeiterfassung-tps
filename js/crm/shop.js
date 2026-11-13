@@ -673,30 +673,33 @@ function _itemsGrid(mgr){
     return true;
   });
   if(!list.length) return `<div class="shop-empty">${items().length?'Keine Artikel für diesen Filter.':(mgr?'Noch keine Artikel. Lege den ersten über ⋯ → „＋ Artikel anlegen" an.':'Noch keine Artikel im Lager.')}</div>`;
+  // v584 (User 13.11.2026): Ort gewählt → Karte zeigt NUR diesen Ort (keine anderen Orte, keine Personen/Ausleihen)
+  const atPl=(fPlace && placeOf(fPlace)) ? fPlace : '';
   return `<div class="shop-grid">${list.map(it=>{
-    const tot=total(it); const low=_num(it.min)>0 && tot<_num(it.min);
-    const art=itemArt(it); const short=shortages(it);
+    const tot=total(it); const low=!atPl && _num(it.min)>0 && tot<_num(it.min);
+    const art=itemArt(it); const short=shortages(it).filter(x=>!atPl || x.pid===atPl);
+    const here=atPl?_num((it.stock||{})[atPl]):0;
     // Orte mit Bestand ODER Soll-Bestand; „ist / soll" + ⚠, wenn darunter
-    const pids=[...new Set([...Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0), ...Object.keys(it.soll||{}).filter(pid=>placeOf(pid)&&sollAt(it,pid)>0)])];
+    const pids=atPl?[atPl]:[...new Set([...Object.keys(it.stock||{}).filter(pid=>_num(it.stock[pid])>0), ...Object.keys(it.soll||{}).filter(pid=>placeOf(pid)&&sollAt(it,pid)>0)])];
     const pl=pids.sort((a,b)=>placeLabel(a).localeCompare(placeLabel(b),'de'))
       .map(pid=>{ const ist=_num((it.stock||{})[pid]), s=sollAt(it,pid), under=s>0&&ist<s;
         return `<span class="${fPlace===pid?'hl':''}${under?' short':''}" ${under?`title="Soll ${s} – es fehlen ${s-ist}"`:''}>${esc(placeLabel(pid))}: <b>${ist}</b>${s?` / ${s}`:''}${under?' ⚠':''}</span>`; }).join('');
     const img=_imgUrl(it.foto)?`<div class="shop-img"><img src="${esc(_imgUrl(it.foto))}" alt="Foto: ${esc(it.name||'Artikel')} (antippen zum Vergrößern)" loading="lazy" onclick="event.stopPropagation();shopImgZoom(this)"></div>`:`<div class="shop-img">${_catIcon(it.kategorie)}</div>`;
-    const ln=activeLoans(it.id);
+    const ln=atPl?[]:activeLoans(it.id);
     const lnHtml=ln.map(l=>`<span class="lent${_overdue(l)?' late':''}${fPlace==='loan:'+bKey(l)?' hl':''}" title="${esc(l.anlass||'')}">${esc(bLabel(l))}: <b>${_num(l.qty)}</b>${l.due?' bis '+_fmtDate(l.due):' (dauerhaft)'}</span>`).join('');
     const avail=inPlaces(it);
     return `<div class="shop-card${(low||short.length)?' low':''}" onclick="shopItemView(${jsq(it.id)})">${img}<div class="shop-cb">
       <div style="display:flex;gap:4px;flex-wrap:wrap">${it.kategorie?`<span class="shop-cat">${esc(it.kategorie)}</span>`:''}${art==='leihe'?'<span class="shop-cat" style="background:var(--info-bg,#dbe6fb);color:var(--info-text,#1e40af)">🔁 Leihmaterial</span>':''}${art==='ausstattung'?'<span class="shop-cat" style="background:#e8f5e9;color:#1b5e20">🧰 Ausstattung</span>':''}${_teamChip(it.team)}</div>
       <button type="button" class="shop-name" onclick="event.stopPropagation();shopItemView(${jsq(it.id)})">${esc(it.name)}</button>
       ${it.variante?`<div class="shop-var">${esc(it.variante)}</div>`:''}
-      <div class="shop-tot">${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small></div>
+      <div class="shop-tot">${atPl?`${here} <small>${esc(it.einheit||'Stück')} hier${tot!==here?` · ${tot} gesamt`:''}</small>`:`${tot} <small>${esc(it.einheit||'Stück')} gesamt${ln.length?` · ${avail} verfügbar`:''}</small>`}</div>
       ${low?`<div class="shop-low">⚠ Unter Mindestbestand (${_num(it.min)}) – nachbestellen</div>`:''}
       ${short.length?`<div class="shop-low">⚠ Unter Soll: ${short.map(s=>`${esc(placeLabel(s.pid))} (${esc(s.ist)}/${esc(s.soll)})`).join(', ')} · 🤖 automatisch bestellt</div>`:''}
       <div class="shop-pl">${pl||(ln.length?'':'<span style="color:var(--muted)">kein Bestand</span>')}${lnHtml}</div>
       ${it.note?`<div class="shop-var">${esc(it.note)}</div>`:''}
-      ${isEinzeln(it)?(()=>{ const ts=unitsOf(it).flatMap(u=>(u.termine||[]).map(t=>t)); const nt=nextTermin(ts);
+      ${isEinzeln(it)?(()=>{ const us=unitsOf(it).filter(u=>!atPl || u.placeId===atPl); const ts=us.flatMap(u=>(u.termine||[]).filter(t=>t&&!t.erledigt)); const nt=nextTermin(ts);
         const nOver=ts.filter(t=>t.datum&&t.datum<_todayIso()).length;
-        return `<div class="shop-var">🏷️ ${unitsOf(it).length} Stück${unitsOf(it).length===1?'':'e'} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:var(--danger,#c0392b)">(${nOver} überfällig)</b>`:''}</div>`; })():''}
+        return `<div class="shop-var">🏷️ ${us.length} Stück${us.length===1?'':'e'}${atPl?' hier':''} einzeln erfasst${nt?' · nächster Termin ':''}${nt?dueBadge(nt):''}${nOver>1?` <b style="color:var(--danger,#c0392b)">(${nOver} überfällig)</b>`:''}</div>`; })():''}
       <div class="shop-act" onclick="event.stopPropagation()">${_itemPrimary(it)}<button class="shop-btn sm" onclick="shopItemView(${jsq(it.id)})" aria-label="Details und alle Aktionen zu ${esc(it.name)}">⋯</button>      </div></div></div>`;
   }).join('')}</div>`;
 }
