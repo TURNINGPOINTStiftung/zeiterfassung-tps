@@ -300,7 +300,7 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
-## GETESTET CANDIDATE-v20.json – Lager-Aufgaben im Planner (noch NICHT live, App v575)
+## Stand 2026-11-13: CANDIDATE-v20.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle shopTasks = 1) – Lager-Aufgaben im Planner (App v575)
 = v18 (live) + Lager-Freigaben für alle Angemeldeten (allowed, kein Kiosk, mit uidUser):
 `crm/shopTasks/$id` (Zuständige/Status/Notizen einer Lager-Aufgabe; .validate id = Schlüssel, datum Pflicht) ·
 `shopPlaces/$id/termine` · `shopItems/$id/stock` · `shopItems/$id/units/$u/{termine,placeId}` ·
