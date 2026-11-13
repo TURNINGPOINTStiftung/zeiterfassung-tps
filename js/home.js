@@ -133,7 +133,7 @@ function _styles(){
   .home-pill{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;background:#e8eef8;color:var(--primary,#203869)}
   .home-pill.red{background:var(--danger-bg,#fde8e8);color:#b42318}.home-pill.amber{background:var(--warn-bg,#fef3c7);color:var(--warn-text,#92400e)}.home-pill.green{background:#e7f6e9;color:#1b5e20}
   .home-empty{font-size:13px;color:var(--muted);padding:4px 0}
-  .home-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:10px;margin-top:14px}
+  .home-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin-top:14px}   /* auto-fit: Kacheln dehnen sich über die VOLLE Breite statt links zu kleben (leere Tracks fallen weg) */
   .home-tile{background:var(--surface,#fff);border:1px solid var(--border);border-radius:14px;padding:14px 6px;text-align:center;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere;hyphens:auto}
   .home-tile:hover{border-color:var(--primary,#203869);color:var(--primary,#203869)}
   .home-tile .ic{font-size:26px;display:block;margin-bottom:4px}
