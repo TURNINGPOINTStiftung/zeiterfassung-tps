@@ -4531,7 +4531,7 @@ function crmRedSet(k, v){
     else window._crmRedRef=_oIso(new Date(ref.getFullYear()+v,0,1,12)); }
   paintTeamDetail();
 }
-const _oeaPostChip=(a,short)=>{ const n=a.node; const ph=oeaPhase(oeaPhaseOf(n)); const k=n.kanal?'<b>'+esc(n.kanal)+'</b> ':''; return `<button type="button" class="red-chip ph-${esc(oeaPhaseOf(n))}" title="${esc((n.kanal?n.kanal+' · ':'')+(n.text||'')+(ph?' · '+ph.label:''))}" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${k}${short?'':esc(n.text||'Beitrag')}</button>`; };
+const _oeaPostChip=(a,short)=>{ const n=a.node; const ph=oeaPhase(oeaPhaseOf(n)); const k=(a._rep?'🔁 ':'')+(n.kanal?'<b>'+esc(n.kanal)+'</b> ':''); return `<button type="button" class="red-chip ph-${esc(oeaPhaseOf(n))}${a._rep?' rep':''}" title="${esc((a._rep?'Wiederholung · ':'')+(n.kanal?n.kanal+' · ':'')+(n.text||'')+(ph?' · '+ph.label:''))}" onclick="crmTeamTaskOpen(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">${k}${short?'':esc(n.text||'Beitrag')}</button>`; };
 function _oeaWhoHtml(r, posts, members, abs){
   const absOn=(id,iso)=>abs.some(x=>x.emp===id&&x.von<=iso&&iso<=x.bis);
   const today=localISODate();
@@ -4710,6 +4710,7 @@ function _oeaRedaktionHtml(){
     .red-g th.today{color:var(--primary,#203869)} .red-g .we{background:var(--surface-2,#f7f9fc)}
     .red-p{white-space:nowrap;font-weight:600;color:var(--primary-d,#15263a);position:sticky;left:0;background:var(--surface,#fff);z-index:1}
     td.abw{background:var(--info-bg,#e3ecfb)} .red-abw{font-size:12px;font-weight:700;color:var(--info,#2563eb)}
+    .red-chip.rep{opacity:.62;border-style:dashed}
     .red-chip{display:block;width:100%;text-align:left;margin:2px 0;padding:3px 6px;border-radius:6px;border:1px solid var(--border,#cdd7e2);background:var(--surface,#fff);font:inherit;font-size:12px;cursor:pointer;color:var(--primary-d,#15263a)}
     .red-chip.ph-freigabe{border-color:var(--warn,#d97706)} .red-chip.ph-veroeffentlicht{opacity:.6}
     .red-n{display:inline-block;min-width:20px;border-radius:10px;border:1.5px solid var(--primary,#203869);font-weight:800;color:var(--primary,#203869)}
@@ -4744,7 +4745,7 @@ function _oeaRedaktionHtml(){
     ${c.oea?`<label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)">Kanal <select onchange="crmRedSet('kanal',this.value)" aria-label="Kanal" style="font:inherit;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${kanOpts}</select></label>`:''}
     ${(c.oea&&_R('crm_einst'))?'<button class="btn-sm-crm" title="Einstellungen liegen zentral in der Verwaltung → CRM" onclick="crmGoVerwOea()">⚙ Einstellungen (Verwaltung)</button>':''}
   </div>
-  <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, posts, members, abs)}</div>
+  <div class="crm-sec"><h4><span class="ttl">👥 Wer ist da</span></h4>${_oeaWhoHtml(r, _rpRepeats(posts, r.a, r.b), members, abs)}</div>
   <div class="crm-sec"><h4><span class="ttl">🗂 ${c.oea?'Beiträge nach Ablauf':'Aufgaben nach Status'}</span>${c.oea?'':' <span style="font-size:13px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">– alle Aufgaben des Teams, unabhängig vom Zeitraum oben</span>'}<span class="hbtns">${_mineSegHtml()}</span></h4>
     ${(r.v==='jahr'&&c.oea)?`<details><summary style="cursor:pointer;color:var(--muted);font-weight:600">Board für das ganze Jahr anzeigen (${c.oea?'Ideen':'offene Aufgaben'} ohne Datum sind dabei)</summary>${board}</details>`:board}
   </div>
@@ -4790,8 +4791,10 @@ function _planTeamOverview(team){
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks({ lager:true }).filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
   const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
-  const leaves=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!a.node.due || a.node.due<=until) && (!_om || crmIsMineA(a,_me)))
+  const open0=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!_om || crmIsMineA(a,_me)))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
+  const leaves=open0.filter(a=>!a.node.due || a.node.due<=until);
+  const later=open0.filter(a=>a.node.due && a.node.due>until);   // v577: später als 6 Wochen → aufklappbar
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row"><span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):(_kIc(a.kind)+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
@@ -4807,7 +4810,8 @@ function _planTeamOverview(team){
   const doneHtml=done.length?`<div class="plan-grp" style="margin-top:14px">✓ Erledigt in den letzten 7 Tagen · ${done.length}</div>${done.map(doneRow).join('')}`:'';
   const tasksCard=`<section class="plan-card"><div class="plan-h"><h2>Offene Aufgaben des Teams</h2>${ohne?'':`<button class="btn-sm-crm primary" onclick="crmAufgNew(${jsq(team)})">＋ Aufgabe</button>`}</div><div style="margin:0 0 8px">${_mineSegHtml()}</div><div class="plan-sub" style="margin:-4px 0 8px">einzelne Aufgaben des Teams und Aufgaben aus Projekten und Veranstaltungen</div>
     ${leaves.length?leaves.map(taskRow).join(''):'<div class="plan-empty">Diesem Team ist in den nächsten 6 Wochen keine offene Aufgabe zugeordnet. Aufgaben bekommen ein Team über die Veranstaltung/das Projekt oder direkt in der Aufgabe.</div>'}
-    <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist. Erledigtes steht unten im Archiv.</div></section>`;
+    ${later.length?`<details class="plan-more"><summary>${later.length} weitere später als 6 Wochen</summary>${later.map(taskRow).join('')}</details>`:''}
+    <div class="plan-sub" style="margin-top:6px">Nächste 6 Wochen und ohne Frist${later.length?' – Späteres zum Aufklappen':''}. Erledigtes steht unten im Archiv.</div></section>`;
   const vas=teamVeranstaltungen(team).filter(v=>!v.closed && String(v.ende||v.start||'')>=today).sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
   const vaRow=v=>{ const vt=vaTeams(v); const lead=vt[0]||''; const openN=all.filter(a=>a.kind==='veranstaltung'&&a.containerId===v.id&&inTeam(a)&&a.node.status!=='erledigt'&&!(Array.isArray(a.node.children)&&a.node.children.length)).length;
     return `<div class="plan-item" role="button" tabindex="0" onclick="planVaSet(${jsq(v.id)})"><span class="plan-barc" style="background:${_tc(lead)}"></span><div class="plan-main"><div class="plan-t">${esc(v.titel||'Veranstaltung')}</div><div class="plan-row">${(lead&&lead!==team&&!ohne)?`<span class="plan-tag">beteiligt · federführend ${esc(lead)}</span>`:''}<span class="plan-tag">${openN} offen fürs Team</span></div></div><span class="plan-when">${esc(v.start?fmtDate(Date.parse(v.start)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
@@ -4880,6 +4884,15 @@ function _aufgNext(due, w){ const x=_AUFG_WDH[w]; const today=localISODate(); le
     else { const day=d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+x.m); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate())); }
     cur=_isoD(d); } while(cur<=today && ++guard<500);   // verpasste Termine überspringen – die nächste liegt immer in der Zukunft
   return cur; }
+// Ein Schritt der Wiederholung (ohne Überspringen verpasster Termine) – für die Vorschau im Projektplan
+function _wdhStep(cur, w){ const x=_AUFG_WDH[w]; const d=new Date(cur+'T12:00:00');
+  if(x.d) d.setDate(d.getDate()+x.d); else { const day=d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+x.m); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate())); }
+  return _isoD(d); }
+// Wiederholungen im Zeitraum a..b als zusätzliche (nur angezeigte) Einträge – _rep:true
+function _rpRepeats(posts, a, b){ const out=posts.slice();
+  posts.forEach(x=>{ const n=x.node; if(!_AUFG_WDH[n.wdh] || !n.due || n.status==='erledigt') return; let cur=n.due, g=0;
+    while(g++<400){ cur=_wdhStep(cur, n.wdh); if(cur>b) break; if(cur>=a) out.push(Object.assign({}, x, { node:Object.assign({}, n, { due:cur }), _rep:true })); } });
+  return out; }
 function _aufgRefresh(){ try{ if(window._activeModule==='planung' && window.renderPlanungStart) window.renderPlanungStart(); else if(window._crmMode==='teams' && window._crmTeamSel) paintTeamDetail(); }catch(e){} }
 
 function _aufgFormHtml(n, curFor, team){
