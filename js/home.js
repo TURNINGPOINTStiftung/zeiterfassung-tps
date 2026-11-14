@@ -731,7 +731,8 @@ function mbSubsBuild(fresh){
   const mobile=!!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
   dd.classList.toggle('mb-has-subs', !mobile);
   if(mobile){ dd.querySelectorAll('.mb-caret,.mb-subs').forEach(x=>x.remove()); return; }
-  if(fresh){ Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); _mbOpen[cur]=true; }
+  const mode=_mbMode();   // v587: 'zu' (Standard) · 'aktuell' (aktuellen Bereich aufklappen) · 'auf' (alle offen)
+  if(fresh){ Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); if(mode==='aktuell') _mbOpen[cur]=true; }
   [...dd.querySelectorAll('.mb-mod')].forEach(b=>{ const mod=b.dataset.mod;
     let row=b.parentElement.classList.contains('mb-row')?b.parentElement:null;
     const vis=b.style.display!=='none'; const subs=vis?_mbSubs(mod):[];
@@ -740,13 +741,27 @@ function mbSubsBuild(fresh){
     let car=row.querySelector('.mb-caret'); let box=row.nextElementSibling&&row.nextElementSibling.classList.contains('mb-subs')?row.nextElementSibling:null;
     if(subs.length<2){ if(car) car.remove(); if(box) box.remove(); return; }
     if(!car){ car=document.createElement('button'); car.type='button'; car.className='mb-caret'; car.setAttribute('aria-label', b.textContent.trim()+': Unterpunkte');
-      car.onclick=e=>{ e.stopPropagation(); const was=!!_mbOpen[mod]; Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); if(!was) _mbOpen[mod]=true; mbSubsBuild(); }; row.appendChild(car); }
-    car.setAttribute('aria-expanded', _mbOpen[mod]?'true':'false'); car.textContent=_mbOpen[mod]?'▴':'▾';
+      car.onclick=e=>{ e.stopPropagation(); const was=_mbIsOpen(mod); if(_mbMode()==='auf'){ _mbOpen[mod]=!was; } else { Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); if(!was) _mbOpen[mod]=true; } mbSubsBuild(); }; row.appendChild(car); }
+    const isOpen=_mbIsOpen(mod); car.setAttribute('aria-expanded', isOpen?'true':'false'); car.textContent=isOpen?'▴':'▾';
     if(!box){ box=document.createElement('div'); box.className='mb-subs'; row.parentNode.insertBefore(box,row.nextSibling); }
-    box.style.display=_mbOpen[mod]?'':'none'; box.classList.toggle('one', subs.length<4);
+    box.style.display=isOpen?'':'none'; box.classList.toggle('one', subs.length<4);
     box.innerHTML=subs.map(s=>`<button type="button" class="mb-sub${s.on?' on':''}" onclick="${s.go}">${esc(s.l)}${s.n?` <span class="mb-n">${+s.n}</span>`:''}</button>`).join('');
   });
 }
+// Einstellung im Profil (geräteübergreifend in crm/userPrefs, Feld menuSubs)
+function _mbMode(){ const v=(_prefs()||{}).menuSubs; return (v==='aktuell'||v==='auf')?v:'zu'; }
+function _mbIsOpen(mod){ return _mbMode()==='auf' ? _mbOpen[mod]!==false : !!_mbOpen[mod]; }
+function homeMenuPrefHtml(){
+  const m=_mbMode(); const o=[['zu','Immer eingeklappt'],['aktuell','Aktuellen Bereich aufklappen'],['auf','Immer alle ausgeklappt']];
+  return `<hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
+    <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:8px">☰ Menü-Unterpunkte</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Wie die Unterpunkte im ☰-Menü (am Computer) beim Öffnen stehen. Mit ▾ lässt sich jeder Bereich jederzeit auf- und zuklappen.</div>
+    <div class="uf-seg" role="radiogroup" aria-label="Menü-Unterpunkte" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      ${o.map(([v,l])=>`<button type="button" class="btn btn-sm ${m===v?'btn-primary':'btn-outline'}" role="radio" aria-checked="${m===v}" style="flex:1;width:auto;min-width:150px;white-space:normal;line-height:1.25;padding:8px 10px" onclick="homeMenuPrefSet(${jsq(v)});this.parentNode.querySelectorAll('button').forEach(b=>{const on=b===this;b.classList.toggle('btn-primary',on);b.classList.toggle('btn-outline',!on);b.setAttribute('aria-checked',on);})">${esc(l)}</button>`).join('')}
+    </div>`;
+}
+function homeMenuPrefSet(v){ _savePrefs({ menuSubs:(v==='aktuell'||v==='auf')?v:'zu' }); Object.keys(_mbOpen).forEach(k=>delete _mbOpen[k]); try{ window.toast&&window.toast('Gespeichert ✓','ok'); }catch(e){} }
+window.homeMenuPrefHtml=homeMenuPrefHtml; window.homeMenuPrefSet=homeMenuPrefSet;
 function mbGo(kind, v){
   try{ window.closeModuleMenu&&window.closeModuleMenu(); }catch(e){}
   try{

@@ -59,6 +59,7 @@ export function openProfileModal(){
     <div class="uf-seg" role="radiogroup" aria-label="Darstellung" style="display:flex;gap:6px;margin-bottom:6px">
       ${[['auto','Automatisch'],['light','Hell'],['dark','Dunkel']].map(([v,l])=>`<button type="button" class="btn btn-sm ${themePref()===v?'btn-primary':'btn-outline'}" role="radio" aria-checked="${themePref()===v}" style="flex:1;width:auto" onclick="setThemePref(${JSON.stringify(v).replace(/"/g,'&quot;')});this.parentNode.querySelectorAll('button').forEach(b=>{const on=b===this;b.className='btn btn-sm '+(on?'btn-primary':'btn-outline');b.setAttribute('aria-checked',on);})">${l}</button>`).join('')}
     </div>
+    ${(()=>{ try{ return (window.homeMenuPrefHtml&&window.homeMenuPrefHtml())||''; }catch(e){ return ''; } })()}
     <hr style="margin:18px 0;border:none;border-top:1.5px solid var(--border)">
     <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:12px">🔒 Passwort ändern</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nur ausfüllen, wenn Sie Ihr Passwort ändern möchten.</div>
