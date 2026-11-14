@@ -133,6 +133,7 @@ function _countWorkdays(user,y,m,from,to){
 //    Beispiel Claudia: Jan–Jun al=6 (→3) + Jul–Dez al=12 (→6) = 9.
 //  • Eintritt/Austritt im Jahr: nur VOLLE Beschäftigungsmonate zählen (§ 5 BUrlG, 1/12 je vollem
 //    Monat). Eintritt 01.10. → Okt–Dez = 3/12 des Jahresurlaubs.
+//  • v588 (User 14.11.2026): auf GANZE Tage runden – ab ,5 auf, darunter ab (§ 5 Abs. 2 BUrlG). 8,75 → 9, 12,5 → 13.
 // Ohne Historie und ohne Eintritt/Austritt = aktueller al (unverändertes Verhalten).
 export function annualVacDays(user,y){
   if(!user) return 0;
@@ -144,7 +145,7 @@ export function annualVacDays(user,y){
     if(hasEmp){ const r=employedRange(user,y,m); if(!r||!r.full) continue; }
     total += Number(effUserAt(user,y,m).al||0)/12;
   }
-  return Math.round(total*2)/2; // auf halbe Tage runden
+  return Math.round(total+1e-9); // auf ganze Tage (ab ,5 aufrunden)
 }
 
 export function monthSOLL(user,y,m){

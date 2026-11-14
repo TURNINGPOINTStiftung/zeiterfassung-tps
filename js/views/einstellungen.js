@@ -3,7 +3,7 @@ import { getData, getUser, mutate, getCustomRoles, _fk, STAMM_FIELDS } from '../
 import { isManagerRole, canSeeEmployee, getLeitungTeams, roleLabel, _baseRoleLabel, getTeamForDate, hasPermission } from '../roles.js';
 import { esc, toast, openModal, closeModal, wsPeriodRows, wsCollectPeriods, localISODate, jsArg as jsq } from '../utils.js';
 import { getTeams, getCatsForTeam } from '../cats.js';
-import { vacDailyMin, annualVacDays, monthSOLL, effUserAt } from '../calc.js';
+import { vacDailyMin, annualVacDays, monthSOLL, effUserAt, employedRange } from '../calc.js';
 
 // Admin ODER Person mit delegiertem Verwaltungs-Zugriff (Deploy 5): darf die Verwaltung voll nutzen.
 // Schreibende Verwaltungs-Aktionen (Nutzer, Passwörter, Konten, Datenkorrekturen) nur noch
@@ -1046,8 +1046,24 @@ function _ufPUser(strands){
   _UF_PKEYS.forEach(k=>{ if(!st[k]) st[k]=_ufStrand(ex,k); });
   const u=Object.assign({},ex,{paramHistory:_ufBuildHistory(st)});
   const cur=localISODate().slice(0,8)+'01'; _UF_ROWKEYS.forEach(k=>{ const v=_ufValAt(st[k],cur); if(v!==undefined) u[k]=v; });
+  const ei=document.getElementById('uf-entry'), xi=document.getElementById('uf-exit');   // v588: Eintritt/Austritt aus dem Formular (noch ungespeichert)
+  if(ei) u.entryDate=ei.value||''; if(xi) u.exitDate=xi.value||'';
   return u;
 }
+// v588: errechneter Urlaubsanspruch des Jahres mit Begründung (unter „Jahresurlaub“)
+function _ufAlInfo(u,y){ try{
+  const a=annualVacDays(u,y); const ent=u.entryDate||'', ex=u.exitDate||''; const de=s=>Number(s.slice(8,10))+'.'+Number(s.slice(5,7))+'.'+s.slice(0,4);
+  let full=0; for(let m=1;m<=12;m++){ const r=employedRange(u,y,m); if(r&&r.full) full++; }
+  const alV=new Set(); for(let m=1;m<=12;m++){ const r=employedRange(u,y,m); if(r) alV.add(Number(effUserAt(u,y,m).al||0)); }
+  const why=[];
+  if(ent && ent.slice(0,4)===String(y) && ent.slice(5)!=='01-01') why.push('Eintritt '+de(ent));
+  if(ex && ex.slice(0,4)===String(y)) why.push('Austritt '+de(ex));
+  if((ent||ex) && full<12) why.push(full+' von 12 vollen Monaten');
+  if(alV.size>1) why.push('Jahresurlaub im Jahr geändert');
+  const txt=why.length?'anteilig: '+why.join(' · '):'ganzes Jahr';
+  return `📅 Anspruch ${y}: <b>${a} Tag${a===1?'':'e'}</b> <span style="color:var(--muted)">(${esc(txt)}, auf ganze Tage gerundet)</span>${ent?'':' <span style="color:var(--muted)">· kein Eintritt eingetragen – zählt das ganze Jahr</span>'}`;
+}catch(e){ return ''; } }
+function _ufAlRefresh(){ const el=document.getElementById('uf-al-info'); if(el && _ufPE){ el.innerHTML=_ufAlInfo(_ufPUser(), new Date().getFullYear()); } }
 function _ufFmt(k,v,user){
   if(v===undefined||v===null||v===''||(k==='vacHoursPerDay'&&!Number(v))) return k==='vacHoursPerDay'?`${Math.round(vacDailyMin(user)/60*10)/10} h (automatisch)`:'–';
   return k==='wh'||k==='vacHoursPerDay'?`${String(v).replace('.',',')} h`:`${String(v).replace('.',',')} Tage`;
@@ -1070,7 +1086,7 @@ function _ufPRowsHtml(){
     const curE=s.filter(e=>e.from<=cur).pop()||s[0];
     let sub='';
     if(k==='wh'){ try{ sub=`= ${_ufH(monthSOLL(pu,y,m))} h Soll im ${MONTHS[m-1]}`; }catch(e){} }
-    if(k==='al'){ try{ const a=annualVacDays(pu,y); if(Number(a)!==Number(curE.v)) sub=`Anspruch ${y}: ${String(a).replace('.',',')} Tage`; }catch(e){} }
+    // al: errechneter Anspruch steht als eigene Zeile darunter (_ufAlInfo, v588)
     const fut=s.filter(e=>e.from>cur);
     const since=curE?_ufMonLbl(curE.from):'';
     const chg=!!_ufPE.strands[k];
@@ -1080,7 +1096,7 @@ function _ufPRowsHtml(){
         <div style="flex:1 1 150px;font-size:13px;color:var(--muted)">${esc(_UF_ROWLBL[k])}</div>
         <div style="flex:2 1 200px"><b>${esc(_ufFmt(k,curE&&curE.v,pu))}</b> <span style="font-size:12px;color:var(--muted)">${esc(sub)}${sub?' · ':''}${esc(since)}${fut.length?' · geplant: '+fut.map(e=>esc(_ufFmt(k,e.v,pu))+' ab '+_ufShort(e.from)).join(', '):''}${chg?' · <b style="color:var(--warn,#b45309)">geändert – wird mit „Speichern“ übernommen</b>':''}</span></div>
         <button type="button" class="btn btn-outline btn-sm" onclick="ufPOpen(${jsq(k)})">Ändern</button>
-      </div>${hist}
+      </div>${hist}${k==='al'?`<div id="uf-al-info" style="font-size:12.5px;margin-top:4px">${_ufAlInfo(pu,y)}</div>`:''}
       <div id="uf-pe-${k}">${_ufPE.open===k?_ufPEditorHtml(k):''}</div>
     </div>`;
   }).join('');
@@ -1186,10 +1202,11 @@ export function ufAutoAdjust(src){
   if(ent||ex){
     const y=Number((ent||ex).slice(0,4)); const tmp={al:parseFloat(al.value)||0, entryDate:ent, exitDate:ex};
     const ys=[...new Set([ent&&Number(ent.slice(0,4)), ex&&Number(ex.slice(0,4))].filter(Boolean))];
-    ys.forEach(yy=>{ const v=annualVacDays(tmp,yy); if(v!==tmp.al) notes.push(`Urlaubsanspruch ${yy}: <b>${v} von ${tmp.al} Tagen</b> (anteilig, 1/12 je vollem Beschäftigungsmonat).`); });
+    // v588: Urlaubsanspruch steht jetzt unter „Jahresurlaub“ (_ufAlInfo, berücksichtigt auch Vertragswechsel)
     if(!ys.length) void y;
   }
   const info=$('uf-vac-info'); if(info){ info.innerHTML=notes.join('<br>'); info.style.display=notes.length?'':'none'; }
+  try{ _ufAlRefresh(); }catch(e){}
 }
 
 export function toggleFreelancerFields(){
