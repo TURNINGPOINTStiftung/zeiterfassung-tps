@@ -869,14 +869,14 @@ function userForm(u={}){
           <input type="checkbox" id="uf-hol" ${u.holidaysLikeSunday!==false?' checked':''} style="width:auto;cursor:pointer">
           Feiertage zählen nicht zum Soll und kosten keinen Urlaubstag
         </label>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Aus: Feiertage an Arbeitstagen müssen gearbeitet bzw. mit Urlaub belegt werden.${u.id?' Eine Änderung gilt ab diesem Monat.':''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Aus: Feiertage an Arbeitstagen müssen gearbeitet bzw. mit Urlaub belegt werden.${u.id?' Eine Änderung gilt ab dem Monat unter „Gilt ab“.':''}</div>
       </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
           <input type="checkbox" id="uf-sollwd"${u.sollWorkdays?' checked':''} style="width:auto;cursor:pointer">
           SOLL arbeitstaggenau berechnen <span style="font-size:12px;color:var(--muted)">(statt pauschal 4× Wochenstunden)</span>
         </label>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.${u.id?' '+_ufSollExample(u)+' Eine Änderung gilt ab diesem Monat.':''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Für Teilzeit, wenn das Monatsziel den echten Arbeitstagen des Monats folgen soll. Vollzeit rechnet ohnehin immer arbeitstaggenau.${u.id?' '+_ufSollExample(u)+' Eine Änderung gilt ab dem Monat unter „Gilt ab“.':''}</div>
       </div>
       <div id="uf-werkstudent-fields" data-haslecture="${((Array.isArray(u.lecturePeriods)&&u.lecturePeriods.length)||(Array.isArray(u.lectureFreeDays)&&u.lectureFreeDays.length))?'1':''}" style="display:none">
         <div class="uf-section-head">🎓 Werkstudent – Vorlesungszeiten</div>
@@ -890,6 +890,7 @@ function userForm(u={}){
     <div id="uf-freelancer-fields" style="display:none">
       <div class="form-group"><label>Monatliches Stundenlimit (h) <span style="font-size:12px;color:var(--muted)">(0 = kein Limit)</span></label><input id="uf-maxhours" type="number" min="0" max="999" step="0.5" value="${esc(u.maxHours||0)}"></div>
     </div>
+    ${u.id?_ufDirFromHtml():''}
     ${(()=>{
       if(u.id==='admin') return `<div class="uf-section-head">🎚️ Zugriffe</div>
         <div style="padding:8px 12px;background:var(--danger-bg,#fee2e2);border:1.5px solid #fca5a5;border-radius:6px;font-size:13px;color:var(--danger-text,#991b1b);font-weight:600">🔒 Administrator – hat immer alle Rechte</div>`;
@@ -1185,12 +1186,40 @@ export function ufPApply(k){
   _ufPE.strands[k]=_ufSetFrom(k,s0,r.from,r.v,lb?lb.checked:true);
   _ufPE.open=null; _ufRerender();
 }
+// v593: „Gilt ab“ für die direkt im Formular geänderten Grunddaten (Rolle, Bundesland, Feiertage, SOLL-Art, Limit)
+function _ufDirFromHtml(){
+  const now=new Date(), cy=now.getFullYear(), cm=now.getMonth()+1;
+  const mo=MONTHS.map((n,i)=>`<option value="${i+1}"${i+1===cm?' selected':''}>${n}</option>`).join('');
+  const yo=[cy-3,cy-2,cy-1,cy].map(y=>`<option value="${y}"${y===cy?' selected':''}>${y}</option>`).join('');
+  return `<div class="form-group" id="uf-dirfrom" style="background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:13px">Gilt ab</b>
+      <select id="uf-dir-m" aria-label="Gilt ab Monat" style="width:auto">${mo}</select><select id="uf-dir-y" aria-label="Gilt ab Jahr" style="width:auto">${yo}</select></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Für Änderungen an Rolle, Bundesland, „Feiertage zählen nicht zum Soll“, „SOLL arbeitstaggenau“ und Stundenlimit. Rückwirkend möglich – Urlaub, Krank &amp; Co. werden ab dann neu eingetragen (eingereichte/genehmigte Monate bleiben).</div>
+  </div>`;
+}
+function _ufDirFromRead(cur){
+  const m=parseInt(document.getElementById('uf-dir-m')?.value||'',10), y=parseInt(document.getElementById('uf-dir-y')?.value||'',10);
+  if(!m||!y) return cur;
+  const f=`${y}-${String(m).padStart(2,'0')}-01`;
+  return f>cur?cur:f;   // keine künftigen Monate (dafür gibt es bei Stunden/Tagen/Urlaub „Ändern“)
+}
+// Erster Monat (JJJJ-MM-01), in dem sich Stunden/Tage/Urlaubsstunden/Feiertags-Regel/Bundesland/Rolle unterscheiden
+const _ABS_KEYS=['wh','dpw','vacHoursPerDay','holidaysLikeSunday','bundesland','role'];
+function _ufFirstDiff(a,b){
+  const now=new Date(); let y=now.getFullYear()-3, m=1; const ey=now.getFullYear()+1;
+  const sig=(u,yy,mm)=>{ const e=effUserAt(u,yy,mm); return JSON.stringify(_ABS_KEYS.map(k=>k==='holidaysLikeSunday'?(e[k]!==false):(k==='vacHoursPerDay'?(Number(e[k])||0):e[k]))); };
+  while(y<ey||(y===ey&&m<=12)){
+    if(sig(a,y,m)!==sig(b,y,m)) return `${y}-${String(m).padStart(2,'0')}-01`;
+    m++; if(m>12){ m=1; y++; }
+  }
+  return null;
+}
 // v591: genehmigte Abwesenheiten der Person neu in die Zeiterfassung schreiben (Tage/Stunden nach heutigen Einstellungen)
 export async function ufAbsResync(uid){
   const u=getUser(uid); if(!u||!window.resyncUserAbsences) return;
   if(!confirm(`Genehmigte Abwesenheiten von ${u.name} neu in die Zeiterfassung eintragen?\n\nTage und Stunden werden nach den hinterlegten Einstellungen berechnet (je Monat). Eingereichte/genehmigte Monate bleiben unverändert.`)) return;
   const r=await window.resyncUserAbsences(uid);
-  toast(`${r.done} Abwesenheit${r.done!==1?'en':''} neu eingetragen`+(r.skipped?` · ${r.skipped} übersprungen (Monat eingereicht/genehmigt)`:'')+' ✓','ok');
+  toast(`${r.done} Abwesenheit${r.done!==1?'en':''}${r.days?` und ${r.days} weitere Tag${r.days!==1?'e':''}`:''} neu eingetragen`+(r.skipped?` · ${r.skipped} übersprungen (Monat eingereicht/genehmigt)`:'')+' ✓','ok');
 }
 window.ufAbsResync=ufAbsResync;
 window.ufPOpen=ufPOpen; window.ufPClose=ufPClose; window.ufPDel=ufPDel; window.ufPPreview=ufPPreview; window.ufPApply=ufPApply;
@@ -1438,11 +1467,16 @@ export async function saveEditUser(id){
   const _pe=(_ufPE&&_ufPE.uid===id)?_ufPE.strands:{};
   const _cur=localISODate().slice(0,8)+'01';
   const _strands={}; let _anyP=Object.keys(_pe).length>0;
+  // v593: „Gilt ab“ (Monat/Jahr) für direkt im Formular geänderte Werte – auch rückwirkend. Einträge zwischen
+  // diesem Monat und heute werden ersetzt (sonst würde ein späterer alter Eintrag die Korrektur wieder aufheben).
+  const _dirFrom=_ufDirFromRead(_cur);
   if(existing){
     _UF_PKEYS.forEach(k=>{
       _strands[k]=_pe[k]||_ufStrand(existing,k);
       if(_pe[k]||_UF_ROWKEYS.includes(k)) return;
-      if(_ufPn(k,existing[k])!==_ufPn(k,u[k])){ _strands[k]=_ufSetFrom(k,_strands[k],_cur,u[k],false); _anyP=true; }
+      if(_ufPn(k,existing[k])!==_ufPn(k,u[k])){
+        const base=_strands[k].filter(e=>!(e.from>_dirFrom&&e.from<=_cur));
+        _strands[k]=_ufSetFrom(k,base.length?base:_strands[k],_dirFrom,u[k],false); _anyP=true; }
     });
   }
   if(existing&&_anyP){
@@ -1481,12 +1515,13 @@ export async function saveEditUser(id){
   const _crmLvl=_ufCrmLevel(_crmState);
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
-  const _absSig=x=>JSON.stringify([x&&x.holidaysLikeSunday,x&&x.vacHoursPerDay,x&&x.dpw,x&&x.wh,x&&x.bundesland,x&&x.role,x&&x.paramHistory||null]);
-  const _absChanged=!!existing&&_absSig(existing)!==_absSig(Object.assign({},existing,u));
+  // v593: ab dem ERSTEN Monat, in dem sich ein für Abwesenheiten wichtiger Wert ändert (auch rückwirkend)
+  const _absFrom=existing?_ufFirstDiff(existing,Object.assign({},existing,u)):null;
+  const _absChanged=!!_absFrom;
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
   // v591: Feiertags-Regel/Urlaubsstunden/Arbeitstage geändert → genehmigte Abwesenheiten ab Vormonat neu eintragen
-  if(_absChanged){ try{ const n=new Date(); n.setDate(1); n.setMonth(n.getMonth()-1); const r=await window.resyncUserAbsences?.(id,{fromDate:localISODate(n)}); if(r&&r.done) toast(`${r.done} Abwesenheit${r.done!==1?'en':''} nach den neuen Einstellungen neu eingetragen.`,'ok'); }catch(e){ console.warn('Abwesenheiten neu:', e); } }
+  if(_absChanged){ try{ const r=await window.resyncUserAbsences?.(id,{fromDate:_absFrom}); if(r&&(r.done||r.days)) toast(`Ab ${MONTHS[Number(_absFrom.slice(5,7))-1]} ${_absFrom.slice(0,4)} neu eingetragen: ${r.done} Abwesenheit${r.done!==1?'en':''}${r.days?`, ${r.days} weitere Tag${r.days!==1?'e':''}`:''}`+(r.skipped?` · ${r.skipped} übersprungen (Monat eingereicht/genehmigt)`:'')+'.','ok'); }catch(e){ console.warn('Abwesenheiten neu:', e); } }
   // Login-Verzeichnis (loginDir) mit dem evtl. geänderten Namen synchronisieren – sonst zeigt/matcht
   // der Anmelde-Bildschirm weiter den alten Namen (z. B. bei korrigierten Umlauten). Idempotent, für
   // bestehende Nutzer ohne Konto-Anlage (nur Namens-Update im Verzeichnis).

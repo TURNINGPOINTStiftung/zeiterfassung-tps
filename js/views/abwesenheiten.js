@@ -1,7 +1,7 @@
 import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
-import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
-import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate, jsArg as jsq } from '../utils.js';
+import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate, isFreelancer } from '../roles.js';
+import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate, addMin, jsArg as jsq } from '../utils.js';
 import { vacDailyMin, dailyMinutes, vacStatus, effUserAt } from '../calc.js';
 
 // v591: Einstellungen (Feiertage wie Sonntag, Bundesland, Arbeitstage/Woche) gelten je MONAT nach dem
@@ -101,7 +101,27 @@ export async function resyncUserAbsences(uid,opts){
     }
     done++;
   }
-  return {done,skipped};
+  // v593: von Hand in der Zeiterfassung gewählte Urlaubs-/Krankheitstage (ohne Antrag) mit den Stunden des Monats neu
+  const covered=new Set();
+  Object.values(getData().vacRequests||{}).forEach(r=>{ if(r&&r.userId===uid&&r.status==='approved'&&!r._public&&r.reviewNote!==_AUTO_NOTE){
+    let c=new Date(r.startDate+'T12:00:00'); const e=new Date(r.endDate+'T12:00:00'); while(c<=e){ covered.add(localISODate(c)); c.setDate(c.getDate()+1); } } });
+  const fromM=minEnd?minEnd.slice(0,7):'';
+  const fixes=[];
+  Object.entries(getData().entries||{}).forEach(([k,en])=>{
+    const mm=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(k); if(!mm||mm[1]!==uid||!en||!en.days) return;
+    if(fromM && `${mm[2]}-${mm[3]}`<fromM) return;
+    if(en.status==='submitted'||en.status==='approved') return;
+    let eu; try{ eu=effUserAt(user,Number(mm[2]),Number(mm[3])); }catch(e){ eu=user; }
+    if(isFreelancer(eu)) return;
+    Object.entries(en.days).forEach(([ds,dd])=>{
+      if(!dd||covered.has(ds)||dd.b1von!=='08:00'||dd.b2von) return;
+      const z=dd.b1zuord; if(z!=='Urlaub'&&z!=='AU/Krank') return;
+      const mins=z==='Urlaub'?(dd.halfDay?Math.round(vacDailyMin(eu)/2):vacDailyMin(eu)):(dailyMinutes(eu)||480);
+      const bis=addMin('08:00',mins); if(dd.b1bis!==bis) fixes.push([k,ds,bis]);
+    });
+  });
+  if(fixes.length) await mutate(d=>{ fixes.forEach(([k,ds,bis])=>{ const x=d.entries?.[k]?.days?.[ds]; if(x){ x.b1bis=bis; x._paused=0; x._pausedF=''; x._pInit=false; } }); });
+  return {done,skipped,days:fixes.length};
 }
 window.resyncUserAbsences=resyncUserAbsences; window.vacReqDays=vacReqDays;
 // Andere genehmigte Anträge der Person, die [from,to] berühren, erneut eintragen (nach Stornieren/Ändern)
