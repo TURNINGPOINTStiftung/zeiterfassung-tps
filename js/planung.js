@@ -100,6 +100,8 @@ function _abs(){ const out=[]; try{ const vr=(getData()||{}).vacRequests||{}; Ob
 function _emps(){ try{ return ((getData()||{}).users||[]).filter(u=>u&&u.id&&u.id!=='admin'&&u.role!=='admin'&&!u.crmOnly&&!u.archived); }catch(e){ return []; } }
 function _teamCol(t){ const ts=_teamsVisible(); const i=ts.indexOf(t); return i<0?'var(--muted,#5d7086)':'var(--team-'+((i%8)+1)+')'; }
 const _ST={ offen:'Offen', inarbeit:'In Arbeit', erledigt:'Erledigt' };
+// v598: Status-Kärtchen in den gemeinsamen Farben (css/styles.css .st-pill)
+const _stP=(st,l)=>{ st=_ST[st]?st:'offen'; return `<span class="st-pill st-${st}">${esc(l||_ST[st])}</span>`; };
 function _srcTag(a){
   if(a.art==='aufgaben'){ const w=(window.crmAufgWdhLabel&&window.crmAufgWdhLabel(a.node))||''; return `<span class="plan-tag">${w?'🔁 '+esc(w):'✔ Aufgabe'}${a.owner?' · privat':''}</span>`; }
   if(a.kind==='lager') return `<span class="plan-tag">📦 Lager${a.lager&&a.lager.where?' · '+esc(a.lager.where):''}</span>`;
@@ -126,9 +128,9 @@ function _todoCard(){
   const row=a=>{ const n=a.node; const u=urg(n);
     const free=!n.assigneeId && !a.owner; const isA=a.art==='aufgaben';
     const jd=(n.jeder&&window.crmTaskWhoA)?(()=>{ const w=window.crmTaskWhoA(a)||[]; const d=w.filter(u=>(n.erledigtVon||{})[u]).length; return `<span class="plan-tag">${d} von ${w.length} erledigt</span>`; })():'';
-    const acts=((isA||leaf(a))?`<button type="button" class="plan-act ok" onclick="${isA?`crmAufgDone(${jsq(a.containerId)},${jsq(n.id)})`:`crmTaskDone(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})`}" aria-label="${n.jeder?'Für mich erledigt':'Erledigt'}: ${esc(n.text||'Aufgabe')}">✓ ${n.jeder?'Für mich erledigt':'Erledigt'}</button>`:'')
-      +((free&&!n.jeder)?`<button type="button" class="plan-act" onclick="crmTakeTask(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})">Übernehmen</button>`:'');
-    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}<span class="plan-tag">${esc(_ST[n.status]||'Offen')}</span>${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}${window.crmNoteBadge?window.crmNoteBadge(n):''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
+    // v598 (User 16.11.2026): kein Abhaken/Übernehmen mehr direkt in der Liste – Status ändert man bewusst in der Aufgabe
+    const acts='';
+    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}${_stP(n.status, n.jeder&&(n.erledigtVon||{})[me()]?'Für dich erledigt':'')}${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}${window.crmNoteBadge?window.crmNoteBadge(n):''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
   // Filter „👤 Nur meine" (User 11.11.2026): ohne freie Team-Aufgaben – gemerkt pro Gerät, gilt auch in Team-Übersicht/Projektplan
   const onlyMine=_mineOnly(), lagerOnly=_lagerOnly(); const all0=mine.length;
   if(lagerOnly) mine=mine.filter(a=>a.kind==='lager');   // v590: 📦 Lager
