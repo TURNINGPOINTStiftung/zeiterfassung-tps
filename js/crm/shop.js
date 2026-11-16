@@ -873,14 +873,15 @@ function _placeSelect(id, sel, withQty, it){
 }
 function shopBook(id, preType, prePl, preQty){
 { const _it=getShop('shopItems',id); if(isEinzeln(_it)){ toast('Einzeln erfasster Artikel – Bestand über „🏷️ Stücke" (anlegen / ausmustern).','ok'); shopUnits(id); return; } }
-  if(!_can('la_bestand')) return;
+  const _plan=!!window._shopFromPlan && preType==='zugang';   // v590: Nachkaufen aus dem Planner – Zugang buchen auch ohne Lager-Recht
+  if(!_can('la_bestand') && !_plan) return;
   const it=getShop('shopItems',id); if(!it) return;
   if(!places().length){ toast('Bitte zuerst unter „📍 Orte" einen Ort anlegen.','err'); return; }
   openModal(`<h3>± Bestand buchen</h3><p style="font-size:13px;margin:0 0 10px"><b>${esc(itemLabel(it))}</b> · gesamt ${total(it)} ${esc(it.einheit||'Stück')}</p>
     <div class="shop-f"><label>Art</label><select id="sb-type" onchange="shopBookPrefill(${jsq(id)})">
-      <option value="zugang"${preType==='zugang'?' selected':''}>➕ Zugang (geliefert, gedruckt, gekauft)</option>
+      <option value="zugang"${preType==='zugang'?' selected':''}>➕ Zugang (geliefert, gedruckt, gekauft)</option>${_plan&&!_can('la_bestand')?'':`
       <option value="abgang"${preType==='abgang'?' selected':''}>➖ Abgang (verbraucht, verteilt, kaputt)</option>
-      <option value="korrektur"${preType==='korrektur'?' selected':''}>✎ Korrektur (gezählt – Bestand genau setzen)</option></select></div>
+      <option value="korrektur"${preType==='korrektur'?' selected':''}>✎ Korrektur (gezählt – Bestand genau setzen)</option>`}</select></div>
     <div class="shop-f2"><div class="shop-f"><label>Ort</label>${_placeSelect('sb-pl', prePl||fPlace, true, it)}</div>
       <div class="shop-f"><label id="sb-qty-l">Menge</label>${_qtyHtml('sb-qty', preQty||1, 0)}</div></div>
     <div class="shop-f"><label>Notiz</label><input id="sb-note" placeholder="z. B. Lieferung Druckerei, Messe Kiel"></div>
@@ -901,10 +902,10 @@ function shopBookSave(id){
   let delta = type==='zugang' ? q : type==='abgang' ? -q : (q-cur);
   if(type!=='korrektur' && q===0){ toast('Bitte eine Menge größer 0 eingeben.','err'); return; }
   if(!_applyDelta(it, pl, delta)){ toast(`Am Ort sind nur ${cur} vorhanden.`,'err'); return; }
-  saveShop('shopItems', it);
+  if(_fieldOnly()) _saveField('shopItems', it.id, 'stock', it.stock); else saveShop('shopItems', it);   // ohne Lager-Recht nur den Bestand (Regeln)
   if(type==='korrektur') _log(it,'korrektur',delta,pl,pl,(note?note+' · ':'')+`${cur} → ${q}`);
   else _log(it,type,q,type==='abgang'?pl:null,type==='zugang'?pl:null,note);
-  closeModal(); toast('Gebucht ✓','ok'); renderShop();
+  closeModal(); toast('Gebucht ✓','ok'); renderShop(); _ptAfter();
 }
 
 // ── Umlagern ───────────────────────────────────────────────────────
@@ -1092,7 +1093,20 @@ function _posEditorHtml(mode){
       ${_qtyHtml('pos-qty', 1, 1)}<button type="button" class="shop-btn sm" onclick="shopPosAddSel()">Hinzufügen</button></div>
     ${mode==='order'?`<div class="shop-posadd"><input id="pos-free" placeholder="Freier Wunsch (nicht im Katalog), z. B. 200 Visitenkarten für mich" onkeydown="if(event.key==='Enter'){event.preventDefault();shopCartAddFree('pos-free');}"><button type="button" class="shop-btn sm" onclick="shopCartAddFree('pos-free')">＋</button></div>`:''}</div>`;
 }
+// v590: Bestellformular – wohin geht welcher Artikel (je Team eine Bestellung); Teamwahl nur für freie Wünsche/Artikel ohne Team
+function _soTeamsHtml(){ try{
+  const ts=teamList(); const a=cartGet(); const ort=_val('so-place')||''; const by=new Map(); const free=[];
+  a.forEach(p=>{ const it=p.itemId?getShop('shopItems',p.itemId):null; const t=_teamOfItemAt(it,ort); const nm=it?itemLabel(it):(p.freitext||'?');
+    if(t){ if(!by.has(t)) by.set(t,[]); by.get(t).push(nm); } else free.push(nm); });
+  const cur=_val('so-team')||(myTeams()[0]||'');
+  const rows=[...by].map(([t,ns])=>`<div>👥 <b>${esc(t)}</b>: ${esc(ns.join(', '))}</div>`).join('');
+  const sel=(free.length&&ts.length)?`<div style="margin-top:6px"><label style="font-size:13px">Für welches Team? <span style="font-weight:400;color:var(--muted)">(${esc(free.join(', '))})</span></label>
+    <select id="so-team"><option value="">– bitte wählen –</option>${ts.map(t=>`<option${t===cur?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`:'';
+  if(!rows && !sel) return '';
+  return `<div class="shop-f"><label>Geht an <span style="font-weight:400;color:var(--muted)">(je Team eine Bestellung – das Team erledigt sie im Planner)</span></label><div style="font-size:13px;line-height:1.6">${rows}</div>${sel}</div>`;
+}catch(e){ return ''; } }
 function _posPaint(){
+  try{ const st=document.getElementById('so-teams'); if(st) st.innerHTML=_soTeamsHtml(); }catch(e){}
   const box=document.getElementById('shop-pos'); if(!box) return;
   const a=cartGet().filter(p=>_posMode!=='send'||p.itemId);
   if(!a.length){ box.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">Noch keine Position – unten hinzufügen.</div>'; }
@@ -1141,9 +1155,7 @@ function shopOrderNew(itemId){
     <div class="shop-f" id="so-adr-w" style="display:none"><label>Lieferadresse <span id="so-adr-h" style="font-weight:400;color:var(--muted)"></span></label>
       <textarea id="so-adr" rows="3" placeholder="Straße Nr.&#10;PLZ Ort"></textarea></div>
     <div class="shop-f"><label>Notiz</label><input id="so-note" placeholder="Optional"></div>
-    ${(()=>{ const ts=teamList(); if(!ts.length) return ''; const mine=myTeams()[0]||'';
-      return `<div class="shop-f"><label>Für welches Team? <span style="font-weight:400;color:var(--muted)">(für freie Wünsche und Artikel ohne Team – Artikel mit Team gehen automatisch an ihr Team)</span></label>
-      <select id="so-team"><option value="">– bitte wählen –</option>${ts.map(t=>`<option${t===mine?' selected':''}>${esc(t)}</option>`).join('')}</select></div>`; })()}
+    <div id="so-teams">${_soTeamsHtml()}</div>
     <div class="modal-btns"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button>
     <button class="btn btn-primary" onclick="shopOrderSave()">Bestellen</button></div>`);
   _posPaint();
@@ -2521,6 +2533,11 @@ function shopPlannerTasks(){
       out.push(_ptEntry(Object.assign({}, base, { key:'l|'+l.id, text:`🔁 Rückgabe nachhalten: ${what}` })));
       if(live && l.borrowerId && l.borrowerId===me) out.push(_ptEntry(Object.assign({}, base, { key:'lb|'+l.id, owner:l.borrowerId, text:`🔁 Zurückbringen: ${what}`, where:'zurück an '+placeLabel(l.fromPlace||l.placeId) })));
     });
+    // Nachkaufen (v590): Gesamtbestand unter Mindestbestand → Aufgabe im Team des Artikels; erledigt = Zugang buchen
+    items().forEach(it=>{ const min=_num(it.min); if(!(min>0)) return; const tot=total(it); if(tot>=min) return;
+      const team=itemTeams(it).filter(Boolean)[0]||''; const u=it.einheit||'Stück';
+      out.push(_ptEntry({ key:'m|'+it.id, cycle:'min'+min, team, placeId:'', sub:'nachkauf', due:'', text:`🛍️ Nachkaufen: ${itemLabel(it)} (${tot} / ${min})`,
+        where:'', info:[`Bestand insgesamt ${tot} ${u}, Mindestbestand ${min} ${u} – es fehlen ${min-tot}`], act:'buy:'+it.id })); });
     // Bestellungen (Schritt B, v578): offen/in Bearbeitung → Aufgabe; ausgegeben/erledigt/abgelehnt (30 Tage) → erledigt
     orders().forEach(o=>{ const st=o.status; const open=st==='offen'||st==='inarbeit';
       const fin=!open && ['ausgegeben','erledigt','abgelehnt'].includes(st) && (o.handledTs||0)>=old;
@@ -2561,7 +2578,8 @@ function shopPtNoteDel(id, nid, uid){ return shopPtMut(id, m=>{ m.notizen=(m.not
 // Erledigen = Lager-Dialog (aus dem Planner auch ohne Lager-Recht)
 function shopPtDone(id){ const a=shopPtGet(id); if(!a){ toast('Diese Lager-Aufgabe ist schon erledigt.','ok'); return; }
   const i=String(a.lager.act).indexOf(':'); const k=a.lager.act.slice(0,i), v=a.lager.act.slice(i+1); window._shopFromPlan=true;
-  try{ if(k==='due') shopDueDone(v); else if(k==='ret') shopReturn(v); else if(k==='ord') shopOrderIssue(v); } finally { window._shopFromPlan=false; } }
+  try{ if(k==='due') shopDueDone(v); else if(k==='ret') shopReturn(v); else if(k==='ord') shopOrderIssue(v);
+    else if(k==='buy'){ const it=getShop('shopItems',v); if(it) shopBook(v,'zugang','',Math.max(1,_num(it.min)-total(it))); } } finally { window._shopFromPlan=false; } }
 function shopPtOpenLager(id){ const a=shopPlannerTasks().find(x=>x.lager.id===id); const leihe=!!(a&&a.lager.sub==='leihe'); const adm=!!(window.cu&&window.cu.role==='admin');
   TAB=!adm?'bestand':(leihe?'ausleihen':(a&&a.lager.sub==='bestellung'?'bestellungen':'faellig')); if(leihe) fLoan='aktiv'; else fDue='all';
   if(!adm && a && a.lager.where){ const pl=places().find(p=>placeLabel(p.id)===a.lager.where); if(pl) fPlace=pl.id; }

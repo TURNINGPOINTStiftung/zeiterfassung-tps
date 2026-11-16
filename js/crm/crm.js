@@ -4612,8 +4612,8 @@ function _oeaBoardHtml(r, posts){
   const inR=a=>a.node.due&&a.node.due>=r.a&&a.node.due<=r.b;
   // Projektplan (nicht ÖA): ALLE Aufgaben des Teams, unabhängig vom Zeitraum – es geht um den Überblick (User 11.11.2026).
   // Redaktionsplan (ÖA) bleibt beim gewählten Zeitraum (+ Ideen ohne Datum).
-  const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
-  const list=(_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice()).filter(a=>!_om || crmIsMineA(a,_me));
+  const _om=_planMineOnly(), _lg=_planLagerOnly(); const _me=(window.cu&&window.cu.id)||'';
+  const list=(_rc.oea ? posts.filter(a=>inR(a) || (!a.node.due && oeaPhaseOf(a.node)===ab[0].key)) : posts.slice()).filter(a=>(!_om || crmIsMineA(a,_me)) && (!_lg || a.kind==='lager'));
   const card=a=>{ const n=a.node; const ph=oeaPhaseOf(n);
     const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     const over=iss.some(x=>x.lv==='crit');
@@ -4797,8 +4797,10 @@ function crmIsMineA(a, me){ me=me||((window.cu&&window.cu.id)||''); const n=a.no
 window.crmIsMineA=crmIsMineA;
 // Filter „👤 Nur meine" (gemeinsam mit „Was ansteht" im Planner, gemerkt pro Gerät)
 function _planMineOnly(){ try{ return localStorage.getItem('tps_plan_mine')==='1'; }catch(e){ return false; } }
-function _mineSegHtml(){ const on=_planMineOnly(); return `<span class="pl-seg" role="group" aria-label="Filter"><button type="button" class="${on?'':'on'}" aria-pressed="${!on}" onclick="crmMineSet(false)">Alle</button><button type="button" class="${on?'on':''}" aria-pressed="${on}" onclick="crmMineSet(true)">👤 Nur meine</button></span>`; }
-function crmMineSet(v){ try{ localStorage.setItem('tps_plan_mine', v?'1':'0'); }catch(e){} paintTeamDetail(); }
+function _planLagerOnly(){ try{ return localStorage.getItem('tps_plan_mine')==='lager'; }catch(e){ return false; } }   // v590: 📦 Lager
+function _mineSegHtml(){ const on=_planMineOnly(), lg=_planLagerOnly(), al=!on&&!lg; const b=(v,c,l)=>`<button type="button" class="${c?'on':''}" aria-pressed="${c}" onclick="crmMineSet(${v})">${l}</button>`;
+  return `<span class="pl-seg" role="group" aria-label="Filter">${b('false',al,'Alle')}${b('true',on,'👤 Nur meine')}${b("'lager'",lg,'📦 Lager')}</span>`; }
+function crmMineSet(v){ try{ localStorage.setItem('tps_plan_mine', v==='lager'?'lager':(v?'1':'0')); }catch(e){} paintTeamDetail(); }
 window.crmMineSet=crmMineSet; window.crmTeamRepaint=()=>{ try{ paintTeamDetail(); }catch(e){} };
 // Team-Archiv (älter als 7 Tage erledigt): Team-Übersicht UND unten im Projekt-/Redaktionsplan – für alle im Team sichtbar
 // sofort=true (Team-Übersicht, User 13.11.2026): erledigte Aufgaben gleich ins Archiv – „Erledigt" zeigt nur der Projektplan
@@ -4825,8 +4827,8 @@ function _planTeamOverview(team){
   const _tc=t=>{ const ts=zeTeams(); const _TC=['var(--team-1,#1f6fb2)','var(--team-2,#b4531f)','var(--team-3,#2f7d4f)','var(--team-4,#7a4bb0)','var(--team-5,#b0306a)','var(--team-6,#2f8a8a)','var(--team-7,#8a6d1f)','var(--team-8,#4b5fb0)']; const i=ts.indexOf(t); return i<0?'var(--primary)':_TC[i%_TC.length]; };
   const inTeam=a=>{ const tg=a.teamsEff||[]; return ohne ? !tg.length : tg.includes(team); };
   const all=listAllTasks({ lager:true }).filter(a=>!a.owner);   // persönliche Projekte nie in der Team-Übersicht
-  const _om=_planMineOnly(); const _me=(window.cu&&window.cu.id)||'';
-  const open0=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!_om || crmIsMineA(a,_me)))
+  const _om=_planMineOnly(), _lg=_planLagerOnly(); const _me=(window.cu&&window.cu.id)||'';
+  const open0=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!_om || crmIsMineA(a,_me)) && (!_lg || a.kind==='lager'))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
   const leaves=open0.filter(a=>!a.node.due || a.node.due<=until);
   const later=open0.filter(a=>a.node.due && a.node.due>until);   // v577: später als 6 Wochen → aufklappbar
@@ -5285,15 +5287,15 @@ function crmLagerView(nodeId){
     <div class="tv-notes">${notes.map(x=>_noteHtml(x, true, `crmLagerNoteDel(${jsq(x.id)})`)).join('')||'<div class="tv-empty">Noch keine Notizen. Z. B. „Termin beim Prüfer am Dienstag“.</div>'}</div>
     <div class="tv-nadd"><textarea id="lv-note" rows="2" placeholder="Info fürs Team … (mit @Vorname jemanden erwähnen)" aria-label="Notiz fürs Team" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();crmLagerNote();}"></textarea><button type="button" class="btn-sm-crm primary" onclick="crmLagerNote()">Senden</button></div>`}
     <div class="tv-act">
-      ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">${L.sub==='bestellung'?'📦 Ausgeben …':'✓ Erledigen …'}</button>
+      ${done?'':`<button class="btn-sm-crm primary" onclick="crmLagerDone(${jsq(L.id)})">${L.sub==='bestellung'?'📦 Ausgeben …':(L.sub==='nachkauf'?'➕ Zugang buchen …':'✓ Erledigen …')}</button>
       ${L.sub==='bestellung'?`<button class="btn-sm-crm" onclick="crmLagerOrder(${jsq(L.id)},'erledigt')">✓ Erledigt ohne Ausgabe</button><button class="btn-sm-crm danger" onclick="crmLagerOrder(${jsq(L.id)},'abgelehnt')">✕ Ablehnen</button>`:''}
       ${(!ass.length&&!a.owner)?`<button class="btn-sm-crm" onclick="crmTakeTask('lager','',${jsq(L.id)},${jsq(n.id)})">Übernehmen</button>`:''}
       ${a.owner?'':`<button class="btn-sm-crm" onclick="crmLagerStatus(${jsq(n.status==='inarbeit'?'offen':'inarbeit')})">${n.status==='inarbeit'?'↩ Zurück auf Offen':'▶ In Arbeit'}</button>`}`}
-      ${(L.sub!=='bestellung'&&window.shopPtMay&&window.shopPtMay())?`${done?'':`<button class="btn-sm-crm" onclick="crmLagerEdit(${jsq(L.id)})">✎ ${L.sub==='leihe'?'Rückgabedatum':'Termin'} ändern</button>`}
+      ${(L.sub!=='bestellung'&&L.sub!=='nachkauf'&&window.shopPtMay&&window.shopPtMay())?`${done?'':`<button class="btn-sm-crm" onclick="crmLagerEdit(${jsq(L.id)})">✎ ${L.sub==='leihe'?'Rückgabedatum':'Termin'} ändern</button>`}
       ${(L.sub!=='leihe'||done)?`<button class="btn-sm-crm danger" onclick="crmLagerDel(${jsq(n.id)})">🗑 ${done?'Eintrag':'Termin'} löschen</button>`:''}`:''}
       <button class="btn-sm-crm" onclick="crmCloseModal()">Schließen</button>
     </div>
-    ${done?'':`<div class="tv-empty" style="margin-top:8px">${L.sub==='bestellung'?'„Ausgeben“ öffnet den Lager-Dialog (aus welchem Ort, Menge, umlagern / verleihen / verschicken) – so stimmen Bestand, Ausleihe und Verlauf. Wer bestellt hat, wird benachrichtigt.':`„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.`}</div>`}</div>`);
+    ${done?'':`<div class="tv-empty" style="margin-top:8px">${L.sub==='nachkauf'?'Nachgekauft? „Zugang buchen“ trägt die gelieferte Menge ein – sobald der Mindestbestand erreicht ist, ist die Aufgabe erledigt.':L.sub==='bestellung'?'„Ausgeben“ öffnet den Lager-Dialog (aus welchem Ort, Menge, umlagern / verleihen / verschicken) – so stimmen Bestand, Ausleihe und Verlauf. Wer bestellt hat, wird benachrichtigt.':`„Erledigen“ öffnet den Lager-Dialog (${L.sub==='leihe'?'Rückgabe buchen':'erledigt am, nächster Termin'}) – so stimmen Bestand und Verlauf.`}</div>`}</div>`);
   _crmSide();
 }
 function _lvA(){ return window._lvId&&window.shopPtFind?window.shopPtFind(window._lvId):null; }
