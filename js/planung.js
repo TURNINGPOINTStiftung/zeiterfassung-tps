@@ -80,7 +80,10 @@ function _openPm(tab){
     else if(window.crmShowTeams) window.crmShowTeams();
   } else {
     let id=window._planVa; const vs=_vasSorted();
-    if(!id || !vs.some(v=>v.id===id)){ const up=vs.find(v=>String(v.ende||v.start||'')>=iso(new Date())); id=(up||vs[0]||{}).id||''; window._planVa=id; }
+    // v597: die ANGEKLICKTE Veranstaltung öffnen – auch abgeschlossene/vergangene. Vorher fiel eine abgeschlossene
+    // hier raus und es öffnete sich die nächste anstehende (Bearbeiten/Löschen trafen dann die falsche).
+    let _allVa=[]; try{ _allVa=(CD.listVeranstaltungen?CD.listVeranstaltungen():[]).filter(Boolean); }catch(e){}
+    if(!id || !_allVa.some(v=>v.id===id)){ const up=vs.find(v=>String(v.ende||v.start||'')>=iso(new Date())); id=(up||vs[0]||{}).id||''; window._planVa=id; }
     window._crmMode='veranstaltungen';
     if(id && window.crmOpenVeranstaltung) window.crmOpenVeranstaltung(id);
   }
