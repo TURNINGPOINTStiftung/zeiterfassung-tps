@@ -743,7 +743,7 @@ export function renderAbwesenheiten(){
     const myActive=myReqs.filter(r=>r.endDate>=todayStr||r.status==='pending').sort((a,b)=>a.startDate.localeCompare(b.startDate));
     const myPast=myReqs.filter(r=>r.endDate<todayStr&&r.status!=='pending');
     html+=`<section>${myActive.length?myActive.map(card).join(''):'<div class="empty-state"><span class="es-icon">🏖️</span><span>Keine aktiven oder geplanten Abwesenheiten.</span></div>'}
-      ${myPast.length?`<details style="margin-top:10px"><summary class="ab-sum">🕓 Vergangene Abwesenheiten (${myPast.length})</summary><div style="margin-top:8px">${myPast.map(card).join('')}</div></details>`:''}</section>`;
+      ${myPast.length?`<details style="margin-top:10px"${window._abPastOpen?' open':''} ontoggle="window._abPastOpen=this.open"><summary class="ab-sum">🕓 Vergangene Abwesenheiten (${myPast.length})</summary><div style="margin-top:8px">${myPast.map(card).join('')}</div></details>`:''}</section>`;
   }
 
   if(tab==='team' && isMgr){
@@ -759,7 +759,7 @@ export function renderAbwesenheiten(){
       ${teamDone.length?teamDone.map(card).join(''):'<div class="ab-c2-sub">Keine laufenden oder geplanten Abwesenheiten.</div>'}</section>`;
     if(isAdmin){
       const allPast=reqs.filter(r=>r.status==='approved'&&r.endDate<todayStr&&r.userId!==cu.id).sort((a,b)=>b.startDate.localeCompare(a.startDate));
-      if(allPast.length) html+=`<section><details><summary class="ab-sum">🕓 Vergangene Abwesenheiten – alle Mitarbeitenden (${allPast.length})</summary>
+      if(allPast.length) html+=`<section><details${window._abAllPastOpen?' open':''} ontoggle="window._abAllPastOpen=this.open"><summary class="ab-sum">🕓 Vergangene Abwesenheiten – alle Mitarbeitenden (${allPast.length})</summary>
         <div style="margin-top:10px">${allPast.map(card).join('')}</div></details></section>`;
     }
   }
