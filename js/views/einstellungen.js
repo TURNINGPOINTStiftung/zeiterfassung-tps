@@ -1096,7 +1096,7 @@ function _ufPRowsHtml(){
         <div style="flex:1 1 150px;font-size:13px;color:var(--muted)">${esc(_UF_ROWLBL[k])}</div>
         <div style="flex:2 1 200px"><b>${esc(_ufFmt(k,curE&&curE.v,pu))}</b> <span style="font-size:12px;color:var(--muted)">${esc(sub)}${sub?' · ':''}${esc(since)}${fut.length?' · geplant: '+fut.map(e=>esc(_ufFmt(k,e.v,pu))+' ab '+_ufShort(e.from)).join(', '):''}${chg?' · <b style="color:var(--warn,#b45309)">geändert – wird mit „Speichern“ übernommen</b>':''}</span></div>
         <button type="button" class="btn btn-outline btn-sm" onclick="ufPOpen(${jsq(k)})">Ändern</button>
-      </div>${hist}${k==='al'?`<div id="uf-al-info" style="font-size:12.5px;margin-top:4px">${_ufAlInfo(pu,y)}</div>`:''}
+      </div>${hist}${k==='al'?`<div id="uf-al-info" style="font-size:12.5px;margin-top:4px">${_ufAlInfo(pu,y)}</div>`:''}${k==='vacHoursPerDay'&&getUser(_ufPE.uid)?`<div style="font-size:12.5px;margin-top:6px;color:var(--muted)">Urlaub, Krank & Co. werden nach Änderungen automatisch neu eingetragen. <a href="#" onclick="event.preventDefault();ufAbsResync(${jsq(_ufPE.uid)})">🔄 Abwesenheiten jetzt neu eintragen</a></div>`:''}
       <div id="uf-pe-${k}">${_ufPE.open===k?_ufPEditorHtml(k):''}</div>
     </div>`;
   }).join('');
@@ -1181,6 +1181,14 @@ export function ufPApply(k){
   _ufPE.strands[k]=_ufSetFrom(k,s0,r.from,r.v,lb?lb.checked:true);
   _ufPE.open=null; _ufRerender();
 }
+// v591: genehmigte Abwesenheiten der Person neu in die Zeiterfassung schreiben (Tage/Stunden nach heutigen Einstellungen)
+export async function ufAbsResync(uid){
+  const u=getUser(uid); if(!u||!window.resyncUserAbsences) return;
+  if(!confirm(`Genehmigte Abwesenheiten von ${u.name} neu in die Zeiterfassung eintragen?\n\nTage und Stunden werden nach den hinterlegten Einstellungen berechnet (je Monat). Eingereichte/genehmigte Monate bleiben unverändert.`)) return;
+  const r=await window.resyncUserAbsences(uid);
+  toast(`${r.done} Abwesenheit${r.done!==1?'en':''} neu eingetragen`+(r.skipped?` · ${r.skipped} übersprungen (Monat eingereicht/genehmigt)`:'')+' ✓','ok');
+}
+window.ufAbsResync=ufAbsResync;
 window.ufPOpen=ufPOpen; window.ufPClose=ufPClose; window.ufPDel=ufPDel; window.ufPPreview=ufPPreview; window.ufPApply=ufPApply;
 
 export function ufAutoAdjust(src){
@@ -1467,8 +1475,12 @@ export async function saveEditUser(id){
   const _crmLvl=_ufCrmLevel(_crmState);
   const _crmVids=Array.from(document.querySelectorAll('.uf-crmv:checked')).map(x=>x.value);
   try{ window.crmSetUserAccess&&window.crmSetUserAccess(id,_crmLvl,_crmVids); }catch(e){}  // CRM-Zugriff (unabhängig vom ZE-Write)
+  const _absSig=x=>JSON.stringify([x&&x.holidaysLikeSunday,x&&x.vacHoursPerDay,x&&x.dpw,x&&x.wh,x&&x.bundesland,x&&x.role,x&&x.paramHistory||null]);
+  const _absChanged=!!existing&&_absSig(existing)!==_absSig(Object.assign({},existing,u));
   try{ await mutate(d=>{ const i=d.users.findIndex(x=>x.id===id); if(i>=0){ Object.assign(d.users[i],u); } }); }
   catch(e){ console.error('Speichern fehlgeschlagen:', e); toast(e&&e.message==='data-shrink-guard'?'⛔ Nicht gespeichert (Schutz vor Datenverlust – bitte Seite neu laden).':('Speichern fehlgeschlagen: '+((e&&e.message)||'unbekannt')),'err'); return; }
+  // v591: Feiertags-Regel/Urlaubsstunden/Arbeitstage geändert → genehmigte Abwesenheiten ab Vormonat neu eintragen
+  if(_absChanged){ try{ const n=new Date(); n.setDate(1); n.setMonth(n.getMonth()-1); const r=await window.resyncUserAbsences?.(id,{fromDate:localISODate(n)}); if(r&&r.done) toast(`${r.done} Abwesenheit${r.done!==1?'en':''} nach den neuen Einstellungen neu eingetragen.`,'ok'); }catch(e){ console.warn('Abwesenheiten neu:', e); } }
   // Login-Verzeichnis (loginDir) mit dem evtl. geänderten Namen synchronisieren – sonst zeigt/matcht
   // der Anmelde-Bildschirm weiter den alten Namen (z. B. bei korrigierten Umlauten). Idempotent, für
   // bestehende Nutzer ohne Konto-Anlage (nur Namens-Update im Verzeichnis).

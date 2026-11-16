@@ -2,23 +2,22 @@ import { MONTHS } from '../config.js';
 import { getData, getUser, mutate, entryKey } from '../data.js';
 import { canSeeEmployee, canSeeAbsence, getLeitungTeams, hasPermission, getTeamForDate } from '../roles.js';
 import { esc, dateStr, daysInMonth, getHolidays, openModal, closeModal, toast, localISODate, jsArg as jsq } from '../utils.js';
-import { vacDailyMin, dailyMinutes, vacStatus } from '../calc.js';
+import { vacDailyMin, dailyMinutes, vacStatus, effUserAt } from '../calc.js';
 
+// v591: Einstellungen (Feiertage wie Sonntag, Bundesland, Arbeitstage/Woche) gelten je MONAT nach dem
+// Parameter-Verlauf – nicht der heutige Stand. Sonst zählt ein Antrag nach einer späteren Umstellung falsch.
+function _euAt(user,ds){ if(!user) return null; try{ return effUserAt(user,Number(ds.slice(0,4)),Number(ds.slice(5,7))); }catch(e){ return user; } }
+function _holFreeAt(user,ds){ const eu=_euAt(user,ds); return !eu||eu.holidaysLikeSunday!==false; }
+function _isHolAt(user,ds){ const eu=_euAt(user,ds); return getHolidays(Number(ds.slice(0,4)),(eu&&eu.bundesland)||'').has(ds); }
 export function countWorkDays(start,end,user){
-  // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday berücksichtigen
-  const holFree=!user||user.holidaysLikeSunday!==false;
-  const startY=parseInt(start.slice(0,4)), endY=parseInt(end.slice(0,4));
-  const holCache={};
-  if(holFree){
-    for(let y=startY;y<=endY;y++) holCache[y]=getHolidays(y,user?.bundesland||'');
-  }
+  // user optional – falls übergeben, Feiertage je nach holidaysLikeSunday (im jeweiligen Monat) berücksichtigen
   let count=0, cur=new Date(start+'T12:00:00');
   const endD=new Date(end+'T12:00:00');
   while(cur<=endD){
     const wd=cur.getDay();
     if(wd!==0&&wd!==6){
       const ds=localISODate(cur);
-      if(!holFree||!holCache[cur.getFullYear()]?.has(ds)) count++;
+      if(!_holFreeAt(user,ds)||!_isHolAt(user,ds)) count++;
     }
     cur.setDate(cur.getDate()+1);
   }
@@ -28,10 +27,6 @@ export function countWorkDays(start,end,user){
 // Urlaubstage nach Profil: Werktage (Mo-Fr) pro Kalenderwoche auf dpw deckeln.
 // Bsp Mateo dpw=2: 1 Werktag → 1 Tag, ganze Woche (5 Werktage) → 2 Tage.
 export function countVacationDays(start,end,user){
-  const holFree=!user||user.holidaysLikeSunday!==false;
-  const dpw=Math.max(1,Math.min(7,user?.dpw||5));
-  const bl=user?.bundesland||'';
-  const holCache={};
   const _iso=d=>{ // ISO-Wochen-Schlüssel (Jahr+KW)
     const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
     const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
@@ -39,24 +34,83 @@ export function countVacationDays(start,end,user){
     const week=1+Math.round(((t-firstThu)/86400000-3+((firstThu.getUTCDay()+6)%7))/7);
     return t.getUTCFullYear()+'-'+week;
   };
-  const perWeek={};
+  const perWeek={}, capWeek={};
   let cur=new Date(start+'T12:00:00');
   const endD=new Date(end+'T12:00:00');
   while(cur<=endD){
     const wd=cur.getDay();
     if(wd!==0&&wd!==6){
-      const y=cur.getFullYear();
-      if(holFree&&!holCache[y]) holCache[y]=getHolidays(y,bl);
       const ds=localISODate(cur);
-      if(!holFree||!holCache[y].has(ds)){
+      if(!_holFreeAt(user,ds)||!_isHolAt(user,ds)){
         const wk=_iso(cur);
         perWeek[wk]=(perWeek[wk]||0)+1;
+        const eu=_euAt(user,ds); capWeek[wk]=Math.max(1,Math.min(7,(eu&&eu.dpw)||5));
       }
     }
     cur.setDate(cur.getDate()+1);
   }
   // Pro Woche auf dpw deckeln
-  return Object.values(perWeek).reduce((s,n)=>s+Math.min(n,dpw),0);
+  return Object.entries(perWeek).reduce((s,[wk,n])=>s+Math.min(n,capWeek[wk]||5),0);
+}
+
+// ── v591: Tage/Stunden eines Antrags immer frisch aus den Einstellungen (nicht der beim Anlegen gespeicherte Wert)
+const _AUTO_NOTE='Automatisch aus Zeiterfassung';
+function _cntWith(user,hls,start,end){ const u2=Object.assign({},user,{holidaysLikeSunday:hls,paramHistory:(user.paramHistory||[]).map(h=>{ const x=Object.assign({},h); delete x.holidaysLikeSunday; return x; })}); return countVacationDays(start,end,u2); }
+export function vacReqDays(r,user){
+  if(!r) return 0;
+  user=user||getUser(r.userId);
+  if(!user||r._public||r.type==='Veranstaltung'||r.reviewNote===_AUTO_NOTE) return Number(r.workDays)||0;
+  if(r.halfDay) return 0.5;
+  if(r.type==='Urlaub'){
+    const auto=countVacationDays(r.startDate,r.endDate,user);
+    const wd=Number(r.workDays);
+    if(r.daysManual===true) return wd;
+    if(r.daysManual===false||!isFinite(wd)) return auto;
+    // Alt-Anträge (ohne Kennzeichen): frei eingegebene Zahl bleibt, wenn sie zu keiner automatischen Zählung passt
+    if(wd===auto||wd===_cntWith(user,true,r.startDate,r.endDate)||wd===_cntWith(user,false,r.startDate,r.endDate)) return auto;
+    return wd;
+  }
+  return countWorkDays(r.startDate,r.endDate,user);
+}
+// Stunden je Tag eines Antrags (Anzeige): Urlaub = Urlaubswert des Startmonats, Gutschrift = Tagesarbeitszeit
+export function vacReqHours(r,user){
+  user=user||getUser(r&&r.userId); if(!r||!user) return r&&r.hoursPerDay;
+  const eu=_euAt(user,r.startDate)||user;
+  if(r.type==='Urlaub') return Math.round(vacDailyMin(eu)/60*10)/10;
+  if(r.type==='Sonstiges'&&r.creditWork) return Math.round(dailyMinutes(eu)/60*10)/10;
+  return r.hoursPerDay;
+}
+// Genehmigte Anträge einer Person neu in die Zeiterfassung schreiben (nach Änderung von Feiertags-Regel,
+// Urlaubsstunden, Arbeitstagen …). Monate, die eingereicht/genehmigt sind, bleiben unangetastet.
+export async function resyncUserAbsences(uid,opts){
+  opts=opts||{};
+  const d=getData(); const user=getUser(uid); if(!user) return {done:0,skipped:0};
+  const minEnd=opts.fromDate||'';
+  const reqs=Object.values(d.vacRequests||{}).filter(r=>r&&r.userId===uid&&r.status==='approved'&&!r._public&&r.reviewNote!==_AUTO_NOTE
+    &&['Urlaub','AU/Krank','Sonstiges','Arbeitszeitausgleich'].includes(r.type)&&(!minEnd||r.endDate>=minEnd));
+  let done=0, skipped=0;
+  for(const r of reqs){
+    let locked=false; let c=new Date(r.startDate+'T12:00:00'); const e=new Date(r.endDate+'T12:00:00');
+    while(c<=e){ const st=d.entries?.[entryKey(uid,c.getFullYear(),c.getMonth()+1)]?.status; if(st==='submitted'||st==='approved'){ locked=true; break; } c.setDate(c.getDate()+1); }
+    if(locked){ skipped++; continue; }
+    const wd=vacReqDays(r,user), h=vacReqHours(r,user);
+    window.clearAbsenceFromTimesheets?.(uid,user,r.type,r.startDate,r.endDate);
+    window.syncAbsenceToTimesheets?.(uid,user,r.type,r.startDate,r.endDate,r.halfDay||false,h,wd,r.creditWork);
+    if(Number(r.workDays)!==wd||(h!=null&&r.hoursPerDay!==h)){
+      await mutate(dd=>{ const x=dd.vacRequests?.[r.id]; if(x){ x.workDays=wd; if(h!=null) x.hoursPerDay=h; } });
+    }
+    done++;
+  }
+  return {done,skipped};
+}
+window.resyncUserAbsences=resyncUserAbsences; window.vacReqDays=vacReqDays;
+// Andere genehmigte Anträge der Person, die [from,to] berühren, erneut eintragen (nach Stornieren/Ändern)
+function _resyncOverlaps(uid,from,to,exceptId){
+  try{ const user=getUser(uid); if(!user) return;
+    Object.values(getData().vacRequests||{}).filter(r=>r&&r.id!==exceptId&&r.userId===uid&&r.status==='approved'&&!r._public&&r.reviewNote!==_AUTO_NOTE
+      &&['Urlaub','AU/Krank','Sonstiges','Arbeitszeitausgleich'].includes(r.type)&&r.startDate<=to&&r.endDate>=from)
+      .forEach(r=>window.syncAbsenceToTimesheets?.(uid,user,r.type,r.startDate,r.endDate,r.halfDay||false,vacReqHours(r,user),vacReqDays(r,user),r.creditWork));
+  }catch(e){ console.warn('Abwesenheiten neu eintragen:', e); }
 }
 
 export function showVacRequestForm(editId){
@@ -130,7 +184,7 @@ export function showVacRequestForm(editId){
     <div id="vr-count-mode-wrap" style="display:none;margin:-4px 0 12px;background:var(--surface-2,#f8f9fb);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-wrap:wrap">
         <span style="font-weight:600;color:var(--primary)">Urlaubstage:</span>
-        <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${esc(editing?editing.workDays:1)}"
+        <input type="number" id="vr-manual-days" min="0.5" max="60" step="0.5" value="${esc(editing?vacReqDays(editing):1)}"
           style="width:80px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px"
           oninput="onVrManualDaysInput()">
         <span id="vr-mode-manual-hint" style="font-size:12px;color:var(--muted)"></span>
@@ -239,7 +293,7 @@ export function calcVrDays(){
   const vrUser=empId?d2.users.find(u=>u.id===empId)||window.cu:window.cu;
   const weekdays=countWorkDays(f,t,vrUser); // Mo-Fr (mit Feiertagscheck)
   // Stunden pro Urlaubstag: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin).
-  const hoursPerDay=Math.round(vacDailyMin(vrUser)/60*10)/10;
+  const hoursPerDay=vacReqHours({type:'Urlaub',startDate:f},vrUser);
   // Vorschlag nach Profil (Werktage/Woche, ggf. dpw-gedeckelt) – frei überschreibbar.
   const autoDays=countVacationDays(f,t,vrUser);
   const manualHint=document.getElementById('vr-mode-manual-hint');
@@ -358,8 +412,8 @@ export async function saveVacRequest(){
   }
   // Stunden pro Tag: Urlaub=Urlaubswert (Teilzeit 8h/Vollzeit Tagessoll); Sonstiges mit
   // Gutschrift=Tagesarbeitszeit (wh/dpw); sonst keine Stunden.
-  const hoursPerDay=type==='Urlaub'?Math.round(vacDailyMin(targetUser)/60*10)/10
-    :(creditWork?Math.round(dailyMinutes(targetUser)/60*10)/10:null);
+  const hoursPerDay=(type==='Urlaub'||creditWork)?vacReqHours({type,creditWork,startDate:from},targetUser):null;
+  const daysManual=(type==='Urlaub'&&!halfDay)?(wd!==countVacationDays(from,to,targetUser)):false;
   // Genehmigung durch die Leitung nur ab 5 Arbeitstagen Abwesenheit nötig –
   // alles darunter läuft automatisch durch (zusätzlich zu den bisherigen
   // Auto-Genehmigungs-Fällen: Krank, Eintrag für andere, Leitung selbst, Freiberufler).
@@ -378,7 +432,7 @@ export async function saveVacRequest(){
     id:key, userId:targetUser.id, userName:targetUser.name,
     team:getTeamForDate(targetUser,from)||(getLeitungTeams(targetUser)[0]||''),
     type, startDate:from, endDate:to, workDays:wd, halfDay:halfDay||false, note,
-    hoursPerDay, creditWork,
+    hoursPerDay, creditWork, daysManual,
     status:autoApprove?'approved':'pending',
     submittedAt:old?old.submittedAt:now,
     reviewedBy:autoApprove?cu.id:null,
@@ -387,6 +441,8 @@ export async function saveVacRequest(){
   };
   await mutate(d=>{ if(!d.vacRequests) d.vacRequests={}; d.vacRequests[key]=req; });
   if(autoApprove) window.syncAbsenceToTimesheets?.(targetUser.id,targetUser,type,from,to,halfDay,hoursPerDay,wd,creditWork);
+  // v591: das Entfernen der alten Fassung hat evtl. Tage anderer Anträge geleert (z. B. Arbeitszeitausgleich am 1.1.) → wieder eintragen
+  if(old&&old.status==='approved'){ const lo=old.startDate<from?old.startDate:from, hi=old.endDate>to?old.endDate:to; _resyncOverlaps(targetUser.id,lo,hi,key); }
   closeModal(); renderAbwesenheiten();
   if(old){
     toast(autoApprove?'Abwesenheit aktualisiert. ✓':'Abwesenheit aktualisiert – wartet erneut auf Genehmigung der Leitung. ✓','ok');
@@ -417,7 +473,7 @@ export function approveVacRequest(id){
   if(!confirm(`Antrag von ${r.userName}\n${r.type}: ${fmtD(r.startDate)} – ${fmtD(r.endDate)}\n\nGenehmigen?\n\nDie Zeiterfassung für diese Tage wird automatisch befüllt.`)) return;
   mutate(d=>{ if(d.vacRequests?.[id]){ d.vacRequests[id].status='approved'; d.vacRequests[id].reviewedBy=cu.id; d.vacRequests[id].reviewedAt=new Date().toISOString(); } });
   const absUser=getUser(r.userId);
-  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,r.hoursPerDay,r.workDays,r.creditWork);
+  if(absUser) window.syncAbsenceToTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate,r.halfDay||false,vacReqHours(r,absUser),vacReqDays(r,absUser),r.creditWork);
   renderAbwesenheiten(); toast('Antrag genehmigt – Zeiterfassung wurde befüllt. ✓','ok');
 }
 
@@ -442,6 +498,7 @@ export function deleteVacRequest(id){
   if(clearsTimesheet){
     const absUser=getUser(r.userId);
     if(absUser) window.clearAbsenceFromTimesheets?.(r.userId,absUser,r.type,r.startDate,r.endDate);
+    _resyncOverlaps(r.userId,r.startDate,r.endDate,id);   // v591: überlappende Anträge (z. B. die geänderte Fassung) wieder eintragen
   }
   renderAbwesenheiten();
   toast(r.status==='pending'?'Antrag zurückgezogen.':'Abwesenheit storniert – Zeiteinträge entfernt.','');
@@ -595,7 +652,7 @@ function _creditChip(r,compact){
   const c=_absCredit(r);
   const base='display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap';
   if(c==='ja'){
-    const h=(!compact&&r&&r.hoursPerDay!=null)?` (à ${r.hoursPerDay} h)`:'';
+    const _h=r?vacReqHours(r):null; const h=(!compact&&_h!=null)?` (à ${String(_h).replace('.',',')} h)`:'';
     return `<span style="${base};background:var(--ok-bg);color:var(--ok-text)" title="Diese Tage werden wie Arbeitszeit gutgeschrieben">⏱ mit Zeitgutschrift${h}</span>`;
   }
   if(c==='abbau') return `<span style="${base};background:var(--warn-bg);color:var(--warn-text)" title="Keine Gutschrift – diese Tage bauen Überstunden ab">⏱ ${compact?'Überstd.-Abbau':'baut Überstunden ab'}</span>`;
@@ -677,7 +734,7 @@ export function renderAbwesenheiten(){
         ${statusBadge(r.status)}
         <span class="ab-c2-sub">${r.submittedAt&&!isNaN(Date.parse(r.submittedAt))?'beantragt '+new Date(r.submittedAt).toLocaleDateString('de-DE'):''}</span>
       </div>
-      <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(r.workDays)} Arbeitstag${r.workDays!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''} · ${_creditChip(r)}</div>
+      <div class="ab-c2-date">📅 ${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''}${String(r.endDate).slice(0,4)!==String(new Date().getFullYear())?' '+esc(String(r.endDate).slice(0,4)):''} · <strong>${esc(String(vacReqDays(r)).replace('.',','))} Arbeitstag${vacReqDays(r)!==1?'e':''}</strong>${r.halfDay?' · ½ Tag':''} · ${_creditChip(r)}</div>
       ${(r.note&&st===r.type)?`<div class="ab-c2-sub" style="margin-top:2px">💬 ${esc(r.note)}</div>`:''}
       ${extra}${rnBtns}${acts?`<div class="ab-c2-acts">${acts}</div>`:''}
     </div>`;
@@ -719,7 +776,7 @@ export function renderAbwesenheiten(){
       const st=_shownType(r);
       return `<div class="ab-row" style="border-left-color:${_typeBar(st)}">
         <div class="ab-row-l"><div><strong>${r.userId===cu.id?'Ich':esc(r.userName)}</strong> · <span style="color:${_typeFg(st)}">${esc(_typeLabel(st))}</span></div>
-          <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(r.workDays)} AT${r.halfDay?' ½':''} · ${_creditChip(r,true)}</div></div>
+          <div class="ab-c2-sub">${fmtW(r.startDate)}${r.endDate!==r.startDate?' – '+fmtW(r.endDate):''} · ${esc(String(vacReqDays(r)).replace('.',','))} AT${r.halfDay?' ½':''} · ${_creditChip(r,true)}</div></div>
         <span class="upc-badge ${cls}">${txt}</span></div>`;
     };
     // Nur die nächsten 40 Tage offen zeigen, der Rest ist ausklappbar (v517, User 30.10.2026)

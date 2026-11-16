@@ -1162,8 +1162,8 @@ function _isoWeekKey(d){
 
 export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null,hourDays=null,creditWork=false){
   const isFree=isFreelancer(user);
-  const holFree=user.holidaysLikeSunday!==false;
-  const dpw=Math.max(1,Math.min(7,user.dpw||5));
+  // v591: Feiertags-Regel, Bundesland, Arbeitstage und Stunden je Tag gelten je MONAT (Parameter-Verlauf)
+  const _eu=(y,m)=>{ try{ return effUserAt(user,y,m); }catch(e){ return user; } };
   const isUrlaub=type==='Urlaub';
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
   // „Sonstiges" NUR mit ausdrücklicher Gutschrift (creditWork, z.B. Bildungsurlaub) – dann wie
@@ -1171,8 +1171,8 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
   // Freiberufler (alles), Sonstiges ohne Gutschrift, Arbeitszeitausgleich → nur Bemerkung.
   const hoursType=!isFree&&(isUrlaub||type==='AU/Krank'||(type==='Sonstiges'&&creditWork));
   // Urlaub: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin); expliziter
-  // hoursPerDay-Wert vom Antrag hat Vorrang. AU/Krank: Tagessoll aus wh/dpw.
-  const dailyMin=isUrlaub?(hoursPerDay?Math.round(hoursPerDay*60):vacDailyMin(user)):(dailyMinutes(user)||480);
+  // v591: immer der Wert des jeweiligen Monats (Parameter-Verlauf). AU/Krank: Tagessoll aus wh/dpw.
+  const _dMin=eu=>isUrlaub?vacDailyMin(eu):(dailyMinutes(eu)||480);   // Urlaub immer nach dem Urlaubswert des Monats
   // Urlaub: nur die ersten <hourDays> Werktage bekommen echte Stunden (zählen als Urlaub),
   // der Rest des Zeitraums nur die Bemerkung „Urlaub" (wie Arbeitszeitausgleich, ohne Stunden).
   const urlaubCap=(isUrlaub&&hourDays!=null)?Number(hourDays):Infinity;
@@ -1186,7 +1186,8 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
       if(wd!==0&&wd!==6){
         const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
         const ds=dateStr(y,m,day);
-        const hols=getHolidays(y,user.bundesland||'');
+        const eu=_eu(y,m), holFree=eu.holidaysLikeSunday!==false, dpw=Math.max(1,Math.min(7,eu.dpw||5)), dailyMin=_dMin(eu);
+        const hols=getHolidays(y,eu.bundesland||'');
         if(!holFree||!hols.has(ds)){
           const k=entryKey(uid,y,m);
           // Gesperrte (eingereichte/genehmigte) Monate nicht überschreiben – außer Admin.
@@ -1260,8 +1261,7 @@ export function clearAbsenceFromTimesheets(uid,user,type,from,to){
       if(wd!==0&&wd!==6){
         const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
         const ds=dateStr(y,m,day);
-        const hols=getHolidays(y,user.bundesland||'');
-        if(!hols.has(ds)){
+        {   // v591: auch Feiertage – bei „Feiertage wie Arbeitstag“ steht dort Urlaub
           const k=entryKey(uid,y,m);
           const dd=d.entries?.[k]?.days?.[ds];
           if(dd){

@@ -314,7 +314,7 @@ export function _migrate(d){
     const usr=d.users.find(u=>u.id===uid2);
     if(!usr||(usr.wh||0)<=0) continue;
     const dMin=Math.round((usr.wh/(usr.dpw||5))*60);
-    // v591: Tage mit NUR der Bemerkung „Urlaub“/„AU/Krank“ bleiben ohne Stunden – so schreibt der
+    // v590: Tage mit NUR der Bemerkung „Urlaub“/„AU/Krank“ bleiben ohne Stunden – so schreibt der
     // Abwesenheits-Sync bewusst die Tage über der Antragszahl (z.B. Feiertage im Urlaub). Früher wurden
     // sie hier zu Urlaubstagen mit wh/dpw aufgefüllt (20 h/5 = 4 h statt der hinterlegten 8 h).
     for(const day of Object.values(entry.days)){
@@ -660,6 +660,9 @@ function _abwOf(r){ return (r && !r._public && r.status==='approved' && _ABW_TYP
   ? { uid:r.userId, von:String(r.startDate).slice(0,10), bis:String(r.endDate||r.startDate).slice(0,10), halb:!!r.halfDay } : null; }
 // Besitzer eines Monatsblatts: Schlüssel = <userId>_JJJJ_MM
 function _entryOwner(key){ const m=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(String(key||'')); return m?m[1]:''; }
+// Besitzer eines Antrags aus dem Schlüssel (<userId>_JJJJ-MM-TT_JJJJ-MM-TT bzw. <userId>_VA_…) – für LÖSCHUNGEN, bei
+// denen der Antrag lokal schon weg ist (v591: sonst blieb die Kopie in ze_private + abwesend liegen und lebte wieder auf)
+function _vacOwner(key){ const m=/^(.+?)_(?:VA_)?[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{4}-[0-9]{2}-[0-9]{2}$/.exec(String(key||'')); return m?m[1]:''; }
 export function privMirror(upd, d){
   d=d||_dataCache||{}; const out={}; const whole=new Set();
   // Fehlt ein Monatsblatt/Antrag in ze_private noch (firebase.js weiß das), wird er dort EINMAL ganz geschrieben statt
@@ -677,7 +680,7 @@ export function privMirror(upd, d){
     } else if(coll==='vacRequests'){
       const cur=(d.vacRequests||{})[key];
       if((cur&&cur._public) || (val&&val._public)) continue;
-      const uid=(!rest && val && val.userId) ? val.userId : ((cur&&cur.userId) || ''); if(!uid) continue;
+      const uid=(!rest && val && val.userId) ? val.userId : ((cur&&cur.userId) || ((!rest && val==null) ? _vacOwner(key) : '')); if(!uid) continue;
       const base='ze_private/'+uid+'/vacRequests/'+key;
       if(rest && cur && has(uid,'vacRequests',key)===false) putWhole(base, cur); else put(base+rest, val);
       out['zeiterfassung/abwesend/'+key]=_abwOf(rest ? cur : val);
