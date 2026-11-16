@@ -1,6 +1,6 @@
 import { MONTHS, DAYS, _TPS_LOGO } from './config.js';
 import { getData, getEntry, getUser } from './data.js';
-import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate } from './roles.js';
+import { isFreelancer, isManagerRole, canSeeEmployee, getResponsibleLeitung, monthStartDate, getTeamForDate } from './roles.js';
 import { diffMin, addMin, dstDayAdj, isWeekend, isoWeek, dateStr, daysInMonth, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, fmtTs, toast } from './utils.js';
 import { vacStatus, monthSOLL, getEffectiveCarryH, normZuord, autoPauseMin, dayMinutes, vacUsedUpToMonth, totalVacUsed, effUserAt, annualVacDays, employedRange } from './calc.js';
 
@@ -152,7 +152,8 @@ export function _teamReportStyle(){
 }
 
 export function renderBuchhaltungHTML(u,entry,y,m){
-  const _bzuord=z=>{ const norm=normZuord(z||''); return (norm==='Marketing & Öffentlichkeitsarbeit'&&u.team==='Akademie')?'Akademie':norm; };
+  const _tM=getTeamForDate(u,`${y}-${String(m).padStart(2,'0')}-15`)||u.team;   // v596: Team in diesem Monat
+  const _bzuord=z=>{ const norm=normZuord(z||''); return (norm==='Marketing & Öffentlichkeitsarbeit'&&_tM==='Akademie')?'Akademie':norm; };
   const _euP=effUserAt(u,y,m);   // v595: Rolle/Bundesland/Limit dieses Monats
   const isFree=isFreelancer(_euP);
   const dim=daysInMonth(y,m);

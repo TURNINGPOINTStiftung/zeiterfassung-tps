@@ -29,9 +29,24 @@ function _currentizeMap(map,canon,exclSet){
   });
   return out;
 }
+// v596: Fassungen eines Mitarbeiters je Monat des Jahres (Team laut Team-Verlauf, Rolle laut Parameter-Verlauf) –
+// damit nach einem Teamwechsel die Stunden unter den Zuordnungen des ALTEN Teams nicht aus der Aufschlüsselung fallen.
+function _usersOverYear(user,y){
+  if(!user||!y) return [user];
+  const cur=Array.isArray(user.teams)&&user.teams.length?user.teams:(user.team?[user.team]:[]);
+  const out=[user];
+  for(let m=1;m<=12;m++){
+    const ds=`${y}-${String(m).padStart(2,'0')}-15`; const t=getTeamForDate(user,ds);
+    let eu=user; try{ eu=effUserAt(user,y,m); }catch(e){}
+    out.push(Object.assign({},eu,{teams:[...new Set([...(t?[t]:[]),...cur])],team:t||eu.team}));
+  }
+  return out;
+}
+// Stichtag für Angaben „zum Jahr“ (Team, Wochenstunden): Jahresende, im laufenden Jahr heute
+function _yearRef(y){ const t=new Date(); return y<t.getFullYear()?`${y}-12-31`:`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; }
 // Wie _currentizeMap, aber für die Jahres-Pivot-Struktur {Kategorie:{Monat:Minuten}}.
-function _currentizePivot(yearMap,user){
-  const canon=_canonCatMap([user]);
+function _currentizePivot(yearMap,user,y){
+  const canon=_canonCatMap(_usersOverYear(user,y));
   const out={};
   Object.entries(yearMap||{}).forEach(([cat,months])=>{
     const disp=canon.get(normZuord(cat).toLowerCase());
@@ -312,7 +327,7 @@ export function buildZuordSummary(employees,oy,om,d){
   // Nur AKTUELLE Zuordnungskategorien anzeigen: jede Daten-Kategorie wird (case-
   // insensitiv) auf eine aktuell gültige Kategorie abgebildet; nicht mehr gültige
   // (z.B. alte/umbenannte) werden verworfen, Schreibweisen-Dubletten zusammengeführt.
-  const canon=_canonCatMap(employees);
+  const canon=_canonCatMap(employees.flatMap(u=>_usersOverYear(u,oy)));   // v596: auch Teams/Rollen, die im Jahr galten
   const mMapsC=mMaps.map(({name,map})=>({name,map:_currentizeMap(map,canon,EXCL_CATS)}));
   const yMapsC=yMaps.map(({name,map})=>({name,map:_currentizeMap(map,canon,EXCL_CATS)}));
   const allCats=[...new Set([...mMapsC,...yMapsC].flatMap(({map})=>Object.keys(map)))]
@@ -441,7 +456,7 @@ export function openJahresübersicht(uid,y){
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalVac>0?totalVac+'&thinsp;T':'–'}</td>
      <td style="padding:8px 10px;text-align:right;font-weight:700">${totalSick>0?totalSick+'&thinsp;T':'–'}</td>`;
 
-  const {yearMap,allCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user);
+  const {yearMap,allCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user,y);
   const MO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let zuordSection='';
   if(allCats.length>0){
@@ -484,7 +499,7 @@ export function openJahresübersicht(uid,y){
 
   openModal(`
     <h3 style="margin-bottom:4px">Jahresübersicht ${y}</h3>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:18px">${esc(user.name)} · ${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px">${esc(user.name)} · ${isFree?'Freiberuflich':(effUserAt(user,Number(_yearRef(y).slice(0,4)),Number(_yearRef(y).slice(5,7))).wh||0)+' h/Woche'}</div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--primary);color:var(--on-primary,#fff)">
@@ -555,7 +570,7 @@ export function printJahresübersicht(uid,y){
     ?`<td class="r">${hFmt(totalIST)}</td>`
     :`<td class="r">${hFmt(totalSOLL)}</td><td class="r">${hFmt(totalIST)}</td><td class="r">${totalDiffStr}</td><td class="r">${totalVac>0?totalVac+' T':'–'}</td><td class="r">${totalSick>0?totalSick+' T':'–'}</td>`;
 
-  const {yearMap:pYearMap,allCats:pAllCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user);
+  const {yearMap:pYearMap,allCats:pAllCats}=_currentizePivot(buildZuordPivot(uid,y).yearMap,user,y);
   const pMO=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   let pZuordTable='';
   if(pAllCats.length>0){
@@ -595,7 +610,7 @@ export function printJahresübersicht(uid,y){
       </div>
       <div class="emp-info">
         <div class="emp-name">${esc(user.name)}</div>
-        <div class="emp-meta">${isFree?'Freiberuflich':(user.wh||0)+' h/Woche'} · ${esc(user.team||'–')} · erstellt ${new Date().toLocaleDateString('de-DE')}</div>
+        <div class="emp-meta">${isFree?'Freiberuflich':(effUserAt(user,Number(_yearRef(y).slice(0,4)),Number(_yearRef(y).slice(5,7))).wh||0)+' h/Woche'} · ${esc(getTeamForDate(user,_yearRef(y))||user.team||'–')} · erstellt ${new Date().toLocaleDateString('de-DE')}</div>
       </div>
       <table>
         <thead><tr><th class="l">Monat</th>${hdr}<th class="c">Status</th></tr></thead>
@@ -681,7 +696,7 @@ export function sendJahresbericht(uid,y){
     id:rKey,
     userId:uid,
     userName:user.name,
-    team:user.team||'',
+    team:getTeamForDate(user,_yearRef(y))||user.team||'',   // v596: Team im Berichtsjahr
     year:y,
     submittedAt:new Date().toISOString(),
     sentBy:cu.id,

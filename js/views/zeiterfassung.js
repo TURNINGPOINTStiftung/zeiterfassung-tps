@@ -1,6 +1,6 @@
 import { MONTHS } from '../config.js';
 import { getEntry, getUser, getData, setDay, setEntryField, mutate, entryKey, loadAudit } from '../data.js';
-import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate } from '../roles.js';
+import { isManagerRole, isFreelancer, isBerater, getLeitungTeams, hasPermission, getResponsibleLeitung, monthStartDate, getTeamForDate } from '../roles.js';
 import { diffMin, addMin, tMin, dstDayAdj, daysInMonth, dateStr, isWeekend, isToday, isoWeek, dayName, getHolidays, hFmt, sFmt, minFmt, dayFmt, esc, toast, openModal, jsArg as jsq } from '../utils.js';
 import { catOptionsForUser, getCatsForTeam } from '../cats.js';
 import { dailyMinutes, vacDailyMin, vacStatus, isAbsDay as _isAbs, monthSOLL, monthSOLLToDate, monthSOLLdays, getEffectiveCarryH, vacDays, sickDays, totalVacUsed, vacUsedUpToMonth, zuordBreakdown, monthIST, autoPauseMin, effUserAt, annualVacDays, clampToEmployment } from '../calc.js';
@@ -689,7 +689,7 @@ export function rebuildAutoAbsences(uid,reviewerId){
       const start=list[i].ds, end=list[j].ds, type=list[i].type;
       let wd=0; for(let q=i;q<=j;q++) wd+=list[q].half?0.5:1;
       const rk=`${uid}_${start}_${end}`;
-      d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:u.team||'',
+      d.vacRequests[rk]={id:rk,userId:uid,userName:u.name,team:getTeamForDate(u,start)||u.team||'',
         type,startDate:start,endDate:end,workDays:wd,halfDay:(start===end&&list[i].half),note:'',
         status:'approved',submittedAt:new Date().toISOString(),
         reviewedBy:reviewerId||uid,reviewedAt:new Date().toISOString(),reviewNote:AUTO};
@@ -1254,7 +1254,7 @@ export function clearAbsenceFromTimesheets(uid,user,type,from,to){
     return;
   }
   const isAZA=type==='Arbeitszeitausgleich';
-  const cats=getCatsForTeam(user.team||'');
+  const cats=getCatsForTeam(getTeamForDate(user,from)||user.team||'');   // v596: Team zum Zeitpunkt der Abwesenheit
   const zuord=cats.includes(type)?type:(cats.includes('Sonstiges')?'Sonstiges':'');
   mutate(d=>{
     let cur=new Date(from+'T12:00:00');
