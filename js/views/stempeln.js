@@ -2,6 +2,8 @@ import { _STAMP_KEY } from '../config.js';
 import { getData, getDataCache, getEntry, entryKey, mutate } from '../data.js';
 import { esc, toast, openModal, closeModal, diffMin, addMin, localISODate } from '../utils.js';
 import { getCatsForTeam } from '../cats.js';
+import { isFreelancer } from '../roles.js';
+import { effUserAt } from '../calc.js';
 
 export function getStamp(){
   const cu=window.cu;
@@ -285,7 +287,7 @@ function _round15(t){
 // Stempelzeiten werden auf 15 Min gerundet. Anschließend wird – wie bei der
 // manuellen Eingabe – die fehlende Pflichtpause auf die letzte Abfahrtszeit
 // aufgeschlagen (Abfahrt = Netto-Ende + Pause). Der Abzug erfolgt im Gesamt.
-export function _recomputeFromSessions(day){
+export function _recomputeFromSessions(day,noPause){
   const sessions=day.stampSessions||[];
   if(!sessions.length) return;
   const sorted=[...sessions].sort((a,b)=>b.min-a.min);
@@ -334,7 +336,7 @@ export function _recomputeFromSessions(day){
   day._pInit=true; day._paused=0; day._pausedF=''; day._netRaw=''; day._netRawF='';
   const carryF=(day.b2von&&day.b2bis)?'b2bis':(day.b1bis?'b1bis':'');
   if(carryF){ day._netRaw=day[carryF]; day._netRawF=carryF; }
-  if(missing>0&&carryF){ day[carryF]=addMin(day[carryF],missing); day._paused=missing; day._pausedF=carryF; }
+  if(missing>0&&carryF&&!noPause){ day[carryF]=addMin(day[carryF],missing); day._paused=missing; day._pausedF=carryF; }   // v592: Freiberufliche ohne Pause
 }
 
 export function stopZeitstempel(bisOverride){
@@ -375,7 +377,8 @@ export function stopZeitstempel(bisOverride){
     if(!Array.isArray(day.stampSessions)) day.stampSessions=[];
     day.stampSessions.push({von,bis,min:durationMin,zuord:zuord||'',note:note||''});
     // Aus allen Sessions die 2 größten Blöcke berechnen, Rest → Pause
-    _recomputeFromSessions(day);
+    let _free=false; try{ _free=isFreelancer(effUserAt(cu,sy,sm)); }catch(e){}
+    _recomputeFromSessions(day,_free);
     const dd=d.entries[k].days[ds];
     if(dd&&!dd.b1von&&!dd.b1bis&&!dd.b2von&&!dd.b2bis&&!Number(dd.ktmin)&&!dd.b1bem&&!dd.b2bem){
       delete d.entries[k].days[ds];

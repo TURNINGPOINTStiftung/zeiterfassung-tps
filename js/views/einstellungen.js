@@ -726,6 +726,9 @@ export function showEditDpw(id){
   const u=getUser(id);
   if(!u){ toast('Mitarbeiter nicht gefunden.','err'); return; }
   if(cu.role!=='admin'){ toast('Nur der Administrator-Account darf Nutzerdaten ändern.','err'); return; }
+  // v592: nicht mehr direkt am Mitarbeiter speichern (am Verlauf vorbei) – Mitarbeiter-Bearbeitung mit „Ändern ab …“ öffnen
+  showEditUser(id); setTimeout(()=>{ try{ ufPOpen('dpw'); document.getElementById('uf-pe-dpw')?.scrollIntoView({block:'center'}); }catch(e){} },0);
+  if(id) return;
   openModal(`<h3 style="margin-bottom:6px">Arbeitstage / Woche</h3>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${esc(u.name)} &middot; ${esc(u.wh||0)}&thinsp;h/Woche</p>
     <div class="form-group">
@@ -739,6 +742,7 @@ export function showEditDpw(id){
 }
 
 export function saveEditDpw(id){
+  showEditDpw(id); return;   // v592: alter Direkt-Weg stillgelegt (siehe showEditDpw)
   if(!_canVerwaltung(window.cu)){ toast('Nur der Administrator-Account darf Nutzerdaten ändern.','err'); return; }
   const val=parseInt(document.getElementById('edit-dpw-val').value)||5;
   if(val<1||val>7){ toast('Bitte einen Wert zwischen 1 und 7 eingeben.','err'); return; }
@@ -1320,7 +1324,9 @@ function collectUserForm(){
     al:isFree?0:parseFloat(document.getElementById('uf-al').value)||24,
     entryDate:document.getElementById('uf-entry')?.value||'',   // Eintritt (leer = unbekannt/seit jeher)
     exitDate:document.getElementById('uf-exit')?.value||'',     // Austritt (leer = unbefristet)
-    vacHoursPerDay:isFree?0:(parseFloat(document.getElementById('uf-vhpd')?.value)||Math.round(vacDailyMin({wh,dpw,role})/60*10)/10),
+    // v592: nur ein ausdrücklich eingetragener Wert wird gespeichert; sonst 0 = „automatisch“ (folgt Wochenstunden/Arbeitstagen/Rolle)
+    vacHoursPerDay:isFree?0:(()=>{ const el=document.getElementById('uf-vhpd'); const v=parseFloat(el?.value)||0;
+      if(el&&el.dataset.touched==='1') return v; const exU=(document.getElementById('uf-prows')&&_ufPE)?getUser(_ufPE.uid):null; return (exU&&Number(exU.vacHoursPerDay))||0; })(),
     holidaysLikeSunday:!!(document.getElementById('uf-hol')?.checked),
     allowHalfVac:!!(document.getElementById('uf-allowhalf')?.checked),
     sollWorkdays:!!(document.getElementById('uf-sollwd')?.checked),

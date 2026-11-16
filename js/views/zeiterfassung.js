@@ -809,7 +809,9 @@ export function td_zuord(ds,field,val,wh,dpw){
   // Urlaub / AU/Krank → Soll-Zeiten nur setzen, wenn der Tag NOCH KEINE Zeiten hat.
   // Verhindert, dass beim Durchblättern der Zuordnung mit der Tastatur bereits
   // eingetragene Start-/Endzeiten durch die festen Urlaubs-/AU-Zeiten überschrieben werden.
-  const u=getUser(uid)||cu;
+  // v592: Stunden aus der Verwaltung mit dem Stand DIESES Monats (Parameter-Verlauf), nicht dem heutigen
+  const u=(()=>{ const x=getUser(uid)||cu; try{ return effUserAt(x,window.year,window.mon); }catch(e){ return x; } })();
+  wh=isFreelancer(u)?0:(Number(u.wh)||0); dpw=Number(u.dpw)||5;
   const _dNow=(getEntry(uid,window.year,window.mon).days||{})[ds]||{};
   if(_half){
     // Halber Urlaubstag: Standard-Stunden aus dem Profil (vacHoursPerDay), halbiert – immer setzen.
@@ -828,7 +830,7 @@ export function td_zuord(ds,field,val,wh,dpw){
     setDay(uid,window.year,window.mon,ds,'b2von',''); setDay(uid,window.year,window.mon,ds,'b2bis','');
     setDay(uid,window.year,window.mon,ds,'ktmin','');
   } else if(val==='AU/Krank'&&wh>0&&!_dNow.b1von&&!_dNow.b1bis&&!_dNow.b2von){
-    // AU/Krank: Tagessoll aus wh/dpw, weiterhin NUR auf noch leerem Tag (unverändert).
+    // AU/Krank: Wochenarbeitszeit ÷ Arbeitstage/Woche (des Monats), weiterhin NUR auf noch leerem Tag.
     const dailyMin=Math.round(wh*60/(dpw||5))||480;
     setDay(uid,window.year,window.mon,ds,'b1von','08:00');
     setDay(uid,window.year,window.mon,ds,'b1bis',addMin('08:00',dailyMin));

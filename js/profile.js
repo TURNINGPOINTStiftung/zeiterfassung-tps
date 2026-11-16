@@ -49,7 +49,8 @@ export function openProfileModal(){
     <div class="form-group"><label>Wohnort</label>
       <input type="text" id="prof-city" value="${esc(cu.city||'')}" placeholder="z.B. Berlin"></div>
     <div class="form-group"><label for="prof-bl">Bundesland</label>
-      <select id="prof-bl">${blOpts}</select></div>
+      <select id="prof-bl" disabled title="Wird in der Verwaltung gepflegt">${blOpts}</select>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px">Wird in der Verwaltung gepflegt (bestimmt die Feiertage).</div></div>
     ${adrSection}
     ${wstSection}
     ${(()=>{ try{ return (window.homeProfileHtml&&window.homeProfileHtml())||''; }catch(e){ return ''; } })()}
@@ -131,7 +132,8 @@ export async function saveProfile(){
   }
   // Nur die eigenen Selbstbedienungs-Felder gezielt schreiben (users/<idx>/<feld>) – passt zur
   // Owner-Regel und rührt den restlichen users-Array (role/teams/… = Admin-only) nicht an.
-  const patch={ email, city, bundesland:bl };   // (vorher `bundesland` = undefinierte Variable → Speichern brach immer ab)
+  const patch={ email, city };   // v592: Bundesland = Grunddaten → nur noch in der Verwaltung (mit „gilt ab“)
+  void bl;   // (vorher `bundesland` = undefinierte Variable → Speichern brach immer ab)
   if(newPwHash) patch.pw=null;   // evtl. noch vorhandenen alten Hash löschen (eigenes Feld, Owner-Regel)
   if(lecturePeriods) patch.lecturePeriods=lecturePeriods;
   if(lectureFreeDays) patch.lectureFreeDays=lectureFreeDays;
