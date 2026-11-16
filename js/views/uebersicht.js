@@ -159,8 +159,9 @@ export function renderOverview(){
     }).join('');
     const pending=MONTHS.filter((_,i)=>{ const e=d.entries[entryKey(u.id,oy,i+1)]; return e&&e.status==='submitted'&&!doneSub(u,i+1,e); }).length;
     const roleChip=`<span class="chip chip-${esc(u.role)}">${roleLabel(u.role,u)}</span>`;
-    const isFree=isFreelancer(u);
-    const maxH=isFree?(u.maxHours||0):0;
+    const _euC=effUserAt(u,oy,om);   // v595: Rolle/Limit des angezeigten Monats
+    const isFree=isFreelancer(_euC);
+    const maxH=isFree?(_euC.maxHours||0):0;
     const curEntry=d.entries[entryKey(u.id,oy,om)]||{};
     const curIST=monthIST(curEntry,u);
     const curCarry=getEffectiveCarryH(u.id,u,oy,om);
@@ -384,7 +385,9 @@ export function openJahresübersicht(uid,y){
   const cu=window.cu;
   const user=getUser(uid);
   if(!user) return;
-  const isFree=isFreelancer(user);
+  // v595: Rolle je Monat – Spalten Soll/± nur weg, wenn das GANZE Jahr freiberuflich war
+  const _freeM=mm=>isFreelancer(effUserAt(user,y,mm));
+  const isFree=MONTHS.every((_,i)=>_freeM(i+1));
   const canSendGF=cu&&hasPermission('btn_jahresbericht',cu);
   const yrSent=!!(getData().yearReports&&getData().yearReports[uid+'_'+y]);
 
@@ -392,16 +395,17 @@ export function openJahresübersicht(uid,y){
     const m=i+1;
     const entry=d.entries[entryKey(uid,y,m)]||{};
     const ist=monthIST(entry,user);
-    const soll=isFree?0:monthSOLL(user,y,m);
+    const fM=_freeM(m);
+    const soll=fM?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
-    const diff=isFree?0:(ist-(soll-Math.round(carry*60)));
+    const diff=fM?0:(ist-(soll-Math.round(carry*60)));
     const vac=vacDays(entry);
     const sick=sickDays(entry);
     const st=entry.status||'draft';
     const stLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st;
     const stColor={draft:'var(--muted)',submitted:'var(--warn)',approved:'var(--ok)',rejected:'var(--danger)'}[st]||'var(--muted)';
     const diffColor=diff>=0?'var(--ok)':'var(--danger)';
-    const diffStr=isFree?'–':sFmt(diff);
+    const diffStr=fM?'–':sFmt(diff);
     return `<tr>
       <td style="font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border)">${mn}</td>
       ${isFree?'':`<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right">${soll>0?hFmt(soll):'–'}</td>`}
@@ -417,7 +421,7 @@ export function openJahresübersicht(uid,y){
   const totalSOLL=isFree?0:Array.from({length:12},(_,i)=>monthSOLL(user,y,i+1)).reduce((a,b)=>a+b,0);
   const totalVac=Array.from({length:12},(_,i)=>vacDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
-  const totalDiff=isFree?0:totalIST-totalSOLL;
+  const totalDiff=isFree?0:Array.from({length:12},(_,i)=>_freeM(i+1)?0:(monthIST(d.entries[entryKey(uid,y,i+1)]||{},user)-monthSOLL(user,y,i+1))).reduce((a,b)=>a+b,0);
   const totalDiffColor=totalDiff>=0?'var(--ok)':'var(--danger)';
   const totalDiffStr=isFree?'–':sFmt(totalDiff);
 
@@ -510,20 +514,23 @@ export function printJahresübersicht(uid,y){
   const d=getData();
   const user=getUser(uid);
   if(!user) return;
-  const isFree=isFreelancer(user);
+  // v595: Rolle je Monat – Spalten Soll/± nur weg, wenn das GANZE Jahr freiberuflich war
+  const _freeM=mm=>isFreelancer(effUserAt(user,y,mm));
+  const isFree=MONTHS.every((_,i)=>_freeM(i+1));
 
   const rows=MONTHS.map((mn,i)=>{
     const m=i+1;
     const entry=d.entries[entryKey(uid,y,m)]||{};
     const ist=monthIST(entry,user);
-    const soll=isFree?0:monthSOLL(user,y,m);
+    const fM=_freeM(m);
+    const soll=fM?0:monthSOLL(user,y,m);
     const carry=getEffectiveCarryH(uid,user,y,m);
-    const diff=isFree?0:(ist-(soll-Math.round(carry*60)));
+    const diff=fM?0:(ist-(soll-Math.round(carry*60)));
     const vac=vacDays(entry);
     const sick=sickDays(entry);
     const st=entry.status||'draft';
     const stLabel={draft:'Entwurf',submitted:'Eingereicht',approved:'Genehmigt',rejected:'Abgelehnt'}[st]||st;
-    const diffStr=isFree?'–':sFmt(diff);
+    const diffStr=fM?'–':sFmt(diff);
     const diffColor=diff>=0?'#27ae60':'#c0392b';
     return `<tr>
       <td>${mn}</td>
@@ -538,7 +545,7 @@ export function printJahresübersicht(uid,y){
   const totalSOLL=isFree?0:Array.from({length:12},(_,i)=>monthSOLL(user,y,i+1)).reduce((a,b)=>a+b,0);
   const totalVac=Array.from({length:12},(_,i)=>vacDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
   const totalSick=Array.from({length:12},(_,i)=>sickDays(d.entries[entryKey(uid,y,i+1)]||{})).reduce((a,b)=>a+b,0);
-  const totalDiff=isFree?0:totalIST-totalSOLL;
+  const totalDiff=isFree?0:Array.from({length:12},(_,i)=>_freeM(i+1)?0:(monthIST(d.entries[entryKey(uid,y,i+1)]||{},user)-monthSOLL(user,y,i+1))).reduce((a,b)=>a+b,0);
   const totalDiffStr=isFree?'–':sFmt(totalDiff);
 
   const hdr=isFree

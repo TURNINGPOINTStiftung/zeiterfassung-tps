@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════════════════════
 import { getData, entryKey } from './data.js';
 import { isFreelancer } from './roles.js';
-import { autoPauseMin } from './calc.js';
+import { autoPauseMin, effUserAt } from './calc.js';
 import { diffMin, tMin, daysInMonth, dateStr, localISODate, dstDayAdj } from './utils.js';
 
 const ABS = new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich','Veranstaltung AU']);
@@ -40,7 +40,7 @@ export function checkMonth(uid, user, y, m){
   const byDay={}, list=[];
   const add=(ds,kind,text)=>{ (byDay[ds]=byDay[ds]||[]).push({kind,text}); list.push({ds,kind,text}); };
   if(!user) return {byDay,list};
-  const free=isFreelancer(user);
+  const free=isFreelancer(effUserAt(user,y,m));   // v595: Rolle dieses Monats
   const dim=daysInMonth(y,m);
   for(let d=1; d<=dim; d++){
     const ds=dateStr(y,m,d), dd=_day(uid,ds);

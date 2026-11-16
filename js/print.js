@@ -153,9 +153,10 @@ export function _teamReportStyle(){
 
 export function renderBuchhaltungHTML(u,entry,y,m){
   const _bzuord=z=>{ const norm=normZuord(z||''); return (norm==='Marketing & Öffentlichkeitsarbeit'&&u.team==='Akademie')?'Akademie':norm; };
-  const isFree=isFreelancer(u);
+  const _euP=effUserAt(u,y,m);   // v595: Rolle/Bundesland/Limit dieses Monats
+  const isFree=isFreelancer(_euP);
   const dim=daysInMonth(y,m);
-  const hols=getHolidays(y,u.bundesland||'');
+  const hols=getHolidays(y,_euP.bundesland||'');
   let rows=''; let monthTotal=0;
   for(let d=1;d<=dim;d++){
     const ds=dateStr(y,m,d);
@@ -197,8 +198,8 @@ export function renderBuchhaltungHTML(u,entry,y,m){
     rows+=row;
   }
 
-  const maxH=isFree?(u.maxHours||0):0;
-  const eu=effUserAt(u,y,m);   // für diesen Monat gültige Vertragswerte (Std/Urlaub/Rolle)
+  const maxH=isFree?(_euP.maxHours||0):0;
+  const eu=_euP;   // für diesen Monat gültige Vertragswerte (Std/Urlaub/Rolle)
   const soll=monthSOLL(u,y,m);
   // Übertrag immer wie am Bildschirm berechnen (auto ODER manuell), damit der
   // GF-Bericht denselben Saldo zeigt wie die Übersicht – nicht den rohen Speicherwert.

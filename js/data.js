@@ -129,8 +129,13 @@ export function _migrate(d){
   if(!d._fixes) d._fixes={};
 
   // Freiberufler-IDs (keine Pausen-Logik für sie)
-  const _freeIds=new Set((d.users||[]).filter(u=>u.role==='freiberuflich').map(u=>u.id));
+  // v595: Rolle je Monatsblatt nach dem Parameter-Verlauf (nicht die heutige) – sonst schreibt ein Rollenwechsel
+  // die Endzeiten ALLER alten Tage um (Pause rein/raus).
   const _uidOf=k=>k.split('_').slice(0,-2).join('_');
+  const _uById={}; (d.users||[]).forEach(u=>{ if(u&&u.id) _uById[u.id]=u; });
+  const _roleAt=(u,key)=>{ let r=u.role; const h=Array.isArray(u.paramHistory)?u.paramHistory.filter(x=>x&&x.fromDate&&x.role!==undefined):[]; if(!h.length) return r;
+    let best=null, first=null; h.forEach(x=>{ if(x.fromDate<=key&&(!best||x.fromDate>best.fromDate)) best=x; if(!first||x.fromDate<first.fromDate) first=x; }); return (best||first).role; };
+  const _freeIds={ has:k=>{ const m=/_([0-9]{4})_([0-9]{2})$/.exec(String(k||'')); const u=_uById[_uidOf(k)]; if(!u) return false; return _roleAt(u, m?`${m[1]}-${m[2]}-01`:'9999-12-01')==='freiberuflich'; } };
 
   // ── Pause-Migration (einmalig) ─────────────────────────────────
   // Historische b1bis-Einträge hatten die auto-Pause nicht eingerechnet.
@@ -140,7 +145,7 @@ export function _migrate(d){
     const _ABS=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     Object.entries(d.entries||{}).forEach(([k,entry])=>{
       if(!entry||!entry.days) return; // null-Guard
-      if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
+      if(_freeIds.has(k)) return; // Freiberufler (in diesem Monat): keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||!day.b1von||!day.b1bis) return;
         if(day._pInit) return; // von der Live-Pausenlogik verwaltet → Pause ist bereits korrekt aufgeschlagen, NICHT erneut migrieren (sonst Doppel-Aufschlag beim Reload)
@@ -175,7 +180,7 @@ export function _migrate(d){
     const _ABS2=new Set(['Urlaub','AU/Krank','Arbeitszeitausgleich']);
     Object.entries(d.entries||{}).forEach(([k,entry])=>{
       if(!entry||!entry.days) return;
-      if(_freeIds.has(_uidOf(k))) return; // Freiberufler: keine Pause
+      if(_freeIds.has(k)) return; // Freiberufler (in diesem Monat): keine Pause
       Object.values(entry.days).forEach(day=>{
         if(!day||day._b2PauseMig) return;
         if(day._pInit) return; // von der Live-Pausenlogik verwaltet → nicht erneut migrieren
@@ -211,7 +216,7 @@ export function _migrate(d){
   try{
     Object.entries(d.entries||{}).forEach(([k,entry])=>{
       if(!entry||!entry.days) return;
-      if(!_freeIds.has(_uidOf(k))) return; // nur Freiberufler
+      if(!_freeIds.has(k)) return; // nur Freiberufler (in diesem Monat)
       Object.values(entry.days).forEach(day=>{
         if(!day) return;
         if((day._pauseMigratedV2||day._pauseMigrated||day._b2PauseMig)&&day.b1bis&&!day.b2von){

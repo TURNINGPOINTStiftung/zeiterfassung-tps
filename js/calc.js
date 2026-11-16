@@ -16,9 +16,11 @@ function _isAbsDay(dd){ return !!(dd&&(_ABS_CATS.has(dd.b1zuord)||_ABS_CATS.has(
 //   Netto≥6h  ⇔ Brutto≥6h30 (390)  → 30 Min
 //   Netto≥9h  ⇔ Brutto≥9h45 (585)  → 45 Min
 // Davon wird eine bereits genommene Lücke zwischen Block 1 und 2 abgezogen.
+// v595: Rolle des MONATS (Parameter-Verlauf) – ein Wechsel freiberuflich↔angestellt wirkt nicht rückwirkend
+function _roleUserAt(user,ds){ if(!user||!ds||!user.paramHistory) return user; try{ return effUserAt(user,Number(ds.slice(0,4)),Number(ds.slice(5,7))); }catch(e){ return user; } }
 export function autoPauseMin(dd,user,ds){
   if(!dd||_isAbsDay(dd)) return 0;
-  if(user&&isFreelancer(user)) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
+  if(user&&isFreelancer(_roleUserAt(user,ds))) return 0; // Freiberufler: keine Pausen-Logik (auch keine Nachtschicht-Pause)
   if(String(dd.b1zuord||'').startsWith('Veranstaltung')) return 0; // Veranstaltung (Krank/AU): keine Pflichtpause
   if(dd._nightShift) return Number(dd._npMin||0); // Nachtschicht: Pause vom Tageswechsel-Paar
   // Reine Kleinteiligkeit (nur ktmin, kein abgeschlossener Block) → keine Pflichtpause.

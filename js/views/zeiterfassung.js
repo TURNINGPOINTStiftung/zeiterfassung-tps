@@ -58,7 +58,7 @@ export function renderZeiterfassung(){
   // "An GF senden"-Button nur für Leitung sichtbar halten
   const _btnTeam=document.getElementById('btn-teamberichte');
   if(_btnTeam) _btnTeam.style.display=hasPermission('btn_teamberichte',cu)?'':'none';
-  const isFree=isFreelancer(user);
+  const isFree=isFreelancer(effUserAt(user,window.year,window.mon));   // v595: Rolle dieses Monats
   // Bearbeitbar: eigener Entwurf; Admin immer; Leitung/GF nur Entwürfe (NICHT
   // eingereichte/genehmigte Monate – die sind nach dem Einreichen gesperrt und
   // werden nur per Zurückweisen wieder zum Entwurf).
@@ -107,7 +107,7 @@ export function renderZeiterfassung(){
   const tbody=document.getElementById('zt-body');
   tbody.innerHTML='';
   const dim=daysInMonth(year,mon);
-  const hols=getHolidays(year,user.bundesland||'');
+  const hols=getHolidays(year,effUserAt(user,year,mon).bundesland||'');   // v595: Bundesland dieses Monats
   let monthTotal=0, monthPause=0;
 
   // Werkstudenten: Wochensummen vorberechnen
@@ -273,11 +273,12 @@ export function ztJumpToday(){
 
 function renderSummary(uid,user,entry,istMin,wsOverWeeks=0){
   const year=window.year, mon=window.mon;
-  const isFree=isFreelancer(user);
+  const _euS=effUserAt(user,year,mon);   // v595: Rolle/Limit dieses Monats
+  const isFree=isFreelancer(_euS);
   const carryH=getEffectiveCarryH(uid,user,year,mon);
   let cards=[];
   if(isFree){
-    const maxH=user.maxHours||0;
+    const maxH=_euS.maxHours||0;
     if(maxH>0){
       const totalMin=istMin+Math.round(carryH*60);
       const billedMin=Math.min(totalMin,maxH*60);
@@ -380,8 +381,9 @@ function renderActionBar(uid,user,entry,isLeiter){
   const btns=document.getElementById('action-btns');
   const cw=document.getElementById('carryover-wrap');
   bar.style.display='flex'; info.textContent=''; btns.innerHTML='';
-  const isFree=isFreelancer(user);
-  const showCarry=!isFree||(user.maxHours||0)>0;
+  const _euB=effUserAt(user,window.year,window.mon);   // v595
+  const isFree=isFreelancer(_euB);
+  const showCarry=!isFree||(_euB.maxHours||0)>0;
   cw.style.display=showCarry?'flex':'none';
   if(showCarry){
     const effCarry=getEffectiveCarryH(uid,user,year,mon);
@@ -756,7 +758,7 @@ function _applyDayPause(uid,ds,editedField){
     day._paused=0; day._pausedF=''; day._pInit=true;
     // 2) Pause neu berechnen – keine bei Freiberufler / Veranstaltung / Abwesenheit
     const z=day.b1zuord||'', bem=day.b1bem||'';
-    if(isFreelancer(user)||z.startsWith('Veranstaltung')||_isAbs(day)){ day._netRaw=''; day._netRawF=''; return; }
+    if(isFreelancer(effUserAt(user,window.year,window.mon))||z.startsWith('Veranstaltung')||_isAbs(day)){ day._netRaw=''; day._netRawF=''; return; }
     const lastF=hasB2?'b2bis':(day.b1von&&day.b1bis?'b1bis':'');
     if(!lastF||day[lastF]==='23:59'||day[lastF]==='24:00'){
       // Noch kein vollständiger Block (z.B. Endzeit getippt, Start fehlt noch) oder 24:00-Rand.
@@ -1163,15 +1165,14 @@ function _isoWeekKey(d){
 }
 
 export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hoursPerDay=null,hourDays=null,creditWork=false){
-  const isFree=isFreelancer(user);
-  // v591: Feiertags-Regel, Bundesland, Arbeitstage und Stunden je Tag gelten je MONAT (Parameter-Verlauf)
+  // v591: Feiertags-Regel, Bundesland, Arbeitstage und Stunden je Tag gelten je MONAT (Parameter-Verlauf); v595 auch die Rolle
   const _eu=(y,m)=>{ try{ return effUserAt(user,y,m); }catch(e){ return user; } };
   const isUrlaub=type==='Urlaub';
   // Nur Urlaub & AU/Krank bei Festangestellten erzeugen Stunden + Zuordnung.
   // „Sonstiges" NUR mit ausdrücklicher Gutschrift (creditWork, z.B. Bildungsurlaub) – dann wie
   // AU/Krank: Tagesarbeitszeit (wh/dpw), gedeckelt auf dpw/Woche, Zuordnung „Sonstiges".
   // Freiberufler (alles), Sonstiges ohne Gutschrift, Arbeitszeitausgleich → nur Bemerkung.
-  const hoursType=!isFree&&(isUrlaub||type==='AU/Krank'||(type==='Sonstiges'&&creditWork));
+  const _hoursType=free=>!free&&(isUrlaub||type==='AU/Krank'||(type==='Sonstiges'&&creditWork));
   // Urlaub: Teilzeit=8h, Vollzeit/Leitung=Tagessoll (zentral in vacDailyMin); expliziter
   // v591: immer der Wert des jeweiligen Monats (Parameter-Verlauf). AU/Krank: Tagessoll aus wh/dpw.
   const _dMin=eu=>isUrlaub?vacDailyMin(eu):(dailyMinutes(eu)||480);   // Urlaub immer nach dem Urlaubswert des Monats
@@ -1188,7 +1189,7 @@ export function syncAbsenceToTimesheets(uid,user,type,from,to,halfDay=false,hour
       if(wd!==0&&wd!==6){
         const y=cur.getFullYear(),m=cur.getMonth()+1,day=cur.getDate();
         const ds=dateStr(y,m,day);
-        const eu=_eu(y,m), holFree=eu.holidaysLikeSunday!==false, dpw=Math.max(1,Math.min(7,eu.dpw||5)), dailyMin=_dMin(eu);
+        const eu=_eu(y,m), holFree=eu.holidaysLikeSunday!==false, dpw=Math.max(1,Math.min(7,eu.dpw||5)), dailyMin=_dMin(eu), hoursType=_hoursType(isFreelancer(eu));
         const hols=getHolidays(y,eu.bundesland||'');
         if(!holFree||!hols.has(ds)){
           const k=entryKey(uid,y,m);
