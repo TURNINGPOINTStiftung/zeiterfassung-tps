@@ -314,13 +314,15 @@ export function _migrate(d){
     const usr=d.users.find(u=>u.id===uid2);
     if(!usr||(usr.wh||0)<=0) continue;
     const dMin=Math.round((usr.wh/(usr.dpw||5))*60);
+    // v591: Tage mit NUR der Bemerkung „Urlaub“/„AU/Krank“ bleiben ohne Stunden – so schreibt der
+    // Abwesenheits-Sync bewusst die Tage über der Antragszahl (z.B. Feiertage im Urlaub). Früher wurden
+    // sie hier zu Urlaubstagen mit wh/dpw aufgefüllt (20 h/5 = 4 h statt der hinterlegten 8 h).
     for(const day of Object.values(entry.days)){
       if(!day) continue;
-      const isVac=(day.b1zuord==='Urlaub'||day.b1zuord==='AU/Krank'||day.b1bem==='Urlaub'||day.b1bem==='AU/Krank');
+      const isVac=(day.b1zuord==='Urlaub'||day.b1zuord==='AU/Krank');
       if(isVac&&!day.b1von&&!day.b1bis){
         day.b1von='08:00';
         day.b1bis=addMin('08:00',dMin);
-        if(!day.b1zuord) day.b1zuord=(day.b1bem==='Urlaub')?'Urlaub':'AU/Krank';
       }
     }
   }
