@@ -40,7 +40,7 @@ function _num(x){ return Number(x||0); }
 // Statistik-Feld lesen, mit Fallback auf alte Schlüssel (v194-)
 function _sNum(s,key,legacy){ if(!s) return 0; let v=s[key]; if((v==null||v==='')&&legacy) v=s[legacy]; return Number(v||0); }
 // Spalten der Inklusions-Statistik (neue Felder)
-const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['tnRegel','davon regelmäßig',null],['tnEinmal','davon einmalig',null],['gruppen','Trainingsgruppen',null],['termine','Termine im Jahr',null]];
+const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['gruppen','Trainingsgruppen',null],['termine','Termine im Jahr',null]];
 // Laufende Angebote: regelmäßiges Training + regelmäßige Veranstaltung (z. B. monatliche Segelsonntage, v487)
 const _isRun=t=>{ t=t||''; return t===''||t==='training'||t==='reihe'; };
 const _PERSON_COLS={engagierte:1,trainer:1};   // Personen – bei mehreren Angeboten eines Vereins NICHT doppelt zählen
@@ -169,7 +169,7 @@ function _tblFoerder(entities){
     <thead><tr><th>Jahr</th><th>Beantragt</th><th>Genehmigt</th><th>Abgelehnt</th><th>Abgeschlossen</th><th>Bewilligt</th><th>Anzahl</th></tr></thead>
     <tbody>${rows||''}${years.length?totalRow:'<tr><td colspan="7" style="text-align:center;color:var(--muted)">Keine Förderungen im Auswahlbereich.</td></tr>'}</tbody></table></div></div>`;
 }
-// Übergangsquote = (TN, die nach Veranstaltungen ins regelmäßige Training übergingen) ÷ TN der
+// Weitermach-Quote = (TN, die nach Veranstaltungen ins regelmäßige Training übergingen) ÷ TN der
 // einmaligen Veranstaltungen. Immer 0–100 %. „–“, wenn für das Jahr kein Übergang erfasst wurde
 // (Feld bei der Veranstaltung leer) – kein irreführendes 0 %/578 %.
 function _statQuote(r){ if(!r.eventTN || !r.eventUebSet) return '–'; return Math.min(100, Math.round(r.eventUeb/r.eventTN*100))+' %'; }
@@ -184,9 +184,9 @@ function _tblStat(entities){
   const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.winter||'–'}</td><td>${r.eventTN||'–'}</td><td>${_sign(r.zuwachs)}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
   const cols=STAT_COLS.length+5;
   return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN Veranstaltungen</th><th>Zuwachs Training</th><th title="Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind">Übergangsquote</th></tr></thead>
+    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN Veranstaltungen</th><th>Zuwachs Training</th><th title="Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind">Weitermach-Quote</th></tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}</tbody></table></div>
-    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. „davon regelmäßig/einmalig“ nur, soweit aufgeteilt erfasst. <b>Übergangsquote</b> = bei den Veranstaltungen erfasste „ins regelmäßige Training übergegangen“ ÷ TN der einmaligen Veranstaltungen (0–100 %). „–“, solange für das Jahr kein Übergang erfasst ist.</div></div>`;
+    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. <b>Weitermach-Quote</b> = bei den Veranstaltungen erfasste „ins regelmäßige Training übergegangen“ ÷ TN der einmaligen Veranstaltungen (0–100 %). „–“, solange für das Jahr kein Übergang erfasst ist.</div></div>`;
 }
 // ── Entwicklung je Verein über die Jahre (NUR regelmäßiges Training/Reihe) ──────────
 const _ENTW_METRICS=[['tn','Inklusive TN (regelmäßig)','tnInkl'],['gruppen','Trainingsgruppen',null],['engagierte','Engagierte Mitglieder',null],['termine','Termine im Jahr',null]];
@@ -237,10 +237,10 @@ function _tblProProjekt(entities){
   const rows=entities.map(x=>{
     const {total:va}=_veranstByYear([x]);
     const LX=_lastTrainX(x), last=LX.rec;   // aktueller Stand = letzte laufende Erfassung (inkl. Kooperation)
-    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${va}</td><td>${LX.eng}</td><td>${_sNum(last,'tn','tnInkl')}</td><td>${last.tnRegel==null?'–':_sNum(last,'tnRegel',null)}</td><td>${last.tnEinmal==null?'–':_sNum(last,'tnEinmal',null)}</td><td>${last.termine==null?'–':_sNum(last,'termine',null)}</td><td>${last.winter?'🧊':''}</td></tr>`;
+    return `<tr><td>${esc(x.name)}</td><td style="text-align:left">${esc(x.treeLabel||'')}</td><td>${va}</td><td>${LX.eng}</td><td>${_sNum(last,'tn','tnInkl')}</td><td>${last.termine==null?'–':_sNum(last,'termine',null)}</td><td>${last.winter?'🧊':''}</td></tr>`;
   }).join('');
   return `<div class="aus-card"><h3>📁 Pro Projekt (Einzelübersicht)</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Projekt</th><th>Baum</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th><th>davon regelm.</th><th>davon einmalig</th><th>Termine/Jahr</th><th>Winter</th></tr></thead>
+    <thead><tr><th>Projekt</th><th>Baum</th><th>Veranst.</th><th>Engagierte (akt.)</th><th>Inkl. TN (akt.)</th><th>Termine/Jahr</th><th>Winter</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="9" style="text-align:center;color:var(--muted)">Keine Projekte gewählt.</td></tr>'}</tbody></table></div></div>`;
 }
 
@@ -281,7 +281,7 @@ export function renderAuswertung(){
       const ents=_selectedEntities();
       root.innerHTML=`
         <div class="aus-h1">📈 Auswertung</div>
-        <div class="aus-sub">Statistik, Übergangsquote und Entwicklung je Verein über die gewählten Projekte – pro Jahr und gesamt. ${ents.length} Projekt(e) gewählt.</div>
+        <div class="aus-sub">Statistik, Weitermach-Quote und Entwicklung je Verein über die gewählten Projekte – pro Jahr und gesamt. ${ents.length} Projekt(e) gewählt.</div>
         ${_filterBar()}
         ${_tblStat(ents)}
         ${_tblEntwicklung(ents)}
@@ -308,8 +308,8 @@ export function ausExport(){
       const p=n=>String(n).padStart(2,'0');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
-      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o['TN Veranstaltungen']=r.eventTN; o['Übergegangen ins Training']=r.eventUebSet?r.eventUeb:''; o['Zuwachs Training']=_sign(r.zuwachs); o['Übergangsquote']=_statQuote(r); return o;});
-      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining','TN Veranstaltungen','Übergegangen ins Training','Zuwachs Training','Übergangsquote'];
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o['TN Veranstaltungen']=r.eventTN; o['Übergegangen ins Training']=r.eventUebSet?r.eventUeb:''; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
+      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining','TN Veranstaltungen','Übergegangen ins Training','Zuwachs Training','Weitermach-Quote'];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
@@ -320,9 +320,9 @@ export function ausExport(){
       const pRows=ents.map(x=>{
         const {total:va}=_veranstByYear([x]);
         const LX=_lastTrainX(x), last=LX.rec;
-        return {Projekt:x.name,Baum:x.treeLabel||'',Veranstaltungen:va,'Engagierte (aktuell)':LX.eng,'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl'),'davon regelmäßig':last.tnRegel==null?'':_sNum(last,'tnRegel',null),'davon einmalig':last.tnEinmal==null?'':_sNum(last,'tnEinmal',null),'Termine im Jahr':last.termine==null?'':_sNum(last,'termine',null),'Wintertraining':last.winter?'ja':''};
+        return {Projekt:x.name,Baum:x.treeLabel||'',Veranstaltungen:va,'Engagierte (aktuell)':LX.eng,'Inkl. TN (aktuell)':_sNum(last,'tn','tnInkl'),'Termine im Jahr':last.termine==null?'':_sNum(last,'termine',null),'Wintertraining':last.winter?'ja':''};
       });
-      const pHead=['Projekt','Baum','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)','davon regelmäßig','davon einmalig','Termine im Jahr','Wintertraining'];
+      const pHead=['Projekt','Baum','Veranstaltungen','Engagierte (aktuell)','Inkl. TN (aktuell)','Termine im Jahr','Wintertraining'];
       XLSX.utils.book_append_sheet(wb, pRows.length?XLSX.utils.json_to_sheet(pRows,{header:pHead}):XLSX.utils.aoa_to_sheet([pHead]), 'Pro Projekt');
       // Entwicklung je Verein (regelmäßiges Training) – gewählte Kennzahl
       const eMetric=_entwMetric(); const eDef=_ENTW_METRICS.find(x=>x[0]===eMetric)||_ENTW_METRICS[0];

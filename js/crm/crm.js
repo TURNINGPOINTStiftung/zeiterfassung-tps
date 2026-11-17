@@ -3768,9 +3768,7 @@ function statTypLabel(t){ const x=STAT_TYPES.find(z=>z[0]===t); return x?x[1]:''
 const STAT_METRICS=[
   { key:'engagierte', label:'Engagierte Mitglieder', title:'Vereinsmitglieder, die sich im Verein für Inklusion engagieren' },
   { key:'trainer',    label:'Inklusions-Trainer',    title:'Inklusions-Trainer', legacy:'trainerInkl' },
-  { key:'tn',         label:'Inklusive TN gesamt',   title:'Inklusive Teilnehmende gesamt (regelmäßig + einmalig)', legacy:'tnInkl' },
-  { key:'tnRegel',    label:'davon regelmäßig',      title:'Inklusive TN, die regelmäßig dabei sind' },
-  { key:'tnEinmal',   label:'davon einmalig',        title:'Inklusive TN mit einmaliger Teilnahme (Schnuppern, Einzeltermin)' },
+  { key:'tn',         label:'Inklusive TN',          title:'Inklusive Teilnehmende', legacy:'tnInkl' },
   { key:'gruppen',    label:'Trainingsgruppen',      title:'Anzahl der Trainingsgruppen' },
   { key:'termine',    label:'Termine im Jahr',       title:'Anzahl der Trainings bzw. Termine im Jahr' },
 ];
@@ -3808,15 +3806,18 @@ function statsSecHtml(e){
   const years=Object.keys(byYear).sort().reverse();
   const tnM=STAT_METRICS.find(m=>m.key==='tn');
   const yearBlocks=years.map(y=>{
-    // Weitermach-Quote: TN des letzten Trainings ÷ TN der Auftaktveranstaltung (frühestes Event) des Jahres
+    // Weitermach-Quote: Σ „ins regelmäßige Training übergegangen" ÷ Σ TN der einmaligen Veranstaltungen
+    // des Jahres (0–100 %). Einheitlich mit der Auswertung; erscheint erst, wenn ein Übergang erfasst ist.
     const ye=byYear[y];
     const evs=ye.filter(s=>s.typ==='veranstaltung');
     const trs=ye.filter(s=>STAT_RUNNING(s.typ)).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    const eventTN=evs.reduce((a,s)=>a+statNum(s,tnM),0);   // Summe ALLER Veranstaltungen des Jahres
+    const eventTN=evs.reduce((a,s)=>a+statNum(s,tnM),0);   // TN der einmaligen Veranstaltungen
+    const uebSet=evs.some(s=>s.uebergang!=null&&s.uebergang!=='');
+    const ueb=evs.reduce((a,s)=>a+((s.uebergang!=null&&s.uebergang!=='')?Number(s.uebergang||0):0),0);
     const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;        // letztes Training
     const firstTrainTN=trs.length?statNum(trs[0],tnM):0;             // erstes Training
     const qParts=[];
-    if(eventTN>0&&trs.length) qParts.push(`Weitermach-Quote: Veranstaltungen gesamt <b>${eventTN}</b> TN → Training <b>${trainTN}</b> TN = <b>${Math.round(trainTN/eventTN*100)} %</b>`);
+    if(eventTN>0&&uebSet) qParts.push(`Weitermach-Quote: <b>${ueb}</b> von <b>${eventTN}</b> Veranstaltungs-TN ins Training = <b>${Math.min(100,Math.round(ueb/eventTN*100))} %</b>`);
     if(trs.length>=2){ const zuw=trainTN-firstTrainTN; qParts.push(`Zuwachs Training: <b>${(zuw>0?'+':'')+zuw}</b> TN (${firstTrainTN} → ${trainTN})`); }
     const quoteBox=qParts.length ? `<div class="crm-stat-quote">🎯 ${qParts.join('&nbsp;·&nbsp;')}</div>` : '';
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
@@ -3875,15 +3876,13 @@ function crmStatModal(s){
    <div id="crm-stat-persrow" style="display:flex;gap:10px;flex-wrap:wrap">${f(M('engagierte'))}${f(M('trainer'))}</div>
    <div id="crm-stat-split"></div>
    <div class="crm-kn-sub">Inklusive Teilnehmende${partners.length?' <span style="font-weight:400;color:var(--muted)">(bei Kooperation: gemeinsam)</span>':''}</div>
-   <div style="display:flex;gap:10px;flex-wrap:wrap">${f(M('tnRegel'),'crmStatSum()')}${f(M('tnEinmal'),'crmStatSum()')}
-     <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Gesamt</label><div id="crm-stat-tnsum" style="padding:9px 2px;font-weight:700">${isEdit?statNum(s,M('tn')):0}</div></div></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap">${f(M('tn'))}</div>
    <div id="crm-stat-ueb-box" style="display:none;margin:2px 0 8px">
      <div class="crm-modal-field" style="max-width:340px"><label title="Von den Teilnehmenden dieser Veranstaltung: wie viele sind danach ins regelmäßige Training übergegangen?">↪ davon ins regelmäßige Training übergegangen</label>
        <input id="crm-stat-uebergang" type="number" min="0" inputmode="numeric" value="${(isEdit&&s.uebergang!=null&&s.uebergang!=='')?Number(s.uebergang):''}"></div>
      <div class="small" style="color:var(--muted)">Für die Übergangsquote in der Auswertung. Kann auch später nachgetragen werden.</div>
    </div>
-   ${(isEdit && s.tnRegel==null && s.tnEinmal==null && statNum(s,M('tn'))>0)?`<div class="small" style="color:var(--muted);margin:-4px 0 8px">Früher nur als Gesamt erfasst (${statNum(s,M('tn'))}). Bleiben beide Felder leer, bleibt diese Zahl erhalten.</div>`:''}
-   <div style="display:flex;gap:10px;flex-wrap:wrap">${f(M('gruppen'))}<span id="crm-stat-termine-box" style="display:contents">${f(M('termine'))}</span></div>
+   <div style="display:flex;gap:10px;flex-wrap:wrap"><span id="crm-stat-gruppen-box" style="display:contents">${f(M('gruppen'))}</span><span id="crm-stat-termine-box" style="display:contents">${f(M('termine'))}</span></div>
    <label id="crm-stat-winter-box" style="display:flex;align-items:center;gap:8px;margin:4px 0 10px;font-size:14px;font-weight:600"><input type="checkbox" id="crm-stat-winter" style="width:auto"${s.winter?' checked':''}> 🧊 Auch Wintertraining (findet auch in der Wintersaison statt)</label>
    <div class="crm-modal-field"><label>Notiz</label><textarea id="crm-stat-notiz" rows="3" placeholder="Freitext, mehrzeilig …">${isEdit?esc(s.notiz||''):''}</textarea></div>
    <div class="crm-modal-actions"><button class="btn-sm-crm" onclick="crmCloseModal()">Abbrechen</button>
@@ -3894,6 +3893,7 @@ function crmStatModal(s){
 // Bei gewählter Kooperation: Engagierte/Trainer je beteiligtem Verein eingeben (Summe = Kooperation)
 function crmStatSplitRender(){
   const box=document.getElementById('crm-stat-split'); const row=document.getElementById('crm-stat-persrow'); if(!box||!row) return;
+  if(!STAT_RUNNING(val('crm-stat-typ'))){ row.style.display='none'; box.innerHTML=''; return; }   // Engagierte/Trainer nur bei regelmäßigem Angebot
   const parts=Array.from(document.querySelectorAll('.crm-stat-share:checked')).map(x=>({ key:_stKey(x.getAttribute('data-tree'),x.getAttribute('data-eid')), name:_entityName(x.getAttribute('data-tree'),x.getAttribute('data-eid')) }));
   // bereits eingetippte Werte merken, bevor neu gezeichnet wird
   box.querySelectorAll('.crm-stat-sp').forEach(i=>{ const k=i.dataset.k, m=i.dataset.m; window._statSplitPre[k]=window._statSplitPre[k]||{}; window._statSplitPre[k][m]=i.value===''?0:Math.max(0,Number(i.value)||0); });
@@ -3910,9 +3910,17 @@ function crmStatSplitRender(){
 function crmStatSplitSum(){ const s={engagierte:0,trainer:0}; document.querySelectorAll('.crm-stat-sp').forEach(i=>{ s[i.dataset.m]+=Math.max(0,Number(i.value)||0); });
   const e=document.getElementById('crm-stat-sp-e'), t=document.getElementById('crm-stat-sp-t'); if(e) e.textContent=String(s.engagierte); if(t) t.textContent=String(s.trainer); return s; }
 // „Termine im Jahr“ und „Wintertraining“ nur bei laufenden Angeboten (nicht bei einmaliger Veranstaltung)
-function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t);
-  ['crm-stat-termine-box','crm-stat-winter-box'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=run?(id==='crm-stat-termine-box'?'contents':'flex'):'none'; });
-  const ub=document.getElementById('crm-stat-ueb-box'); if(ub) ub.style.display=(t==='veranstaltung')?'block':'none'; }
+// Felder je Erfassungs-Art zeigen: regelmäßiges Angebot (Training/Reihe) → Engagierte/Trainer/
+// Gruppen/Termine/Winter; einmalige Veranstaltung → nur TN + „übergegangen"; Sonstiges → nur TN.
+function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t); const ev=(t==='veranstaltung');
+  const d=(id,on,disp)=>{ const el=document.getElementById(id); if(el) el.style.display=on?(disp||'flex'):'none'; };
+  d('crm-stat-gruppen-box', run, 'contents');
+  d('crm-stat-termine-box', run, 'contents');
+  d('crm-stat-winter-box', run, 'flex');
+  d('crm-stat-ueb-box', ev, 'block');
+  // Engagierte/Trainer (+ Kooperations-Aufteilung) nur beim regelmäßigen Angebot.
+  if(!run){ const pr=document.getElementById('crm-stat-persrow'); const sp=document.getElementById('crm-stat-split'); if(pr) pr.style.display='none'; if(sp) sp.style.display='none'; }
+  else crmStatSplitRender(); }
 function crmStatSum(){ const n=id=>{ const x=document.getElementById(id); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
   const el=document.getElementById('crm-stat-tnsum'); if(el) el.textContent=String(n('crm-stat-tnRegel')+n('crm-stat-tnEinmal')); }
 function crmAddStat(){ crmStatModal(null); }
@@ -3924,11 +3932,10 @@ function crmSaveStat(){
   const sharedWith=Array.from(document.querySelectorAll('.crm-stat-share:checked')).map(x=>({tree:x.getAttribute('data-tree'),eid:x.getAttribute('data-eid')}));
   const typ=val('crm-stat-typ')||'training'; const run=STAT_RUNNING(typ);
   const raw=k=>{ const x=document.getElementById('crm-stat-'+k); return x?x.value:''; };
-  const splitGiven=raw('tnRegel')!==''||raw('tnEinmal')!=='';
   const rec={ date, typ, engagierte:num('engagierte'), trainer:num('trainer'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim(), sharedWith,
+    tn:num('tn'), tnRegel:null, tnEinmal:null,   // nur noch EIN Wert „Inklusive TN"; alte regelm./einmalig-Aufteilung entfällt
     termine: (run && raw('termine')!=='')?num('termine'):null, winter: run && !!(document.getElementById('crm-stat-winter')||{}).checked,
-    uebergang: (typ==='veranstaltung' && raw('uebergang')!=='') ? num('uebergang') : null };   // davon ins regelm. Training übergegangen (für Übergangsquote)
-  if(splitGiven){ rec.tnRegel=num('tnRegel'); rec.tnEinmal=num('tnEinmal'); rec.tn=rec.tnRegel+rec.tnEinmal; }
+    uebergang: (typ==='veranstaltung' && raw('uebergang')!=='') ? num('uebergang') : null };   // davon ins regelm. Training übergegangen (für Weitermach-Quote)
   // Kooperation: Engagierte/Trainer je Verein; oben steht die Summe
   if(sharedWith.length && document.querySelector('.crm-stat-sp')){
     const sp={}; document.querySelectorAll('.crm-stat-sp').forEach(i=>{ const k=i.dataset.k; sp[k]=sp[k]||{engagierte:0,trainer:0}; sp[k][i.dataset.m]=Math.max(0,Number(i.value)||0); });
@@ -3936,7 +3943,6 @@ function crmSaveStat(){
   } else rec.split=null;
   mutateEntity(e=>{
     if(!Array.isArray(e.stats)) e.stats=[];
-    if(!splitGiven){ const old=id?e.stats.find(x=>x.id===id):null; rec.tn=old?statNum(old,STAT_METRICS.find(m=>m.key==='tn')):0; }   // nur Gesamt (Altdaten) bleibt erhalten
     if(id){ const s=e.stats.find(x=>x.id===id); if(s) Object.assign(s, rec); }   // Altfelder (mitglieder/tnAktiv) bleiben erhalten
     else { rec.id=newId(); e.stats.push(rec); }
   });
