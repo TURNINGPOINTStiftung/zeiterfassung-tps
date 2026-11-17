@@ -300,7 +300,13 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
-## GETESTET CANDIDATE-v23.json – „Personaldaten privat“ Phase 4 (noch NICHT live, 17.11.2026)
+## Stand 2026-11-17: CANDIDATE-v23.json ist LIVE – „Personaldaten privat“ Phase 4 abgeschlossen
+Veröffentlicht von Moritz per Cloud Shell; Werkzeug-Abschluss danach ausgeführt (Regeln kamen versehentlich zuerst – kurze Zeit
+schlug Speichern fehl, behoben durch „Alten Ort löschen“). Lesende Kontrolle 17.11.2026: `zeiterfassung/entries|vacRequests|stamps`
+leer, `zePrivOnly` = true, App v604 lädt 637 Monatsblätter / 126 Anträge aus `ze_private`, keine Konsolenfehler.
+Offen: Berichte mit Krankheitstagen (`teamReports`/`yearReports`) → eigener Bereich; Leitung/Genehmiger lesen alle `vacRequests`.
+
+### (Testprotokoll v23)
 = v22 (live) + genau die Phase-4-Sperren aus v17 (strukturell geprüft: v22→v23 = v16→v17; Lager-/Teilen-Freigaben unverändert):
 `zeiterfassung/entries|vacRequests|stamps` `.validate:false`, `zeiterfassung/zePrivOnly` nur `true`, `ze_audit/$k/$id` Status aus `ze_private`.
 Test im Testprojekt 17.11.2026: vollständige v23-Datei vom Compiler akzeptiert (veröffentlicht, nach Neuladen identisch); dann v23 mit
