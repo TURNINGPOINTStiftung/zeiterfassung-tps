@@ -300,7 +300,12 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
-## GETESTET CANDIDATE-v24.json / CANDIDATE-v25.json – Berichte geschützt (noch NICHT live, 17.11.2026)
+## Stand 2026-11-17: CANDIDATE-v25.json ist LIVE – Berichte geschützt (Etappen v24 → App v605 → tpsPw → Umzug → v25)
+Moritz: v24 + tpsPw (rev tpspw-00023-gax) + Werkzeug „Berichte schützen“ (50 Teamberichte kopiert, alter Ort leer) + v25.
+Lesende Kontrolle 17.11.2026 (App v606): `zeiterfassung/teamReports|yearReports` leer, `ze_reports/teamReports` 50, App zeigt 50 Berichte
++ 637 Monatsblätter, keine Konsolenfehler. Rückweg: v24 (alter Ort wieder beschreibbar) bzw. Sicherungsdatei aus dem Werkzeug.
+
+### (Testprotokoll v24/v25)
 **v24** = v23 + neuer Wurzelknoten `ze_reports/{teamReports,yearReports}/$k`: lesen (ganz `ze_reports`) und je Bericht schreiben dürfen
 Admin, `managers` (Leitung/GF/Admin) und `grants/btn_teamberichte|btn_jahresbericht|tab_gfberichte` (wie bisher das Schreibrecht am alten
 Ort; Lesen zusätzlich nur allowed + kein Kiosk); ganze Sammlung ersetzen nur Admin; Schlüssel `^[A-Za-z0-9._-]{1,160}$`. Alter Ort unverändert.
