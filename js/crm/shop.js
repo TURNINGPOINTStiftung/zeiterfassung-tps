@@ -2519,7 +2519,8 @@ function shopPlannerTasks(){
       const base={ team, placeId, holder, sub:'termin', where:d.where||'', info:[art.l+(t.intervall?' · alle '+_num(t.intervall)+' Monate':' · einmalig')] };
       // v599 (User 17.11.2026): alle offenen Termine – außerhalb des Vorlaufs („Termine zeigen … Tage vorher“) mit later=true;
       // der Planner zeigt sie unter „📦 Lager“ und in der Team-Übersicht unter „später“, unter „Alle“ nur als Hinweis
-      if(!t.erledigt) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, later:t.datum>_soonIso(_ptDays(team)), text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
+      // v600 (User 17.11.2026): höchstens 6 Monate im Voraus – Späteres steht nur im Lager
+      if(!t.erledigt && t.datum<=_soonIso(Math.max(183,_ptDays(team)))) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, later:t.datum>_soonIso(_ptDays(team)), text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
       (t.verlauf||[]).forEach(v=>{ const at=Date.parse((v.am||'')+'T12:00:00'); if(!isFinite(at)||at<old) return;
         out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:v.faellig||'', due:v.faellig||'', text:`${art.i} ${what}: ${d.title}`, done:true, doneAt:new Date(at).toISOString(), doneBy:v.by||'', info:base.info.concat(v.note?['Notiz: '+v.note]:[]) }))); });
     });
