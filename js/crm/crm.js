@@ -2379,6 +2379,9 @@ function crmGoTeamProj(id){
 
 // ── Navigation ─────────────────────────────────────────────────────
 // ☰-Menü (v585): CRM-Bereiche als Unterpunkte – nur bei voller CRM-Sicht
+// v603 (User 17.11.2026): Menüpunkt Vereine/Sozialakteure … öffnet die Kontaktliste mit passendem Kategorie-Filter
+window.crmMenuOpenTree=(key)=>{ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch='';
+  window._crmStatusFilter=[]; let cats=[]; try{ cats=getCategories(); }catch(e){} window._crmCatFilter=cats.some(c=>c.key===key)?[key]:[]; };
 window.crmMenuTrees=()=>{ try{ if(!crmCanView()) return []; return getTrees().map(t=>({ key:t.key, label:t.label||t.key, icon:t.icon||'' })); }catch(e){ return []; } };
 function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
 function crmSearch(v){ window._crmSearch=v; paintList(); }
