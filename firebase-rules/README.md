@@ -300,6 +300,17 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
+## GETESTET CANDIDATE-v26.json – Anträge nur je Person (noch NICHT live, 17.11.2026)
+= v25 ohne `ze_private/$u/vacRequests/.read` (bisher: managers + grants/genehmigung_abwesenheit lasen die Anträge ALLER, inkl. AU/Krank).
+Lesen jetzt nur noch über `ze_private/$u/.read`: eigene Person, Admin, `seeOf/<auth.uid>/<u>`. Schreiben unverändert (Vertretungen ohne
+aktuelles seeOf können weiter genehmigen). App v607: `zpScope` liefert keine `vacIds` mehr → fremde Anträge nur als „Abwesend“ aus `abwesend`.
+Test im Testprojekt 17.11.2026: v26 vollständig vom Compiler akzeptiert (veröffentlicht, nach Neuladen identisch); umgeschrieben 9 Fälle wie
+erwartet – eigene lesen, Leitung mit seeOf, Admin → erlaubt; Leitung fremdes Team, Genehmigerin ohne Team (auch Annas), Mitarbeiterin fremd →
+verweigert; Leitung genehmigt Teamantrag, Anna stellt Antrag → erlaubt. Danach Testdaten gelöscht, Original-Regeln zurück (identisch, 401).
+Stub/privat_test.py mit `&v26=1`: 95 Prüfungen ok. sha256 (raw @36a6eef): 196a02e1a9530f086a06b1c06615051212564b725794bb771fc5af8507d93629
+**Reihenfolge:** erst App v607 (liest fremde Anträge nicht mehr), dann v26. Andersherum fehlen in der alten App fremde Abwesenheiten
+im Kalender, bis neu geladen wird. Rückweg: v25.
+
 ## Stand 2026-11-17: CANDIDATE-v25.json ist LIVE – Berichte geschützt (Etappen v24 → App v605 → tpsPw → Umzug → v25)
 Moritz: v24 + tpsPw (rev tpspw-00023-gax) + Werkzeug „Berichte schützen“ (50 Teamberichte kopiert, alter Ort leer) + v25.
 Lesende Kontrolle 17.11.2026 (App v606): `zeiterfassung/teamReports|yearReports` leer, `ze_reports/teamReports` 50, App zeigt 50 Berichte
