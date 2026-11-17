@@ -3877,6 +3877,11 @@ function crmStatModal(s){
    <div class="crm-kn-sub">Inklusive Teilnehmende${partners.length?' <span style="font-weight:400;color:var(--muted)">(bei Kooperation: gemeinsam)</span>':''}</div>
    <div style="display:flex;gap:10px;flex-wrap:wrap">${f(M('tnRegel'),'crmStatSum()')}${f(M('tnEinmal'),'crmStatSum()')}
      <div class="crm-modal-field" style="flex:1;min-width:150px"><label>Gesamt</label><div id="crm-stat-tnsum" style="padding:9px 2px;font-weight:700">${isEdit?statNum(s,M('tn')):0}</div></div></div>
+   <div id="crm-stat-ueb-box" style="display:none;margin:2px 0 8px">
+     <div class="crm-modal-field" style="max-width:340px"><label title="Von den Teilnehmenden dieser Veranstaltung: wie viele sind danach ins regelmäßige Training übergegangen?">↪ davon ins regelmäßige Training übergegangen</label>
+       <input id="crm-stat-uebergang" type="number" min="0" inputmode="numeric" value="${(isEdit&&s.uebergang!=null&&s.uebergang!=='')?Number(s.uebergang):''}"></div>
+     <div class="small" style="color:var(--muted)">Für die Übergangsquote in der Auswertung. Kann auch später nachgetragen werden.</div>
+   </div>
    ${(isEdit && s.tnRegel==null && s.tnEinmal==null && statNum(s,M('tn'))>0)?`<div class="small" style="color:var(--muted);margin:-4px 0 8px">Früher nur als Gesamt erfasst (${statNum(s,M('tn'))}). Bleiben beide Felder leer, bleibt diese Zahl erhalten.</div>`:''}
    <div style="display:flex;gap:10px;flex-wrap:wrap">${f(M('gruppen'))}<span id="crm-stat-termine-box" style="display:contents">${f(M('termine'))}</span></div>
    <label id="crm-stat-winter-box" style="display:flex;align-items:center;gap:8px;margin:4px 0 10px;font-size:14px;font-weight:600"><input type="checkbox" id="crm-stat-winter" style="width:auto"${s.winter?' checked':''}> 🧊 Auch Wintertraining (findet auch in der Wintersaison statt)</label>
@@ -3906,7 +3911,8 @@ function crmStatSplitSum(){ const s={engagierte:0,trainer:0}; document.querySele
   const e=document.getElementById('crm-stat-sp-e'), t=document.getElementById('crm-stat-sp-t'); if(e) e.textContent=String(s.engagierte); if(t) t.textContent=String(s.trainer); return s; }
 // „Termine im Jahr“ und „Wintertraining“ nur bei laufenden Angeboten (nicht bei einmaliger Veranstaltung)
 function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t);
-  ['crm-stat-termine-box','crm-stat-winter-box'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=run?(id==='crm-stat-termine-box'?'contents':'flex'):'none'; }); }
+  ['crm-stat-termine-box','crm-stat-winter-box'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=run?(id==='crm-stat-termine-box'?'contents':'flex'):'none'; });
+  const ub=document.getElementById('crm-stat-ueb-box'); if(ub) ub.style.display=(t==='veranstaltung')?'block':'none'; }
 function crmStatSum(){ const n=id=>{ const x=document.getElementById(id); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
   const el=document.getElementById('crm-stat-tnsum'); if(el) el.textContent=String(n('crm-stat-tnRegel')+n('crm-stat-tnEinmal')); }
 function crmAddStat(){ crmStatModal(null); }
@@ -3920,7 +3926,8 @@ function crmSaveStat(){
   const raw=k=>{ const x=document.getElementById('crm-stat-'+k); return x?x.value:''; };
   const splitGiven=raw('tnRegel')!==''||raw('tnEinmal')!=='';
   const rec={ date, typ, engagierte:num('engagierte'), trainer:num('trainer'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim(), sharedWith,
-    termine: (run && raw('termine')!=='')?num('termine'):null, winter: run && !!(document.getElementById('crm-stat-winter')||{}).checked };
+    termine: (run && raw('termine')!=='')?num('termine'):null, winter: run && !!(document.getElementById('crm-stat-winter')||{}).checked,
+    uebergang: (typ==='veranstaltung' && raw('uebergang')!=='') ? num('uebergang') : null };   // davon ins regelm. Training übergegangen (für Übergangsquote)
   if(splitGiven){ rec.tnRegel=num('tnRegel'); rec.tnEinmal=num('tnEinmal'); rec.tn=rec.tnRegel+rec.tnEinmal; }
   // Kooperation: Engagierte/Trainer je Verein; oben steht die Summe
   if(sharedWith.length && document.querySelector('.crm-stat-sp')){
