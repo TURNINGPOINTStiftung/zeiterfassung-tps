@@ -232,8 +232,8 @@ export async function loadFullData(){
 // ══ „Personaldaten privat“, Phase 3 (v551, Regeln v16) ══════════════════════════════════════════════════
 // Zeiteinträge, Anträge und Stempelzeiten kommen aus ze_private/<Person> – gelesen wird NUR je Person (die Regel
 // erlaubt ze_private nicht als Ganzes): Admin alle, sonst die eigene Person + zeiterfassung/seeOf/<auth.uid>.
-// Leitung/GF/Genehmiger:in (managers bzw. grants/genehmigung_abwesenheit) lesen zusätzlich ze_private/<u>/vacRequests
-// aller. Wer eine Person nicht lesen darf, bekommt deren Abwesenheiten nur aus zeiterfassung/abwesend als Pseudo-Antrag
+// v607 (Regeln v26): Anträge fremder Personen liest niemand mehr gesondert – auch Leitung/GF/Genehmiger:in sehen
+// Anträge nur der Personen, die sie auch sonst sehen (seeOf). Wer eine Person nicht lesen darf, bekommt deren Abwesenheiten nur aus zeiterfassung/abwesend als Pseudo-Antrag
 // {type:'Abwesend', status:'approved', _public:true} – Kalender, Planner, Abwesenheiten, Konflikte laufen damit
 // unverändert, und Krankheit erscheint dort nur als „abwesend“. Datenmodell im Speicher (d.entries usw.) bleibt gleich.
 // Übergang bis Phase 4: für lesbare Personen alter Stand ∪ ze_private je Schlüssel (ze_private gewinnt), siehe zpBuild.
@@ -256,8 +256,7 @@ export function zpScope(val, authUid){
   } else {
     ids.add(me); Object.keys((val.seeOf&&val.seeOf[authUid])||{}).forEach(u=>{ if(val.seeOf[authUid][u]===true) ids.add(u); });
   }
-  const vacAll=!isAdm && !!((val.managers&&val.managers[authUid]===true) || (val.grants&&val.grants.genehmigung_abwesenheit&&val.grants.genehmigung_abwesenheit[authUid]===true));
-  const vacIds=vacAll ? (val.users||[]).map(u=>u&&u.id).filter(id=>id && !ids.has(id)) : [];
+  const vacIds=[];   // v607: keine Anträge außerhalb von seeOf mehr (Regeln v26) – sonst nur „abwesend“
   // v605: geschützte Berichte (ze_reports) lesen – wie das Schreibrecht: Admin, Leitung/GF (managers) oder Berichte-Rechte
   const g=val.grants||{}; const rep=isAdm || !!(val.managers&&val.managers[authUid]===true)
     || ['btn_teamberichte','btn_jahresbericht','tab_gfberichte'].some(k=>g[k]&&g[k][authUid]===true);
