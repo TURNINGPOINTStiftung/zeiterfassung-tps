@@ -377,6 +377,7 @@ function _renderForm(msg){
         <div class="me-field"><label for="me-adresse">Adresse</label><input id="me-adresse" maxlength="190" autocomplete="off" placeholder="optional, Straße / PLZ"></div>
       </div>
       <div class="me-field"><label for="me-note">Notiz / Interesse</label><textarea id="me-note" maxlength="2000" placeholder="Worum ging es? Woran besteht Interesse?"></textarea></div>
+      <div class="me-ds" style="font-size:12px;color:var(--muted,#5b6b7d);line-height:1.5;margin:2px 0 10px">Ihre Angaben verarbeitet die <b>TURNING POINT Stiftung gGmbH</b> zur Kontaktaufnahme und Kontaktpflege (Art. 6 Abs. 1 lit. f DSGVO); Sie können jederzeit widersprechen. Einzelheiten und Ihre Rechte: <a href="https://www.turningpoint-stiftung.com/datenschutz/" target="_blank" rel="noopener">Datenschutzerklärung</a>.</div>
       <button class="me-btn" onclick="messeSaveEntry(this)">✓ Speichern</button>
       <div class="me-ok" id="me-ok" role="status">${msg?_esc(msg):''}</div>
     </div>
