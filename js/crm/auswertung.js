@@ -23,7 +23,17 @@ function loadXLSX(){
   return _xlsxP;
 }
 
-function _ausAllowed(){ const cu=window.cu; return !!cu && (cu.role==='admin'||cu.role==='leitung'||cu.role==='geschaeftsfuehrer'); }
+// Darf der angemeldete Nutzer die Auswertung sehen? Admin immer; sonst entscheidet die
+// Pro-Person-/Rollen-Freigabe aus der Verwaltung (crmModuleAccess → path_auswertung) – NICHT nur
+// die Systemrolle. So kann z. B. ein Mitarbeiter, der in der Verwaltung für die Auswertung
+// freigeschaltet wurde, sie einsehen; ein explizit entzogener Zugriff bleibt gesperrt.
+// Fallback (crmModuleAccess noch nicht geladen): bisherige Rollen-Regel (Leitung/GF).
+function _ausAllowed(){
+  const cu=window.cu; if(!cu) return false;
+  if(cu.role==='admin') return true;
+  try{ if(window.crmModuleAccess) return window.crmModuleAccess(cu).auswertung!=='kein'; }catch(e){}
+  return cu.role==='leitung'||cu.role==='geschaeftsfuehrer';
+}
 function _yearOf(d){ const t=Date.parse(d); if(isNaN(t)) return null; return new Date(t).getFullYear(); }
 function _eName(e){ return (e && e.stamm && e.stamm.name) || (e && e.name) || '(ohne Name)'; }
 function _num(x){ return Number(x||0); }
