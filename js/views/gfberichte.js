@@ -505,6 +505,7 @@ export function renderZeNotices(){
     rows=_lagerItems().map(_noticeRow);
   }
   try{ if(am==='start' && window.homeNewsRefresh) window.homeNewsRefresh(); }catch(e){}
+  try{ window.crmWvPopupCheck && window.crmWvPopupCheck(); }catch(e){}   // v599: 🔔 Wiedervorlage beim Öffnen
   if(!rows.length){ if(bar) bar.remove(); return; }
   if(!bar){
     bar=document.createElement('div'); bar.id='ze-notice-bar';

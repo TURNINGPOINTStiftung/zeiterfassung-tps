@@ -133,17 +133,25 @@ function _todoCard(){
     return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(a)}${_stP(n.status, n.jeder&&(n.erledigtVon||{})[me()]?'Für dich erledigt':'')}${(!n.assigneeId && !a.owner)?`<span class="plan-tag">Team ${esc((a.teamsEff||[]).filter(t=>myT.has(t)).join(', '))}${n.jeder?' · alle':' · noch frei'}</span>`:''}${jd}${_ass(n).filter(x=>x!==me()).length?`<span class="plan-tag">${_ass(n).includes(me())?'mit':'→'} ${esc(_ass(n).filter(x=>x!==me()).map(_uName).join(', '))}</span>`:''}${n.fromNote?'<span class="plan-tag">aus Kontaktnotiz</span>':''}${window.crmNoteBadge?window.crmNoteBadge(n):''}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div>${acts?`<div class="plan-acts">${acts}</div>`:''}</div>`; };
   // Filter „👤 Nur meine" (User 11.11.2026): ohne freie Team-Aufgaben – gemerkt pro Gerät, gilt auch in Team-Übersicht/Projektplan
   const onlyMine=_mineOnly(), lagerOnly=_lagerOnly(); const all0=mine.length;
+  // v599: Lager-Termine außerhalb des Vorlaufs nur unter „📦 Lager“ – sonst als Hinweiszeile
+  const lgLater=lagerOnly?0:mine.filter(a=>a.kind==='lager'&&a.lager&&a.lager.later).length;
+  if(!lagerOnly) mine=mine.filter(a=>!(a.kind==='lager'&&a.lager&&a.lager.later));
   if(lagerOnly) mine=mine.filter(a=>a.kind==='lager');   // v590: 📦 Lager
   if(onlyMine) mine=mine.filter(a=>(window.crmIsMineA?window.crmIsMineA(a,me()):_ass(a.node).includes(me())) || (a.owner===me() && !_ass(a.node).length));   // eigenes Projekt: nur Unzugeteiltes, nicht das anderer
   const MAXN=12; const cnt=k=>mine.filter(a=>urg(a.node).k===k).length;
   const legend=`<div class="plan-legend">${[['r','überfällig / bis 2 Tage'],['y','bis 2 Wochen'],['g','später'],['n','ohne Frist']].map(([k,l])=>`<span><i class="u-${k}"></i>${l}${cnt(k)?` <b>${cnt(k)}</b>`:''}</span>`).join('')}</div>`;
   const ment=(()=>{ try{ return (window.crmMyMentions?window.crmMyMentions():[]).filter(m=>!m.pin); }catch(e){ return []; } })();
   const mentHtml=ment.length?`<div class="plan-ment">${ment.slice(0,5).map(m=>`<div class="plan-item" role="button" tabindex="0" onclick="${_open(m.a)}"><span class="plan-barc" style="background:var(--primary,#203869)"></span><div class="plan-main"><div class="plan-t">💬 ${esc(m.x.name||'')} hat dich erwähnt · ${esc(m.a.node.text||'Aufgabe')}</div><div class="plan-row"><span class="plan-tag">„${esc(String(m.x.text||'').slice(0,90))}${String(m.x.text||'').length>90?'…':''}“</span>${_srcTag(m.a)}</div></div><span class="plan-when">${esc(new Date(m.x.ts).toLocaleDateString('de-DE',{day:'numeric',month:'numeric'}))}</span></div>`).join('')}</div>`:'';
+  // 🔔 Wiedervorlage (v599): fällige Erinnerungen der Leitung – oben, unabhängig von Filter und Zuteilung
+  const wv=(()=>{ try{ return window.crmWvDue?window.crmWvDue():[]; }catch(e){ return []; } })();
+  const wvHtml=wv.length?`<div class="plan-wv"><div class="plan-wv-h">🔔 Wiedervorlage</div>${wv.map(x=>{ const n=x.a.node, u=urg(n);
+    return `<div class="plan-irow"><div class="plan-item" role="button" tabindex="0" onclick="${_open(x.a)}"><span class="plan-barc u-${u.k}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}</div><div class="plan-row">${_srcTag(x.a)}</div></div><span class="plan-due u-${u.k}">${esc(u.t)}</span></div><button type="button" class="plan-wv-x" title="Nicht mehr erinnern" aria-label="Nicht mehr erinnern: ${esc(n.text||'')}" onclick="crmWvAck(${jsq(n.id)})">🔕</button></div>`; }).join('')}</div>`:'';
   const _b=(v,c,l)=>`<button type="button" class="${c?'on':''}" aria-pressed="${c}" onclick="planMineSet(${v})">${l}</button>`;
   const seg=`<span class="plan-mseg" role="group" aria-label="Filter">${_b('false',!onlyMine&&!lagerOnly,'Alle')}${_b('true',onlyMine,'👤 Nur meine')}${_b("'lager'",lagerOnly,'📦 Lager')}</span>`;
-  const body=(onlyMine&&!mine.length&&all0)?`${mentHtml}${seg}<div class="plan-empty">Dir ist gerade nichts zugeteilt – ${all0} freie Team-Aufgabe${all0===1?'':'n'} unter „Alle“.</div>`:mine.length?`${mentHtml}<div class="plan-fbar">${seg}</div><div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
+  // v599: Filter-Leiste bleibt auch bei leerem Ergebnis stehen (sonst kam man aus „📦 Lager“ nicht mehr heraus)
+  const body=((onlyMine||lagerOnly)&&!mine.length&&all0)?`${mentHtml}<div class="plan-fbar">${seg}</div><div class="plan-empty">${lagerOnly?'Im Lager steht gerade nichts an':'Dir ist gerade nichts zugeteilt'} – ${all0} Aufgabe${all0===1?'':'n'} unter „Alle“.</div>`:mine.length?`${mentHtml}<div class="plan-fbar">${seg}</div><div class="plan-tlist">${mine.slice(0,MAXN).map(row).join('')}</div>${mine.length>MAXN?`<details class="plan-more"><summary>${mine.length-MAXN} weitere anzeigen</summary><div class="plan-tlist">${mine.slice(MAXN).map(row).join('')}</div></details>`:''}`:''
     || '<div class="plan-empty">Gerade steht nichts an. Hier erscheinen Aufgaben, die dir zugeteilt sind, und Aufgaben mit Frist aus deinen eigenen Projekten.</div>';
-  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div>${body}${_myArchiveHtml()}</section>`;
+  return `<section class="plan-card"><div class="plan-h"><h2>📌 Was ansteht</h2><button class="btn-sm-crm primary" onclick="crmAufgNew('')">＋ Aufgabe</button></div>${wvHtml}${body}${lgLater?`<button type="button" class="plan-link" style="margin:2px 0 6px" onclick="planMineSet('lager')">📦 ${lgLater} weitere${lgLater===1?'r':''} Lager-Termin${lgLater===1?'':'e'} später – unter „📦 Lager“ ansehen</button>`:''}${_myArchiveHtml()}</section>`;
 }
 // 🗄 Mein Archiv (User 11.11.2026): Erledigtes, das mir zugeteilt war / das ich abgehakt habe, + abgeschlossene Projekte
 function _myArchiveHtml(){
@@ -274,6 +282,10 @@ function _styles(){
   .plan-arch{margin-top:14px;border-top:1px dashed var(--border,#dce3ec);padding-top:10px}
   .plan-arch-s{cursor:pointer;color:var(--primary-d,#15263a);font-weight:700;font-size:14px;padding:4px 0}
   .plan-ment{margin:0 0 12px} .plan-ment .plan-item{background:var(--info-bg,#eef3fb)}
+  .plan-wv{margin:0 0 12px;padding:10px 12px 4px;border:1.5px solid var(--st-ia-bd,#9db8dd);border-radius:12px;background:var(--surface-2,#f6f8fb)}
+  .plan-wv-h{font-weight:800;font-size:14px;color:var(--primary-d,#15263a);margin:0 0 8px}
+  .plan-wv .plan-irow{display:flex;gap:6px;align-items:flex-start} .plan-wv .plan-item{flex:1;min-width:0;background:var(--surface,#fff)}
+  .plan-wv-x{flex:none;border:1px solid var(--border,#dce3ec);background:var(--surface,#fff);border-radius:10px;min-width:44px;min-height:44px;cursor:pointer;font-size:16px}
   .tv-badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border,#dce3ec);background:var(--surface,#fff);color:var(--muted,#5d7086)}
   .tv-badge.neu{background:var(--info-bg,#dbe6fb);color:var(--primary,#203869);border-color:transparent;font-weight:700}
   .plan-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:0 0 10px} .plan-fbar .plan-legend{margin:0}

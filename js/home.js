@@ -354,6 +354,7 @@ function _newsItems(){
   let out=[];
   try{ out=out.concat(window.zeNoticeItems ? window.zeNoticeItems() : []); }catch(e){}
   try{ out=out.concat(window.shopNotices ? window.shopNotices() : []); }catch(e){}
+  try{ out=out.concat(window.crmWvNotices ? window.crmWvNotices() : []); }catch(e){}   // v599: 🔔 Wiedervorlage
   const seen=_newsSeenMap();
   _crmNews.filter(it=>(it.ts||0) > (+seen[_nk(it.coll,it.recId)]||0)).forEach(it=>{
     const a=JSON.stringify(String(it.coll))+','+JSON.stringify(String(it.recId))+','+(+it.ts||0);

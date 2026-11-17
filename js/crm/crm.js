@@ -16,7 +16,8 @@ import {
   saveVerteiler, deleteVerteiler, getVerteiler, listVerteiler,
   saveVeranstaltung, deleteVeranstaltung, getVeranstaltung, listVeranstaltungen,
   listHistory, restoreHistory,
-  getPathAccess, savePathAccess, isPathAccessMigrated
+  getPathAccess, savePathAccess, isPathAccessMigrated,
+  getUserPrefs, saveUserPrefs
 } from './crm-data.js';
 import {
   getTrees, treeByKey, stammFields, memberFunctions,
@@ -4833,8 +4834,10 @@ function _planTeamOverview(team){
   const _om=_planMineOnly(), _lg=_planLagerOnly(); const _me=(window.cu&&window.cu.id)||'';
   const open0=all.filter(a=>inTeam(a) && a.node.status!=='erledigt' && !(Array.isArray(a.node.children)&&a.node.children.length) && (!_om || crmIsMineA(a,_me)) && (!_lg || a.kind==='lager'))
     .sort((x,y)=>String(x.node.due||'9').localeCompare(String(y.node.due||'9')));
-  const leaves=open0.filter(a=>!a.node.due || a.node.due<=until);
-  const later=open0.filter(a=>a.node.due && a.node.due>until);   // v577: später als 6 Wochen → aufklappbar
+  // v599: Lager-Termine außerhalb ihres Vorlaufs gehören zu „später“; unter „📦 Lager“ steht alles offen da
+  const _lt=a=>!_lg && ((a.node.due && a.node.due>until) || (a.kind==='lager' && a.lager && a.lager.later));
+  const leaves=open0.filter(a=>!_lt(a));
+  const later=open0.filter(_lt);   // v577: später als 6 Wochen → aufklappbar
   const short=String(team).split(/\s+/)[0];
   const taskRow=a=>{ const n=a.node; const iss=(window.kalTaskIssues?window.kalTaskIssues(n):[]);
     return `<div class="plan-item" role="button" tabindex="0" onclick="crmTaskViewAt(${jsq(a.kind)},${jsq(a.tree||'')},${jsq(a.containerId)},${jsq(n.id)})"><span class="plan-barc" style="background:${_tc(team)}"></span><div class="plan-main"><div class="plan-t">${esc(n.text||'Aufgabe')}${n.kanal?' · '+esc(n.kanal):''}</div><div class="plan-row">${_stPill(n.status)}<span class="plan-tag">${a.art==='aufgaben'?(n.wdh?'🔁 '+esc(aufgWdhLabel(n)):'✔ Aufgabe'):(_kIc(a.kind)+' '+esc(a.containerName||''))}</span>${n.assigneeId?`<span class="plan-tag">${esc(_taskAss(n).map(userName).filter(Boolean).join(', '))}</span>`:`<span class="plan-tag warn">Team ${esc(short)} · ${n.jeder?'alle':'niemand'}</span>`}${iss.map(x=>`<span class="plan-tag ${x.lv==='crit'?'crit':'warn'}">${esc(x.t)}</span>`).join('')}</div></div><span class="plan-when">${esc(n.due?fmtDate(Date.parse(n.due)).replace(/\.\d{4}$/,'.'):'')}</span></div>`; };
@@ -5262,6 +5265,7 @@ function _tvRender(){
     </div>
     <div class="tv-sec">Status${n.jeder?' · dein Teil':''}</div>
     <div class="tv-stbox">${_stSeg(n.jeder&&(n.erledigtVon||{})[me]?'erledigt':n.status, done&&!may)}</div>
+    ${(_wvMay()&&!done)?_wvBox(n):''}
     ${n.note?`<div class="tv-sec">Beschreibung</div><div class="tv-desc">${linkify(n.note)}</div>`:''}
     ${(kids.length||may)?`<div class="tv-sec">Unterpunkte${kids.length?` · ${kDone} von ${kids.length} erledigt`:''}</div>
       <div class="tv-subs">${kids.map(k=>`<div class="tv-sub${k.status==='erledigt'?' done':''}">${may?`<button type="button" class="pl-chk${k.status==='erledigt'?' on':''}" aria-pressed="${k.status==='erledigt'}" aria-label="${k.status==='erledigt'?'Wieder öffnen':'Erledigt'}: ${esc(k.text||'')}" onclick="crmTvSubToggle(${jsq(k.id)})">${k.status==='erledigt'?'✓':''}</button>`:''}<span class="tv-st">${esc(k.text||'')}</span>${k.due?`<span class="pl-tag">${esc(fmtDate(Date.parse(k.due)))}</span>`:''}${_taskAss(k).length?`<span class="pl-tag">👤 ${esc(_taskAss(k).map(userName).join(', '))}</span>`:''}</div>`).join('')}
@@ -5357,6 +5361,74 @@ function _taskSetStatus(kind, tree, cid, tid, st){
   const fn=n=>{ n.status=st; if(n.phase){ const f=oeaCfg().ablauf.find(x=>x.base===st)||oeaCfg().ablauf[0]; if(f) n.phase=f.key; } };
   if(kind==='teamprojekt'){ const c=getTeamProjekt(cid); if(c && c.art==='aufgaben'){ normTasks(c); const f=findNode(c, tid); if(!f) return; fn(f.node); _aufgSave(c); _aufgRefresh(); toast(st==='inarbeit'?'In Arbeit ✓':'Wieder offen ✓','ok'); return; } }
   _meSetCtx(kind, tree, cid, tid); mutateContainer(en=>{ const g=findNode(en, tid); if(g) fn(g.node); }); _aufgRefresh(); toast(st==='inarbeit'?'In Arbeit ✓':'Wieder offen ✓','ok'); }
+// ══ 🔔 Wiedervorlage (v599, User 17.11.2026): Leitungen lassen sich vor Ablauf einer Aufgaben-Frist erinnern.
+// Persönlich in crm/userPrefs/<uid>.wv = { <Aufgaben-ID>: { tage, k, tr, c, ack:'<Frist beim Abschalten>', snz:'JJJJ-MM-TT' } }
+// – die Aufgabe selbst bleibt unverändert. Fällig ab (Frist − Vorlauf), bis die Aufgabe erledigt ist oder „nicht mehr erinnern“.
+// Verschiebt sich die Frist, meldet sich die Wiedervorlage neu (ack hängt am alten Datum).
+const _WV_OPT=[[1,'1 Tag'],[7,'1 Woche'],[14,'2 Wochen'],[30,'1 Monat']];
+function _wvMay(){ const r=(window.cu&&window.cu.role)||''; return r==='leitung'||r==='geschaeftsfuehrer'||r==='admin'; }
+function _wvMap(){ try{ const p=getUserPrefs((window.cu&&window.cu.id)||''); return (p&&p.wv&&typeof p.wv==='object')?p.wv:{}; }catch(e){ return {}; } }
+function _wvSave(map){ const uid=(window.cu&&window.cu.id)||''; if(!uid) return; try{ const p=Object.assign({}, getUserPrefs(uid)||{}); p.wv=map; saveUserPrefs(uid, p); }catch(e){ console.warn('Wiedervorlage speichern:', e&&e.message); } }
+function _wvAt(due, t){ const x=new Date(due+'T12:00:00'); x.setDate(x.getDate()-(+t||14)); return localISODate(x); }
+function _wvTomorrow(){ const x=new Date(); x.setDate(x.getDate()+1); return localISODate(x); }
+function wvDue(){   // fällige Wiedervorlagen → [{ a, w, at }], nach Frist sortiert
+  if(!window.cu || !_wvMay()) return [];
+  const map=_wvMap(); if(!Object.keys(map).length) return [];
+  const today=localISODate(); let all=[]; try{ all=listAllTasks(); }catch(e){}
+  const out=[], seen=new Set();
+  all.forEach(a=>{ const n=a.node, w=map[n.id]; if(!w || !(+w.tage>0) || seen.has(n.id) || !n.due || n.status==='erledigt' || w.ack===n.due) return;
+    const at=_wvAt(n.due, w.tage); if(at>today) return; seen.add(n.id); out.push({ a, w, at }); });
+  return out.sort((x,y)=>String(x.a.node.due).localeCompare(String(y.a.node.due)));
+}
+function _wvBox(n){
+  const w=_wvMap()[n.id]; const cur=(w&&+w.tage>0)?+w.tage:0;
+  if(!n.due) return `<div class="tv-sec">🔔 Wiedervorlage</div><div class="tv-empty">Für eine Erinnerung braucht die Aufgabe ein Fälligkeitsdatum (✎ Bearbeiten).</div>`;
+  const at=cur?_wvAt(n.due, cur):''; const quiet=!!(w && w.ack===n.due);
+  const b=(t,l)=>`<button type="button" class="${t===cur?'on':''}" aria-pressed="${t===cur}" onclick="crmWvSet(${t})">${l}</button>`;
+  return `<div class="tv-sec">🔔 Wiedervorlage · nur für dich</div>
+    <div class="tv-stbox"><span class="wv-seg" role="group" aria-label="Wiedervorlage">${b(0,'Aus')}${_WV_OPT.map(([t,l])=>b(t,l+' vorher')).join('')}</span>
+    <div class="wv-hint">${cur?(quiet?'Für diese Frist abgeschaltet – Vorlauf neu wählen, um wieder erinnert zu werden.':`Erinnert dich am <b>${esc(fmtDate(Date.parse(at)))}</b> – beim Öffnen der App und oben in „Was ansteht“.`):'Lass dich vor Ablauf der Frist erinnern.'}</div></div>`;
+}
+function crmWvSet(t){ const a=window._tvArgs; if(!a) return; const map=Object.assign({}, _wvMap());
+  if(!t){ map[a.tid]={ tage:0 }; _wvSave(map); toast('Wiedervorlage aus','ok'); }   // nicht löschen: das Speichern führt zusammen, gelöschte Schlüssel kämen zurück
+  else { map[a.tid]={ tage:t, k:a.kind||'', tr:a.tree||'', c:a.cid||'', ack:'', snz:'' }; _wvSave(map);
+    let due=''; try{ _tvCtx(); const c=curContainer(); const f=c&&findNode(c, a.tid); due=(f&&f.node.due)||''; }catch(e){}
+    toast(due&&_wvAt(due,t)<=localISODate()?'Wiedervorlage gesetzt ✓ – die Frist ist schon nah, sie steht ab sofort oben in „Was ansteht“':'Wiedervorlage gesetzt ✓ – du wirst am '+fmtDate(Date.parse(_wvAt(due||localISODate(),t)))+' erinnert','ok'); }
+  try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){}
+  _tvBg(); _tvRender(); }
+function _wvFind(tid){ try{ return listAllTasks().find(a=>a.node.id===tid)||null; }catch(e){ return null; } }
+function crmWvOpen(tid){ const a=_wvFind(tid); if(!a){ toast('Diese Aufgabe gibt es nicht mehr.','err'); return; } crmCloseModal(); crmTaskViewAt(a.kind, a.tree||'', a.containerId, a.node.id); }
+function _wvAfter(){ try{ window.renderZeNotices&&window.renderZeNotices(); }catch(e){} _tvBg();
+  if(document.querySelector('#modal-body .wv-pop')){ const l=wvDue().filter(x=>!(x.w.snz&&x.w.snz>localISODate())); if(l.length) _wvPopup(l); else crmCloseModal(); } }
+function crmWvAck(tid){ const a=_wvFind(tid); const map=Object.assign({}, _wvMap()); if(!map[tid]||!(+map[tid].tage>0)) return;
+  map[tid]=Object.assign({}, map[tid], { ack:(a&&a.node.due)||'' }); _wvSave(map); toast('Wird für diese Frist nicht mehr erinnert ✓','ok'); _wvAfter(); }
+function crmWvSnooze(tid){ const map=Object.assign({}, _wvMap()); if(!map[tid]||!(+map[tid].tage>0)) return;
+  map[tid]=Object.assign({}, map[tid], { snz:_wvTomorrow() }); _wvSave(map); toast('Morgen wieder ✓','ok'); _wvAfter(); }
+// Hinweisfenster beim Öffnen der App (einmal je Sitzung; „Morgen wieder“ hält es bis morgen still)
+function _wvPopup(l){
+  const today=localISODate();
+  crmOpenModalShell();
+  openModal(`<div class="tv wv-pop"><h3 class="tv-h">🔔 Wiedervorlage</h3>
+    <div class="tv-empty" style="margin:0 0 10px">${l.length===1?'Diese Frist rückt näher:':'Diese '+l.length+' Fristen rücken näher:'}</div>
+    ${l.map(x=>{ const n=x.a.node; const u=_plUrg(n, today); const who=_taskAss(n).map(userName).filter(Boolean).join(', ');
+      return `<div class="wv-row"><div class="wv-t">${esc(n.text||'Aufgabe')}</div>
+        <div class="wv-m"><span class="pl-due u-${u.k}">${esc(u.t)}</span><span class="pl-tag">${_kIc(x.a.kind)} ${esc(x.a.containerName||'Aufgabe')}</span>${who?`<span class="pl-tag">👤 ${esc(who)}</span>`:''}</div>
+        <div class="wv-b"><button class="btn-sm-crm primary" onclick="crmWvOpen(${jsq(n.id)})">Öffnen</button><button class="btn-sm-crm" onclick="crmWvSnooze(${jsq(n.id)})">⏰ Morgen wieder</button><button class="btn-sm-crm" onclick="crmWvAck(${jsq(n.id)})">🔕 Nicht mehr erinnern</button></div></div>`; }).join('')}
+    <div class="tv-act"><button class="btn-sm-crm" onclick="crmCloseModal()">Später</button></div></div>`);
+}
+let _wvPopped=false;
+function crmWvPopupCheck(){
+  if(_wvPopped || !window.cu || !_wvMay()) return;
+  try{ if(document.getElementById('modal-bg').classList.contains('show')) return; }catch(e){}
+  const l=wvDue().filter(x=>!(x.w.snz && x.w.snz>localISODate())); if(!l.length) return;
+  _wvPopped=true; _wvPopup(l);
+}
+// Startseite (Neuigkeiten): fällige Wiedervorlagen im gemeinsamen Format
+function crmWvNotices(){ return wvDue().map(x=>{ const n=x.a.node;
+  return { key:'wv|'+n.id, area:'crm', label:'🔔 Wiedervorlage', ts:Date.parse(x.at)||0,
+    html:`🔔 Wiedervorlage: <b>${esc(n.text||'Aufgabe')}</b> · fällig ${esc(fmtDate(Date.parse(n.due)))}${x.a.containerName?' · '+esc(x.a.containerName):''}`,
+    open:`crmWvOpen(${JSON.stringify(String(n.id))})`, ack:`crmWvAck(${JSON.stringify(String(n.id))})` }; }); }
+try{ Object.assign(window, { crmWvSet, crmWvOpen, crmWvAck, crmWvSnooze, crmWvPopupCheck, crmWvDue:wvDue, crmWvNotices }); }catch(e){}
 function crmTvReopen(){ const a=window._tvArgs; if(!a) return; crmTaskReopen(a.kind, a.tree, a.cid, a.tid); _tvBg(); _tvRender(); }
 function crmTvTake(){ const a=window._tvArgs; if(!a) return; crmTakeTask(a.kind, a.tree, a.cid, a.tid); _tvRender(); }
 function crmTvEdit(){ const a=window._tvArgs; if(!a) return; const c=a.kind==='teamprojekt'?getTeamProjekt(a.cid):null;

@@ -1005,3 +1005,13 @@ button.st-pill:focus-visible{outline:2px solid var(--primary);outline-offset:2px
 .more-menu-m{position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:grid;gap:6px;min-width:260px;padding:8px;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:var(--shadow-2)}
 .more-menu-m .btn-sm-crm{width:100%;text-align:left;justify-content:flex-start}
 .plan-link{font:inherit;background:none;border:0;padding:0;color:var(--primary);text-decoration:underline;cursor:pointer}
+/* v599: 🔔 Wiedervorlage (Aufgaben-Ansicht + Hinweisfenster) */
+.wv-seg{display:inline-flex;flex-wrap:wrap;border:1.5px solid var(--border-strong);border-radius:10px;overflow:hidden}
+.wv-seg button{font:inherit;font-size:13px;font-weight:600;padding:7px 12px;min-height:40px;border:0;border-right:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer}
+.wv-seg button:last-child{border-right:0}
+.wv-seg button.on{background:var(--primary);color:var(--on-primary,#fff)}
+.wv-hint{font-size:13px;color:var(--muted);margin-top:6px}
+.wv-row{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:0 0 8px;background:var(--surface-2,var(--surface))}
+.wv-t{font-weight:700;color:var(--text)}
+.wv-m{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 8px}
+.wv-b{display:flex;flex-wrap:wrap;gap:6px}

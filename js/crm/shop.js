@@ -2497,12 +2497,13 @@ function _ptEntry(o){
   const auto=o.owner?{ id:o.owner, why:'ausgeliehen' }:_ptAuto(o.team, o.placeId, o.holder);
   const ass=(meta&&meta.manual)?(meta.ass||[]).filter(Boolean):(auto.id?[auto.id]:[]);
   let zug=(meta&&meta.zugeteilt)||null;
-  if(!(meta&&meta.manual) && auto.id && !o.done){ const ts=Math.min(Date.now(), _ptMinus(o.due||_todayIso(), o.owner?0:Math.min(14,_ptDays(o.team))));   // „Dir zugeteilt“ spätestens 2 Wochen vor Frist
+  // v599: Termine außerhalb des Vorlaufs melden noch kein „Dir zugeteilt“
+  if(!(meta&&meta.manual) && auto.id && !o.done && !o.later){ const ts=Math.min(Date.now(), _ptMinus(o.due||_todayIso(), o.owner?0:Math.min(14,_ptDays(o.team))));   // „Dir zugeteilt“ spätestens 2 Wochen vor Frist
     zug={ [auto.id]:{ ts, by:'lager', byName:'Lager' } }; }
   const node={ id:'lg~'+id+(o.done?'~'+o.doneAt:''), text:o.text, due:o.due||'', status:o.done?'erledigt':(o.st?o.st:((meta&&meta.status)==='inarbeit'?'inarbeit':'offen')),
     assigneeId:ass[0]||'', assigneeIds:ass.length>1?ass:null, assigneeName:ass.map(_ptUName).filter(Boolean).join(', '),
     notizen:(meta&&!o.done&&meta.notizen)||null, zugeteilt:o.done?null:zug, note:'', children:[], doneAt:o.doneAt||'', doneBy:o.doneBy||'' };
-  const lager={ key:o.key, id, cycle:o.cycle, sub:o.sub, where:o.where||'', info:o.info||[], act:o.act||'', autoWhy:(meta&&meta.manual)?'von Hand':auto.why, done:!!o.done, team:o.team||'', rej:!!o.rej, orderId:o.orderId||'' };
+  const lager={ key:o.key, id, cycle:o.cycle, sub:o.sub, where:o.where||'', info:o.info||[], act:o.act||'', autoWhy:(meta&&meta.manual)?'von Hand':auto.why, done:!!o.done, later:!!o.later, team:o.team||'', rej:!!o.rej, orderId:o.orderId||'' };
   return { node, kind:'lager', containerId:id, containerName:'Lager', tree:'', eid:'', pid:'', projName:'', owner:o.owner||'', closed:false, art:'lager',
     depth:0, top:node, inhAss:[], teamsEff:(o.teams&&o.teams.length)?o.teams:(o.team?[o.team]:[]), lager };
 }
@@ -2516,7 +2517,9 @@ function shopPlannerTasks(){
       else { const z=placeZuord(d.placeId); if(z) holder=z.borrowerId||''; }
       const what=(t.label||art.l);
       const base={ team, placeId, holder, sub:'termin', where:d.where||'', info:[art.l+(t.intervall?' · alle '+_num(t.intervall)+' Monate':' · einmalig')] };
-      if(!t.erledigt && t.datum<=_soonIso(_ptDays(team))) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
+      // v599 (User 17.11.2026): alle offenen Termine – außerhalb des Vorlaufs („Termine zeigen … Tage vorher“) mit later=true;
+      // der Planner zeigt sie unter „📦 Lager“ und in der Team-Übersicht unter „später“, unter „Alle“ nur als Hinweis
+      if(!t.erledigt) out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:t.datum, due:t.datum, later:t.datum>_soonIso(_ptDays(team)), text:`${art.i} ${what}: ${d.title}`, act:'due:'+d.key })));
       (t.verlauf||[]).forEach(v=>{ const at=Date.parse((v.am||'')+'T12:00:00'); if(!isFinite(at)||at<old) return;
         out.push(_ptEntry(Object.assign({}, base, { key:'t|'+d.key, cycle:v.faellig||'', due:v.faellig||'', text:`${art.i} ${what}: ${d.title}`, done:true, doneAt:new Date(at).toISOString(), doneBy:v.by||'', info:base.info.concat(v.note?['Notiz: '+v.note]:[]) }))); });
     });
