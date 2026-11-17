@@ -127,7 +127,7 @@ export async function zpFinish(){
     const chk=await _readRaw(db); const left=Object.keys(chk.entries).length+Object.keys(chk.vacRequests).length+Object.keys(chk.stamps).length;
     _done=!left; _cmp=null; _saved=false;
     _last=left?'<b style="color:var(--danger)">Am alten Ort liegen noch '+left+' Datensätze.</b>'
-      :`<b style="color:var(--ok,#1a7f3c)">✓ Abgeschlossen.</b> ${cmp.onlyOld.length} Reste übernommen, alter Ort gelöscht. Jetzt Regeln v17 veröffentlichen (Anleitung in firebase-rules/README.md).`;
+      :`<b style="color:var(--ok,#1a7f3c)">✓ Abgeschlossen.</b> ${cmp.onlyOld.length} Reste übernommen, alter Ort gelöscht. Jetzt Regeln v23 veröffentlichen (Anleitung in firebase-rules/README.md).`;
   }catch(e){ _last='<span style="color:var(--danger)">Abgebrochen, nichts gelöscht: '+esc(e&&e.message)+'</span>'; }
   _busy=false; _render();
 }
@@ -136,11 +136,62 @@ function _render(msg){
   if(!isAdmin()){ host.innerHTML=''; return; }
   const can=!_busy&&!!_cmp&&_saved&&!_done;
   host.innerHTML=`<div class="crm-sec"><h4><span class="ttl">🔒 Personaldaten privat · Abschluss (Phase 4)</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:8px">Löscht Monatsblätter, Anträge und Stempelzeiten am alten, für alle lesbaren Ort. Die App liest seit v551 nur noch den geschützten Bereich je Person. Reihenfolge: 1. Prüfen · 2. Sicherung herunterladen · 3. Abschließen · danach Regeln v17 veröffentlichen.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Löscht Monatsblätter, Anträge und Stempelzeiten am alten, für alle lesbaren Ort. Die App liest seit v551 nur noch den geschützten Bereich je Person. Reihenfolge: 1. Prüfen · 2. Sicherung herunterladen · 3. Abschließen · danach Regeln v23 veröffentlichen.</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"><button class="btn-sm-crm" ${_busy?'disabled':''} onclick="zpCheck()">1. Prüfen (ändert nichts)</button>
       <button class="btn-sm-crm" ${(_busy||!_cmp||_done)?'disabled':''} onclick="zpBackup()">2. Sicherung herunterladen</button>
       <button class="btn-sm-crm primary" ${can?'':'disabled'} onclick="zpFinish()">3. Alten Ort löschen</button></div>
-    <div class="small" role="status" aria-live="polite">${msg?esc(msg):(_last||'Noch nicht geprüft.')}</div></div>`;
+    <div class="small" role="status" aria-live="polite">${msg?esc(msg):(_last||'Noch nicht geprüft.')}</div></div>${_zrHtml()}`;
 }
 export function renderZePrivBox(){ _render(); }
-try{ Object.assign(window, { zpCheck, zpBackup, zpFinish, zpPlan, zpCompare, zpOldWriters, renderZePrivBox }); }catch(e){}
+
+// ═════════════════════════════════════════════════════════════════
+//  v605: Berichte schützen – zeiterfassung/teamReports|yearReports (enthalten Krankheitstage, bisher für alle
+//  Angemeldeten lesbar) nach ze_reports umziehen. Voraussetzung: Regeln v24 (erlauben ze_reports). Danach Regeln v25
+//  (sperren den alten Ort). Die App liest seit v605 alter Ort ∪ ze_reports und schreibt nur noch ze_reports.
+// ═════════════════════════════════════════════════════════════════
+let _zr={ busy:false, chk:null, msg:'' };
+// Reine Logik (testbar): was wird kopiert (nur alt oder abweichend → geschützter Stand gewinnt), was bleibt
+export function zrPlan(old, neu){
+  old=old||{}; neu=neu||{}; const upd={}; let copy=0, same=0, kept=0;
+  ['teamReports','yearReports'].forEach(c=>{ const o=old[c]||{}, n=neu[c]||{};
+    Object.entries(o).forEach(([k,v])=>{ if(v==null) return; if(n[k]===undefined){ upd['ze_reports/'+c+'/'+k]=v; copy++; } else if(_stable(n[k])===_stable(v)) same++; else kept++; });
+    upd['zeiterfassung/'+c]=null; });
+  return { upd, copy, same, kept };
+}
+async function _zrRead(db){
+  const g=p=>db.ref(p).once('value').then(s=>s.val()||{});
+  const [ot,oy,n]=await Promise.all([g('zeiterfassung/teamReports'), g('zeiterfassung/yearReports'), g('ze_reports')]);
+  return { old:{ teamReports:ot, yearReports:oy }, neu:n };
+}
+export async function zrCheck(){
+  if(!isAdmin()||_zr.busy) return; _zr.busy=true; _zr.msg='Prüfe …'; _render();
+  try{ const r=await _zrRead(firebase.database()); const pl=zrPlan(r.old, r.neu);
+    const nOld=Object.keys(r.old.teamReports).length+Object.keys(r.old.yearReports).length;
+    const nNew=Object.keys(r.neu.teamReports||{}).length+Object.keys(r.neu.yearReports||{}).length;
+    _zr.chk=nOld?r:null;
+    _zr.msg=nOld?`Alter Ort: ${Object.keys(r.old.teamReports).length} Teamberichte · ${Object.keys(r.old.yearReports).length} Jahresberichte · geschützt schon ${nNew}. Beim Umzug: ${pl.copy} kopiert, ${pl.same} gleich, ${pl.kept} abweichend (geschützter Stand bleibt).`
+      :`✓ Am alten Ort liegen keine Berichte mehr (geschützt: ${nNew}). Jetzt Regeln v25 veröffentlichen, falls noch nicht geschehen.`;
+  }catch(e){ _zr.msg='Lesen fehlgeschlagen: '+(e&&e.message)+' – sind die Regeln v24 schon veröffentlicht?'; _zr.chk=null; }
+  _zr.busy=false; _render();
+}
+export async function zrMove(){
+  if(!isAdmin()||_zr.busy||!_zr.chk) return;
+  if(!window.confirm('Team- und Jahresberichte in den geschützten Bereich umziehen und am alten Ort löschen? Vorher wird automatisch eine Sicherungsdatei heruntergeladen.')) return;
+  _zr.busy=true; _zr.msg='Ziehe um … bitte die Seite offen lassen.'; _render();
+  try{ const db=firebase.database(); const r=await _zrRead(db);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify({ _type:'tps-berichte-sicherung', _v:1, exportedAt:new Date().toISOString(), alt:r.old, geschuetzt:r.neu })],{type:'application/json'}));
+    a.download='Berichte-Sicherung_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    const pl=zrPlan(r.old, r.neu); await db.ref().update(pl.upd);   // atomar: kopieren + alten Ort löschen
+    const chk=await _zrRead(db); const left=Object.keys(chk.old.teamReports).length+Object.keys(chk.old.yearReports).length;
+    _zr.chk=null; _zr.msg=left?('Am alten Ort liegen noch '+left+' Berichte.'):`✓ Umgezogen: ${pl.copy} kopiert, alter Ort leer. Jetzt Regeln v25 veröffentlichen.`;
+  }catch(e){ _zr.msg='Abgebrochen, nichts gelöscht: '+(e&&e.message); }
+  _zr.busy=false; _render();
+}
+function _zrHtml(){
+  return `<div class="crm-sec"><h4><span class="ttl">🔒 Berichte schützen (Team- und Jahresberichte)</span></h4>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Die Berichte an die GF enthalten Krankheitstage. Der Umzug legt sie in einen Bereich, den nur Leitung, GF, Admin und Personen mit Berichte-Recht lesen. Voraussetzung: Regeln v24 sind veröffentlicht. Danach Regeln v25.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"><button class="btn-sm-crm" ${_zr.busy?'disabled':''} onclick="zrCheck()">1. Prüfen (ändert nichts)</button>
+      <button class="btn-sm-crm primary" ${(!_zr.busy&&_zr.chk)?'':'disabled'} onclick="zrMove()">2. Sichern und umziehen</button></div>
+    <div class="small" role="status" aria-live="polite">${esc(_zr.msg||'Noch nicht geprüft.')}</div></div>`;
+}
+try{ Object.assign(window, { zpCheck, zpBackup, zpFinish, zpPlan, zpCompare, zpOldWriters, renderZePrivBox, zrCheck, zrMove, zrPlan }); }catch(e){}

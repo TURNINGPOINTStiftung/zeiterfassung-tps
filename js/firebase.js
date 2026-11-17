@@ -183,7 +183,6 @@ export async function loadFullData(){
     const needsCleanup=
       data.users.some(u=>u.id==='admin'&&u.role!=='admin')||
       !data.users.some(u=>u.id==='admin')||
-      !data.teamReports||
       data.users.some(u=>u.role==='leitung'&&!Array.isArray(u.teams))||
       data.users.some(u=>u.role==='freiberuflich'&&u.maxHours===undefined)||
       data.users.some(u=>!u.dpw)||
@@ -239,7 +238,7 @@ export async function loadFullData(){
 // unverändert, und Krankheit erscheint dort nur als „abwesend“. Datenmodell im Speicher (d.entries usw.) bleibt gleich.
 // Übergang bis Phase 4: für lesbare Personen alter Stand ∪ ze_private je Schlüssel (ze_private gewinnt), siehe zpBuild.
 // Pro Person ein Live-Listener; jede Änderung baut den Stand neu zusammen.
-const _zp={ subs:{}, person:{}, vac:{}, snap:null, timer:0, ready:false };
+const _zp={ subs:{}, person:{}, vac:{}, rep:undefined, snap:null, timer:0, ready:false };
 function _zpOwner(k){ const m=/^(.+)_([0-9]{4})_([0-9]{2})$/.exec(String(k||'')); return m?m[1]:''; }
 function _zpUid(){ try{ const u=firebase.auth().currentUser; return (u&&u.uid)||''; }catch(e){ return ''; } }
 // Wer darf was lesen? null = unbekannt (dann bleibt alles wie geladen).
@@ -259,7 +258,10 @@ export function zpScope(val, authUid){
   }
   const vacAll=!isAdm && !!((val.managers&&val.managers[authUid]===true) || (val.grants&&val.grants.genehmigung_abwesenheit&&val.grants.genehmigung_abwesenheit[authUid]===true));
   const vacIds=vacAll ? (val.users||[]).map(u=>u&&u.id).filter(id=>id && !ids.has(id)) : [];
-  return { ids:[...ids], vacIds, me, isAdm };
+  // v605: geschützte Berichte (ze_reports) lesen – wie das Schreibrecht: Admin, Leitung/GF (managers) oder Berichte-Rechte
+  const g=val.grants||{}; const rep=isAdm || !!(val.managers&&val.managers[authUid]===true)
+    || ['btn_teamberichte','btn_jahresbericht','tab_gfberichte'].some(k=>g[k]&&g[k][authUid]===true);
+  return { ids:[...ids], vacIds, me, isAdm, rep };
 }
 // Werktage (Mo–Fr ohne Feiertage des Wohnorts) für die Anzeige der Pseudo-Anträge
 function _zpWorkDays(von, bis, u, halb){
@@ -300,6 +302,10 @@ export function zpBuild(val, scope, priv){
       workDays:_zpWorkDays(von,bis,u,!!a.halb), status:'approved', type:'Abwesend', _public:true };
   });
   val.entries=E; val.vacRequests=VR; val.stamps=S;
+  // v605: Berichte = alter Ort ∪ ze_reports (geschützt gewinnt). Nicht geladen (undefined) → alter Stand bleibt.
+  if(scope.rep && priv.rep!==undefined && priv.rep!==null){ const R=priv.rep||{};
+    val.teamReports=Object.assign({}, val.teamReports||{}, R.teamReports||{});
+    val.yearReports=Object.assign({}, val.yearReports||{}, R.yearReports||{}); }
   return val;
 }
 // Für data.js (privMirror): Gibt es den Datensatz in ze_private schon? true/false, undefined = unbekannt.
@@ -312,15 +318,15 @@ window._zpHas=function(u,coll,key){
 // Live-Listener je Person anmelden/abmelden; liefert ein Promise, das nach dem ersten Stand aller neuen Listener erfüllt ist.
 function _zpSubscribe(scope){
   if(!scope) return Promise.resolve();
-  const want={}; scope.ids.forEach(u=>{ want['p:'+u]=u; }); scope.vacIds.forEach(u=>{ want['v:'+u]=u; });
-  Object.keys(_zp.subs).forEach(k=>{ if(!want[k]){ const s=_zp.subs[k]; try{ s.ref.off('value', s.cb); }catch(e){} delete _zp.subs[k]; if(k[0]==='p') delete _zp.person[s.u]; else delete _zp.vac[s.u]; } });
+  const want={}; scope.ids.forEach(u=>{ want['p:'+u]=u; }); scope.vacIds.forEach(u=>{ want['v:'+u]=u; }); if(scope.rep) want['r:']='*';
+  Object.keys(_zp.subs).forEach(k=>{ if(!want[k]){ const s=_zp.subs[k]; try{ s.ref.off('value', s.cb); }catch(e){} delete _zp.subs[k]; if(k[0]==='p') delete _zp.person[s.u]; else if(k[0]==='r') _zp.rep=undefined; else delete _zp.vac[s.u]; } });
   const firsts=[];
   Object.entries(want).forEach(([k,u])=>{
     if(_zp.subs[k]) return;
-    const isP=k[0]==='p';
-    let ref; try{ ref=firebase.database().ref('ze_private/'+u+(isP?'':'/vacRequests')); }catch(e){ return; }
+    const isP=k[0]==='p', isR=k[0]==='r';
+    let ref; try{ ref=firebase.database().ref(isR?'ze_reports':('ze_private/'+u+(isP?'':'/vacRequests'))); }catch(e){ return; }
     let done; firsts.push(new Promise(r=>{ done=r; }));
-    const cb=s=>{ const v=s.val(); if(isP) _zp.person[u]=v||{}; else _zp.vac[u]=v||{}; done(); _zpChanged(); };
+    const cb=s=>{ const v=s.val(); if(isR) _zp.rep=v||{}; else if(isP) _zp.person[u]=v||{}; else _zp.vac[u]=v||{}; done(); _zpChanged(); };
     const err=e=>{ console.warn('[Personaldaten privat] '+k+' nicht lesbar:', e&&(e.code||e.message)); done(); };   // bleibt „nicht geladen“ → alter Stand
     _zp.subs[k]={ ref, cb, u };
     try{ ref.on('value', cb, err); }catch(e){ done(); }

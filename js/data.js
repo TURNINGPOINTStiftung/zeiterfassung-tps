@@ -409,6 +409,10 @@ export function fbWriteMerge(d){
     } else if(k==='users' && _usersPoisoned(d[k])){
       // Schutz: verstümmelten users-Array NICHT hochschreiben (Server-Stand bleibt intakt).
       console.warn('[Schutz] users nicht geschrieben (Mojibake erkannt) – Server-Stand bleibt.');
+    } else if(k==='teamReports'||k==='yearReports'){
+      // v605: Berichte nie als ganze Sammlung (sonst könnte ein unvollständiger Stand geschützte Berichte überschreiben);
+      // nur ein ausdrücklicher Import des Administrators übernimmt sie – einzeln nach ze_reports.
+      if(window.cu && window.cu.role==='admin' && window._allowDataShrink) Object.entries(d[k]||{}).forEach(([id,r])=>{ if(r) upd[k+'/'+id]=r; });
     } else if(k==='vacRequests'){
       // Pseudo-Anträge (_public, aus zeiterfassung/abwesend) gehören nie in den Datenbestand.
       const vr={}; Object.entries(d.vacRequests||{}).forEach(([id,r])=>{ if(r && !r._public) vr[id]=r; }); upd[k]=vr;
@@ -700,9 +704,14 @@ export function privMirror(upd, d){
 // entries/vacRequests/stamps NUR noch unter ze_private geschrieben – die Regeln (v17) verbieten den alten Ort dann.
 const _PRIV_COLLS=/^(entries|vacRequests|stamps)(\/|$)/;
 export function zePrivOnly(d){ d=d||_dataCache; return !!(d && d.zePrivOnly===true); }
+// v605: Team-/Jahresberichte (enthalten Krankheitstage) liegen geschützt unter ze_reports/… (Regeln v24: lesen/schreiben nur
+// Leitung/GF/Admin/Berichte-Rechte). Gelöscht wird zusätzlich am alten Ort, damit nichts aus dem Altbestand wieder auftaucht.
+const _REP_COLLS=/^(teamReports|yearReports)(\/|$)/;
 function _rootUpdate(upd, withMirror, mirrorSrc){
   const r={}; const only=zePrivOnly();
-  for(const [k,v] of Object.entries(upd||{})){ if(only && _PRIV_COLLS.test(k)) continue; r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v; }
+  for(const [k,v] of Object.entries(upd||{})){ if(only && _PRIV_COLLS.test(k)) continue;
+    if(_REP_COLLS.test(k)){ r['ze_reports/'+k]=v; if(v===null && k.includes('/')) r['zeiterfassung/'+k]=null; continue; }
+    r[k.startsWith('audit/')?('ze_audit/'+k.slice(6)):('zeiterfassung/'+k)]=v; }
   let n=0;
   if(withMirror){ let m={}; try{ m=JSON.parse(JSON.stringify(privMirror(mirrorSrc||upd))); }catch(e){ m={}; } for(const [k,v] of Object.entries(m)){ r[k]=v; n++; } }
   return { r, n };
