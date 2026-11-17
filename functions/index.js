@@ -195,8 +195,14 @@ function zeWithPrivate(ze, zp) {
   return out;
 }
 async function readZeFull() {
-  const [ze, zp] = await Promise.all([db.ref('zeiterfassung').once('value'), db.ref('ze_private').once('value')]);
-  return zeWithPrivate(ze.val() || {}, zp.val() || {});
+  const [ze, zp, zr] = await Promise.all([db.ref('zeiterfassung').once('value'), db.ref('ze_private').once('value'), db.ref('ze_reports').once('value')]);
+  return zeWithReports(zeWithPrivate(ze.val() || {}, zp.val() || {}), zr.val() || {});
+}
+// Berichte (v605): alter Ort ∪ ze_reports (geschützt gewinnt) – das Backup-Format bleibt unverändert (teamReports/yearReports).
+function zeWithReports(ze, zr) {
+  const isO = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  ['teamReports', 'yearReports'].forEach(n => { ze[n] = Object.assign({}, isO(ze[n]) ? ze[n] : {}, isO(zr) && isO(zr[n]) ? zr[n] : {}); });
+  return ze;
 }
 const ABW_TYPES = ['Urlaub', 'Arbeitszeitausgleich', 'AU/Krank'];
 function abwOf(r) { return (r && r.status === 'approved' && ABW_TYPES.includes(r.type) && r.userId && r.startDate)
@@ -718,6 +724,8 @@ exports.tpsPw = async (req, res) => {
         // Personaldaten privat: Zeiteinträge/Anträge/Stempel je Person nach ze_private, öffentliche Liste abwesend neu.
         // Freitext bei Krankheit wird nicht übernommen. Sind die alten Sammlungen abgeschaltet (zeiterfassung/zePrivOnly), bleiben sie leer.
         Object.assign(upd, privRestoreUpd(clean, curZe.zePrivOnly === true));
+        // Berichte (v605) geschützt unter ze_reports, alter Ort bleibt leer
+        ['teamReports', 'yearReports'].forEach(n => { upd['ze_reports/' + n] = Object.keys(clean[n] || {}).length ? clean[n] : null; upd['zeiterfassung/' + n] = null; });
         if (Array.isArray(ze.customRoles)) upd['zeiterfassung/customRoles'] = cleanDeep(ze.customRoles.slice(0, 200));   // nur Anzeige-Bezeichnungen
         ['teams', 'cats'].forEach(n => { if (Array.isArray(ze[n])) upd['zeiterfassung/' + n] = ze[n].filter(x => typeof x === 'string').map(x => cleanStr(x).slice(0, 120)).slice(0, 500); });
       }
