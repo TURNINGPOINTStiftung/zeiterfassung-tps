@@ -216,7 +216,13 @@ function myTeams(){ const cu=_me(); const t=Array.isArray(cu.teams)&&cu.teams.le
 function placeTeam(pid){ const p=pid&&placeOf(pid); return (p&&p.team)||''; }
 function _teamOfItemAt(it,pid){ return (it&&it.team)||placeTeam(pid); }
 // Teams einer Sache: [] bzw. '' darin = betrifft alle
-function dueTeams(d){ if(d.kind==='place') return [placeTeam(d.placeId)]; return [_teamOfItemAt(getShop('shopItems',d.itemId), d.placeId)]; }
+function dueTeams(d){ if(d.kind==='place') return [placeTeam(d.placeId)];
+  const it=getShop('shopItems',d.itemId); let t=_teamOfItemAt(it, d.placeId);
+  // v602 (User 17.11.2026): Stück ohne Ort (z. B. einer Person zugeordnet) → Team des Ausgabe-Orts, sonst das Team,
+  // bei dem die übrigen Stücke des Artikels liegen (nur wenn eindeutig) – damit es in der Team-Übersicht erscheint
+  if(!t && d.kind==='unit'){ try{ const ul=unitLoan(d.unitId); if(ul) t=placeTeam(ul.fromPlace||ul.placeId);
+    if(!t){ const ts=[...new Set(unitsOf(it).map(u=>placeTeam(u.placeId)).filter(Boolean))]; if(ts.length===1) t=ts[0]; } }catch(e){} }
+  return [t]; }
 function orderTeams(o){ return _pos(o).map(p=>_teamOfItemAt(p.itemId?getShop('shopItems',p.itemId):null, o.ortId)); }
 // Artikel: eigenes Team, sonst Teams der Orte, wo er liegt oder ein Soll hat ('' = für alle)
 function itemTeams(it){ if(it.team) return [it.team];
