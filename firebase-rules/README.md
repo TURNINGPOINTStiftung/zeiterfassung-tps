@@ -300,6 +300,24 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
+## GETESTET CANDIDATE-v24.json / CANDIDATE-v25.json – Berichte geschützt (noch NICHT live, 17.11.2026)
+**v24** = v23 + neuer Wurzelknoten `ze_reports/{teamReports,yearReports}/$k`: lesen (ganz `ze_reports`) und je Bericht schreiben dürfen
+Admin, `managers` (Leitung/GF/Admin) und `grants/btn_teamberichte|btn_jahresbericht|tab_gfberichte` (wie bisher das Schreibrecht am alten
+Ort; Lesen zusätzlich nur allowed + kein Kiosk); ganze Sammlung ersetzen nur Admin; Schlüssel `^[A-Za-z0-9._-]{1,160}$`. Alter Ort unverändert.
+**v25** = v24 + `zeiterfassung/teamReports|yearReports` `.validate:false` (Knoten + je Kind) → dort entsteht nichts mehr, Löschen geht.
+App v605 liest alter Ort ∪ ze_reports (geschützt gewinnt), schreibt nur ze_reports (Löschen zusätzlich am alten Ort), Werkzeug
+„Berichte schützen“ (Verwaltung → Daten & Backup) kopiert + löscht atomar. tpsPw: Backup inkl. ze_reports, Einspielen nach ze_reports.
+Test im Testprojekt 17.11.2026: v24 vollständig vom Compiler akzeptiert (veröffentlicht, nach Neuladen identisch); v25 umgeschrieben
+(`ze_reports/`→`ruletest_rep/` usw.): 15 von 16 Simulator-Fällen wie erwartet – lesen: Admin/Leitung/Jahresbericht-Recht erlaubt,
+Mitarbeiterin/ohne Anmeldung verweigert; schreiben je Bericht: Leitung/Recht erlaubt, Mitarbeiterin verweigert; Admin ersetzt Sammlung
+erlaubt; alter Ort: Leitung/Admin schreiben verweigert, Leitung löscht Bericht / Admin löscht Sammlung erlaubt; Regression v23
+Monatsblatt alter Ort verweigert. Abweichung: „Leitung ersetzt ganze Sammlung“ im Simulator erlaubt (bekannt: set auf Elternknoten
+wird wie Zusammenführen je Kind simuliert) – war am alten Ort ohnehin erlaubt, die App tut es nie. Danach Testdaten gelöscht,
+Original-Regeln zurück (identisch, PUT ohne Anmeldung → 401).
+sha256 (raw @e04af52): v24 79684d0fb95b4a99d6aec99f3241f915d2aace42e57cc0453615239340d02902 · v25 415b8f12be95a787426307e37165d7938aad1a68268fd4de88bc4244746d50e4
+Prüfwort: v24 `ze_reports` = 1 (v23: 0); v25 zusätzlich `"false"` +4.
+**Reihenfolge:** v24 → App v605 → tpsPw deployen → Werkzeug „Berichte schützen“ (Prüfen, Sichern und umziehen) → v25. Rückweg: v23 bzw. v24.
+
 ## Stand 2026-11-17: CANDIDATE-v23.json ist LIVE – „Personaldaten privat“ Phase 4 abgeschlossen
 Veröffentlicht von Moritz per Cloud Shell; Werkzeug-Abschluss danach ausgeführt (Regeln kamen versehentlich zuerst – kurze Zeit
 schlug Speichern fehl, behoben durch „Alten Ort löschen“). Lesende Kontrolle 17.11.2026: `zeiterfassung/entries|vacRequests|stamps`
