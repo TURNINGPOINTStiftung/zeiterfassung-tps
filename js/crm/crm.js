@@ -2381,8 +2381,12 @@ function crmGoTeamProj(id){
 // ☰-Menü (v585): CRM-Bereiche als Unterpunkte – nur bei voller CRM-Sicht
 // v603 (User 17.11.2026): Menüpunkt Vereine/Sozialakteure … öffnet die Kontaktliste mit passendem Kategorie-Filter
 window.crmMenuOpenTree=(key)=>{ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch='';
-  window._crmStatusFilter=[]; let cats=[]; try{ cats=getCategories(); }catch(e){} window._crmCatFilter=cats.some(c=>c.key===key)?[key]:[]; };
-window.crmMenuTrees=()=>{ try{ if(!crmCanView()) return []; return getTrees().map(t=>({ key:t.key, label:t.label||t.key, icon:t.icon||'' })); }catch(e){ return []; } };
+  window._crmStatusFilter=[]; let cats=[]; try{ cats=getCategories(); }catch(e){} window._crmCatFilter=cats.some(c=>c.key===key)?[key]:[];
+  try{ if(!getTrees().some(t=>t.key===key)) window._crmTree=(getTrees()[0]||{}).key||window._crmTree; }catch(e){} };
+// v604 (User 17.11.2026): Menü-Unterpunkte = KATEGORIEN (wie im Filter, gleiche Reihenfolge) statt Bereiche – sonst fehlten
+// Kategorien ohne Bereich (Erstkontakt, Intern …) und Bereiche ohne Kategorie filterten ins Leere
+window.crmMenuTrees=()=>{ try{ if(!crmCanView()) return []; const tr={}; getTrees().forEach(t=>{ tr[t.key]=t; });
+  return getCategories().map(c=>({ key:c.key, label:c.label||c.key, icon:(tr[c.key]&&tr[c.key].icon)||'🏷️' })); }catch(e){ return []; } };
 function crmSwitchTree(key){ window._crmMode='kontakte'; window._crmTree=key; window._crmSelId=null; window._crmSearch=''; paintList(); }
 function crmSearch(v){ window._crmSearch=v; paintList(); }
 function crmOpenDetail(id){ window._crmMode='kontakte'; window._crmSelId=id; paintDetail(); }

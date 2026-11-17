@@ -701,7 +701,7 @@ function _mbSubs(mod){
       .map(b=>{ const c=b.cloneNode(true); let n=0; c.querySelectorAll('span,sup,b').forEach(x=>{ const t=x.textContent.trim(); if(/^\d+$/.test(t)){ n+=+t; x.remove(); } });   // Zähler-Abzeichen getrennt
         return { l:c.textContent.replace(/\s+/g,' ').trim(), n, on:window._activeModule==='zeiterfassung' && b.classList.contains('active'), go:`mbGo('ze',${jsq(b.dataset.view)})` }; });
     if(mod==='planung') return (window.planTabs?window.planTabs():[]).map(t=>({ l:t[1], on:!!window._planActive && window._planTab===t[0], go:`mbGo('plan',${jsq(t[0])})` }));
-    if(mod==='crm') return (window.crmMenuTrees?window.crmMenuTrees():[]).map(t=>({ l:(t.icon?t.icon+' ':'')+t.label, on:window._activeModule==='crm' && window._crmMode==='kontakte' && window._crmTree===t.key && !window._crmSelId, go:`mbGo('crm',${jsq(t.key)})` }));
+    if(mod==='crm') return (window.crmMenuTrees?window.crmMenuTrees():[]).map(t=>({ l:(t.icon?t.icon+' ':'')+t.label, on:window._activeModule==='crm' && window._crmMode==='kontakte' && !window._crmSelId && Array.isArray(window._crmCatFilter) && window._crmCatFilter.length===1 && window._crmCatFilter[0]===t.key, go:`mbGo('crm',${jsq(t.key)})` }));
     if(mod==='shop') return (window.shopMenuTabs?window.shopMenuTabs():[]).map(t=>({ l:t.l, on:t.on, go:`mbGo('shop',${jsq(t.k)})` }));
     if(mod==='verwaltung'){ let ts=[...document.querySelectorAll('#verw-root .verw-tab')];
       if(!ts.length && window.renderVerwaltung){ try{ window.renderVerwaltung(); }catch(e){} ts=[...document.querySelectorAll('#verw-root .verw-tab')]; }
