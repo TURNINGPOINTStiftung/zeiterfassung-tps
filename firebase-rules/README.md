@@ -300,6 +300,20 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
+## GETESTET CANDIDATE-v23.json – „Personaldaten privat“ Phase 4 (noch NICHT live, 17.11.2026)
+= v22 (live) + genau die Phase-4-Sperren aus v17 (strukturell geprüft: v22→v23 = v16→v17; Lager-/Teilen-Freigaben unverändert):
+`zeiterfassung/entries|vacRequests|stamps` `.validate:false`, `zeiterfassung/zePrivOnly` nur `true`, `ze_audit/$k/$id` Status aus `ze_private`.
+Test im Testprojekt 17.11.2026: vollständige v23-Datei vom Compiler akzeptiert (veröffentlicht, nach Neuladen identisch); dann v23 mit
+`zeiterfassung/`→`ruletest/`, `ze_private/`→`ruletest_priv/`, `crm/`→`ruletest_crm/` usw.: 19 Simulator-Fälle wie erwartet – alter Ort:
+Anna/Leitung/Admin Monatsblatt, Anna Antrag/Stempel → verweigert; Admin löscht alte Monatsblätter → erlaubt, Anna → verweigert; Merker:
+Admin true → erlaubt, false → verweigert, Anna → verweigert; geschützt: eigener Entwurfsmonat → erlaubt, genehmigter Monat → verweigert,
+Leitung mit seeOf liest → erlaubt, Anna liest fremd → verweigert; Regression Lager-Aufgabe → erlaubt, ohne Anmeldung → verweigert.
+Danach Testdaten gelöscht, Original-Regeln zurück (identisch, PUT ohne Anmeldung → 401).
+sha256 (raw @6ebba0b): d1cdcf1a78a6fcbfe62accc99b6887a4cd2a7b2fc32e1572ef3d8d39badf8020 · Prüfwort `zePrivOnly` = 1 (v22: 0).
+**Reihenfolge (zwingend):** App-Werkzeug (Verwaltung → Daten & Backup): Prüfen · Sicherung · Alten Ort löschen (setzt zePrivOnly) →
+**sofort danach** v23 veröffentlichen. Nicht andersherum (ohne Merker schreibt die App noch an den alten Ort → unter v23 abgelehnt).
+Rückweg: CANDIDATE-v22.json (+ Sicherungsdatei aus dem Werkzeug). v17/v19 NICHT mehr verwenden (fehlen Lager-Freigaben).
+
 ## Stand 2026-11-16: CANDIDATE-v22.json ist LIVE (veröffentlicht von Moritz per Cloud Shell, Kontrolle zugang = 1) – Nachkaufen aus dem Planner (App v594)
 = v21 + `shopLog/$id` neu auch Typ `zugang` für alle Angemeldeten (Absender eigene Person per .validate). Bestand schreiben ging seit v20.
 Test im Testprojekt 16.11.2026: 10 Simulator-Fälle wie erwartet – Zugang + Bestand erlaubt; Zugang mit fremdem Absender, Korrektur,
