@@ -234,8 +234,7 @@ export function renderAuswertung(){
         <div class="aus-sub">Statistik und Veranstaltungen über die gewählten Projekte – pro Jahr und gesamt. ${ents.length} Projekt(e) gewählt.</div>
         ${_filterBar()}
         ${_tblStat(ents)}
-        ${_tblVeranst(ents)}
-        ${_tblProProjekt(ents)}`;
+        ${_tblProProjekt(ents)}`;   /* Veranstaltungen-Karte (_tblVeranst) auf Wunsch ausgeblendet; Funktion bleibt für spätere Reaktivierung */
     }catch(err){ console.error('renderAuswertung:',err); root.innerHTML='<div class="aus-card">Fehler beim Aufbau der Auswertung (siehe Konsole). Die übrigen Module sind nicht betroffen.</div>'; }
   }).catch(err=>{ root.innerHTML='<div class="aus-card">CRM-Daten konnten nicht geladen werden.</div>'; console.error(err); });
 }
