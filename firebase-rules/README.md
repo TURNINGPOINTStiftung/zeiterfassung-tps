@@ -300,7 +300,11 @@ sha256 (raw @2028bfe): 3e2dd19130f4c361cccb87f169a8fc284e2851ed22962826b1a3ef490
 Rückweg: CANDIDATE-v16.json.
 **CANDIDATE-v19.json** = v17 + dieselbe Teilen-Erlaubnis → beim Abschluss „Personaldaten privat“ (Phase 4) **v19 statt v17** veröffentlichen.
 
-## GETESTET CANDIDATE-v26.json – Anträge nur je Person (noch NICHT live, 17.11.2026)
+## Stand 2026-11-17: CANDIDATE-v26.json ist LIVE – Anträge nur je Person
+Reihenfolge eingehalten: App v608 (0cd62b5) → v26 (Moritz, Cloud Shell). Lesende Kontrolle als Leitung (Moritz): ze_private/anna/vacRequests
+→ PERMISSION_DENIED (unter v25 erlaubt), App zeigt 126 Abwesenheiten (40 davon nur „abwesend“), 50 Teamberichte, keine Konsolenfehler.
+
+### (Testprotokoll v26)
 = v25 ohne `ze_private/$u/vacRequests/.read` (bisher: managers + grants/genehmigung_abwesenheit lasen die Anträge ALLER, inkl. AU/Krank).
 Lesen jetzt nur noch über `ze_private/$u/.read`: eigene Person, Admin, `seeOf/<auth.uid>/<u>`. Schreiben unverändert (Vertretungen ohne
 aktuelles seeOf können weiter genehmigen). App v607: `zpScope` liefert keine `vacIds` mehr → fremde Anträge nur als „Abwesend“ aus `abwesend`.
