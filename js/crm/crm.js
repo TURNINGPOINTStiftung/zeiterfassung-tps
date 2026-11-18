@@ -7809,7 +7809,7 @@ function paintVerwImpExp(){
   </div>
   <div class="crm-sec">
     <h4><span class="ttl">🔑 Zugänge (Login) prüfen &amp; reparieren</span></h4>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">Prüft für ALLE Mitarbeiter, ob der Login-Eintrag stimmt (Name im Verzeichnis = Stammdaten). <b>Prüfen</b> liest nur; <b>Reparieren</b> gleicht Namen an und legt fehlende Zugänge an. Nutze das, wenn sich jemand nicht anmelden kann. Bestehende, funktionierende Logins bleiben unberührt.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">Prüft für ALLE Mitarbeiter, ob der Login-Eintrag stimmt (Name im Verzeichnis = Stammdaten). <b>Prüfen</b> liest nur; <b>Reparieren</b> gleicht Namen an, legt fehlende Zugänge an <b>und baut die Freigaben für die eingereichten Berichte neu auf</b> (hilft, wenn GF/Leitung bei den eingereichten Berichten nur ein leeres Sheet sehen). Nutze das, wenn sich jemand nicht anmelden kann oder Berichte nicht sieht. Bestehende, funktionierende Logins bleiben unberührt.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-sm-crm" onclick="crmCheckLogins(this)">🔍 Prüfen (nur lesen)</button>
       <button class="btn-sm-crm primary" onclick="crmRepairLogins(this)">🔧 Reparieren</button>
@@ -7876,7 +7876,27 @@ async function crmRepairLogins(btn){
         log('🧹 Verwaiste Einträge entfernt ('+orphans.length+'): '+orphans.map(k=>((dir2[k]&&dir2[k].name)||'?')+' ('+k+')').join(', '));
       } else { log('Keine verwaisten Einträge.'); }
     }catch(e){ log('Aufräumen übersprungen: '+((e&&e.message)||e)); }
-    toast(sum.failed?('Fertig, aber '+sum.failed+' Problem(e) – siehe Protokoll.'):'Zugänge geprüft & aktualisiert ✓', sum.failed?'err':'ok');
+    // Freigabe-Spiegel (managers/grants) VOLLSTÄNDIG neu aus uidUser aufbauen. runSecuritySetup
+    // überspringt „bereits eingerichtete" Nutzer, darum zusätzlich refreshPermissionAllowlists –
+    // sonst sehen GF/Leitung die GESCHÜTZTEN eingereichten Berichte (ze_reports, Datenschutz v25)
+    // nicht, obwohl berechtigt (die App/Regeln lesen ze_reports nur bei managers/grants-Eintrag).
+    try{ if(window.refreshPermissionAllowlists){ log('Freigaben (Berichte, managers/grants) werden neu aufgebaut …'); await window.refreshPermissionAllowlists({ log:m=>log('  '+m) }); log('✓ Freigaben aktualisiert.'); } else log('Hinweis: Freigaben-Funktion nicht verfügbar (refreshPermissionAllowlists).'); }
+    catch(e){ log('Freigaben-Aufbau: '+((e&&e.message)||e)); }
+    // Kontrolle: Wer darf Berichte sehen (GF/Leitung oder tab_gfberichte/btn_teamberichte/btn_jahresbericht),
+    // steht aber NICHT im Spiegel? → bei dieser Person „🔧 Zugang neu aufsetzen" (Login-UID nicht gemappt).
+    try{
+      const db2=firebase.database();
+      const [uu,mg,gr]=await Promise.all([ db2.ref('zeiterfassung/uidUser').once('value').then(s=>s.val()||{}), db2.ref('zeiterfassung/managers').once('value').then(s=>s.val()||{}), db2.ref('zeiterfassung/grants').once('value').then(s=>s.val()||{}) ]);
+      const uidsOf={}; Object.entries(uu).forEach(([uid,id])=>{ (uidsOf[id]=uidsOf[id]||[]).push(uid); });
+      const REP=['btn_teamberichte','btn_jahresbericht','tab_gfberichte'];
+      const covered=uid=> mg[uid]===true || REP.some(k=>gr[k]&&gr[k][uid]===true);
+      const hp=(k,u)=>{ try{ return !!(window.hasPermission && window.hasPermission(k,u)); }catch(e){ return false; } };
+      const elig=(getData().users||[]).filter(u=> u && u.id!=='admin' && (u.role==='geschaeftsfuehrer'||u.role==='leitung'||REP.some(k=>hp(k,u))));
+      const miss=elig.filter(u=>{ const us=uidsOf[u.id]||[]; return !us.length || !us.some(covered); });
+      if(miss.length) log('⚠ Dürfen Berichte sehen, fehlen aber im Freigabe-Spiegel: '+miss.map(u=>(u.name||u.id)+((uidsOf[u.id]||[]).length?'':' (kein Login gemappt)')).join(', ')+' → beim Mitarbeiter „🔧 Zugang neu aufsetzen", dann dort erneut anmelden.');
+      else log('✓ Alle Berichts-Berechtigten stehen im Freigabe-Spiegel.');
+    }catch(e){ log('Berichts-Freigabe-Prüfung übersprungen: '+((e&&e.message)||e)); }
+    toast(sum.failed?('Fertig, aber '+sum.failed+' Problem(e) – siehe Protokoll.'):'Zugänge & Berichts-Freigaben aktualisiert ✓', sum.failed?'err':'ok');
   }catch(e){ log('Fehler: '+((e&&e.message)||e)); toast('Reparatur fehlgeschlagen: '+((e&&e.message)||e),'err'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent=orig||'🔧 Reparieren'; } }
 }
