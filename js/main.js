@@ -75,6 +75,7 @@ import './planung.js';   // Planung: gemeinsamer Bereich Kalender + Projektmanag
 import './crm/shop.js';
 import { initAccessClaims } from './claims.js';   // Freigabe-Markierung (Custom Claim) für Storage
 import './anleitung.js';   // 📖 Anleitung (ANLEITUNG.md als eigener Bereich)
+import './footer.js';   // 🔻 Fußband: Anleitung · Impressum · Datenschutz
 import './home.js';  // 🏠 Startseite (pro Mitarbeiter schaltbar, Standard nur Admin)
 import './nav.js';   // Zurück-Taste innerhalb der App (Verlauf je Ansicht, Fenster schließen)
 

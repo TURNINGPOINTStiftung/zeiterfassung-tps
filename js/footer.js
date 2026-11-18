@@ -1,0 +1,61 @@
+// ══════════════════════════════════════════════════════════════════
+//  🔻 Schmales Fußband (v614): Anleitung · Impressum · Datenschutz
+//  Kind von #app → erscheint automatisch nur eingeloggt (vor Login ist #app
+//  display:none). Links öffnen die Anleitung (Modul) bzw. Impressum/Datenschutz
+//  als Modal. Reine Anzeige, self-registrierend, alles in try/catch.
+//  Inhalt (Impressum/Datenschutz) wird hier im Code gepflegt – wie die Anleitung.
+// ══════════════════════════════════════════════════════════════════
+
+// Verantwortlich für die Stiftung: Jens Kroker (GF) · Technische Umsetzung: Moritz Kriese
+const _IMPRESSUM = `
+  <p><b>TURNING POINT Stiftung gGmbH</b><br>Philosophenweg 11, 69120 Heidelberg</p>
+  <p>Telefon: 06221 6599995<br>E-Mail: info@turningpoint-stiftung.com</p>
+  <p><b>Vertretungsberechtigt / verantwortlich für die Stiftung:</b><br>Jens Kroker (Geschäftsführer)</p>
+  <p><b>Technische Umsetzung &amp; Betrieb dieser Anwendung:</b><br>Moritz Kriese</p>
+  <p style="color:var(--muted,#5b6b7d);font-size:12.5px;margin-top:10px">Diese Anwendung ist ein internes Werkzeug der Stiftung. Vollständige Pflichtangaben (Handelsregister, USt-IdNr.) im Impressum unter <a href="https://www.turningpoint-stiftung.com" target="_blank" rel="noopener">turningpoint-stiftung.com</a>.</p>`;
+
+const _DATENSCHUTZ = `
+  <p>Für die Zeiterfassung verarbeiten wir die Daten, die für dein Arbeitsverhältnis nötig sind: Stammdaten (Name, Kontakt, Team, Arbeitszeit- und Urlaubsangaben), deine erfassten Arbeits- und Pausenzeiten sowie Abwesenheiten.</p>
+  <p><b>Krankheit:</b> Gespeichert wird nur „abwesend/krank" mit Zeitraum – <b>kein Grund und keine Diagnose</b>. Für Kolleg:innen erscheinst du nur als „abwesend".</p>
+  <p><b>Rechtsgrundlage:</b> § 26 BDSG und Art. 6 Abs. 1 lit. c DSGVO (gesetzliche Pflicht zur Arbeitszeiterfassung).</p>
+  <p><b>Wer sieht was:</b> deine eigenen Daten nur du selbst; darüber hinaus nur die für dich zuständige Leitung/Geschäftsführung bzw. die Verwaltung.</p>
+  <p><b>Speicherung:</b> in der EU (Google Firebase, europe-west1). Dein Passwort wird nicht in der App gespeichert.</p>
+  <p><b>Deine Rechte:</b> Auskunft, Berichtigung, Löschung, Einschränkung und Widerspruch – über die Verwaltung oder direkt beim Datenschutzbeauftragten.</p>
+  <p><b>Datenschutzbeauftragter:</b> Rechtsanwalt P. Tim Klümper, sivis.legal, Waldstraße 100, 68305 Mannheim, tk@sivis.legal</p>
+  <p style="color:var(--muted,#5b6b7d);font-size:12.5px;margin-top:10px">Die vollständige Datenschutzerklärung findest du unter <a href="https://www.turningpoint-stiftung.com/datenschutz/" target="_blank" rel="noopener">turningpoint-stiftung.com/datenschutz</a>.</p>`;
+
+function _modal(title, inner){
+  return `<h3 style="color:var(--primary,#203869);margin:0 0 10px">${title}</h3>`
+       + `<div style="max-height:66vh;overflow:auto;font-size:14px;line-height:1.55">${inner}</div>`
+       + `<div class="modal-btns"><button class="btn btn-primary" onclick="window.closeModal&&window.closeModal()">Schließen</button></div>`;
+}
+function footerAnleitung(){ try{ window.switchModule&&window.switchModule('anleitung'); }catch(e){} return false; }
+function footerImpressum(){ try{ window.openModal&&window.openModal(_modal('Impressum', _IMPRESSUM), true); }catch(e){} return false; }
+function footerDatenschutz(){ try{ window.openModal&&window.openModal(_modal('Datenschutz', _DATENSCHUTZ), true); }catch(e){} return false; }
+
+function _injectFooter(){
+  try{
+    if(document.getElementById('app-footer')) return;
+    const host=document.getElementById('app'); if(!host) return;
+    if(!document.getElementById('app-footer-css')){
+      const s=document.createElement('style'); s.id='app-footer-css';
+      s.textContent='#app-footer{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;flex-wrap:wrap;gap:4px 12px;'
+        +'align-items:center;justify-content:center;padding:4px 96px 4px 12px;font-size:12px;line-height:1.3;'
+        +'background:var(--surface,#fff);border-top:1px solid var(--border,#dde1e7);color:var(--muted,#5b6b7d)}'
+        +'#app-footer a{color:var(--muted,#5b6b7d);text-decoration:none;cursor:pointer}'
+        +'#app-footer a:hover{color:var(--primary,#203869);text-decoration:underline}'
+        +'#app-footer .sep{opacity:.45}'
+        +'#app{padding-bottom:30px}'
+        +'@media print{#app-footer{display:none}}';
+      document.head.appendChild(s);
+    }
+    const f=document.createElement('footer'); f.id='app-footer';
+    f.innerHTML='<a href="#" onclick="return footerAnleitung()">📖 Anleitung</a><span class="sep">·</span>'
+      +'<a href="#" onclick="return footerImpressum()">Impressum</a><span class="sep">·</span>'
+      +'<a href="#" onclick="return footerDatenschutz()">Datenschutz</a>';
+    host.appendChild(f);
+  }catch(e){ console.error('Fußband:', e); }
+}
+
+try{ Object.assign(window, { footerAnleitung, footerImpressum, footerDatenschutz }); }catch(e){}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _injectFooter); else _injectFooter();
