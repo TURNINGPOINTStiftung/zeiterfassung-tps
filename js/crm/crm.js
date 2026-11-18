@@ -3813,8 +3813,8 @@ function statsSecHtml(e){
   const years=Object.keys(byYear).sort().reverse();
   const tnM=STAT_METRICS.find(m=>m.key==='tn');
   const yearBlocks=years.map(y=>{
-    // Weitermach-Quote: Σ „ins regelmäßige Training übergegangen" ÷ Σ TN der einmaligen Veranstaltungen
-    // des Jahres (0–100 %). Einheitlich mit der Auswertung; erscheint erst, wenn ein Übergang erfasst ist.
+    // Weitermach-Quote: Σ „ins regelmäßige Training übergegangen" ÷ Σ TN der Veranstaltungen des Jahres
+    // (0–100 %). Einheitlich mit der Auswertung; nicht eingetragener Übergang zählt als 0 (v621).
     const ye=byYear[y];
     const evs=ye.filter(s=>STAT_EVENT(s.typ));
     const trs=ye.filter(s=>STAT_RUNNING(s.typ)).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
@@ -3824,7 +3824,7 @@ function statsSecHtml(e){
     const trainTN=trs.length?statNum(trs[trs.length-1],tnM):0;        // letztes Training
     const firstTrainTN=trs.length?statNum(trs[0],tnM):0;             // erstes Training
     const qParts=[];
-    if(eventTN>0&&uebSet) qParts.push(`Weitermach-Quote: <b>${ueb}</b> von <b>${eventTN}</b> Veranstaltungs-TN ins Training = <b>${Math.min(100,Math.round(ueb/eventTN*100))} %</b>`);
+    if(eventTN>0) qParts.push(`Weitermach-Quote: <b>${ueb}</b> von <b>${eventTN}</b> Veranstaltungs-TN ins Training = <b>${Math.min(100,Math.round(ueb/eventTN*100))} %</b>`);
     if(trs.length>=2){ const zuw=trainTN-firstTrainTN; qParts.push(`Zuwachs Training: <b>${(zuw>0?'+':'')+zuw}</b> TN (${firstTrainTN} → ${trainTN})`); }
     const quoteBox=qParts.length ? `<div class="crm-stat-quote">🎯 ${qParts.join('&nbsp;·&nbsp;')}</div>` : '';
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
