@@ -3830,11 +3830,16 @@ function statsSecHtml(e){
     const rows=byYear[y].slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(s=>{
       const prev=prevOf.get(s.id);
       const NEWF={tnRegel:1,tnEinmal:1,termine:1};   // erst seit v487 erfasst – fehlend ≠ 0
-      const cells=STAT_METRICS.map(m=>{ if(NEWF[m.key] && (s[m.key]==null||(m.key==='termine'&&!STAT_RUNNING(s.typ)))) return '<td><span class="small" style="color:var(--muted)">–</span></td>';
+      const cells=STAT_METRICS.map(m=>{
+        // Gruppen/Termine nur bei laufendem Angebot sinnvoll → sonst „–" (nicht „0") (v620)
+        if((m.key==='gruppen'||m.key==='termine') && !STAT_RUNNING(s.typ)) return '<td><span class="small" style="color:var(--muted)">–</span></td>';
+        if(NEWF[m.key] && s[m.key]==null) return '<td><span class="small" style="color:var(--muted)">–</span></td>';
         const cur=statNumFor(s,m,myKey); let d='';
         if(prev && !(NEWF[m.key] && prev[m.key]==null)){ const dv=cur-statNumFor(prev,m,myKey); if(dv) d=` <span class="crm-delta ${dv>0?'up':'down'}">${dv>0?'▲':'▼'}${Math.abs(dv)}</span>`; }
         const tot=(s.split && STAT_SPLIT.includes(m.key)) ? ` <span class="small" style="color:var(--muted)" title="zusammen in der Kooperation">(Σ ${statNum(s,m)})</span>` : '';
-        return `<td>${cur}${d}${tot}</td>`; }).join('');
+        // Bei Events: „↪ ins Training" direkt an der TN-Zahl (statt eigener Spalte) (v620)
+        const ueb=(m.key==='tn' && STAT_EVENT(s.typ) && s.uebergang!=null && s.uebergang!=='') ? `<span style="display:block;font-size:12px;color:var(--primary);font-weight:600;margin-top:2px" title="Von diesen TN danach ins regelmäßige Training übergegangen">↪ ${Number(s.uebergang)} ins Training</span>` : '';
+        return `<td>${cur}${d}${tot}${ueb}</td>`; }).join('');
       const shared=s._own===false;
       const typ=s.typ?`<span class="crm-stat-typ t-${esc(s.typ)}">${esc(statTypLabel(s.typ)||s.typ)}</span>`:'<span class="small" style="color:var(--muted)">—</span>';
       const sharedTag = shared ? ` <span class="crm-koop-art" title="Gemeinsame Erfassung – beim Partner bearbeiten">🤝 mit ${esc(s._ownerName||'')}</span>`
@@ -3843,13 +3848,11 @@ function statsSecHtml(e){
       if(s.mitglieder!=null&&s.mitglieder!=='') legacy.push('Vereinsmitglieder: '+Number(s.mitglieder||0));
       if(s.tnAktiv!=null&&s.tnAktiv!=='') legacy.push('aktiv im Training: '+Number(s.tnAktiv||0));
       const noteHtml=[ s.notiz?`<div class="crm-stat-note">${nl2br(esc(s.notiz))}</div>`:'', legacy.length?`<div class="small" style="color:var(--muted)">früher erfasst · ${esc(legacy.join(' · '))}</div>`:'' ].join('');
-      // „ins Training übergegangen": nur bei Events mit erfasstem Wert – sonst „–".
-      const uebCell=(STAT_EVENT(s.typ) && s.uebergang!=null && s.uebergang!=='') ? String(Number(s.uebergang)) : '<span class="small" style="color:var(--muted)">–</span>';
-      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td style="text-align:center">${uebCell}</td><td style="text-align:center">${s.winter?'<span title="Auch Wintertraining">🧊</span>':''}</td><td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
+      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td style="text-align:center">${s.winter?'<span title="Auch Wintertraining">🧊</span>':''}</td><td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
         <td class="crm-stat-act">${(canEdit&&!shared)?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat(${jsq(s.id)})">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat(${jsq(s.id)})">✕</button>`:(shared?`<button class="btn-sm-crm" title="Beim Partner öffnen" onclick="crmGoEntry(${jsq(s._ownerTree)},${jsq(s._ownerEid)})">↗</button>`:'')}</td></tr>`;
     }).join('');
     return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>${quoteBox}
-      <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th title="Von den Veranstaltungs-TN danach ins regelmäßige Training übergegangen">↪ ins Training</th><th title="Auch Wintertraining">Winter</th><th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
+      <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th title="Auch Wintertraining">Winter</th><th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
   }).join('');
   return `<div class="crm-sec">
     <h4><span class="ttl">📊 Statistik · Inklusion</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button>`:''}</h4>
