@@ -3843,11 +3843,13 @@ function statsSecHtml(e){
       if(s.mitglieder!=null&&s.mitglieder!=='') legacy.push('Vereinsmitglieder: '+Number(s.mitglieder||0));
       if(s.tnAktiv!=null&&s.tnAktiv!=='') legacy.push('aktiv im Training: '+Number(s.tnAktiv||0));
       const noteHtml=[ s.notiz?`<div class="crm-stat-note">${nl2br(esc(s.notiz))}</div>`:'', legacy.length?`<div class="small" style="color:var(--muted)">früher erfasst · ${esc(legacy.join(' · '))}</div>`:'' ].join('');
-      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td style="text-align:center">${s.winter?'<span title="Auch Wintertraining">🧊</span>':''}</td><td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
+      // „ins Training übergegangen": nur bei Events mit erfasstem Wert – sonst „–".
+      const uebCell=(STAT_EVENT(s.typ) && s.uebergang!=null && s.uebergang!=='') ? String(Number(s.uebergang)) : '<span class="small" style="color:var(--muted)">–</span>';
+      return `<tr><td>${esc(fmtDate(Date.parse(s.date)))}</td><td>${typ}${sharedTag}</td>${cells}<td style="text-align:center">${uebCell}</td><td style="text-align:center">${s.winter?'<span title="Auch Wintertraining">🧊</span>':''}</td><td class="crm-stat-notecell">${noteHtml||'<span class="small" style="color:var(--muted)">—</span>'}</td>
         <td class="crm-stat-act">${(canEdit&&!shared)?`<button class="btn-sm-crm" title="Bearbeiten" onclick="crmEditStat(${jsq(s.id)})">✎</button><button class="crm-x" title="Löschen" onclick="crmDeleteStat(${jsq(s.id)})">✕</button>`:(shared?`<button class="btn-sm-crm" title="Beim Partner öffnen" onclick="crmGoEntry(${jsq(s._ownerTree)},${jsq(s._ownerEid)})">↗</button>`:'')}</td></tr>`;
     }).join('');
     return `<div class="crm-stat-year"><div class="crm-stat-yhead">${esc(y)}</div>${quoteBox}
-      <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th title="Auch Wintertraining">Winter</th><th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
+      <div style="overflow-x:auto"><table class="crm-stats"><tr><th>Datum</th><th>Art</th>${metricHead}<th title="Von den Veranstaltungs-TN danach ins regelmäßige Training übergegangen">↪ ins Training</th><th title="Auch Wintertraining">Winter</th><th>Notiz</th><th></th></tr>${rows}</table></div></div>`;
   }).join('');
   return `<div class="crm-sec">
     <h4><span class="ttl">📊 Statistik · Inklusion</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button>`:''}</h4>
@@ -3900,7 +3902,7 @@ function crmStatModal(s){
 // Bei gewählter Kooperation: Engagierte/Trainer je beteiligtem Verein eingeben (Summe = Kooperation)
 function crmStatSplitRender(){
   const box=document.getElementById('crm-stat-split'); const row=document.getElementById('crm-stat-persrow'); if(!box||!row) return;
-  if(!STAT_RUNNING(val('crm-stat-typ'))){ row.style.display='none'; box.innerHTML=''; return; }   // Engagierte/Trainer nur bei regelmäßigem Angebot
+  // v619: Engagierte/Trainer bei ALLEN Arten erfassbar (Training/Reihe, WENDE-Events, Sonstiges).
   const parts=Array.from(document.querySelectorAll('.crm-stat-share:checked')).map(x=>({ key:_stKey(x.getAttribute('data-tree'),x.getAttribute('data-eid')), name:_entityName(x.getAttribute('data-tree'),x.getAttribute('data-eid')) }));
   // bereits eingetippte Werte merken, bevor neu gezeichnet wird
   box.querySelectorAll('.crm-stat-sp').forEach(i=>{ const k=i.dataset.k, m=i.dataset.m; window._statSplitPre[k]=window._statSplitPre[k]||{}; window._statSplitPre[k][m]=i.value===''?0:Math.max(0,Number(i.value)||0); });
@@ -3916,18 +3918,17 @@ function crmStatSplitRender(){
 }
 function crmStatSplitSum(){ const s={engagierte:0,trainer:0}; document.querySelectorAll('.crm-stat-sp').forEach(i=>{ s[i.dataset.m]+=Math.max(0,Number(i.value)||0); });
   const e=document.getElementById('crm-stat-sp-e'), t=document.getElementById('crm-stat-sp-t'); if(e) e.textContent=String(s.engagierte); if(t) t.textContent=String(s.trainer); return s; }
-// „Termine im Jahr“ und „Wintertraining“ nur bei laufenden Angeboten (nicht bei einmaliger Veranstaltung)
-// Felder je Erfassungs-Art zeigen: regelmäßiges Angebot (Training/Reihe) → Engagierte/Trainer/
-// Gruppen/Termine/Winter; einmalige Veranstaltung → nur TN + „übergegangen"; Sonstiges → nur TN.
+// „Gruppen“, „Termine im Jahr“ und „Wintertraining“ nur bei laufenden Angeboten (nicht bei WENDE-Event/Sonstiges).
+// Felder je Erfassungs-Art: regelmäßiges Angebot (Training/Reihe) → Engagierte/Trainer/TN/Gruppen/Termine/Winter;
+// WENDE-Event → Engagierte/Trainer/TN + „übergegangen"; Sonstiges → Engagierte/Trainer/TN. (v619)
 function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t); const ev=STAT_EVENT(t);
   const d=(id,on,disp)=>{ const el=document.getElementById(id); if(el) el.style.display=on?(disp||'flex'):'none'; };
   d('crm-stat-gruppen-box', run, 'contents');
   d('crm-stat-termine-box', run, 'contents');
   d('crm-stat-winter-box', run, 'flex');
   d('crm-stat-ueb-box', ev, 'block');
-  // Engagierte/Trainer (+ Kooperations-Aufteilung) nur beim regelmäßigen Angebot.
-  if(!run){ const pr=document.getElementById('crm-stat-persrow'); const sp=document.getElementById('crm-stat-split'); if(pr) pr.style.display='none'; if(sp) sp.style.display='none'; }
-  else crmStatSplitRender(); }
+  // Engagierte/Trainer (+ ggf. Kooperations-Aufteilung) jetzt bei ALLEN Arten.
+  crmStatSplitRender(); }
 function crmStatSum(){ const n=id=>{ const x=document.getElementById(id); return x&&x.value!==''?Math.max(0,Number(x.value)||0):0; };
   const el=document.getElementById('crm-stat-tnsum'); if(el) el.textContent=String(n('crm-stat-tnRegel')+n('crm-stat-tnEinmal')); }
 function crmAddStat(){ crmStatModal(null); }
