@@ -1,9 +1,14 @@
 // ══════════════════════════════════════════════════════════════════
 //  🔻 Schmales Fußband (v614): Anleitung · Impressum · Datenschutz
-//  Kind von #app → erscheint automatisch nur eingeloggt (vor Login ist #app
-//  display:none). Links öffnen die Anleitung (Modul) bzw. Impressum/Datenschutz
-//  als Modal. Reine Anzeige, self-registrierend, alles in try/catch.
+//  Letztes Kind von #app → erscheint automatisch nur eingeloggt (vor Login ist
+//  #app display:none). Links öffnen die Anleitung (Modul) bzw. Impressum/
+//  Datenschutz als Modal. Reine Anzeige, self-registrierend, alles in try/catch.
 //  Inhalt (Impressum/Datenschutz) wird hier im Code gepflegt – wie die Anleitung.
+//
+//  v616: position:STICKY statt fixed. Sticky verankert am Scroll-Container
+//  (Viewport) statt an einem Fixed-Bezugsrahmen → bleibt in JEDER Engine unten,
+//  ist immun gegen den body-Zoom/Transform-Bezugsrahmen UND liegt im Fluss, also
+//  überlappt es nie den Inhalt (die letzte Zeile verschwindet nicht dahinter).
 // ══════════════════════════════════════════════════════════════════
 
 // Verantwortlich für die Stiftung: Jens Kroker (GF) · Technische Umsetzung: Moritz Kriese
@@ -39,13 +44,12 @@ function _injectFooter(){
     const host=document.getElementById('app'); if(!host) return;
     if(!document.getElementById('app-footer-css')){
       const s=document.createElement('style'); s.id='app-footer-css';
-      s.textContent='#app-footer{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;flex-wrap:wrap;gap:0 10px;'
+      s.textContent='#app-footer{position:sticky;bottom:0;z-index:30;display:flex;flex-wrap:wrap;gap:0 10px;'
         +'align-items:center;justify-content:center;padding:3px 78px 3px 10px;font-size:11.5px;line-height:1.25;'
         +'background:var(--primary,#203869);color:#fff}'
         +'#app-footer a{color:#fff;text-decoration:none;cursor:pointer}'
         +'#app-footer a:hover{text-decoration:underline}'
         +'#app-footer .sep{opacity:.5}'
-        +'#app{padding-bottom:24px}'
         +'@media print{#app-footer{display:none}}';
       document.head.appendChild(s);
     }
