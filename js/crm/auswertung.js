@@ -161,7 +161,10 @@ function _injectStyles(){
   .aus-badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:12px;font-weight:700}
   .aus-btn{background:var(--primary);color:var(--on-primary,#fff);border:none;border-radius:8px;padding:9px 16px;font-size:14px;font-weight:700;cursor:pointer}
   .aus-btn.sec{background:var(--surface,#fff);color:var(--primary);border:1.5px solid var(--border)}
-  .aus-scroll{overflow-x:auto}`;
+  .aus-scroll{overflow-x:auto}
+  table.aus-t td.aus-ev{background:var(--surface-3,#eef2f7)}
+  table.aus-t tr.total td.aus-ev{background:var(--surface-3,#eef2f7)}
+  table.aus-t .aus-evsep{border-left:2px solid var(--accent,#48ae4d)}`;
   const st=document.createElement('style'); st.id='aus-styles'; st.textContent=css; document.head.appendChild(st);
 }
 
@@ -189,15 +192,31 @@ function _lastTrainX(x){ const key=x.tree+'|'+x.id; const own=new Set(x.e.stats|
 function _tblStat(entities){
   const by=_applyYear(_statByYear(entities)); const years=Object.keys(by).sort();
   const evLbl=_eventFilter()?(_EVENT_LABELS[_eventFilter()]||'Veranstaltungen'):'Veranstaltungen';
-  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.winter||'–'}</td><td>${r.eventTN||'–'}</td><td>${r.eventTN?r.eventUeb:'–'}</td><td>${_sign(r.zuwachs)}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
+  // Spalten in Anzeigereihenfolge (v622): erst das regelmäßige Angebot, dann – optisch abgehoben (ev) – die Veranstaltungen.
+  // „Zuwachs Training" entfernt (gehört zum Training, war aber meist leer/0).
+  const COLS=[
+    {k:'engagierte', l:'Engagierte Mitglieder',     v:r=>r.engagierte},
+    {k:'trainer',    l:'Inkl.-Trainer',             v:r=>r.trainer},
+    {k:'gruppen',    l:'Trainingsgruppen',          v:r=>r.gruppen},
+    {k:'winter',     l:'Vereine mit Wintertraining', v:r=>r.winter||'–'},
+    {k:'termine',    l:'Termine im Jahr',           v:r=>r.termine},
+    {k:'tn',         l:'Inklusive TN',              v:r=>r.tn},
+    {k:'eventTN',    l:'TN '+evLbl,                 v:r=>r.eventTN||'–', ev:1},
+    {k:'eventUeb',   l:'↪ ins Training',            v:r=>r.eventTN?r.eventUeb:'–', ev:1, t:'Von diesen TN danach ins regelmäßige Training übergegangen'},
+    {k:'quote',      l:'Weitermach-Quote',          v:r=>`<b>${_statQuote(r)}</b>`, ev:1, t:'Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind'},
+  ];
+  const firstEv=COLS.findIndex(c=>c.ev);
+  const cls=(c,i)=>((c.ev?'aus-ev':'')+(i===firstEv?' aus-evsep':'')).trim();
+  const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${COLS.map((c,i)=>`<td class="${cls(c,i)}">${c.v(r)}</td>`).join('')}</tr>`; }).join('');
   // Gesamt über alle Jahre: nur die Veranstaltungs-Zahlen summieren sich sinnvoll (Flüsse); Stand-Werte bleiben „–". (v621)
   const gTN=years.reduce((a,y)=>a+(by[y].eventTN||0),0), gUeb=years.reduce((a,y)=>a+(by[y].eventUeb||0),0);
-  const totalRow=years.length?`<tr class="total"><td>Gesamt</td>${STAT_COLS.map(()=>`<td>–</td>`).join('')}<td>–</td><td>${gTN||'–'}</td><td>${gTN?gUeb:'–'}</td><td>–</td><td><b>${_statQuote({eventTN:gTN,eventUeb:gUeb})}</b></td></tr>`:'';
-  const cols=STAT_COLS.length+6;
+  const gVal=k=> k==='eventTN'?(gTN||'–') : k==='eventUeb'?(gTN?gUeb:'–') : k==='quote'?`<b>${_statQuote({eventTN:gTN,eventUeb:gUeb})}</b>` : '–';
+  const totalRow=years.length?`<tr class="total"><td>Gesamt</td>${COLS.map((c,i)=>`<td class="${cls(c,i)}">${gVal(c.k)}</td>`).join('')}</tr>`:'';
+  const cols=COLS.length+1;
   return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN ${esc(evLbl)}</th><th title="Von diesen TN danach ins regelmäßige Training übergegangen">↪ ins Training</th><th>Zuwachs Training</th><th title="Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind">Weitermach-Quote</th></tr></thead>
+    <thead><tr><th>Jahr</th>${COLS.map((c,i)=>`<th class="${cls(c,i)}"${c.t?` title="${c.t}"`:''}>${esc(c.l)}</th>`).join('')}</tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}${totalRow}</tbody></table></div>
-    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. <b>Gesamt</b> summiert nur die Veranstaltungs-Zahlen über alle Jahre (Stand-Werte wie Engagierte/Trainer sind Momentaufnahmen → „–"). <b>Weitermach-Quote</b> = „ins regelmäßige Training übergegangen" ÷ TN der Veranstaltungen (0–100 %); nicht eingetragener Übergang zählt als 0, „–" nur ohne Veranstaltungs-TN.</div></div>`;
+    <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. <b>Gesamt</b> summiert nur die Veranstaltungs-Zahlen über alle Jahre (Stand-Werte sind Momentaufnahmen → „–"). <b>Weitermach-Quote</b> = „ins regelmäßige Training übergegangen" ÷ TN der Veranstaltungen (0–100 %); nicht eingetragener Übergang zählt als 0, „–" nur ohne Veranstaltungs-TN.</div></div>`;
 }
 // ── Entwicklung je Verein über die Jahre (NUR regelmäßiges Training/Reihe) ──────────
 const _ENTW_METRICS=[['tn','Inklusive TN (regelmäßig)','tnInkl'],['gruppen','Trainingsgruppen',null],['engagierte','Engagierte Mitglieder',null],['termine','Termine im Jahr',null]];
@@ -331,9 +350,9 @@ export function ausExport(){
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
       const evCol='TN '+(_eventFilter()?(_EVENT_LABELS[_eventFilter()]||'Veranstaltungen'):'Veranstaltungen');
-      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o[evCol]=r.eventTN; o['Übergegangen ins Training']=r.eventTN?r.eventUeb:''; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o[evCol]=r.eventTN; o['Übergegangen ins Training']=r.eventTN?r.eventUeb:''; o['Weitermach-Quote']=_statQuote(r); return o;});
       if(sYears.length){ const gTN=sYears.reduce((a,y)=>a+(sBy[y].eventTN||0),0), gUeb=sYears.reduce((a,y)=>a+(sBy[y].eventUeb||0),0); const g={Jahr:'Gesamt'}; g[evCol]=gTN; g['Übergegangen ins Training']=gTN?gUeb:''; g['Weitermach-Quote']=_statQuote({eventTN:gTN,eventUeb:gUeb}); sRows.push(g); }
-      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining',evCol,'Übergegangen ins Training','Zuwachs Training','Weitermach-Quote'];
+      const sHead=['Jahr','Engagierte Mitglieder','Inkl.-Trainer','Trainingsgruppen','Vereine mit Wintertraining','Termine im Jahr','Inklusive TN',evCol,'Übergegangen ins Training','Weitermach-Quote'];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
