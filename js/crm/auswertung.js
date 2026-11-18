@@ -43,6 +43,13 @@ function _sNum(s,key,legacy){ if(!s) return 0; let v=s[key]; if((v==null||v===''
 const STAT_COLS=[['engagierte','Engagierte Mitglieder',null],['trainer','Inkl.-Trainer','trainerInkl'],['tn','Inklusive TN','tnInkl'],['gruppen','Trainingsgruppen',null],['termine','Termine im Jahr',null]];
 // Laufende Angebote: regelmäßiges Training + regelmäßige Veranstaltung (z. B. monatliche Segelsonntage, v487)
 const _isRun=t=>{ t=t||''; return t===''||t==='training'||t==='reihe'; };
+// Einmalige Events der Vereins-Statistik: die drei WENDE-Events + Alt-Typ „veranstaltung" (vor v618).
+const _EVENT_TYPES=['wendestart','wendekurs','wendetraining','veranstaltung'];
+const _EVENT_LABELS={wendestart:'WENDESTART',wendekurs:'WENDEKURS',wendetraining:'WENDETRAINING',veranstaltung:'Veranstaltung (einmalig)'};
+const _isEvent=t=>_EVENT_TYPES.indexOf(t||'')>=0;
+function _eventFilter(){ return window._ausEvent||''; }
+// Zählt diese Erfassung für die aktuelle Event-Filterwahl? Ohne Filter: alle Events; mit Filter: nur der gewählte Typ.
+function _eventMatches(t){ const f=_eventFilter(); return f ? (t===f) : _isEvent(t); }
 const _PERSON_COLS={engagierte:1,trainer:1};   // Personen – bei mehreren Angeboten eines Vereins NICHT doppelt zählen
 function _euro(n){ return _num(n).toLocaleString('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}); }
 
@@ -96,7 +103,7 @@ function _statByYear(entities){
     // Summe ALLER einmaligen Veranstaltungs-TN; Wintertraining ja/nein
     const last={}, first={}, eventSum={}, eventUeb={}, eventUebSet={}, winter={};
     recs.forEach(s=>{ const y=_yearOf(s.date); if(y==null) return; const t=s.typ||'';
-      if(t==='veranstaltung'){ const id=s.id||s; if(!countedEv.has(id)){ countedEv.add(id); eventSum[y]=(eventSum[y]||0)+_sNum(s,'tn','tnInkl'); if(s.uebergang!=null&&s.uebergang!==''){ eventUeb[y]=(eventUeb[y]||0)+Number(s.uebergang||0); eventUebSet[y]=true; } } else if(!(y in eventSum)) eventSum[y]=eventSum[y]||0; }
+      if(_eventMatches(t)){ const id=s.id||s; if(!countedEv.has(id)){ countedEv.add(id); eventSum[y]=(eventSum[y]||0)+_sNum(s,'tn','tnInkl'); if(s.uebergang!=null&&s.uebergang!==''){ eventUeb[y]=(eventUeb[y]||0)+Number(s.uebergang||0); eventUebSet[y]=true; } } else if(!(y in eventSum)) eventSum[y]=eventSum[y]||0; }
       else if(_isRun(t)){ const k=t==='reihe'?'reihe':'training'; last[y]=last[y]||{}; first[y]=first[y]||{};
         if(!last[y][k]||String(s.date)>String(last[y][k].date)) last[y][k]=s;
         if(!first[y][k]||String(s.date)<String(first[y][k].date)) first[y][k]=s;
@@ -181,10 +188,11 @@ function _lastTrainX(x){ const key=x.tree+'|'+x.id; const own=new Set(x.e.stats|
   return { rec, eng:_personVal(rec,'engagierte',key,own.has(rec),null), tr:_personVal(rec,'trainer',key,own.has(rec),'trainerInkl') }; }
 function _tblStat(entities){
   const by=_applyYear(_statByYear(entities)); const years=Object.keys(by).sort();
+  const evLbl=_eventFilter()?(_EVENT_LABELS[_eventFilter()]||'Veranstaltungen'):'Veranstaltungen';
   const rows=years.map(y=>{ const r=by[y]; return `<tr><td>${esc(y)}</td>${STAT_COLS.map(([k])=>`<td>${r[k]}</td>`).join('')}<td>${r.winter||'–'}</td><td>${r.eventTN||'–'}</td><td>${_sign(r.zuwachs)}</td><td><b>${_statQuote(r)}</b></td></tr>`; }).join('');
   const cols=STAT_COLS.length+5;
   return `<div class="aus-card"><h3>📊 Statistik · Inklusion</h3><div class="aus-scroll"><table class="aus-t">
-    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN Veranstaltungen</th><th>Zuwachs Training</th><th title="Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind">Weitermach-Quote</th></tr></thead>
+    <thead><tr><th>Jahr</th>${STAT_COLS.map(([,l])=>`<th>${esc(l)}</th>`).join('')}<th>Vereine mit Wintertraining</th><th>TN ${esc(evLbl)}</th><th>Zuwachs Training</th><th title="Anteil der Veranstaltungs-TN, die danach ins regelmäßige Training übergegangen sind">Weitermach-Quote</th></tr></thead>
     <tbody>${rows||`<tr><td colspan="${cols}" style="text-align:center;color:var(--muted)">Keine Statistik im Auswahlbereich.</td></tr>`}</tbody></table></div>
     <div class="aus-sub" style="margin:8px 0 0">Laufende Werte = letzte Erfassung je Verein und Angebot (regelmäßiges Training bzw. regelmäßige Veranstaltung), über die Auswahl summiert; Engagierte/Trainer je Verein nur einmal. <b>Weitermach-Quote</b> = bei den Veranstaltungen erfasste „ins regelmäßige Training übergegangen“ ÷ TN der einmaligen Veranstaltungen (0–100 %). „–“, solange für das Jahr kein Übergang erfasst ist.</div></div>`;
 }
@@ -253,6 +261,11 @@ function _filterBar(){
   try{ (listVeranstaltungen()||[]).forEach(v=>{const y=_yearOf(v.start); if(y)yset.add(y);}); }catch(e){}
   const years=[...yset].sort();
   const yearOpts=`<option value="">Alle Jahre</option>`+years.map(y=>`<option value="${y}"${String(_yearsFilter())===String(y)?' selected':''}>${y}</option>`).join('');
+  // Event-Filter: die drei WENDE-Events; Alt-„veranstaltung" nur anbieten, wenn solche Altdaten da sind.
+  const evSet=new Set(); all.forEach(x=>(x.e.stats||[]).forEach(s=>{ if(_isEvent(s.typ)) evSet.add(s.typ); }));
+  const evTypes=['wendestart','wendekurs','wendetraining'].concat(evSet.has('veranstaltung')?['veranstaltung']:[]);
+  const curEv=_eventFilter();
+  const eventOpts=`<option value="">Alle Veranstaltungen</option>`+evTypes.map(t=>`<option value="${t}"${curEv===t?' selected':''}>${esc(_EVENT_LABELS[t]||t)}</option>`).join('');
   // Einträge gruppiert nach Baum
   const byTree={}; all.forEach(x=>{ (byTree[x.treeLabel]=byTree[x.treeLabel]||[]).push(x); });
   const entHtml=Object.keys(byTree).map(tl=>`<div class="grp">${esc(tl)}</div>`+byTree[tl].map(x=>`<label><input type="checkbox" ${isSel(x)?'checked':''} onchange="ausToggle(${jsq(_key(x.tree,x.id))})"> ${esc(x.name)}</label>`).join('')).join('');
@@ -261,6 +274,11 @@ function _filterBar(){
       <div style="min-width:170px">
         <label style="font-size:12px;font-weight:700;color:var(--muted)">Zeitraum</label><br>
         <select aria-label="Zeitraum" onchange="ausSetYear(this.value)" style="margin-top:5px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">${yearOpts}</select>
+        <div style="margin-top:12px">
+          <label style="font-size:12px;font-weight:700;color:var(--muted)">Veranstaltung</label><br>
+          <select aria-label="Veranstaltung" onchange="ausSetEvent(this.value)" style="margin-top:5px;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px">${eventOpts}</select>
+          <div class="aus-sub" style="margin:4px 0 0;font-size:11px">Filtert „TN Veranstaltungen" &amp; Weitermach-Quote.</div>
+        </div>
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="aus-btn sec" onclick="ausAll()">Alle</button>
           <button class="aus-btn sec" onclick="ausNone()">Keine</button>
@@ -298,6 +316,7 @@ export function ausToggle(key){
 export function ausAll(){ window._ausSel=new Set(_allEntities().map(x=>_key(x.tree,x.id))); renderAuswertung(); }
 export function ausNone(){ window._ausSel=new Set(); renderAuswertung(); }
 export function ausSetYear(y){ window._ausYear=y||''; renderAuswertung(); }
+export function ausSetEvent(t){ window._ausEvent=t||''; renderAuswertung(); }
 export function ausSetEntwMetric(m){ window._ausEntwMetric=m||'tn'; renderAuswertung(); }
 
 export function ausExport(){
@@ -308,8 +327,9 @@ export function ausExport(){
       const p=n=>String(n).padStart(2,'0');
       // Statistik
       const sBy=_applyYear(_statByYear(ents)); const sYears=Object.keys(sBy).sort();
-      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o['TN Veranstaltungen']=r.eventTN; o['Übergegangen ins Training']=r.eventUebSet?r.eventUeb:''; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
-      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining','TN Veranstaltungen','Übergegangen ins Training','Zuwachs Training','Weitermach-Quote'];
+      const evCol='TN '+(_eventFilter()?(_EVENT_LABELS[_eventFilter()]||'Veranstaltungen'):'Veranstaltungen');
+      const sRows=sYears.map(y=>{const r=sBy[y]; const o={Jahr:y}; STAT_COLS.forEach(([k,l])=>{o[l]=r[k];}); o['Vereine mit Wintertraining']=r.winter; o[evCol]=r.eventTN; o['Übergegangen ins Training']=r.eventUebSet?r.eventUeb:''; o['Zuwachs Training']=_sign(r.zuwachs); o['Weitermach-Quote']=_statQuote(r); return o;});
+      const sHead=['Jahr',...STAT_COLS.map(([,l])=>l),'Vereine mit Wintertraining',evCol,'Übergegangen ins Training','Zuwachs Training','Weitermach-Quote'];
       XLSX.utils.book_append_sheet(wb, sRows.length?XLSX.utils.json_to_sheet(sRows,{header:sHead}):XLSX.utils.aoa_to_sheet([sHead]), 'Statistik');
       // Veranstaltungen
       const {by:vByAll}=_veranstByYear(ents); const vBy=_applyYear(vByAll); const vYears=Object.keys(vBy).sort();
@@ -337,4 +357,4 @@ export function ausExport(){
   }).catch(err=>{ toast(err.message||'Excel-Bibliothek nicht geladen.','err'); });
 }
 
-Object.assign(window, { renderAuswertung, ausToggle, ausAll, ausNone, ausSetYear, ausSetEntwMetric, ausExport });
+Object.assign(window, { renderAuswertung, ausToggle, ausAll, ausNone, ausSetYear, ausSetEvent, ausSetEntwMetric, ausExport });

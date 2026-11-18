@@ -822,7 +822,7 @@ function injectStyles(){
   .crm-stat-year{margin-bottom:14px}
   .crm-stat-yhead{font-size:13px;font-weight:800;color:var(--primary);padding:2px 0 6px;letter-spacing:.3px}
   .crm-stat-typ{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;color:#fff}
-  .crm-stat-typ.t-training{background:#0d8a8a} .crm-stat-typ.t-reihe{background:#2563eb} .crm-stat-typ.t-veranstaltung{background:#7b3fb3} .crm-stat-typ.t-sonstiges{background:var(--muted,#6b7280)}
+  .crm-stat-typ.t-training{background:#0d8a8a} .crm-stat-typ.t-reihe{background:#2563eb} .crm-stat-typ.t-veranstaltung{background:#7b3fb3} .crm-stat-typ.t-wendestart{background:#7b3fb3} .crm-stat-typ.t-wendekurs{background:#b02a6f} .crm-stat-typ.t-wendetraining{background:#b4531f} .crm-stat-typ.t-sonstiges{background:var(--muted,#6b7280)}
   .crm-stat-notecell{white-space:normal;min-width:160px;max-width:320px}
   .crm-stat-note{white-space:pre-line;font-size:13px;line-height:1.45}
   .crm-stat-act{white-space:nowrap;text-align:right}
@@ -3762,9 +3762,16 @@ function crmTeamAtt(tree,eid,id){ _entityNodeCtx(tree,eid,id); crmAttOpen(id); }
 // gebildet → Veränderung übers Jahr sichtbar. Altdaten bleiben erhalten:
 // trainer/tn lesen notfalls die alten Schlüssel (trainerInkl/tnInkl); alte
 // „Vereinsmitglieder"/„aktiv im Training" werden als „früher erfasst" gezeigt.
-const STAT_TYPES=[['training','Regelmäßiges Training'],['reihe','Regelmäßige Veranstaltung (z. B. monatlich)'],['veranstaltung','Veranstaltung (einmalig)'],['sonstiges','Sonstiges']];
+// Erfassungs-Arten der Vereins-Statistik. Der frühere Typ „Veranstaltung (einmalig)" wurde v618 durch
+// die drei WENDE-Events ersetzt – gleicher Aufbau (einmaliges Event: nur TN + „ins Training übergegangen").
+const STAT_TYPES=[['training','Regelmäßiges Training'],['reihe','Regelmäßige Veranstaltung (z. B. monatlich)'],['wendestart','WENDESTART'],['wendekurs','WENDEKURS'],['wendetraining','WENDETRAINING'],['sonstiges','Sonstiges']];
 const STAT_RUNNING=t=>{ t=t||''; return t===''||t==='training'||t==='reihe'; };   // laufende Angebote (Stand-Werte)
-function statTypLabel(t){ const x=STAT_TYPES.find(z=>z[0]===t); return x?x[1]:''; }
+// Einmalige Events (TN + Weitermach-Quote). Inkl. Alt-Typ „veranstaltung" (vor v618), damit bereits
+// erfasste Veranstaltungen weiter korrekt mitzählen und beschriftet werden.
+const STAT_EVENT_TYPES=['wendestart','wendekurs','wendetraining','veranstaltung'];
+const STAT_EVENT=t=>STAT_EVENT_TYPES.indexOf(t||'')>=0;
+const _STAT_LABELS_LEGACY={veranstaltung:'Veranstaltung (einmalig)'};
+function statTypLabel(t){ const x=STAT_TYPES.find(z=>z[0]===t); if(x) return x[1]; return _STAT_LABELS_LEGACY[t]||''; }
 const STAT_METRICS=[
   { key:'engagierte', label:'Engagierte Mitglieder', title:'Vereinsmitglieder, die sich im Verein für Inklusion engagieren' },
   { key:'trainer',    label:'Inklusions-Trainer',    title:'Inklusions-Trainer', legacy:'trainerInkl' },
@@ -3809,7 +3816,7 @@ function statsSecHtml(e){
     // Weitermach-Quote: Σ „ins regelmäßige Training übergegangen" ÷ Σ TN der einmaligen Veranstaltungen
     // des Jahres (0–100 %). Einheitlich mit der Auswertung; erscheint erst, wenn ein Übergang erfasst ist.
     const ye=byYear[y];
-    const evs=ye.filter(s=>s.typ==='veranstaltung');
+    const evs=ye.filter(s=>STAT_EVENT(s.typ));
     const trs=ye.filter(s=>STAT_RUNNING(s.typ)).slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const eventTN=evs.reduce((a,s)=>a+statNum(s,tnM),0);   // TN der einmaligen Veranstaltungen
     const uebSet=evs.some(s=>s.uebergang!=null&&s.uebergang!=='');
@@ -3844,7 +3851,7 @@ function statsSecHtml(e){
   }).join('');
   return `<div class="crm-sec">
     <h4><span class="ttl">📊 Statistik · Inklusion</span>${canEdit?`<button class="btn-sm-crm primary" onclick="crmAddStat()">＋ Erfassung</button>`:''}</h4>
-    <div class="small" style="color:var(--muted);margin-bottom:8px">Pro Erfassung Art wählen (Training/Veranstaltung). ▲▼ zeigt die Veränderung zur vorigen Erfassung gleicher Art.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:8px">Pro Erfassung Art wählen (Training / WENDE-Event / …). ▲▼ zeigt die Veränderung zur vorigen Erfassung gleicher Art.</div>
     ${stats.length ? yearBlocks
       : `<div class="small" style="color:var(--muted)">Noch keine Erfassung.</div>`}
   </div>`;
@@ -3912,7 +3919,7 @@ function crmStatSplitSum(){ const s={engagierte:0,trainer:0}; document.querySele
 // „Termine im Jahr“ und „Wintertraining“ nur bei laufenden Angeboten (nicht bei einmaliger Veranstaltung)
 // Felder je Erfassungs-Art zeigen: regelmäßiges Angebot (Training/Reihe) → Engagierte/Trainer/
 // Gruppen/Termine/Winter; einmalige Veranstaltung → nur TN + „übergegangen"; Sonstiges → nur TN.
-function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t); const ev=(t==='veranstaltung');
+function crmStatTypChg(){ const t=val('crm-stat-typ'); const run=STAT_RUNNING(t); const ev=STAT_EVENT(t);
   const d=(id,on,disp)=>{ const el=document.getElementById(id); if(el) el.style.display=on?(disp||'flex'):'none'; };
   d('crm-stat-gruppen-box', run, 'contents');
   d('crm-stat-termine-box', run, 'contents');
@@ -3935,7 +3942,7 @@ function crmSaveStat(){
   const rec={ date, typ, engagierte:num('engagierte'), trainer:num('trainer'), gruppen:num('gruppen'), notiz:(val('crm-stat-notiz')||'').trim(), sharedWith,
     tn:num('tn'), tnRegel:null, tnEinmal:null,   // nur noch EIN Wert „Inklusive TN"; alte regelm./einmalig-Aufteilung entfällt
     termine: (run && raw('termine')!=='')?num('termine'):null, winter: run && !!(document.getElementById('crm-stat-winter')||{}).checked,
-    uebergang: (typ==='veranstaltung' && raw('uebergang')!=='') ? num('uebergang') : null };   // davon ins regelm. Training übergegangen (für Weitermach-Quote)
+    uebergang: (STAT_EVENT(typ) && raw('uebergang')!=='') ? num('uebergang') : null };   // davon ins regelm. Training übergegangen (für Weitermach-Quote)
   // Kooperation: Engagierte/Trainer je Verein; oben steht die Summe
   if(sharedWith.length && document.querySelector('.crm-stat-sp')){
     const sp={}; document.querySelectorAll('.crm-stat-sp').forEach(i=>{ const k=i.dataset.k; sp[k]=sp[k]||{engagierte:0,trainer:0}; sp[k][i.dataset.m]=Math.max(0,Number(i.value)||0); });
