@@ -43,13 +43,10 @@ const CARDS=[
   { k:'favs',   l:'⭐ Favoriten' },
   { k:'recent', l:'🕘 Zuletzt geöffnet', hint:'Standard aus – bei Bedarf pro Rolle einschalten' },
   { k:'tiles',  l:'🧩 Kacheln (Module, Website, Forum)' },
-  { k:'dsinfo',    l:'🔒 Datenschutz', hint:'kurze Datenschutz-Info – für alle' },
-  { k:'dsdossier', l:'🔒 Datenschutz-Dossier', hint:'ausführliche Verarbeitungsübersicht – Standard nur Admin/Leitung' },
-  { k:'anleitung', l:'📖 Anleitung', hint:'öffnet die Bedienungsanleitung' },
 ];
 const HOME_ROLES=[['admin','Admin'],['mitarbeiter','Mitarbeiter'],['berater','Berater'],['freiberuflich','Freiberuflich'],['leitung','Leitung'],['geschaeftsfuehrer','GF']];
 const ALL_R=HOME_ROLES.map(r=>r[0]);
-const CARD_DEF={ wx:ALL_R, stamp:ALL_R.filter(r=>r!=='admin'), sys:['admin'], todo:ALL_R, notes:ALL_R, team:['leitung','geschaeftsfuehrer'], favs:ALL_R, recent:[], tiles:ALL_R, dsinfo:ALL_R, dsdossier:['admin','geschaeftsfuehrer','leitung'], anleitung:ALL_R };
+const CARD_DEF={ wx:ALL_R, stamp:ALL_R.filter(r=>r!=='admin'), sys:['admin'], todo:ALL_R, notes:ALL_R, team:['leitung','geschaeftsfuehrer'], favs:ALL_R, recent:[], tiles:ALL_R };
 function _rp(){ try{ return D.getData().rolePermissions||{}; }catch(e){ return {}; } }
 function cardRoles(k){ const v=_rp()['home_'+k]; return Array.isArray(v)?v:(CARD_DEF[k]||ALL_R); }
 function cardOn(k,u){
@@ -89,158 +86,8 @@ function renderHomeCardsConfig(el){
       <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:13px;min-width:620px">
         <thead><tr><th></th><th style="text-align:left;padding:6px 8px">Karte</th>${HOME_ROLES.map(([,l])=>`<th style="font-size:12px;padding:6px 8px;text-align:center">${esc(l)}</th>`).join('')}</tr></thead>
         <tbody>${rows}</tbody></table></div>
-      ${adm?'<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="homeCfgReset()">↺ Standard wiederherstellen</button>':''}</div>${adm?_dsEditorHtml():''}`;
+      ${adm?'<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="homeCfgReset()">↺ Standard wiederherstellen</button>':''}</div>`;
   }catch(e){ console.error('renderHomeCardsConfig:',e); }
-}
-
-// ── 🔒 Datenschutz-Seiten (v611): in der Verwaltung editierbar, live für alle ──
-// Inhalt in rolePermissions.dsInfo/.dsDossier (admin-schreibbar, für alle lesbar) → KEINE neue Firebase-Regel.
-// Fehlt ein gespeicherter Text, greift der Standard unten. Anzeige: Startseiten-Karten; Bearbeiten: Verwaltung.
-const DS_INFO_DEF = `## Datenschutz – wie wir mit deinen Daten umgehen
-
-Für die Zeiterfassung verarbeiten wir die Daten, die für dein Arbeitsverhältnis nötig sind: Stammdaten (Name, Kontakt, Team, Arbeitszeit- und Urlaubsangaben), deine erfassten Arbeits- und Pausenzeiten sowie Abwesenheiten.
-
-**Krankheit:** Gespeichert wird nur „abwesend/krank" mit Zeitraum – **kein Grund und keine Diagnose**. Für andere Mitarbeitende erscheinst du nur als „abwesend".
-
-**Rechtsgrundlage:** § 26 BDSG und Art. 6 Abs. 1 lit. c DSGVO (gesetzliche Pflicht zur Arbeitszeiterfassung).
-
-**Wer sieht was:** deine eigenen Daten nur du selbst; darüber hinaus nur die für dich zuständige Leitung/Geschäftsführung bzw. die Verwaltung.
-
-**Speicherung:** in der EU (Google Firebase, europe-west1). Dein Passwort wird nicht in der App gespeichert.
-
-**Deine Rechte:** Auskunft, Berichtigung, Löschung, Einschränkung und Widerspruch. Wende dich dafür an die Verwaltung oder direkt an unseren Datenschutzbeauftragten.
-
-**Datenschutzbeauftragter:** Rechtsanwalt P. Tim Klümper, sivis.legal, Waldstraße 100, 68305 Mannheim, [tk@sivis.legal](https://sivis.legal)`;
-
-const DS_DOSSIER_DEF = `## Datenschutz-Dossier: CRM & Zeiterfassung
-
-Übersicht der Verarbeitung personenbezogener Daten in den selbst betriebenen Anwendungen der TURNING POINT Stiftung gGmbH – CRM (externe Kontakte) und Zeiterfassung (Beschäftigte).
-
-### 0 · Verantwortlicher & Datenschutzbeauftragter
-- **Verantwortlicher:** TURNING POINT Stiftung gGmbH, Geschäftsführer Jens Kroker, Philosophenweg 11, 69120 Heidelberg · 06221 6599995 · info@turningpoint-stiftung.com
-- **Datenschutzbeauftragter:** RA P. Tim Klümper, sivis.legal, Waldstraße 100, 68305 Mannheim · tk@sivis.legal
-- **System:** selbst entwickelte Web-Anwendung (PWA), getrennte Bereiche CRM und Zeiterfassung. Hosting GitHub Pages · Backend Google Firebase (EU/europe-west1).
-
-## A · CRM – Kontakt- & Kooperationsverwaltung
-### A.1 Zwecke & Personengruppen
-Betroffene sind natürliche Ansprechpersonen.
-- Ansprechpersonen in (Partner-)Vereinen – Kontaktpflege, Vereinsentwicklung, Verwaltung als Ansprechpartner
-- Kooperations-Ansprechpersonen – Organisation von Kooperationen
-- Marketing-/Pressekontakte – Öffentlichkeitsarbeit
-- Ansprechpartner von Dienstleistern
-
-### A.2 Rechtsgrundlage
-- **Art. 6 Abs. 1 lit. f DSGVO** (berechtigtes Interesse an Pflege/Weiterentwicklung der Vereins- und Kooperationsbeziehungen)
-- **Art. 6 Abs. 1 lit. b DSGVO** bei konkretem Vertrags-/Kooperationsverhältnis
-- Werbung/Newsletter zusätzlich **§ 7 UWG** (Einwilligung) – reine CRM-Speicherung erlaubt keine Werbe-Mails
-
-### A.3 Datenfelder
-- Organisation/Kontakt: Name, Adresse, Sitz, Website, E-Mail, Telefon, Schlagworte, Status/Verlauf
-- Ansprechpartner: Name, Funktion, E-Mail(s), Telefon(e), Anschrift, Notiz
-- Kontaktnotizen, Statistik (nur Aggregatzahlen), Förderungen, Kooperationen, Dateien, Verteiler
-
-### A.4 Datenquellen
-- Manuelle Erfassung (mittelbar, Art. 14)
-- Messe-Modus (Direkterhebung, Art. 13; Besucherdatensatz nach Übertrag sofort gelöscht)
-- Datei-Import (vCard/CSV), Verteiler-Import
-
-### A.5 Information der Betroffenen
-- Messe (Art. 13): Hinweis + Link direkt im Erfassungsformular
-- Vereine/manuell/Import (Art. 14): Hinweis spätestens bei der ersten Kontaktaufnahme
-
-### A.6 Berechtigungen
-Feingranulares Rechtemodell je Bereich; CRM-Zugriffsstufe je Nutzer (kein / nur eigener Verein / voll); Zugriff nur für authentifizierte Mitarbeitende.
-
-### A.7 Speicherort
-- Datenbank: Firebase RTDB, EU (europe-west1), Knoten crm
-- Dateien: Google Cloud Storage, EU-Bucket (europe-west1); früherer US-Bucket am 13.11.2026 geleert → Speicherung vollständig EU
-
-### A.8 Unterauftragnehmer & AVV
-- Google (Firebase DB/Auth/Storage/Functions) – EU – Google Cloud DPA ✓
-- Microsoft 365 – E-Mail-Versand – Microsoft DPA ✓
-- GitHub (Microsoft) – Hosting statischer Dateien – DPA über Online-Bedingungen
-- Open-Meteo (Wetter), Cloudflare DNS (nur Domain-Prüfung im Verteiler)
-
-### A.9 Drittlandtransfers
-Verarbeitung/Speicherung in der EU; Konzernmütter (Google/Microsoft) USA → Transfer über DPA + EU-Standardvertragsklauseln/DPF.
-
-### A.10 Löschregeln
-Keine gesetzliche Pflichtfrist für reine Kontaktdaten → Löschung bei Wegfall des Zwecks, spätestens 3 Jahre nach letztem Kontakt; vertrags-/abrechnungsbezogene Unterlagen nach § 257 HGB (6 J.) / § 147 AO (10 J.).
-
-## B · Zeiterfassung – Mitarbeiterdaten
-### B.1 Zweck
-Erfassung/Nachweis der Arbeitszeiten (inkl. Pausen/Zuordnung), Abwesenheiten, Saldo/Übertrag, Freigabe-/Prüfprozess, Buchhaltungs- und Jahresnachweise.
-
-### B.2 Rechtsgrundlage
-- **§ 26 Abs. 1 BDSG** + **Art. 6 Abs. 1 lit. c DSGVO** i. V. m. **§ 16 ArbZG** (Arbeitszeiterfassungspflicht)
-- Lohn-/steuerrelevant: Art. 6 Abs. 1 lit. c i. V. m. § 257 HGB / § 147 AO
-- Gesundheitsdaten (AU/Krank): **Art. 9 Abs. 2 lit. b DSGVO i. V. m. § 26 Abs. 3 BDSG**
-
-### B.3 Datenfelder
-- Stammdaten: Login-ID, Name, E-Mail, Ort, Bundesland, Rolle, Team(s)/Historie, Wochenstunden, Tage/Woche, Urlaubsanspruch, Ein-/Austritt, Teilzeit-/Werkstudenten-Parameter, Berechtigungen. **Passwort NICHT in der Datenbank** (nur Firebase Auth; 2FA/TOTP dort).
-- Zeiteinträge: Tageszeiten, Zuordnung, Bemerkung, Status, Einreich-/Prüf-Verlauf, Übertrag
-- Stempeln: Start-/Endzeiten (15-Min-Raster) – kein Gerät, kein Standort, keine IP
-- Abwesenheiten: Art, Zeitraum, Arbeitstage; bei Krankheit ohne Grund/Diagnose
-- Änderungsprotokoll (wer/wann/welches Feld)
-
-### B.4 Gesundheitsdaten (AU/Krank) – datensparsam
-Nur Tatsache und Zeitraum der Arbeitsunfähigkeit, kein Grund/keine Diagnose; gegenüber Kolleg:innen nur „abwesend". Die einzige Art-9-Verarbeitung ist bewusst minimiert.
-
-### B.5 Berechtigungen / Zugriff
-Eigene Daten immer; Leitung nur eigenes/vertretenes Team; GF eingeschränkt; Admin alles. Serverseitig über Zugriffslisten und Datenbank-Regeln. Persönliche Zeitdaten sind je Person geschützt; Abwesenheitsanträge (inkl. Krank) nur je Person zugänglich.
-
-### B.6 Speicherort
-Firebase RTDB, EU (europe-west1), Knoten zeiterfassung; persönliche Zeitdaten in einem pro Person geschützten Bereich. Lokaler Geräte-Cache für Offline-Fähigkeit.
-
-### B.7 Exporte
-PDF „Buchhaltungsversion", Jahresmappe, GF-Berichte; tägliche Voll-Backups im EU-Storage.
-
-### B.8 Aufbewahrung
-Keine automatische Löschung der Live-Daten; Archivierung sperrt nur den Zugang (Daten bleiben, ArbZG-Nachweis). Backups: Konsole 30 Tage, Monats-Backup dauerhaft (ArbZG ≥ 2 Jahre).`;
-
-function _dsGet(kind){ const rp=_rp(); const o=(kind==='dossier')?rp.dsDossier:rp.dsInfo; const def=(kind==='dossier')?DS_DOSSIER_DEF:DS_INFO_DEF;
-  const has=!!(o&&typeof o.body==='string'&&o.body.trim()); return { body:has?o.body:def, updatedAt:o&&o.updatedAt, updatedBy:o&&o.updatedBy, custom:has }; }
-// Mini-Markdown → HTML (## Überschrift, **fett**, - Punkt, [Text](url), Absätze); escapt zuerst.
-function _mdLite(src){
-  const E=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const inl=s=>E(s).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-  let h='', ul=false; const cl=()=>{ if(ul){ h+='</ul>'; ul=false; } };
-  String(src||'').split(/\r?\n/).forEach(raw=>{ const t=raw.trim(); let m;
-    if(!t){ cl(); return; }
-    if(m=t.match(/^###\s+(.*)/)){ cl(); h+='<h4 style="color:var(--primary,#203869);font-size:13.5px;margin:12px 0 3px">'+inl(m[1])+'</h4>'; }
-    else if(m=t.match(/^##\s+(.*)/)){ cl(); h+='<h3 style="color:var(--primary,#203869);font-size:15px;margin:15px 0 5px">'+inl(m[1])+'</h3>'; }
-    else if(m=t.match(/^#\s+(.*)/)){ cl(); h+='<h3 style="color:var(--primary,#203869);font-size:16px;margin:16px 0 5px">'+inl(m[1])+'</h3>'; }
-    else if(m=t.match(/^[-*]\s+(.*)/)){ if(!ul){ h+='<ul style="margin:0 0 7px;padding-left:20px">'; ul=true; } h+='<li style="margin:0 0 3px">'+inl(m[1])+'</li>'; }
-    else { cl(); h+='<p style="margin:0 0 7px;line-height:1.5">'+inl(t)+'</p>'; } });
-  cl(); return h;
-}
-function homeDsOpen(kind){ try{ const d=_dsGet(kind); const title=(kind==='dossier')?'Datenschutz-Dossier':'Datenschutz';
-  window.openModal&&window.openModal(`<h3 style="color:var(--primary,#203869);margin:0 0 8px">🔒 ${esc(title)}</h3><div style="max-height:68vh;overflow:auto;padding-right:6px;font-size:14px">${_mdLite(d.body)}</div><div class="modal-btns"><button class="btn btn-primary" onclick="window.closeModal&&window.closeModal()">Schließen</button></div>`, true);
-}catch(e){ console.error('homeDsOpen:',e); } }
-function homeAnl(){ try{ window.switchModule&&window.switchModule('anleitung'); }catch(e){} }
-function homeDsSave(kind){
-  if(!(window.cu && window.cu.role==='admin')){ try{ window.toast&&window.toast('Nur der Administrator-Account kann das ändern.','err'); }catch(e){} return; }
-  const ta=document.getElementById('ds-ta-'+kind); if(!ta) return; const body=ta.value;
-  const key=(kind==='dossier')?'dsDossier':'dsInfo';
-  try{ D.mutate(d=>{ if(!d.rolePermissions) d.rolePermissions={}; d.rolePermissions[key]={ body, updatedAt:Date.now(), updatedBy:(window.cu&&window.cu.name)||'' }; }); }
-  catch(e){ console.error('DS speichern:',e); try{ window.toast&&window.toast('Speichern fehlgeschlagen.','err'); }catch(_){} return; }
-  try{ window.toast&&window.toast('Datenschutz-Text gespeichert ✓','ok'); }catch(e){}
-  const el=document.getElementById('home-cards-section'); if(el) renderHomeCardsConfig(el);
-  if(window._activeModule==='start') renderHome();
-}
-function _dsEditorHtml(){
-  const mk=(kind,title,hint,v)=>`<div style="margin-top:14px">
-    <label style="font-weight:600;color:var(--primary,#203869)">${esc(title)}</label>
-    <div style="font-size:12px;color:var(--muted);margin:2px 0 4px">${esc(hint)} · Format: <code>## Überschrift</code>, <code>**fett**</code>, <code>- Punkt</code>, <code>[Text](https://…)</code>${v.custom?(' · zuletzt geändert'+(v.updatedAt?' '+new Date(v.updatedAt).toLocaleDateString('de-DE'):'')+(v.updatedBy?' von '+esc(v.updatedBy):'')):' · (Standardtext – noch nicht angepasst)'}</div>
-    <textarea id="ds-ta-${kind}" rows="8" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;line-height:1.45;padding:8px;border:1.5px solid var(--border);border-radius:6px">${esc(v.body)}</textarea>
-    <button class="btn btn-ok btn-sm" style="margin-top:6px" onclick="homeDsSave(${jsq(kind)})">💾 Speichern</button>
-  </div>`;
-  return `<div style="margin-top:26px;border-top:2px solid var(--border);padding-top:14px">
-    <h3 style="margin:0 0 4px;color:var(--primary,#203869)">🔒 Datenschutz-Texte (Startseite)</h3>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 6px">Erscheinen auf der Startseite als Karten „Datenschutz" (für alle) und „Datenschutz-Dossier" (Sichtbarkeit je Rolle oben einstellbar). Änderungen sind sofort für alle sichtbar.</p>
-    ${mk('info','Datenschutz – Info für alle','kurz & verständlich',_dsGet('info'))}
-    ${mk('dossier','Datenschutz-Dossier (ausführlich)','für Admin/Leitung',_dsGet('dossier'))}
-  </div>`;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────
@@ -341,9 +188,6 @@ export function renderHome(){
       team: ()=>_zeModuleOn(cu)?'<div class="home-card" id="home-team"><p class="home-h">👥 Team</p></div>':'',
       favs:  ()=>'<div class="home-card" id="home-favs" style="display:none"></div>',
       recent:()=>'<div class="home-card" id="home-recent" style="display:none"></div>',
-      dsinfo:   ()=>'<div class="home-card" id="home-dsinfo"><p class="home-h">🔒 Datenschutz</p><p class="home-empty" style="margin:0 0 10px">Wie wir mit deinen Daten umgehen – und deine Rechte.</p><button class="btn btn-primary btn-sm" onclick="homeDsOpen(\'info\')">📖 Öffnen</button></div>',
-      dsdossier:()=>'<div class="home-card" id="home-dsdossier"><p class="home-h">🔒 Datenschutz-Dossier</p><p class="home-empty" style="margin:0 0 10px">Ausführliche Verarbeitungsübersicht (CRM &amp; Zeiterfassung).</p><button class="btn btn-primary btn-sm" onclick="homeDsOpen(\'dossier\')">📖 Öffnen</button></div>',
-      anleitung:()=>'<div class="home-card" id="home-anl"><p class="home-h">📖 Anleitung</p><p class="home-empty" style="margin:0 0 10px">Bedienungsanleitung der App.</p><button class="btn btn-primary btn-sm" onclick="homeAnl()">Öffnen</button></div>',
     };
     const hid=_hiddenCards();
     const avail=cardOrder().filter(k=>k!=='tiles' && cardOn(k,cu) && BOX[k] && BOX[k]());   // für die Person sinnvolle Karten
@@ -998,4 +842,4 @@ async function _fillWeather(){
   setTimeout(wait, 500);
 })();
 
-try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen, homeAsgOpen, homeTaskOpen, homeNewsIsSeen, homeNewsMark, homeDsOpen, homeDsSave, homeAnl }); }catch(e){}
+try{ Object.assign(window,{ renderHome, homeArrange, homeArrangeReset, homeProfileHtml, homeHideCard, renderHomeCardsConfig, homeCfgSet, homeCfgMove, homeCfgReset, homeEnabled, homeGo, homeOpenVa, homeZe, homeVerw, homeTile, homeTrack, homeFavHas, homeFavToggle, homeCurrentKey, homeOpenItem, homeNewsRefresh, homeNewsSeen, homeNewsOpen, homeNewsAllSeen, homeAsgOpen, homeTaskOpen, homeNewsIsSeen, homeNewsMark }); }catch(e){}
