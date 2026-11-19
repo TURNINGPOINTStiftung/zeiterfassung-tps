@@ -60,11 +60,15 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||!!(cu.perms&&cu.perms.zugriff_verwaltung);   // Versionsnummer für Admin + System-Verwaltung
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v622':'';
-  // Manuelles Aktualisieren (Button im Profil): Cache leeren, SW prüfen, neu laden.
+  if(_hv) _hv.textContent=_showVer?'v623':'';
+  // Manuelles Aktualisieren (Button im Profil): Cache + lokalen Datenstand leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
       .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
+      // v623: auch den lokal gespeicherten Datenstand (Snapshot) verwerfen – sonst kann ein veralteter
+      // Stand (z. B. fehlende eingereichte Berichte) nach dem Neuladen wieder angezeigt werden. Die
+      // Anmeldung (Firebase-Auth in IndexedDB) bleibt erhalten; die Daten werden frisch aus der Cloud geladen.
+      .then(function(){ try{ ['tp_zt_v3','tp_zt_v3_prev','tp_zt_guard'].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} return null; })
       .then(function(){ return (navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)?navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.update();}));}):null; })
       // v532: alle geladenen Programmteile einmal am Browser-Zwischenspeicher vorbei neu holen – sonst liefert er
       // nach einem Update bis zu 10 Min. alte Dateien (GitHub Pages max-age=600).

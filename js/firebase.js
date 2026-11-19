@@ -318,16 +318,20 @@ window._zpHas=function(u,coll,key){
 function _zpSubscribe(scope){
   if(!scope) return Promise.resolve();
   const want={}; scope.ids.forEach(u=>{ want['p:'+u]=u; }); scope.vacIds.forEach(u=>{ want['v:'+u]=u; }); if(scope.rep) want['r:']='*';
-  Object.keys(_zp.subs).forEach(k=>{ if(!want[k]){ const s=_zp.subs[k]; try{ s.ref.off('value', s.cb); }catch(e){} delete _zp.subs[k]; if(k[0]==='p') delete _zp.person[s.u]; else if(k[0]==='r') _zp.rep=undefined; else delete _zp.vac[s.u]; } });
+  Object.keys(_zp.subs).forEach(k=>{ if(!want[k]){ const s=_zp.subs[k]; s._gone=true; try{ clearTimeout(s._retry); }catch(e){} try{ s.ref.off('value', s.cb); }catch(e){} delete _zp.subs[k]; if(k[0]==='p') delete _zp.person[s.u]; else if(k[0]==='r') _zp.rep=undefined; else delete _zp.vac[s.u]; } });
   const firsts=[];
   Object.entries(want).forEach(([k,u])=>{
     if(_zp.subs[k]) return;
     const isP=k[0]==='p', isR=k[0]==='r';
     let ref; try{ ref=firebase.database().ref(isR?'ze_reports':('ze_private/'+u+(isP?'':'/vacRequests'))); }catch(e){ return; }
     let done; firsts.push(new Promise(r=>{ done=r; }));
-    const cb=s=>{ const v=s.val(); if(isR) _zp.rep=v||{}; else if(isP) _zp.person[u]=v||{}; else _zp.vac[u]=v||{}; done(); _zpChanged(); };
-    const err=e=>{ console.warn('[Personaldaten privat] '+k+' nicht lesbar:', e&&(e.code||e.message)); done(); };   // bleibt „nicht geladen“ → alter Stand
-    _zp.subs[k]={ ref, cb, u };
+    const sub={ ref, cb:null, u, _tries:0, _gone:false, _retry:0 };
+    const cb=s=>{ const v=s.val(); if(isR) _zp.rep=v||{}; else if(isP) _zp.person[u]=v||{}; else _zp.vac[u]=v||{}; sub._tries=0; done(); _zpChanged(); };
+    const err=e=>{ console.warn('[Personaldaten privat] '+k+' nicht lesbar:', e&&(e.code||e.message)); done();
+      if(!sub._gone && sub._tries<6){ sub._tries++; try{ clearTimeout(sub._retry); }catch(_){}
+        sub._retry=setTimeout(()=>{ if(!sub._gone && _zp.subs[k]===sub){ try{ ref.off('value', cb); }catch(_){} try{ ref.on('value', cb, err); }catch(_){} } }, Math.min(30000, 800*Math.pow(2, sub._tries))); } };   // bleibt „nicht geladen“ → alter Stand
+    sub.cb=cb;
+    _zp.subs[k]=sub;
     try{ ref.on('value', cb, err); }catch(e){ done(); }
   });
   return Promise.all(firsts);
