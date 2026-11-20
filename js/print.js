@@ -31,11 +31,14 @@ export function printTeamBuchhaltung(){
   _openPerEmpPrint(emps,window.year,window.mon);
 }
 
-export function _openPerEmpPrint(emps,y,m){
+export function _openPerEmpPrint(emps,y,m,snapByUid){
   const win=window.open('','_blank');
   if(!win){ toast('Popup blockiert – bitte Popup-Blocker deaktivieren.','err'); return; }
   win._pPages=emps.map(function(u){
-    const entry=getEntry(u.id,y,m);
+    // v624: Ist ein Berichts-Snapshot vorhanden, daraus rendern (selbst-enthaltene
+    // Buchhaltungsversion). So sieht der GF den Inhalt auch von Teams, deren Live-
+    // Privatdaten (ze_private) er nicht lesen darf. Sonst wie bisher live (getEntry).
+    const entry=(snapByUid && snapByUid[u.id]) ? snapByUid[u.id] : getEntry(u.id,y,m);
     return {name:u.name,html:renderBuchhaltungHTML(u,entry,y,m)};
   });
   win._pMonths=MONTHS; win._pY=y; win._pM=m;

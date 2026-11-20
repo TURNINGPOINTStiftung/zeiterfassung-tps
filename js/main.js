@@ -39,7 +39,7 @@ import { getStamp, renderStempelView, _refreshStempelView, _stempelLiveTick,
 
 import { renderGFBerichte, gfSetMonth, viewTeamReport, markReportSeen, viewYearReport, deleteGfReport,
          markYearReportSeen, sendTeamReport, sendTeamReportForTeam, recallTeamReport,
-         gfReturnEmp, gfReturnConfirm, renderZeNotices, zeNoticeOpen, zeNoticeAck, zeNoticeItems } from './views/gfberichte.js';
+         gfReturnEmp, gfReturnConfirm, renderZeNotices, zeNoticeOpen, zeNoticeAck, zeNoticeItems, backfillReportSnapshots } from './views/gfberichte.js';
 import { renderVertretungen, addVertretung, endVertretung, deleteVertretung } from './views/vertretungen.js';
 
 import { renderSettings, addTeam, removeTeam, addCustomRole, removeCustomRole, savePermission,
@@ -200,6 +200,7 @@ window.gfSetMonth          = gfSetMonth;
 window.viewTeamReport      = viewTeamReport;
 window.deleteGfReport      = deleteGfReport;
 window.markReportSeen      = markReportSeen;
+window.backfillReportSnapshots = backfillReportSnapshots;
 window.viewYearReport      = viewYearReport;
 window.markYearReportSeen  = markYearReportSeen;
 window.sendTeamReport      = sendTeamReport;

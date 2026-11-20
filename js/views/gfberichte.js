@@ -1,5 +1,5 @@
 import { MONTHS, EMAILJS_PUBLIC_KEY, EMAILJS_SERVICE_ID, EMAILJS_GF_REPORT_TEMPLATE_ID, APP_URL } from '../config.js';
-import { getData, mutate, entryKey } from '../data.js';
+import { getData, mutate, entryKey, getEntry } from '../data.js';
 import { esc, toast, openModal, closeModal, jsArg as jsq } from '../utils.js';
 import { isManagerRole, canSeeEmployee, getLeitungTeams, getTeamForDate, monthStartDate } from '../roles.js';
 import { employedRange } from '../calc.js';
@@ -39,6 +39,17 @@ function _leitungLabel(u){
   return 'Leitung'+(t.length?' '+t.join(', '):'');
 }
 
+// v624: Inhalts-Snapshot (Buchhaltungsversion) je Mitarbeiter einfrieren, damit der GF den
+// Bericht auch ohne Lesezugriff auf fremde Live-Privatdaten (ze_private) öffnen kann. Der
+// Snapshot wird mit dem Bericht in ze_reports gespeichert (das der GF ohnehin lesen darf).
+function _reportSnap(ids,y,m){
+  const snap={};
+  (ids||[]).forEach(function(id){
+    try{ const e=getEntry(id,y,m); if(e) snap[id]=JSON.parse(JSON.stringify(e)); }catch(_){}
+  });
+  return snap;
+}
+
 // Report-Schlüssel, unter dem eine vom GF genehmigte ZE in der Buchhaltungsversion landet:
 // Leitung → eigener LEIT_-Bericht (eine Karte pro Leitung), sonst der Team-Bericht des Monats.
 function _gfReportTarget(u,y,m){
@@ -56,6 +67,7 @@ export function fileGfApproval(uid,y,m){
   if(!u||!cu) return;
   const tg=_gfReportTarget(u,y,m);
   const now=new Date().toISOString();
+  const snapEntry=_reportSnap([uid],y,m)[uid]||null;   // v624: Inhalt einfrieren (GF-lesbar in ze_reports)
   mutate(function(dd){
     if(!dd.teamReports) dd.teamReports={};
     // Person aus anderen Berichten desselben Monats lösen (z.B. alter Teamname / „Leitungsteam").
@@ -70,6 +82,7 @@ export function fileGfApproval(uid,y,m){
       if(!Array.isArray(r.employeeIds)) r.employeeIds=[];
       if(!r.employeeIds.includes(uid)) r.employeeIds.push(uid);
       r.teamName=tg.teamName;
+      if(snapEntry){ (r.snap=r.snap||{})[uid]=snapEntry; }
       if(u.role==='leitung'){ r.countersignedAt=now; r.countersignedBy=cu.id; r.countersignedByName=cu.name; }
       else { r.submittedAt=now; r.seenAt=null; }
     } else {
@@ -77,6 +90,7 @@ export function fileGfApproval(uid,y,m){
         id:tg.key, teamName:tg.teamName, managedTeams:[tg.teamName],
         leitungId:u.role==='leitung'?u.id:cu.id, leitungName:u.role==='leitung'?u.name:cu.name,
         year:y, month:m, submittedAt:now, seenAt:null, employeeIds:[uid],
+        ...(snapEntry?{snap:{[uid]:snapEntry}}:{}),
         ...(u.role==='leitung'?{countersignedAt:now,countersignedBy:cu.id,countersignedByName:cu.name}:{})
       };
     }
@@ -108,6 +122,12 @@ export function renderGFBerichte(){
 
   const yearReports=Object.values(d.yearReports||{}).sort((a,b)=>b.year-a.year||a.userName.localeCompare(b.userName,'de'));
   let html='';
+  // v624: Einmal-Werkzeug (nur Admin) – Inhalt in Alt-Berichte schreiben, damit GF/Leitung ihn sehen.
+  if(cu&&cu.role==='admin'){
+    html+='<div style="margin:0 0 14px;padding:10px 12px;background:var(--surface,#fff);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      +'<span>Berichtsinhalte für GF/Leitung lesbar machen (einmalig für vorhandene Berichte):</span>'
+      +'<button class="btn btn-outline btn-sm" onclick="backfillReportSnapshots(this)">🔧 Berichtsinhalte nachrüsten</button></div>';
+  }
   if(yearReports.length){
     const newYR=yearReports.filter(r=>!r.seenAt).length;
     html+='<div class="gf-team-group" style="margin-bottom:28px">';
@@ -267,13 +287,38 @@ export function viewTeamReport(key){
   if(!r){ toast('Bericht nicht gefunden.','err'); return; }
   const emps=r.employeeIds.map(function(id){ return d.users.find(function(u){ return u.id===id; }); }).filter(Boolean);
   if(!emps.length){ toast('Keine Mitarbeiterdaten vorhanden.','err'); return; }
-  _openPerEmpPrint(emps,r.year,r.month);
+  _openPerEmpPrint(emps,r.year,r.month,r.snap);   // v624: aus dem Berichts-Snapshot rendern (GF-lesbar)
   if(!r.seenAt) markReportSeen(key);
 }
 
 export function markReportSeen(key){
   mutate(function(d){ if(d.teamReports&&d.teamReports[key]) d.teamReports[key].seenAt=new Date().toISOString(); });
   renderGFBerichte();
+}
+
+// v624: Bereits eingereichte Berichte einmalig nachrüsten – als Admin (der alle Privatdaten
+// lesen darf) den Inhalts-Snapshot je Mitarbeiter in den Bericht schreiben. Danach sehen
+// GF/Leitung den Inhalt aus ze_reports, ohne Zugriff auf fremde Live-Privatdaten. Ändert
+// KEINE Zeitdaten – legt nur eine lesbare Kopie in den Bericht. Nur Administrator.
+export function backfillReportSnapshots(btn){
+  const cu=window.cu;
+  if(!cu || cu.role!=='admin'){ toast('Nur der Administrator kann Berichtsinhalte nachrüsten.','err'); return; }
+  const reps=getData().teamReports||{};
+  const keys=Object.keys(reps);
+  if(!keys.length){ toast('Keine Berichte vorhanden.','err'); return; }
+  if(!confirm('Inhalt (Buchhaltungsversion) in die '+keys.length+' eingereichten Berichte schreiben?\n\nNötig für Berichte, die vor dieser Funktion eingereicht wurden. Es werden KEINE Zeitdaten geändert – nur eine lesbare Kopie in den Bericht gelegt, damit GF/Leitung den Inhalt öffnen können.')) return;
+  let nRep=0, nEmp=0;
+  const orig=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='⏳ …'; }
+  mutate(function(dd){
+    Object.keys(dd.teamReports||{}).forEach(function(k){
+      const r=dd.teamReports[k]; if(!r||!Array.isArray(r.employeeIds)||!r.employeeIds.length) return;
+      const snap=_reportSnap(r.employeeIds, r.year, r.month);
+      if(Object.keys(snap).length){ r.snap=Object.assign(r.snap||{}, snap); nEmp+=Object.keys(snap).length; nRep++; }
+    });
+  });
+  if(btn){ btn.disabled=false; btn.textContent=orig||'🔧 Berichtsinhalte nachrüsten'; }
+  toast('Nachgerüstet: '+nRep+' Berichte, '+nEmp+' Mitarbeiter-Inhalte ✓','ok');
+  try{ renderGFBerichte(); }catch(_){}
 }
 
 export function viewYearReport(uid,y,key){
@@ -298,7 +343,8 @@ export function sendTeamReport(){
     year:window.year, month:window.mon,
     submittedAt:new Date().toISOString(),
     seenAt:null,
-    employeeIds:emps.map(u=>u.id)
+    employeeIds:emps.map(u=>u.id),
+    snap:_reportSnap(emps.map(u=>u.id),window.year,window.mon)   // v624: Inhalt einfrieren (GF-lesbar)
   };
   mutate(function(d){ if(!d.teamReports) d.teamReports={}; d.teamReports[key]=report; });
   toast('Teambericht an Geschäftsführung gesendet. ✓','ok');
@@ -340,7 +386,8 @@ export function sendTeamReportForTeam(teamName,empIds,y,m){
     year:y, month:m,
     submittedAt:new Date().toISOString(),
     seenAt:null,
-    employeeIds:empIds
+    employeeIds:empIds,
+    snap:_reportSnap(empIds,y,m)   // v624: Inhalt einfrieren (GF-lesbar)
   };
   mutate(function(d){
     if(!d.teamReports) d.teamReports={};

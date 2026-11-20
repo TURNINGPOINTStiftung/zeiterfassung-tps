@@ -60,12 +60,12 @@ export function initApp(){
   const isAdmin=cu.role==='admin';
   const _showVer=isAdmin||!!(cu.perms&&cu.perms.zugriff_verwaltung);   // Versionsnummer für Admin + System-Verwaltung
   var _hv=document.getElementById('hdr-version');
-  if(_hv) _hv.textContent=_showVer?'v623':'';
+  if(_hv) _hv.textContent=_showVer?'v624':'';
   // Manuelles Aktualisieren (Button im Profil): Cache + lokalen Datenstand leeren, SW prüfen, neu laden.
   window.forceAppUpdate=function(){
     Promise.resolve()
       .then(function(){ return ('caches' in window)?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}):null; })
-      // v623: auch den lokal gespeicherten Datenstand (Snapshot) verwerfen – sonst kann ein veralteter
+      // v624: auch den lokal gespeicherten Datenstand (Snapshot) verwerfen – sonst kann ein veralteter
       // Stand (z. B. fehlende eingereichte Berichte) nach dem Neuladen wieder angezeigt werden. Die
       // Anmeldung (Firebase-Auth in IndexedDB) bleibt erhalten; die Daten werden frisch aus der Cloud geladen.
       .then(function(){ try{ ['tp_zt_v3','tp_zt_v3_prev','tp_zt_guard'].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){} return null; })
