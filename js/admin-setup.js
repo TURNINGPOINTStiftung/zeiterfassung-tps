@@ -315,9 +315,17 @@ export async function refreshPermissionAllowlists(opts){
     const seeOf={}; const all=Object.values(byId);
     for(const [uid,id] of Object.entries(uidMap)){
       const m=byId[id]; if(!m || _isAdminUser(m)) continue;
+      // v625: Teams, die m per geplanter/laufender Vertretung abdeckt (ganze Laufzeit, auch vor „von") –
+      // Lesefreigabe vorab setzen, damit die Vertretung auch ohne Admin-Aufbau im Zeitraum greift.
+      let vtTeams=[]; try{ vtTeams=RO.plannedVertretungTeams(m)||[]; }catch(_){ vtTeams=[]; }
       all.forEach(e=>{ if(!e||!e.id||e.id===m.id||_isAdminUser(e)) return;
         const ds=[undefined].concat((Array.isArray(e.teamHistory)?e.teamHistory:[]).map(h=>h&&h.fromDate).filter(Boolean));
-        if(ds.some(dt=>{ try{ return RO.canSeeEmployee(m,e,dt); }catch(_){ return false; } })) (seeOf[uid]=seeOf[uid]||{})[e.id]=true; });
+        let see=ds.some(dt=>{ try{ return RO.canSeeEmployee(m,e,dt); }catch(_){ return false; } });
+        if(!see && vtTeams.length && e.role!=='leitung' && e.role!=='admin' && e.role!=='geschaeftsfuehrer'){
+          const et=(Array.isArray(e.teams)&&e.teams.length)?e.teams:(e.team?[e.team]:[]);
+          if(et.some(t=>vtTeams.includes(t))) see=true;
+        }
+        if(see) (seeOf[uid]=seeOf[uid]||{})[e.id]=true; });
     }
     await db.ref('zeiterfassung/seeOf').set(seeOf);
     log('Lesefreigaben Personaldaten (seeOf): '+Object.keys(seeOf).length+' Konten');

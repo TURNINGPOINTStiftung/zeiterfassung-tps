@@ -102,6 +102,14 @@ export function renderVertretungen(){
     </div>`;
 }
 
+// v625: Vertretung geändert → Lesefreigaben (seeOf) sofort neu aufbauen, damit die Vertretung
+// greift, ohne auf den nächsten Admin-App-Start zu warten. Schreibt nur das Admin-Konto (seeOf
+// ist admin-schreibbar); bei Leitung/GF läuft es still ins Leere (dann greift es beim nächsten
+// Admin-Aufbau). Der erweiterte seeOf-Aufbau (admin-setup.js) deckt auch künftige Zeiträume ab.
+function _vtRefreshFreigaben(){
+  try{ const p=window.refreshPermissionAllowlists?.({log:()=>{}}); if(p&&p.catch) p.catch(e=>console.warn('Vertretung seeOf-Refresh:', e&&e.message)); }catch(_){}
+}
+
 export function addVertretung(){
   const team=_vtVal('vt-team'), deputyId=_vtVal('vt-deputy'), von=_vtVal('vt-von'), bis=_vtVal('vt-bis');
   if(!team||!deputyId){ toast('Bitte Team und Vertreter:in wählen.','err'); return; }
@@ -110,17 +118,17 @@ export function addVertretung(){
   if(!_vtMayUse(cu) || (!_vtAll(cu) && !_vtOwnTeams(cu).includes(team))){ toast('Vertretungen nur für das eigene Team.','err'); return; }
   mutate(dd=>{ if(!Array.isArray(dd.vertretungen)) dd.vertretungen=[];
     dd.vertretungen.push({ id:'vt_'+Date.now()+'_'+Math.floor(Math.random()*1e6), team, teamKey:_vtTeamKey(team), deputyId, deputyName:(dep&&dep.name)||'', von:von||localISODate(), bis:bis||'', ended:false, byId:cu&&cu.id, byName:cu&&cu.name, ts:Date.now() }); });
-  toast('Vertretung angelegt ✓','ok'); renderVertretungen();
+  toast('Vertretung angelegt ✓','ok'); renderVertretungen(); _vtRefreshFreigaben();
 }
 export function endVertretung(id){
   const cu=window.cu; const x=(getData().vertretungen||[]).find(v=>v.id===id);
   if(!x || !_vtMayUse(cu) || (!_vtAll(cu) && !_vtOwnTeams(cu).includes(x.team))){ toast('Vertretungen nur für das eigene Team.','err'); return; }
   mutate(d=>{ const v=(d.vertretungen||[]).find(x=>x.id===id); if(v){ v.ended=true; if(!v.teamKey) v.teamKey=_vtTeamKey(v.team); } });
-  toast('Vertretung beendet.','ok'); renderVertretungen();
+  toast('Vertretung beendet.','ok'); renderVertretungen(); _vtRefreshFreigaben();
 }
 export function deleteVertretung(id){
   if(!_vtAll(window.cu)){ toast('Löschen nur durch Geschäftsführung/Administrator – bitte „Beenden“ nutzen.','err'); return; }
   if(!confirm('Diese Vertretung wirklich löschen?')) return;
   mutate(d=>{ d.vertretungen=(d.vertretungen||[]).filter(x=>x.id!==id); });
-  renderVertretungen();
+  renderVertretungen(); _vtRefreshFreigaben();
 }

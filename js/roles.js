@@ -78,6 +78,19 @@ export function activeVertretungTeams(u){
     ).map(v=>v.team).filter(Boolean);
 }
 
+// v625: Teams, die u per noch nicht beendeter, nicht abgelaufener Vertretung abdeckt – unabhängig
+// davon, ob sie HEUTE schon aktiv ist (also auch vor „von"). NUR für den seeOf-Vorbau gedacht:
+// die Lesefreigabe wird schon vorab gesetzt, damit die Vertretung auch dann greift, wenn während
+// ihres Zeitraums kein Admin die App öffnet. Die Live-Sicht/Rechte bleiben über activeVertretungTeams
+// (datumsgenau) begrenzt – der Vertreter sieht das Team in der Oberfläche erst ab „von".
+export function plannedVertretungTeams(u){
+  if(!u) return [];
+  const today=_cmpDate(localISODate());
+  return (getData().vertretungen||[]).filter(v=>
+      v && v.deputyId===u.id && !v.ended && (!v.bis || today<=_cmpDate(v.bis))
+    ).map(v=>v.team).filter(Boolean);
+}
+
 export function teamHasLeitung(teamName){
   if(!teamName) return false;
   return getData().users.some(u=>{
